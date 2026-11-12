@@ -406,24 +406,25 @@ public sealed class AwsObjectStorageTests
     }
 
     /// <summary>
-    /// Checks that S3 rejecting caller-supplied part receipts surfaces as the contract's invalid-content
-    /// outcome, as the fake reports it, rather than as a vendor SDK exception.
+    /// Checks that S3 rejection maps to invalid content and leaves the multipart upload available
+    /// for a corrected retry.
     /// </summary>
     [Theory]
     [InlineData("InvalidPart")]
     [InlineData("InvalidPartOrder")]
     [InlineData("EntityTooSmall")]
-    public async Task ShouldReportRejectedPartReceiptsAsInvalidContent(string s3ErrorCode)
+    public async Task ShouldMapRejectedPartReceiptsAndAllowCorrectedRetry(string s3ErrorCode)
     {
         // Arrange
         var content = "browser upload"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+        var tenant = new TenantId("tenant-one");
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
         var proxy = (TestS3ClientProxy)(object)client;
         proxy.Content = content;
         proxy.CompletionErrorCode = s3ErrorCode;
         var storage = CreateStorage(client);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(tenant, digest);
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
@@ -431,7 +432,22 @@ public sealed class AwsObjectStorageTests
 
         // Assert
         Assert.IsType<InvalidDataException>(error);
+        Assert.Equal(1, proxy.CompleteCount);
+        Assert.Equal(0, proxy.AbortCount);
         Assert.Equal(0, proxy.CopyCount);
+        Assert.Equal(0, proxy.StagingDeleteCount);
+
+        // Act: the caller corrects the receipts and retries the same upload session.
+        proxy.CompletionErrorCode = null;
+        var retryError = await Record.ExceptionAsync(async () =>
+            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "corrected-etag")]));
+
+        // Assert
+        Assert.Null(retryError);
+        Assert.Equal(2, proxy.CompleteCount);
+        Assert.Equal(1, proxy.CopyCount);
+        Assert.Equal(1, proxy.StagingDeleteCount);
+        Assert.True(await storage.HeadAndVerifyAsync(tenant, digest));
     }
 
     /// <summary>
