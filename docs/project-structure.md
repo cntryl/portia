@@ -213,13 +213,6 @@ with custom Compile rules must be updated manually before rerunning the command.
 code actions remain available in hosts that support safe file operations.
 
 Analyzer tests compile small application samples and exercise the diagnostics and code actions.
-Run `bash scripts/verify-namespace-fix.sh /tmp/portia-namespace-check 64` after a Release build to
-exercise PORTIA202 through the installed SDK's solution-level `dotnet format` host. The harness
-uses a Common project and a referencing Core project, generated JSON constructor references, both
-namespace styles, solution compilation, cross-project reference updates, and a second idempotence pass.
-Run `bash scripts/verify-structure-file-fixes.sh /tmp/portia-structure-fixes` to exercise CLI splits,
-renames, SDK default globs, explicit Compile rollback, collision refusal, build-failure rollback, and
-second-pass idempotence.
 They are not repository structure tests. They do not establish business semantics, absence of
 indirection, production implementations/tests for every port, or a complete cross-project graph.
 Those remain review requirements, alongside authoritative outcome-validation behavior tests.

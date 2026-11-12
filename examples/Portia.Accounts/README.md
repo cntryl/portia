@@ -105,23 +105,3 @@ collector receives all three signal types and prints service resources, trace/sp
 and structured log attributes. Both executable hosts use `await using` so their telemetry providers
 are disposed after the graceful host shutdown. Portia telemetry tests in the solution separately
 exercise the fast in-memory exporter controls.
-
-## Qualify freshly packed packages
-
-The package gate switches the example's conditional references to `Cntryl.Portia.*` packages and
-uses a fresh NuGet cache. It fails if the selected package version is missing from
-`artifacts/packages`:
-
-```sh
-dotnet restore Portia.slnx
-dotnet build Portia.slnx --configuration Release --no-restore
-dotnet pack Portia.slnx --configuration Release --no-build --no-restore \
-  --output artifacts/packages -p:PackageVersion=0.11.1
-PORTIA_SMOKE_PACKAGE_VERSION=0.11.1 \
-  scripts/qualify-account-example.sh /tmp/portia-account-otel-evidence
-```
-
-The qualification script restores and builds the tests, API, and worker against those packed
-packages, runs the feature tests, drives the API and worker against the pinned Fitz broker, and
-checks actual OTLP receiver output for traces, metrics, structured logs, service names, trace
-correlation, and export after graceful host shutdown.

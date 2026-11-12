@@ -145,11 +145,8 @@ cancellations and 40 unexpected faults. It asserts exact exported counts, reques
 values of one then zero, and worker failure/restart counters of two. Worker and committed-batch
 observations are controlled framework-instrument fixtures, separate from the real request bus.
 
-Run `bash scripts/qualify-prometheus.sh artifacts/prometheus` after locked restore. This starts an
-isolated, digest-pinned receiver on port 49090, waits for readiness with bounded polling, retains
-raw samples/names/query JSON, and removes only its own container. No exporter wait enters an
-operation performance measurement. [Configuration](../bench/Portia.Benchmarks/Telemetry/prometheus.yaml)
-enables underscore translation; the receiver starts with `--web.enable-otlp-receiver`.
+The receiver [configuration](../bench/Portia.Benchmarks/Telemetry/prometheus.yaml) enables
+underscore translation, and the receiver starts with `--web.enable-otlp-receiver`.
 
 The tested C# configuration is:
 
