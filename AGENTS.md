@@ -19,3 +19,10 @@ An expected business rejection is a domain outcome to record. A failed projector
 means processing is incomplete and prevents checkpoint advancement; retry or worker failure does
 not replace the required business outcome. Projectors build derived data; reactors and commands
 perform outcome-validation choreography.
+
+# Tests
+
+- Structure every test as `// Arrange`, `// Act`, `// Assert` sections, in that order.
+- Act performs exactly the behavior under test. When an exception is the expected outcome, capture it
+  in Act with `Record.Exception`/`Record.ExceptionAsync` and assert its type and details in Assert.
+- Work for red→green: write the failing test first and confirm it fails for the expected reason.

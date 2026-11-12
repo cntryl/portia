@@ -54,17 +54,22 @@ public sealed class FakeObjectStorageTests
     [Fact]
     public async Task ShouldKeepSessionOpenAfterAnUnknownPartReceipt()
     {
+        // Arrange
         var store = new FakeObjectStorage();
         var tenant = new TenantId("tenant-a");
         var content = "browser upload"u8.ToArray();
         var digest = Digest(content);
         var session = await store.CreateUploadAsync(tenant, digest);
         var receipt = await store.AcceptPartAsync(session, 1, new MemoryStream(content));
-
-        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+        var rejected = await Record.ExceptionAsync(async () =>
             await store.CompleteUploadAsync(session, [receipt with { Token = "mistyped-etag" }]));
-        await store.CompleteUploadAsync(session, [receipt]);
 
+        // Act
+        var corrected = await Record.ExceptionAsync(async () => await store.CompleteUploadAsync(session, [receipt]));
+
+        // Assert
+        Assert.IsType<InvalidDataException>(rejected);
+        Assert.Null(corrected);
         Assert.True(await store.HeadAndVerifyAsync(tenant, digest));
     }
 
@@ -118,15 +123,18 @@ public sealed class FakeObjectStorageTests
     [Fact]
     public async Task ShouldRejectAnUndersizedNonfinalPart()
     {
+        // Arrange
         var store = new FakeObjectStorage();
         var content = new byte[8 * 1024 * 1024];
         var session = await store.CreateUploadAsync(new TenantId("tenant-a"), Digest(content));
         var first = await store.AcceptPartAsync(session, 1, new MemoryStream(content, 0, 4 * 1024 * 1024));
         var last = await store.AcceptPartAsync(session, 2, new MemoryStream(content, 4 * 1024 * 1024, 4 * 1024 * 1024));
 
-        await Assert.ThrowsAsync<InvalidDataException>(async () =>
-            await store.CompleteUploadAsync(session, [first, last]));
+        // Act
+        var error = await Record.ExceptionAsync(async () => await store.CompleteUploadAsync(session, [first, last]));
 
+        // Assert
+        Assert.IsType<InvalidDataException>(error);
         Assert.Equal(1, store.ActiveUploadCount);
     }
 

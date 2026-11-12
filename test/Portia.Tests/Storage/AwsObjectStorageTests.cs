@@ -415,6 +415,7 @@ public sealed class AwsObjectStorageTests
     [InlineData("EntityTooSmall")]
     public async Task ShouldReportRejectedPartReceiptsAsInvalidContent(string s3ErrorCode)
     {
+        // Arrange
         var content = "browser upload"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -424,9 +425,12 @@ public sealed class AwsObjectStorageTests
         var storage = CreateStorage(client);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
 
-        await Assert.ThrowsAsync<InvalidDataException>(async () =>
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
             await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "\"etag-typed-by-the-client\"")]));
 
+        // Assert
+        Assert.IsType<InvalidDataException>(error);
         Assert.Equal(0, proxy.CopyCount);
     }
 
@@ -437,6 +441,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldReportCommittedCompletionWhenStagingCleanupFails()
     {
+        // Arrange
         var content = "committed object"u8.ToArray();
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
         var tenant = new TenantId("tenant-one");
@@ -447,8 +452,12 @@ public sealed class AwsObjectStorageTests
         var storage = CreateStorage(client);
         var session = await storage.CreateUploadAsync(tenant, digest);
 
-        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]);
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
+            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]));
 
+        // Assert
+        Assert.Null(error);
         Assert.Equal(1, proxy.CopyCount);
         Assert.True(await storage.HeadAndVerifyAsync(tenant, digest));
     }
@@ -457,6 +466,7 @@ public sealed class AwsObjectStorageTests
     [Fact]
     public async Task ShouldSurfaceTheAbortFailureWhenCleanupAlsoFails()
     {
+        // Arrange
         var digest = new ObjectDigest(new string('a', 64), 1);
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
         var proxy = (TestS3ClientProxy)(object)client;
@@ -465,9 +475,12 @@ public sealed class AwsObjectStorageTests
         var storage = CreateStorage(client);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
 
-        var exception = await Assert.ThrowsAsync<AmazonS3Exception>(async () => await storage.AbortUploadAsync(session));
+        // Act
+        var error = await Record.ExceptionAsync(async () => await storage.AbortUploadAsync(session));
 
-        Assert.Equal("SlowDown", exception.ErrorCode);
+        // Assert
+        var s3Error = Assert.IsType<AmazonS3Exception>(error);
+        Assert.Equal("SlowDown", s3Error.ErrorCode);
     }
 
     static AwsObjectStorage CreateStorage(IAmazonS3 client)
