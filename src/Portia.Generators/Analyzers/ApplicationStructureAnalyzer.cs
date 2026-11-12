@@ -30,7 +30,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         "Application project '{0}' must end in .Common, .Core, .Api, or .Worker; mark test projects with IsTestProject",
         "PortiaStructure", DiagnosticSeverity.Warning, true, customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
-    static readonly string[] CommonFolders = ["Commands", "Queries", "Events", "Models", "Values"];
+    static readonly string[] CommonFolders = ["Commands", "Queries", "Events", "Models", "Values", "Serialization"];
     static readonly string[] CoreFolders =
         ["Aggregates", "Handlers", "Capabilities", "Reactors", "Projectors", "Repositories", "Authorization", "Events",
             "Ports", "Values", "Models", "Execution", "Sources", "Actions", "Errors", "Serialization"];

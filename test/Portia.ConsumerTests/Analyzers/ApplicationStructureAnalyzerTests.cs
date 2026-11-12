@@ -271,6 +271,62 @@ public sealed class ApplicationStructureAnalyzerTests
         Assert.DoesNotContain(diagnostics, item => item.Id is "PORTIA203" or "PORTIA204");
     }
 
+    [Theory]
+    [InlineData(typeof(ApplicationStructureAnalyzer))]
+    [InlineData(typeof(ApplicationContractAnalyzer))]
+    public void ShouldAllowCommonJsonContextGivenFeatureSerializationFolder(Type analyzerType)
+    {
+        // Arrange
+        const string declaration = """
+            using System.Text.Json.Serialization;
+            using Cntryl.Portia;
+            using Shop.Common.Features.Orders.Models;
+            namespace Shop.Common.Features.Orders.Serialization;
+            [PortiaJsonContext]
+            [JsonSerializable(typeof(OrderSummary))]
+            public sealed partial class OrdersJsonContext : JsonSerializerContext;
+            """;
+        const string generated = """
+            #nullable enable
+            using System;
+            using System.Text.Json;
+            using System.Text.Json.Serialization;
+            using System.Text.Json.Serialization.Metadata;
+            namespace Shop.Common.Features.Orders.Serialization;
+            public sealed partial class OrdersJsonContext
+            {
+                public OrdersJsonContext() : base(null) { }
+                protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """;
+        const string model = "namespace Shop.Common.Features.Orders.Models; public sealed record OrderSummary(string Id);";
+        var analyzer = (Microsoft.CodeAnalysis.Diagnostics.DiagnosticAnalyzer)Activator.CreateInstance(analyzerType)!;
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", analyzer,
+            [("Features/Orders/Serialization/OrdersJsonContext.cs", declaration),
+             ("obj/OrdersJsonContext.g.cs", generated),
+             ("Features/Orders/Models/OrderSummary.cs", model)]);
+
+        // Assert
+        Assert.DoesNotContain(diagnostics, item => item.Id is "PORTIA203" or "PORTIA204" or "PORTIA209");
+    }
+
+    [Fact]
+    public void ShouldRejectNonContextTypeGivenCommonSerializationFolder()
+    {
+        // Arrange
+        const string source = "namespace Shop.Common.Features.Orders.Serialization; public sealed record OrderPayload(string Id);";
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Serialization/OrderPayload.cs", source)]);
+
+        // Assert
+        _ = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
+    }
+
     [Fact]
     public void ShouldIgnoreNestedTypesGivenTopLevelOwner()
     {

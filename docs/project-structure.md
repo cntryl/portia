@@ -37,6 +37,7 @@ Common/Features/{Feature}/
     Events/
     Models/
     Values/
+    Serialization/
 
 Core/Features/{Feature}/
     Aggregates/
@@ -80,10 +81,13 @@ There is no general-purpose static-helper or global error-catalog role folder.
 
 Prefer one `[PortiaJsonContext]` per serializer-owning assembly. In Common/Core, an assembly-wide
 context belongs in a file at the project root with the project's root namespace, for example
-`Platform.Common/ContractsJsonContext.cs`. This slot requires the existing marker and a valid
-`JsonSerializerContext` shape; it is not a general exception for root-level helpers. Api/Worker
-may organize their context alongside other serialization composition. Additional contexts can
-support genuinely separate serializer configurations; context count is a review choice.
+`Shop.Common/ContractsJsonContext.cs`. This slot requires the existing marker and a valid
+`JsonSerializerContext` shape; it is not a general exception for root-level helpers. When contracts
+are serialized per feature, put that feature's context in its `Serialization/` folder, for example
+`Shop.Common/Features/Orders/Serialization/OrdersJsonContext.cs`. `Serialization/` holds only
+`[PortiaJsonContext]` contexts. Api/Worker may organize their context alongside other serialization
+composition. Additional contexts can support genuinely separate serializer configurations; context
+count is a review choice.
 
 A repository does not always need a feature-local interface: an implementation that satisfies an
 existing persistence contract, such as `IProjectionStore`, `IProjectionCheckpointStore`, or
