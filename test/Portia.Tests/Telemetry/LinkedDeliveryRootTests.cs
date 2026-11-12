@@ -12,7 +12,7 @@ public sealed class LinkedDeliveryRootTests
 
     /// <summary>Wire ingress uses remote-parent sampling while an adapter's SDK parent stays local.</summary>
     [Fact]
-    public void ShouldSampleWireParentsAsRemoteAndSdkParentsAsLocal()
+    public void ShouldSampleParentsGivenWireParentsAsRemoteAndSdkParentsAsLocal()
     {
         // Arrange
         var exported = new List<Activity>();
@@ -42,7 +42,7 @@ public sealed class LinkedDeliveryRootTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void ShouldUseRootSamplingForLinkedDelivery(bool sampleRoot)
+    public void ShouldUseRootSamplingGivenLinkedDelivery(bool sampleRoot)
     {
         // Arrange
         var exported = new List<Activity>();
@@ -81,7 +81,7 @@ public sealed class LinkedDeliveryRootTests
     [InlineData("schedule", "valid")]
     [InlineData("schedule", "absent")]
     [InlineData("schedule", "invalid")]
-    public async Task ShouldCreateIndependentLinkedRootsAndRestoreAmbient(string transport, string propagation)
+    public async Task ShouldCreateIndependentLinkedRootsAndRestoreAmbientGivenTransportAndPropagation(string transport, string propagation)
     {
         // Arrange
         using var listener = new ActivityListener

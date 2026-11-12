@@ -21,7 +21,7 @@ public sealed class FitzEventStreamPatternCursorTests
     [InlineData("orders", "order-1", 11UL)]
     [InlineData("orders", null, 21UL)]
     [InlineData(null, null, 31UL)]
-    public void ShouldResumeFromTheCursorFieldMatchingThePatternScope(string? area, string? resource, ulong expected)
+    public void ShouldResumeFromMatchingCursorFieldGivenPatternScope(string? area, string? resource, ulong expected)
     {
         // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", area, resource);
@@ -43,7 +43,7 @@ public sealed class FitzEventStreamPatternCursorTests
     [Theory]
     [InlineData("orders", "area cursor")]
     [InlineData(null, "realm cursor")]
-    public void ShouldFailWhenTheCursorOmitsTheScopesOffset(string? area, string expected)
+    public void ShouldFailGivenCursorOmittingScopeOffset(string? area, string expected)
     {
         // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", area);
@@ -63,7 +63,7 @@ public sealed class FitzEventStreamPatternCursorTests
     ///     only the resource offset still resumes a single-stream read correctly.
     /// </summary>
     [Fact]
-    public void ShouldResumeAResourceScopedReadWithoutAnyWiderCursor()
+    public void ShouldResumeGivenResourceScopedReadWithoutWiderCursor()
     {
         // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", "orders", "order-1");
@@ -86,7 +86,7 @@ public sealed class FitzEventStreamPatternCursorTests
     [InlineData("orders", "order-1", 10UL)]
     [InlineData("orders", null, 20UL)]
     [InlineData(null, null, 30UL)]
-    public void ShouldSelectTheRecordOffsetMatchingThePatternScope(string? area, string? resource, ulong expected)
+    public void ShouldSelectMatchingRecordOffsetGivenPatternScope(string? area, string? resource, ulong expected)
     {
         // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", area, resource);
@@ -107,7 +107,7 @@ public sealed class FitzEventStreamPatternCursorTests
     [Theory]
     [InlineData("orders", "area offset")]
     [InlineData(null, "realm offset")]
-    public void ShouldFailWhenARecordOmitsTheScopesOffset(string? area, string expected)
+    public void ShouldFailGivenRecordOmittingScopeOffset(string? area, string expected)
     {
         // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", area);

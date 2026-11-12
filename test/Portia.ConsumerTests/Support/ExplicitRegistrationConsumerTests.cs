@@ -6,7 +6,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ExplicitRegistrationConsumerTests
 {
     [Fact]
-    public async Task HostedStartupFailsWhenFeatureAssemblyGuardedHandlerHasNoPermissionEvaluator()
+    public async Task ShouldFailHostedStartupGivenGuardedHandlerWithoutPermissionEvaluator()
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
@@ -25,7 +25,7 @@ public sealed class ExplicitRegistrationConsumerTests
     }
 
     [Fact]
-    public void StronglyTypedOutboundCallsInferEveryRequestTransportWithoutExplicitRegistration()
+    public void ShouldInferRequestTransportsGivenStronglyTypedOutboundCalls()
     {
         // Arrange
         const string source = """
@@ -84,7 +84,7 @@ public sealed class ExplicitRegistrationConsumerTests
     }
 
     [Fact]
-    public void SelectedHandlersAndAuthorizersRemainIndependent()
+    public void ShouldKeepHandlersAndAuthorizersIndependentGivenSelectedRegistrations()
     {
         // Arrange
         const string source = """
@@ -136,7 +136,7 @@ public sealed class ExplicitRegistrationConsumerTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task BothFeaturesContributeDispatchEventsAndContractTransports(bool reverse)
+    public async Task ShouldContributeDispatchEventsAndTransportsGivenBothFeatures(bool reverse)
     {
         // Arrange
         var services = ConsumerHost.CreateServices();
@@ -214,7 +214,7 @@ public sealed class ExplicitRegistrationConsumerTests
     }
 
     [Fact]
-    public void ExplicitFeaturesComposeIdempotentlyThroughPublicApi()
+    public void ShouldComposeIdempotentlyGivenExplicitFeaturesThroughPublicApi()
     {
         // Arrange
         var assembly = GeneratorCompilation.Compile("""

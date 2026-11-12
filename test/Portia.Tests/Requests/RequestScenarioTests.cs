@@ -14,7 +14,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>An authorized, guarded command that is handled passes every lifecycle expectation.</summary>
     [Fact]
-    public async Task ShouldPassWhenAuthorizedGuardedCommandIsHandledSuccessfully()
+    public async Task ShouldPassGivenAuthorizedGuardedCommandHandledSuccessfully()
     {
         // Arrange
         await using var provider = Provider();
@@ -34,7 +34,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>A failing guard short-circuits the handler, and both facts are assertable.</summary>
     [Fact]
-    public async Task ShouldPassWhenGuardFailsWithExpectedKindAndRequestIsNotHandled()
+    public async Task ShouldPassGivenGuardFailingWithExpectedKindAndRequestNotHandled()
     {
         // Arrange
         await using var provider = Provider(RequestErrorKind.Conflict);
@@ -54,7 +54,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>An unmet expectation names what was expected and shows the observed lifecycle.</summary>
     [Fact]
-    public async Task ShouldReportLifecycleTraceWhenExpectHandledButGuardFails()
+    public async Task ShouldReportLifecycleTraceGivenExpectHandledAndGuardFailure()
     {
         // Arrange
         await using var provider = Provider(RequestErrorKind.Conflict);
@@ -74,7 +74,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>An authorizer rejection is a denial that stops before guards and the handler.</summary>
     [Fact]
-    public async Task ShouldReportDeniedWhenAuthorizerRejects()
+    public async Task ShouldReportDeniedGivenAuthorizerRejection()
     {
         // Arrange
         await using var provider = Provider();
@@ -92,7 +92,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>A permission rejection is a denial too.</summary>
     [Fact]
-    public async Task ShouldReportDeniedWhenPermissionEvaluatorRejects()
+    public async Task ShouldReportDeniedGivenPermissionEvaluatorRejection()
     {
         // Arrange
         await using var provider = Provider(permissions: TestPermissionEvaluator.DenyAll());
@@ -110,7 +110,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>A guard that fails with Forbidden is a guard failure, not an authorization denial.</summary>
     [Fact]
-    public async Task ShouldNotTreatForbiddenGuardFailureAsDenied()
+    public async Task ShouldNotReportDeniedGivenForbiddenGuardFailure()
     {
         // Arrange
         await using var provider = Provider(RequestErrorKind.Forbidden);
@@ -126,7 +126,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>ExpectAuthorized requires authorization to have actually been consulted.</summary>
     [Fact]
-    public async Task ShouldFailExpectAuthorizedWhenNothingWasConsulted()
+    public async Task ShouldFailExpectAuthorizedGivenNothingConsulted()
     {
         // Arrange
         await using var provider = Provider();
@@ -143,7 +143,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>A result-bearing request's value is assertable and returned.</summary>
     [Fact]
-    public async Task ShouldAssertQueryValue()
+    public async Task ShouldAssertValueGivenQuery()
     {
         // Arrange
         await using var provider = Provider();
@@ -163,7 +163,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>Awaiting the same expectations twice runs the request once.</summary>
     [Fact]
-    public async Task ShouldRunScenarioOnceWhenAwaitedTwice()
+    public async Task ShouldRunScenarioOnceGivenScenarioAwaitedTwice()
     {
         // Arrange
         await using var provider = Provider();
@@ -181,7 +181,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>Expectations are immutable values, so extending one leaves the original unchanged.</summary>
     [Fact]
-    public async Task ShouldLeaveEarlierExpectationsUnchangedWhenExtended()
+    public async Task ShouldLeaveEarlierExpectationsUnchangedGivenExtendedScenario()
     {
         // Arrange
         await using var provider = Provider(RequestErrorKind.Conflict);
@@ -201,7 +201,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>The scenario and its actor are immutable too.</summary>
     [Fact]
-    public async Task ShouldKeepBaseScenarioUnchangedWhenGivenActor()
+    public async Task ShouldKeepBaseScenarioUnchangedGivenActorAdded()
     {
         // Arrange
         await using var provider = Provider();
@@ -220,7 +220,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>A guard expectation for a guard that cannot apply to the request says so.</summary>
     [Fact]
-    public async Task ShouldRejectGuardExpectationForGuardNotApplicableToRequest()
+    public async Task ShouldRejectGuardExpectationGivenGuardNotApplicableToRequest()
     {
         // Arrange
         await using var provider = Provider();
@@ -238,7 +238,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>Each run resolves scoped components from its own scope.</summary>
     [Fact]
-    public async Task ShouldResolveScopedComponentsFromFreshScopePerRun()
+    public async Task ShouldResolveScopedComponentsFromFreshScopeGivenEachRun()
     {
         // Arrange
         await using var provider = Provider();
@@ -255,7 +255,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>Every unmet expectation is reported together.</summary>
     [Fact]
-    public async Task ShouldReportAllUnmetExpectationsTogether()
+    public async Task ShouldReportAllUnmetExpectationsTogetherGivenMultipleFailures()
     {
         // Arrange
         await using var provider = Provider(RequestErrorKind.Conflict);
@@ -273,7 +273,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>An unexpected exception from the lifecycle propagates unchanged.</summary>
     [Fact]
-    public async Task ShouldPropagateDispatchException()
+    public async Task ShouldPropagateExceptionGivenDispatchException()
     {
         // Arrange
         await using var provider = Provider();
@@ -289,7 +289,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>Pipeline behaviors run between authorization and guards, and count as proceeding past authorization.</summary>
     [Fact]
-    public async Task ShouldTreatBehaviorsAsProceedingPastAuthorization()
+    public async Task ShouldTreatBehaviorsAsProceedingPastAuthorizationGivenBehaviorRegistered()
     {
         // Arrange
         await using var provider = Provider(RequestErrorKind.Conflict);
@@ -305,7 +305,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>A scenario needs a Portia composition to find the request lifecycle.</summary>
     [Fact]
-    public async Task ShouldRequireRequestRegistry()
+    public async Task ShouldRequireRequestRegistryGivenProviderWithoutRegistry()
     {
         // Arrange
         await using var provider = new ServiceCollection().BuildServiceProvider();
@@ -321,7 +321,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>A streamed request's lifecycle and items are assertable.</summary>
     [Fact]
-    public async Task ShouldRunStreamedRequestLifecycle()
+    public async Task ShouldRunLifecycleGivenStreamedRequest()
     {
         // Arrange
         await using var provider = Provider();
@@ -339,7 +339,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>A streamed request stopped by a guard reports the guard failure and no items.</summary>
     [Fact]
-    public async Task ShouldReportStreamGuardFailure()
+    public async Task ShouldReportGuardFailureGivenStreamedRequest()
     {
         // Arrange
         await using var provider = Provider(RequestErrorKind.Conflict);
@@ -356,7 +356,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>A concurrency conflict is the settled Conflict outcome the bus reports, so it is assertable.</summary>
     [Fact]
-    public async Task ShouldReportConcurrencyConflictAsConflictFailure()
+    public async Task ShouldReportConflictFailureGivenConcurrencyConflict()
     {
         // Arrange
         await using var provider = Provider();
@@ -376,7 +376,7 @@ public sealed class RequestScenarioTests
     ///     settle, so it propagates instead of passing as the request's own denial.
     /// </summary>
     [Fact]
-    public async Task ShouldPropagateDenialRaisedInsideStreamHandler()
+    public async Task ShouldPropagateDenialGivenDenialRaisedInsideStreamHandler()
     {
         // Arrange
         await using var provider = Provider();
@@ -392,7 +392,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>Discarded immutable assertions are not executed; retaining them makes the failure observable.</summary>
     [Fact]
-    public async Task ShouldRequireObservationOfTheReturnedAssertion()
+    public async Task ShouldRequireObservationGivenReturnedAssertion()
     {
         // Arrange
         await using var provider = Provider();
@@ -418,7 +418,7 @@ public sealed class RequestScenarioTests
     [Theory]
     [InlineData(1, 1)]
     [InlineData(5, 2)]
-    public async Task ShouldBoundStreamAndDisposeScope(int limit, int count)
+    public async Task ShouldBoundStreamAndDisposeScopeGivenLimitAndCount(int limit, int count)
     {
         // Arrange
         await using var provider = Provider();
@@ -441,7 +441,7 @@ public sealed class RequestScenarioTests
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public void ShouldRejectInvalidStreamLimits(int limit)
+    public void ShouldRejectLimitGivenInvalidStreamLimit(int limit)
     {
         // Arrange
         using var provider = Provider();
@@ -456,7 +456,7 @@ public sealed class RequestScenarioTests
 
     /// <summary>Cancellation between items unwinds the enumerator and asynchronous service scope.</summary>
     [Fact]
-    public async Task ShouldCancelStreamAndDisposeScope()
+    public async Task ShouldCancelStreamAndDisposeScopeGivenCancellation()
     {
         // Arrange
         await using var provider = Provider();
@@ -477,7 +477,7 @@ public sealed class RequestScenarioTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldCancelUnaryRequestAndDisposeScope(bool query)
+    public async Task ShouldCancelUnaryRequestAndDisposeScopeGivenCancellation(bool query)
     {
         // Arrange
         await using var provider = Provider();

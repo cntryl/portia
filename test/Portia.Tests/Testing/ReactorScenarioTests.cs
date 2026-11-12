@@ -10,7 +10,7 @@ public sealed class ReactorScenarioTests
     [Theory]
     [InlineData(4097)]
     [InlineData(8193)]
-    public async Task ShouldDrainHistoryAcrossBoundedPasses(int count)
+    public async Task ShouldDrainHistoryGivenBoundedPasses(int count)
     {
         // Arrange
         var ids = Enumerable.Range(0, count).Select(_ => Uuid.CreateVersion4()).ToArray();
@@ -67,7 +67,7 @@ public sealed class ReactorScenarioTests
 
     /// <summary>A scripted failure surfaces as the reaction failure the runner would retry.</summary>
     [Fact]
-    public async Task ShouldFailReactionWhenScriptedRequestFails()
+    public async Task ShouldFailReactionGivenScriptedRequestFailure()
     {
         // Arrange
         var scenario = new ReactorScenario()
@@ -89,7 +89,7 @@ public sealed class ReactorScenarioTests
     ///     such a script would silently never apply.
     /// </summary>
     [Fact]
-    public void ShouldRejectScriptForNonConcreteRequestType()
+    public void ShouldRejectScriptGivenNonConcreteRequestType()
     {
         // Arrange
         var scenario = new ReactorScenario();
@@ -121,7 +121,7 @@ public sealed class ReactorScenarioTests
 
     /// <summary>A tenant-scoped reactor runs bound to a test tenant, as its hosted workload would be.</summary>
     [Fact]
-    public async Task ShouldRunTenantScopedReactor()
+    public async Task ShouldRunReactorGivenTenantScope()
     {
         // Arrange
         var user = Uuid.CreateVersion4();
@@ -136,7 +136,7 @@ public sealed class ReactorScenarioTests
 
     /// <summary>A caller-selected tenant binds the reactor and supplies matching event streams.</summary>
     [Fact]
-    public async Task ShouldRunReactorUnderChosenTenant()
+    public async Task ShouldRunReactorGivenChosenTenant()
     {
         // Arrange
         var tenant = new TenantId(Uuid.CreateVersion4().ToString());
@@ -155,7 +155,7 @@ public sealed class ReactorScenarioTests
 
     /// <summary>The optional tenant cannot be the uninitialized value of the tenant struct.</summary>
     [Fact]
-    public void ShouldRejectUninitializedTenant()
+    public void ShouldRejectScenarioGivenUninitializedTenant()
     {
         // Arrange
         var tenant = default(TenantId);
@@ -169,7 +169,7 @@ public sealed class ReactorScenarioTests
 
     /// <summary>Seeded events reach the reactor with the metadata the test attached.</summary>
     [Fact]
-    public async Task ShouldDeliverSeededEventsUnchanged()
+    public async Task ShouldDeliverEventsUnchangedGivenSeededEvents()
     {
         // Arrange
         var eventId = Uuid.CreateVersion4();

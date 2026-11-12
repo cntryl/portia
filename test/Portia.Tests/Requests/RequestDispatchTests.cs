@@ -37,7 +37,7 @@ public sealed class RequestDispatchTests
     ///     bus at all and returns the validator's failure unchanged.
     /// </summary>
     [Fact]
-    public async Task ShouldReturnValidationFailureWithoutDispatchingWhenActorValidationFails()
+    public async Task ShouldReturnValidationFailureWithoutDispatchingGivenActorValidationFailure()
     {
         // Arrange
         var handler = new ChangeValueHandler();
@@ -62,7 +62,7 @@ public sealed class RequestDispatchTests
     ///     bus, and the bus's own result is returned.
     /// </summary>
     [Fact]
-    public async Task ShouldDispatchToBusAndReturnItsResultWhenActorValidationSucceeds()
+    public async Task ShouldDispatchToBusAndReturnResultGivenActorValidationSuccess()
     {
         // Arrange
         var handler = new ChangeValueHandler();

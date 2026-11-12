@@ -12,7 +12,7 @@ public sealed class FitzEventStoreProgressTests
     [InlineData("opaque/processor:v1", "opaque/source:v2")]
     [InlineData(null, null)]
     [InlineData(null, "")]
-    public void ShouldRoundTripProgressCursorsThroughGeneratedJson(string? position, string? sourcePosition)
+    public void ShouldRoundTripProgressCursorsGivenGeneratedJson(string? position, string? sourcePosition)
     {
         // Arrange
         var expected = new EventStreamProgress(position is null ? EventCursor.Start : new EventCursor(position),
@@ -37,7 +37,7 @@ public sealed class FitzEventStoreProgressTests
     [Theory]
     [InlineData("orders", 10UL, 12UL)]
     [InlineData(null, 30UL, 32UL)]
-    public async Task ShouldObserveThePatternScopeWithoutDeserializingEvents(string? area, ulong position, ulong head)
+    public async Task ShouldObservePatternScopeWithoutDeserializingEventsGivenPatternAreaAndPosition(string? area, ulong position, ulong head)
     {
         // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", area);
@@ -58,7 +58,7 @@ public sealed class FitzEventStoreProgressTests
 
     /// <summary>An unexhausted page proves a lower bound without inventing a total backlog or head.</summary>
     [Fact]
-    public async Task ShouldPreserveUnknownHeadForAnUnexhaustedPatternPage()
+    public async Task ShouldPreserveUnknownHeadGivenUnexhaustedPatternPage()
     {
         // Arrange
         var client = new ProgressClient(Page(true, Item(3, 10, 30), Item(4, 11, 31)));
@@ -76,7 +76,7 @@ public sealed class FitzEventStoreProgressTests
 
     /// <summary>An empty read alone cannot validate a checkpoint ahead of the source.</summary>
     [Fact]
-    public async Task ShouldPreserveUnknownStatusWhenAnEmptyPatternCannotValidateTheCheckpoint()
+    public async Task ShouldPreserveUnknownStatusGivenEmptyPatternThatCannotValidateCheckpoint()
     {
         // Arrange
         var client = new ProgressClient(EmptyPage(100), previousPage: EmptyPage(99));
@@ -93,7 +93,7 @@ public sealed class FitzEventStoreProgressTests
 
     /// <summary>A bounded preceding-position probe validates a caught-up checkpoint.</summary>
     [Fact]
-    public async Task ShouldValidateAnEmptyPatternsCheckpointAgainstItsPrecedingRecord()
+    public async Task ShouldValidateCheckpointAgainstPrecedingRecordGivenEmptyPattern()
     {
         // Arrange
         var client = new ProgressClient(EmptyPage(3), previousPage: Page(false, Item(2, 2, 2)));
@@ -115,7 +115,7 @@ public sealed class FitzEventStoreProgressTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldPreserveSourceProgressWhenExpiredOffsetsPrecedeReadableRecords(bool resource)
+    public async Task ShouldPreserveSourceProgressGivenExpiredOffsetsPrecedingReadableRecords(bool resource)
     {
         // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", "orders", resource ? "one" : null);
@@ -133,7 +133,7 @@ public sealed class FitzEventStoreProgressTests
 
     /// <summary>An exhausted page can advance across expired history without returning an event.</summary>
     [Fact]
-    public async Task ShouldNotInventAZeroHeadWhenAnEmptyPageCursorAdvanced()
+    public async Task ShouldNotInventZeroHeadGivenEmptyPageCursorAdvanced()
     {
         // Arrange
         var client = new ProgressClient(EmptyPage(8));
@@ -150,7 +150,7 @@ public sealed class FitzEventStoreProgressTests
 
     /// <summary>A later resource page cannot inflate the lower bound beyond its sampled metadata frontier.</summary>
     [Fact]
-    public async Task ShouldExcludeConcurrentAppendsBeyondTheSampledResourceHead()
+    public async Task ShouldExcludeConcurrentAppendsGivenAppendsBeyondSampledResourceHead()
     {
         // Arrange
         var client = new ProgressClient(Page(false, Item(1, 1, 1), Item(2, 2, 2)), new StreamMetadata(0, 1, 2));
@@ -169,7 +169,7 @@ public sealed class FitzEventStoreProgressTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldRejectDuplicatePositionsAfterAnExpiredGap(bool hasMore)
+    public async Task ShouldRejectDuplicatePositionsGivenExpiredGap(bool hasMore)
     {
         // Arrange
         var client = new ProgressClient(Page(hasMore, Item(2, 2, 2), Item(2, 2, 2)));
@@ -184,7 +184,7 @@ public sealed class FitzEventStoreProgressTests
 
     /// <summary>A withheld entry does not bypass scope validation of later records.</summary>
     [Fact]
-    public async Task ShouldRejectRecordsOutsideThePatternAfterAWithheldEntry()
+    public async Task ShouldRejectRecordsGivenRecordOutsidePatternAfterWithheldEntry()
     {
         // Arrange
         var withheld = new StreamReadItem("stream://tenant/orders/one", StreamReadItemKind.Filtered, Offset: 0);
@@ -199,7 +199,7 @@ public sealed class FitzEventStoreProgressTests
 
     /// <summary>Withheld positions do not become a fabricated readable-event count.</summary>
     [Fact]
-    public async Task ShouldNotCountWithheldEntriesAsUnreadEvents()
+    public async Task ShouldNotCountUnreadEventsGivenWithheldEntries()
     {
         // Arrange
         var withheld = new StreamReadItem("stream://tenant/orders/one", StreamReadItemKind.Filtered, Offset: 10);
@@ -217,7 +217,7 @@ public sealed class FitzEventStoreProgressTests
 
     /// <summary>A resource's metadata supplies its head; a bounded read verifies its readable backlog.</summary>
     [Fact]
-    public async Task ShouldUseMetadataAndBoundedRecordsForResourceProgress()
+    public async Task ShouldUseMetadataAndBoundedRecordsGivenResourceProgress()
     {
         // Arrange
         var client = new ProgressClient(Page(false, Item(2, 10, 30), Item(3, 11, 31), Item(4, 12, 32)),
@@ -239,7 +239,7 @@ public sealed class FitzEventStoreProgressTests
 
     /// <summary>A large resource backlog remains bounded while preserving its known head.</summary>
     [Fact]
-    public async Task ShouldKeepTheResourceHeadWhenItsBacklogExceedsTheProbe()
+    public async Task ShouldKeepResourceHeadGivenBacklogExceedingProbe()
     {
         // Arrange
         var client = new ProgressClient(Page(true, Item(0, 0, 0), Item(1, 1, 1)), new StreamMetadata(0, 9999, 10000));
@@ -256,7 +256,7 @@ public sealed class FitzEventStoreProgressTests
 
     /// <summary>A source behind the supplied checkpoint must not be called caught up.</summary>
     [Fact]
-    public async Task ShouldPreserveUnknownStatusForAResourceCheckpointBeyondTheSource()
+    public async Task ShouldPreserveUnknownStatusGivenResourceCheckpointBeyondSource()
     {
         // Arrange
         var client = new ProgressClient(Page(false), new StreamMetadata(0, 2, 3));
@@ -273,7 +273,7 @@ public sealed class FitzEventStoreProgressTests
 
     /// <summary>Retained suffixes cannot claim an exact count across missing source history.</summary>
     [Fact]
-    public async Task ShouldPreserveUnknownCountWhenResourceRetentionPassedTheCheckpoint()
+    public async Task ShouldPreserveUnknownCountGivenRetentionPastCheckpoint()
     {
         // Arrange
         var client = new ProgressClient(Page(false), new StreamMetadata(3, 4, 2));
@@ -290,7 +290,7 @@ public sealed class FitzEventStoreProgressTests
 
     /// <summary>Scope and cursor validation precede transport access.</summary>
     [Fact]
-    public async Task ShouldRejectUnboundPatternsAndForeignCursorsBeforeCallingFitz()
+    public async Task ShouldRejectBeforeCallingFitzGivenUnboundPatternsAndForeignCursors()
     {
         // Arrange
         var client = new ProgressClient(Page(false));
@@ -309,7 +309,7 @@ public sealed class FitzEventStoreProgressTests
 
     /// <summary>Caller cancellation is preserved and never invokes the transport.</summary>
     [Fact]
-    public async Task ShouldRespectCancellationBeforeObservingTheSource()
+    public async Task ShouldRespectCancellationGivenCanceledTokenBeforeObservingSource()
     {
         // Arrange
         var client = new ProgressClient(Page(false));
@@ -327,7 +327,7 @@ public sealed class FitzEventStoreProgressTests
 
     /// <summary>Even a lower-bound probe must not include records from another tenant or source pattern.</summary>
     [Fact]
-    public async Task ShouldRejectRecordsOutsideTheObservedPattern()
+    public async Task ShouldRejectRecordsGivenRecordOutsideObservedPattern()
     {
         // Arrange
         var client = new ProgressClient(Page(true, Item(0, 0, 0, "stream://other/orders/one")));

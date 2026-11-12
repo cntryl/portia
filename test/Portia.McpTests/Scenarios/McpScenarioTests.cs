@@ -14,7 +14,7 @@ namespace Cntryl.Portia.Tests;
 public sealed class McpScenarioTests
 {
     [Fact]
-    public async Task ShouldTerminateStdioChildAfterScenarioDisposal()
+    public async Task ShouldTerminateStdioChildGivenScenarioDisposal()
     {
         // Arrange
         var host = GetStdioHostPath();
@@ -42,7 +42,7 @@ public sealed class McpScenarioTests
     }
 
     [Fact]
-    public async Task ShouldTerminateStdioChildWhenConnectionIsCanceled()
+    public async Task ShouldTerminateStdioChildGivenCanceledConnection()
     {
         // Arrange
         var started = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -73,7 +73,7 @@ public sealed class McpScenarioTests
     }
 
     [Fact]
-    public async Task ShouldTerminateStdioChildWhenInitializationFails()
+    public async Task ShouldTerminateStdioChildGivenFailedInitialization()
     {
         // Arrange
         var started = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -141,7 +141,7 @@ public sealed class McpScenarioTests
     }
 
     [Fact]
-    public void ShouldPreservePrimitiveSnapshotConstructionAndDeconstruction()
+    public void ShouldPreserveConstructionAndDeconstructionGivenPrimitiveSnapshots()
     {
         // Arrange
         var resource = new McpResourceSnapshot("resource://one", "One", "text/plain", false);
@@ -164,7 +164,7 @@ public sealed class McpScenarioTests
     }
 
     [Fact]
-    public async Task ShouldExerciseToolsResourcesAndPromptsThroughOwnedStdioScenario()
+    public async Task ShouldExerciseToolsResourcesAndPromptsGivenOwnedStdioScenario()
     {
         // Arrange
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name
@@ -216,7 +216,7 @@ public sealed class McpScenarioTests
     }
 
     [Fact]
-    public async Task ShouldSnapshotCatalogAndExerciseRealDispatchFailures()
+    public async Task ShouldSnapshotCatalogAndExerciseDispatchFailuresGivenRealDispatch()
     {
         // Arrange
         var postRequests = 0;

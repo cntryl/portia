@@ -5,7 +5,7 @@ public sealed class AwsObjectStorageTests
 {
     /// <summary>Checks encrypted staging, verified digest metadata, and conditional immutable promotion.</summary>
     [Fact]
-    public async Task ShouldResolveTenantKeyAndPromoteVerifiedContentConditionally()
+    public async Task ShouldPromoteVerifiedContentConditionallyGivenTenantKey()
     {
         // Arrange
         var content = "object bytes"u8.ToArray();
@@ -50,7 +50,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Uses the configured S3 endpoint scheme for signed part and download links.</summary>
     [Fact]
-    public async Task ShouldSignHttpUrlsForHttpS3Endpoints()
+    public async Task ShouldSignHttpUrlsGivenHttpS3Endpoint()
     {
         // Arrange
         var content = "local endpoint"u8.ToArray();
@@ -76,7 +76,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Uses the S3 client's HTTP setting when it has no explicit service URL.</summary>
     [Fact]
-    public async Task ShouldSignHttpUrlsWhenS3ClientUsesHttp()
+    public async Task ShouldSignHttpUrlsGivenS3ClientUsingHttp()
     {
         // Arrange
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
@@ -95,7 +95,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Checks that a staged full-object digest mismatch never reaches the content key.</summary>
     [Fact]
-    public async Task ShouldRejectMismatchedStagedBytesAndCleanUpTheMultipartUpload()
+    public async Task ShouldRejectAndCleanUpMultipartUploadGivenMismatchedStagedBytes()
     {
         // Arrange
         var content = "correct"u8.ToArray();
@@ -126,7 +126,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Checks that a lost completion response can be retried after immutable promotion.</summary>
     [Fact]
-    public async Task ShouldTreatVerifiedPromotionAsSuccessfulWhenCompletionIsRetried()
+    public async Task ShouldTreatPromotionAsSuccessfulGivenVerifiedPromotionAndRetriedCompletion()
     {
         // Arrange
         var content = "retryable object"u8.ToArray();
@@ -159,7 +159,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Checks that a concurrent completion cannot lose its staged input during retry.</summary>
     [Fact]
-    public async Task ShouldKeepStagingWhenUploadIdIsGoneButPromotionIsNotVisibleYet()
+    public async Task ShouldKeepStagingGivenUploadIdGoneAndPromotionNotYetVisible()
     {
         // Arrange
         var content = "concurrent completion"u8.ToArray();
@@ -190,7 +190,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Checks that a completed staging object can be verified and promoted on retry.</summary>
     [Fact]
-    public async Task ShouldResumePromotionWhenTheMultipartUploadIdIsGone()
+    public async Task ShouldResumePromotionGivenMultipartUploadIdGone()
     {
         // Arrange
         var content = "completed staging object"u8.ToArray();
@@ -214,7 +214,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Checks that a lost completion response leaves the staged bytes available for retry.</summary>
     [Fact]
-    public async Task ShouldPreserveAndResumeAfterAmbiguousMultipartCompletion()
+    public async Task ShouldPreserveAndResumeGivenAmbiguousMultipartCompletion()
     {
         // Arrange
         var content = "ambiguous completion"u8.ToArray();
@@ -249,7 +249,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Checks that cancellation after S3 receives completion leaves a retry path.</summary>
     [Fact]
-    public async Task ShouldPreserveStagingWhenCompletionIsCanceledInFlight()
+    public async Task ShouldPreserveStagingGivenCompletionCanceledInFlight()
     {
         // Arrange
         var content = "in-flight cancellation"u8.ToArray();
@@ -278,7 +278,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Checks that a bad completed staging object is discarded during recovery.</summary>
     [Fact]
-    public async Task ShouldRejectAndCleanMismatchedStagingOnResume()
+    public async Task ShouldRejectAndCleanStagingGivenMismatchedStagingOnResume()
     {
         // Arrange
         var content = "expected content"u8.ToArray();
@@ -302,7 +302,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Checks that a transient destination conflict retries without discarding verified bytes.</summary>
     [Fact]
-    public async Task ShouldRetryConditionalCopyConflict()
+    public async Task ShouldRetryGivenConditionalCopyConflict()
     {
         // Arrange
         var content = "conflicting promotion"u8.ToArray();
@@ -324,7 +324,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Checks that unresolved conditional conflicts retain staged bytes for a later retry.</summary>
     [Fact]
-    public async Task ShouldKeepStagingAfterRepeatedConditionalCopyConflicts()
+    public async Task ShouldKeepStagingGivenRepeatedConditionalCopyConflicts()
     {
         // Arrange
         var content = "persistent conflict"u8.ToArray();
@@ -348,7 +348,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Checks that an immutable-copy race succeeds only when the existing object verifies.</summary>
     [Fact]
-    public async Task ShouldAcceptVerifiedConditionalCreateRace()
+    public async Task ShouldAcceptGivenVerifiedConditionalCreateRace()
     {
         // Arrange
         var content = "concurrent immutable object"u8.ToArray();
@@ -371,7 +371,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Checks that missing and incorrectly described promoted objects are not reported as valid.</summary>
     [Fact]
-    public async Task ShouldReportMissingOrUnverifiedContentAsUnavailable()
+    public async Task ShouldReportUnavailableGivenMissingOrUnverifiedContent()
     {
         // Arrange
         var content = "existing object"u8.ToArray();
@@ -398,7 +398,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>A delete between metadata verification and reading has the same missing-object result.</summary>
     [Fact]
-    public async Task ShouldReturnNoStreamWhenContentDisappearsAfterHead()
+    public async Task ShouldReturnNoStreamGivenContentDisappearingAfterHead()
     {
         // Arrange
         var content = "concurrent deletion"u8.ToArray();
@@ -418,7 +418,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Checks cancellation leaves a session recoverable until the caller explicitly aborts it.</summary>
     [Fact]
-    public async Task ShouldPreserveStagingWhenCompletionIsCanceledBeforeS3Request()
+    public async Task ShouldPreserveStagingGivenCompletionCanceledBeforeS3Request()
     {
         // Arrange
         var content = "cancelled object"u8.ToArray();
@@ -449,7 +449,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Checks that abort remains idempotent after S3 has removed the upload ID.</summary>
     [Fact]
-    public async Task ShouldAbortWhenS3ReportsNoSuchUpload()
+    public async Task ShouldAbortGivenS3ReportingNoSuchUpload()
     {
         // Arrange
         var content = "aborted object"u8.ToArray();
@@ -476,7 +476,7 @@ public sealed class AwsObjectStorageTests
     [InlineData("InvalidPart")]
     [InlineData("InvalidPartOrder")]
     [InlineData("EntityTooSmall")]
-    public async Task ShouldMapRejectedPartReceiptsAndAllowCorrectedRetry(string s3ErrorCode)
+    public async Task ShouldMapRejectedPartReceiptsAndAllowCorrectedRetryGivenS3ErrorCode(string s3ErrorCode)
     {
         // Arrange
         var content = "browser upload"u8.ToArray();
@@ -518,7 +518,7 @@ public sealed class AwsObjectStorageTests
     /// cleanup fails afterwards.
     /// </summary>
     [Fact]
-    public async Task ShouldReportCommittedCompletionWhenStagingCleanupFails()
+    public async Task ShouldReportCommittedCompletionGivenStagingCleanupFailure()
     {
         // Arrange
         var content = "committed object"u8.ToArray();
@@ -543,7 +543,7 @@ public sealed class AwsObjectStorageTests
 
     /// <summary>Checks that a failed abort reports its own failure rather than a later cleanup failure.</summary>
     [Fact]
-    public async Task ShouldSurfaceTheAbortFailureWhenCleanupAlsoFails()
+    public async Task ShouldSurfaceAbortFailureGivenCleanupAlsoFails()
     {
         // Arrange
         var digest = new ObjectDigest(new string('a', 64), 1);

@@ -16,7 +16,7 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldReportOwnedProjectorAndReactorProgressThroughPublicRpcClient(bool operationalPolicy)
+    public async Task ShouldReportOwnedProgressGivenProjectorAndReactorThroughPublicRpcClient(bool operationalPolicy)
     {
         // Arrange
         await using var connection = await broker.CreateClientAsync();

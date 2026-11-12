@@ -26,7 +26,7 @@ public sealed class RequestDispatchAllocationTests
     ///     Both dispatch shapes stay inside the steady-state budget measured on an optimized build.
     /// </summary>
     [OptimizedBuildFact]
-    public void ShouldStayWithinMeasuredSteadyStateDispatchBudgets()
+    public void ShouldStayWithinAllocationBudgetsGivenSteadyStateDispatch()
     {
         // Arrange
         using var host = TestRequestBus.Create();

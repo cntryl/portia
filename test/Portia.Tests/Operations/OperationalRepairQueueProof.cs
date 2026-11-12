@@ -4,7 +4,7 @@ public sealed partial class OperationalExecutionTests
 {
     /// <summary>Resolving one failed block invalidates other queued plans for that same failure.</summary>
     [Fact]
-    public async Task ShouldInvalidateOtherQueuedRepairsWhenFailureIsResolved()
+    public async Task ShouldInvalidateOtherQueuedRepairsGivenFailureResolved()
     {
         // Arrange
         var journal = new MemoryOperationalStore();

@@ -14,7 +14,7 @@ public sealed class DomainEventSchemaResolverTests
     ///     payload unchanged.
     /// </summary>
     [Fact]
-    public void ShouldResolveDirectlyWhenExactVersionIsRegistered()
+    public void ShouldResolveDirectlyGivenExactVersionRegistered()
     {
         // Arrange
         var resolver = new DomainEventSchemaResolver(
@@ -35,7 +35,7 @@ public sealed class DomainEventSchemaResolverTests
     ///     reaches a version the catalog has.
     /// </summary>
     [Fact]
-    public void ShouldWalkForwardThroughAnUpcasterUntilCatalogResolves()
+    public void ShouldWalkForwardThroughUpcasterGivenVersionUnresolvedByCatalog()
     {
         // Arrange
         var upcaster = new WidgetNamedToRenamedUpcaster();
@@ -58,7 +58,7 @@ public sealed class DomainEventSchemaResolverTests
     ///     Verifies a version with neither a catalog registration nor an upcaster fails loudly.
     /// </summary>
     [Fact]
-    public void ShouldThrowWhenNoRegistrationOrUpcasterCanResolveVersion()
+    public void ShouldThrowGivenNoRegistrationOrUpcasterForVersion()
     {
         // Arrange
         var resolver = new DomainEventSchemaResolver(

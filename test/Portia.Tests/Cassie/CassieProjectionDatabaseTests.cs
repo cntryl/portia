@@ -21,7 +21,7 @@ public sealed class CassieProjectionDatabaseTests
     [InlineData("40001", false)]
     [InlineData("22000", false)]
     [InlineData("23514", false)]
-    public void ShouldClassifyCheckpointSchemaErrorsOnly(string sqlState, bool expected)
+    public void ShouldClassifyCheckpointSchemaErrorsOnlyGivenSqlState(string sqlState, bool expected)
     {
         // Arrange
         var error = new CassieException("probe failed", sqlState);

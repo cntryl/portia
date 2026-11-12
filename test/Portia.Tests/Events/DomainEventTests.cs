@@ -9,7 +9,7 @@ public sealed class DomainEventTests
     ///     Verifies that an event's metadata cannot be reassigned once attached.
     /// </summary>
     [Fact]
-    public void ShouldThrowWhenMetadataAttachedMoreThanOnce()
+    public void ShouldThrowGivenMetadataAttachedMoreThanOnce()
     {
         // Arrange
         var ev = new StubEvent();
@@ -33,7 +33,7 @@ public sealed class DomainEventTests
     ///     Verifies that reading metadata before it is attached fails clearly.
     /// </summary>
     [Fact]
-    public void ShouldThrowWhenMetadataReadBeforeAttached()
+    public void ShouldThrowGivenMetadataReadBeforeAttached()
     {
         // Arrange
         var ev = new StubEvent();
@@ -50,7 +50,7 @@ public sealed class DomainEventTests
     ///     constructed expectation regardless of the metadata Portia attached.
     /// </summary>
     [Fact]
-    public void ShouldCompareEventsByPayloadIgnoringMetadata()
+    public void ShouldCompareEventsByPayloadGivenDifferingMetadata()
     {
         // Arrange
         var attached = new ValueChanged(3);
@@ -74,7 +74,7 @@ public sealed class DomainEventTests
     ///     so it can never share an event ID with the event it was copied from.
     /// </summary>
     [Fact]
-    public void ShouldStartCopiedEventWithoutMetadata()
+    public void ShouldStartWithoutMetadataGivenCopiedEvent()
     {
         // Arrange
         var attached = new ValueChanged(3);

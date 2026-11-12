@@ -8,7 +8,7 @@ public sealed class ContextSaveTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task FailedSaveFreezesAttributionAndRetryPreservesSerializedEvents(bool audit)
+    public async Task ShouldPreserveSerializedEventsOnRetryGivenFailedSaveFrozeAttribution(bool audit)
     {
         // Arrange
         var store = new FailingStore();
@@ -74,7 +74,7 @@ public sealed class ContextSaveTests
     }
 
     [Fact]
-    public async Task MissingContextCannotPersistEvents()
+    public async Task ShouldRejectSaveGivenMissingContext()
     {
         // Arrange
         var store = new InMemoryEventStore();
@@ -90,7 +90,7 @@ public sealed class ContextSaveTests
     }
 
     [Fact]
-    public async Task CancelledSaveDoesNotFreezeAttribution()
+    public async Task ShouldNotFreezeAttributionGivenCancelledSave()
     {
         // Arrange
         var store = new InMemoryEventStore();
@@ -114,7 +114,7 @@ public sealed class ContextSaveTests
     }
 
     [Fact]
-    public async Task ConflictingMetadataRejectsWholeBatchBeforeStampingOrAppending()
+    public async Task ShouldRejectWholeBatchGivenConflictingMetadataBeforeStampingOrAppending()
     {
         // Arrange
         var store = new InMemoryEventStore();

@@ -25,7 +25,7 @@ public sealed class HttpTenantBindingTests : IAsyncDisposable
 
     /// <summary>A route token binds to the typed tenant.</summary>
     [Fact]
-    public async Task ShouldBindTenantFromRoute()
+    public async Task ShouldBindTenantGivenTenantInRoute()
     {
         // Arrange
         var client = await StartAsync();
@@ -40,7 +40,7 @@ public sealed class HttpTenantBindingTests : IAsyncDisposable
 
     /// <summary>A route token that is not a realm segment is rejected before the handler runs.</summary>
     [Fact]
-    public async Task ShouldRejectMalformedTenantInRoute()
+    public async Task ShouldRejectRequestGivenMalformedTenantInRoute()
     {
         // Arrange
         var client = await StartAsync();
@@ -59,7 +59,7 @@ public sealed class HttpTenantBindingTests : IAsyncDisposable
     [InlineData("acme", HttpStatusCode.OK)]
     [InlineData("a/b", HttpStatusCode.BadRequest)]
     [InlineData("{tenant}", HttpStatusCode.BadRequest)]
-    public async Task ShouldBindTenantFromBody(string tenant, HttpStatusCode expected)
+    public async Task ShouldBindTenantGivenTenantInBody(string tenant, HttpStatusCode expected)
     {
         // Arrange
         var client = await StartAsync();
@@ -73,7 +73,7 @@ public sealed class HttpTenantBindingTests : IAsyncDisposable
 
     /// <summary>OpenAPI describes the tenant as a string in both the path and the body.</summary>
     [Fact]
-    public async Task ShouldDescribeTenantAsString()
+    public async Task ShouldDescribeTenantAsStringGivenOpenApiDocument()
     {
         // Arrange
         var client = await StartAsync();

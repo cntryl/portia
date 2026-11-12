@@ -7,7 +7,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ApplicationFleetTests
 {
     [Fact]
-    public async Task WorkerReplicasHandOffLeasedComponentWithoutConcurrentExecution()
+    public async Task ShouldHandOffLeasedComponentWithoutConcurrentExecutionGivenWorkerReplicas()
     {
         // Arrange
         await using var firstClient = await ConsumerBroker.ConnectAsync();

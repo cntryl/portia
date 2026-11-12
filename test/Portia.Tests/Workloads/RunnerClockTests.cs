@@ -16,7 +16,7 @@ public sealed class RunnerClockTests
     ///     clock passes the grace interval.
     /// </summary>
     [Fact]
-    public async Task ShouldBoundMultiTenantShutdownGraceWithTheInjectedClock()
+    public async Task ShouldBoundShutdownGraceGivenInjectedClockAndMultiTenantRunner()
     {
         // Arrange
         var grace = TimeSpan.FromMinutes(10);
@@ -49,7 +49,7 @@ public sealed class RunnerClockTests
     ///     configured interval in real time.
     /// </summary>
     [Fact]
-    public async Task ShouldBoundPartitionTerminationWithTheInjectedClock()
+    public async Task ShouldBoundPartitionTerminationGivenInjectedClock()
     {
         // Arrange
         const string partition = "lease://portia/fleet/stuck";

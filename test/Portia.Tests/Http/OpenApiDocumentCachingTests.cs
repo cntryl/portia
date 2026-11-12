@@ -32,7 +32,7 @@ public sealed class OpenApiDocumentCachingTests : IAsyncDisposable
     ///     regenerating per request costs an order of magnitude more than writing it.
     /// </summary>
     [Fact]
-    public async Task ShouldNotRecomposeTheDocumentOnEveryRequest()
+    public async Task ShouldNotRecomposeDocumentGivenRepeatedRequests()
     {
         // Arrange
         const int iterations = 100;
@@ -61,7 +61,7 @@ public sealed class OpenApiDocumentCachingTests : IAsyncDisposable
 
     /// <summary>The cached bytes keep the media types and the 404 for an unknown document name.</summary>
     [Fact]
-    public async Task ShouldServeTheDocumentedMediaTypesAndRejectUnknownDocumentNames()
+    public async Task ShouldServeDocumentedMediaTypesAndRejectUnknownNamesGivenDocumentRequests()
     {
         // Arrange
         var client = await StartAsync();

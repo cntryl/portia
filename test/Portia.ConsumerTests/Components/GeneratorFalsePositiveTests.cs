@@ -14,7 +14,7 @@ public sealed class GeneratorFalsePositiveTests
     static readonly CSharpParseOptions FileParseOptions = new(LanguageVersion.Preview);
 
     [Fact]
-    public void RegistrationNamesCompileForKeywordNamespaces()
+    public void ShouldCompileRegistrationNamesGivenKeywordNamespaces()
     {
         // Arrange
         const string source = """
@@ -39,7 +39,7 @@ public sealed class GeneratorFalsePositiveTests
     }
 
     [Fact]
-    public void HttpBindingCompilesForLargeDecimalDefaults()
+    public void ShouldCompileHttpBindingGivenLargeDecimalDefaults()
     {
         // Arrange
         const string source = """
@@ -60,7 +60,7 @@ public sealed class GeneratorFalsePositiveTests
     }
 
     [Fact]
-    public void HttpBindingReportsRequiredMembersInsteadOfEmittingBrokenConstruction()
+    public void ShouldReportRequiredMembersGivenRequestWithRequiredProperty()
     {
         // Arrange
         const string source = """
@@ -81,7 +81,7 @@ public sealed class GeneratorFalsePositiveTests
     }
 
     [Fact]
-    public void HttpBindingAcceptsRecordStructRequests()
+    public void ShouldAcceptHttpBindingGivenRecordStructRequest()
     {
         // Arrange
         const string source = """
@@ -104,7 +104,7 @@ public sealed class GeneratorFalsePositiveTests
     }
 
     [Fact]
-    public void HttpBindingAcceptsRegexConstraintsContainingQuestionMarks()
+    public void ShouldAcceptHttpBindingGivenRegexConstraintContainingQuestionMark()
     {
         // Arrange
         const string source = """
@@ -125,7 +125,7 @@ public sealed class GeneratorFalsePositiveTests
     }
 
     [Fact]
-    public void HttpBindingStillRejectsOptionalRouteTokens()
+    public void ShouldRejectHttpBindingGivenOptionalRouteTokens()
     {
         // Arrange
         const string source = """
@@ -150,7 +150,7 @@ public sealed class GeneratorFalsePositiveTests
     }
 
     [Fact]
-    public void HttpBindingAcceptsDuplicateMappingExcludedThroughALocal()
+    public void ShouldAcceptDuplicateMappingGivenExclusionThroughLocal()
     {
         // Arrange
         const string source = """
@@ -177,7 +177,7 @@ public sealed class GeneratorFalsePositiveTests
     }
 
     [Fact]
-    public void JsonMetadataIgnoresAbstractAndOpenGenericDispatchArguments()
+    public void ShouldIgnoreDispatchArgumentsGivenAbstractAndOpenGenericRequests()
     {
         // Arrange
         const string source = """
@@ -207,7 +207,7 @@ public sealed class GeneratorFalsePositiveTests
     }
 
     [Fact]
-    public void JsonMetadataIgnoresFileLocalEvents()
+    public void ShouldIgnoreEventGivenFileLocalDeclaration()
     {
         // Arrange
         const string source = """
@@ -225,7 +225,7 @@ public sealed class GeneratorFalsePositiveTests
     }
 
     [Fact]
-    public void ProcessorDerivedFromAPartialDispatchingBaseNeedsNoPartial()
+    public void ShouldNotRequirePartialGivenProcessorDerivedFromPartialDispatchingBase()
     {
         // Arrange
         const string source = """
@@ -250,7 +250,7 @@ public sealed class GeneratorFalsePositiveTests
     }
 
     [Fact]
-    public void UpcasterForAnEventDeclaredInAReferencedFeatureIsKnown()
+    public void ShouldKnowUpcasterEventGivenEventDeclaredInReferencedFeature()
     {
         // Arrange
         var feature = GeneratorCompilation.Reference("""
@@ -279,7 +279,7 @@ public sealed class GeneratorFalsePositiveTests
     [InlineData("switch (value) { case UsedEvent: return 1; default: return 0; }")]
     [InlineData("return value switch { UsedEvent => 1, _ => 0 };")]
     [InlineData("_ = UsedEvent.Create(); return 0;")]
-    public void RegistersReferencedEventsNamedOnlyInPatternsOrStaticCalls(string body)
+    public void ShouldRegisterReferencedEventsGivenNamesOnlyInPatternsOrStaticCalls(string body)
     {
         // Arrange
         var contracts = GeneratorCompilation.Reference("""
@@ -309,7 +309,7 @@ public sealed class GeneratorFalsePositiveTests
     }
 
     [Fact]
-    public void UpcasterSplitAcrossFilesDoesNotCrashTheCatalog()
+    public void ShouldNotCrashCatalogGivenUpcasterSplitAcrossFiles()
     {
         // Arrange
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
@@ -345,7 +345,7 @@ public sealed class GeneratorFalsePositiveTests
 
     /// <summary>A JSON context in a file the compiler treats as generated still covers the roots it declares.</summary>
     [Fact]
-    public void JsonContextInAGeneratedFileCoversItsRoots()
+    public void ShouldCoverRootsGivenJsonContextInGeneratedFile()
     {
         // Arrange
         const string source = """
@@ -373,7 +373,7 @@ public sealed class GeneratorFalsePositiveTests
 
     /// <summary>A component whose first partial part is generated is still checked through its other parts.</summary>
     [Fact]
-    public void ComponentWithAGeneratedFirstPartIsStillChecked()
+    public void ShouldCheckComponentGivenGeneratedFirstPart()
     {
         // Arrange
         const string source = """

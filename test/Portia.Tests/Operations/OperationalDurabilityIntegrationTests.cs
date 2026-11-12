@@ -41,7 +41,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
 
     /// <summary>Failure and interrupted-attempt evidence survive hard termination; replay does not duplicate an earlier effect.</summary>
     [Fact]
-    public async Task ShouldRecoverAfterWorkerKillAndBrokerRecreationWithoutDuplicatingEffects()
+    public async Task ShouldRecoverWithoutDuplicatingEffectsGivenWorkerKillAndBrokerRecreation()
     {
         // Arrange
         await using (var client = await ConnectAsync())

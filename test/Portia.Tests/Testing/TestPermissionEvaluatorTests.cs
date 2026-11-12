@@ -5,7 +5,7 @@ public sealed class TestPermissionEvaluatorTests
 {
     /// <summary>Concurrent dispatches sharing one singleton evaluator lose no recorded permission.</summary>
     [Fact]
-    public async Task ShouldRecordEveryConcurrentEvaluation()
+    public async Task ShouldRecordEveryEvaluationGivenConcurrentEvaluations()
     {
         // Arrange
         var evaluator = TestPermissionEvaluator.AllowAll();

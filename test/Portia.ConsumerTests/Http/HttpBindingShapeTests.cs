@@ -8,7 +8,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class HttpBindingShapeTests
 {
     [Fact]
-    public void NullableReferenceResultIsCarriedIntoGeneratedOpenApiMetadata()
+    public void ShouldCarryNullableResultIntoOpenApiMetadataGivenNullableReferenceResult()
     {
         // Arrange
         const string source = """
@@ -32,7 +32,7 @@ public sealed class HttpBindingShapeTests
     }
 
     [Fact]
-    public void NullableAndEscapedHttpContractTypesCompileWithRuntimeMetadata()
+    public void ShouldCompileWithRuntimeMetadataGivenNullableAndEscapedContractTypes()
     {
         // Arrange
         const string source = """
@@ -83,7 +83,7 @@ public sealed class HttpBindingShapeTests
     }
 
     [Fact]
-    public async Task GeneratedHttpMapsCommitConcurrencyToSafeTransientConflictWithoutRetry()
+    public async Task ShouldMapToTransientConflictWithoutRetryGivenCommitConcurrency()
     {
         // Arrange
         var assembly = GeneratorCompilation.Compile("""
@@ -198,7 +198,7 @@ public sealed class HttpBindingShapeTests
     }
 
     [Fact]
-    public async Task HelperConfiguredBindersSupportOtherwiseUnbindableRequests()
+    public async Task ShouldBindRequestGivenHelperConfiguredBinderOnOtherwiseUnbindableRequest()
     {
         // Arrange
         var assembly = GeneratorCompilation.Compile("""
@@ -279,7 +279,7 @@ public sealed class HttpBindingShapeTests
     }
 
     [Fact]
-    public void ConfiguredUnbindableRequestWithoutOnBindFailsDuringMapping()
+    public void ShouldFailDuringMappingGivenConfiguredUnbindableRequestWithoutOnBind()
     {
         // Arrange
         var assembly = GeneratorCompilation.Compile("""
@@ -318,7 +318,7 @@ public sealed class HttpBindingShapeTests
     }
 
     [Fact]
-    public async Task SupportedRequestRetainsDefaultBinderWhenConditionalOnBindIsNotInstalled()
+    public async Task ShouldRetainDefaultBinderGivenSupportedRequestWhenConditionalOnBindNotInstalled()
     {
         // Arrange
         var assembly = GeneratorCompilation.Compile("""
@@ -375,7 +375,7 @@ public sealed class HttpBindingShapeTests
     }
 
     [Fact]
-    public void ConfiguredUnaryAndStreamingMappingsAreIntercepted() => _ = GeneratorCompilation.Compile("""
+    public void ShouldInterceptMappingsGivenConfiguredUnaryAndStreamingEndpoints() => _ = GeneratorCompilation.Compile("""
         using Cntryl.Portia;
         using Cntryl.Portia.Testing;
         using Microsoft.AspNetCore.Http;
@@ -397,7 +397,7 @@ public sealed class HttpBindingShapeTests
         """, new RequestHttpBindingGenerator());
 
     [Fact]
-    public void CustomBinderSupportsShapesRejectedByGeneratedBindingIncludingStructs() => _ =
+    public void ShouldSupportCustomBinderGivenShapesRejectedByGeneratedBinding() => _ =
         GeneratorCompilation.Compile("""
                                      using Cntryl.Portia;
                                      using Cntryl.Portia.Testing;
@@ -415,7 +415,7 @@ public sealed class HttpBindingShapeTests
                                      """, new RequestHttpBindingGenerator());
 
     [Fact]
-    public void StreamingConfigurationDoesNotExposeOnResult()
+    public void ShouldNotExposeOnResultGivenStreamingConfiguration()
     {
         // Arrange
         var configurationType = typeof(PortiaStreamingEndpointConfiguration<object>);
@@ -428,7 +428,7 @@ public sealed class HttpBindingShapeTests
     }
 
     [Fact]
-    public Task BodyWithStyleOnlyTryParseRemainsJsonOnly() => AssertJsonOnlyTryParseShape("""
+    public Task ShouldRemainJsonOnlyGivenBodyWithStyleOnlyTryParse() => AssertJsonOnlyTryParseShape("""
         public enum SomeStyle { Default }
         public sealed record Scalar(string Text)
         {
@@ -441,7 +441,7 @@ public sealed class HttpBindingShapeTests
         """);
 
     [Fact]
-    public Task BodyWithMismatchedTryParseOutputRemainsJsonOnly() => AssertJsonOnlyTryParseShape("""
+    public Task ShouldRemainJsonOnlyGivenBodyWithMismatchedTryParseOutput() => AssertJsonOnlyTryParseShape("""
         public sealed record Scalar(string Text)
         {
             public static bool TryParse(string value, out int result) => int.TryParse(value, out result);
@@ -449,7 +449,7 @@ public sealed class HttpBindingShapeTests
         """);
 
     [Fact]
-    public async Task ValidSimpleTryParseWinsOverInvalidProviderOverload()
+    public async Task ShouldPreferSimpleTryParseGivenInvalidProviderOverload()
     {
         // Arrange
         var assembly = HttpConsumerScenario.Compile("""
@@ -476,7 +476,7 @@ public sealed class HttpBindingShapeTests
     }
 
     [Fact]
-    public void InvalidTryParseShapeRemainsUnsupportedForQueryBinding()
+    public void ShouldRemainUnsupportedGivenInvalidTryParseShapeForQueryBinding()
     {
         // Arrange
         const string source = """
@@ -511,7 +511,7 @@ public sealed class HttpBindingShapeTests
     [Theory]
     [InlineData("object Value", "\"/binding\"", "scalar")]
     [InlineData("int Value", "route", "constant")]
-    public void UnsupportedBindingsHaveActionableDiagnostics(string parameters, string route, string reason)
+    public void ShouldReportActionableDiagnosticGivenUnsupportedBinding(string parameters, string route, string reason)
     {
         // Arrange
         var source = $$"""
@@ -651,7 +651,7 @@ public sealed class HttpBindingShapeTests
     }
 
     [Fact]
-    public void UnrelatedMappingMethodIsNeverIntercepted()
+    public void ShouldNotInterceptGivenUnrelatedMappingMethod()
     {
         // Arrange
         const string source = """
@@ -677,7 +677,7 @@ public sealed class HttpBindingShapeTests
     }
 
     [Fact]
-    public async Task ScalarParsingUsesInvariantCulture()
+    public async Task ShouldParseScalarWithInvariantCultureGivenFrenchCurrentCulture()
     {
         // Arrange
         var assembly = HttpConsumerScenario.Compile(

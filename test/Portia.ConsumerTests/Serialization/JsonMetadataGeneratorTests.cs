@@ -9,7 +9,7 @@ public sealed class JsonMetadataGeneratorTests
     [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, new RequestQueueOptions(TtlHours: 1))")]
     [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, RequestMetadata.Create(), new RequestQueueOptions(TtlHours: 1), default)")]
     [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, parent, new RequestQueueOptions(TtlHours: 1))")]
-    public void RequiresRequestJsonMetadataForOptionsPublication(string invocation)
+    public void ShouldRequireRequestJsonMetadataGivenOptionsPublication(string invocation)
     {
         // Arrange
         var source = $$"""
@@ -35,7 +35,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void IgnoresUnregisteredHandlersButStillCatalogsDomainEvents()
+    public void ShouldIgnoreHandlersAndCatalogEventsGivenUnregisteredHandlers()
     {
         // Arrange
         const string source = """
@@ -64,7 +64,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void RegisteredHandlerRequiresRequestAndResultRoots()
+    public void ShouldRequireRequestAndResultRootsGivenRegisteredHandler()
     {
         // Arrange
         const string source = """
@@ -91,7 +91,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void EndpointAcceptsRootAdvertisedByReferencedAssembly()
+    public void ShouldAcceptEndpointGivenRootAdvertisedByReferencedAssembly()
     {
         // Arrange
         var contracts = GeneratorCompilation.Reference("""
@@ -128,7 +128,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void AddPortiaComposesReferencedContextFactory()
+    public void ShouldComposeReferencedContextFactoryGivenAddPortia()
     {
         // Arrange
         var contracts = GeneratorCompilation.Reference("""
@@ -167,7 +167,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void McpToolRequiresRequestAndResultRoots()
+    public void ShouldRequireRequestAndResultRootsGivenMcpTool()
     {
         // Arrange
         var mcp = MetadataReference.CreateFromFile(
@@ -192,7 +192,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void AcceptsExplicitRootsAndDoesNotRequireNestedTypes()
+    public void ShouldNotRequireNestedTypesGivenExplicitRoots()
     {
         // Arrange
         const string source = """
@@ -220,7 +220,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void IgnoresConsumerMethodsWhoseNamesMatchPortiaApis()
+    public void ShouldIgnoreConsumerMethodsGivenNamesMatchingPortiaApis()
     {
         // Arrange
         const string source = """
@@ -250,7 +250,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void NamedConfigurationBeforePatternUsesTheSemanticRouteArgument()
+    public void ShouldUseSemanticRouteArgumentGivenNamedConfigurationBeforePattern()
     {
         // Arrange
         const string source = """
@@ -283,7 +283,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void BinaryStreamContractsDoNotRequireJsonMetadata()
+    public void ShouldNotRequireJsonMetadataGivenBinaryStreamContracts()
     {
         // Arrange
         const string source = """
@@ -316,7 +316,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void ReportsEndpointConfigurationTypesWithoutJsonMetadata()
+    public void ShouldReportEndpointConfigurationTypesGivenMissingJsonMetadata()
     {
         // Arrange
         const string source = """
@@ -349,7 +349,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void BodyMembersAreCoveredByTheirRequestRoot()
+    public void ShouldCoverBodyMembersGivenRequestRoot()
     {
         // Arrange
         const string source = """
@@ -382,7 +382,7 @@ public sealed class JsonMetadataGeneratorTests
     [InlineData("MapPortiaPost", true)]
     [InlineData("MapPortiaGet", false)]
     [InlineData("MapPortiaDelete", false)]
-    public void ConvertedRequestsRequireIndependentBodyMetadata(string mapping, bool bodyRoot)
+    public void ShouldRequireIndependentBodyMetadataGivenConvertedRequest(string mapping, bool bodyRoot)
     {
         // Arrange
         var diagnostics = GeneratorCompilation.Diagnostics($$"""
@@ -422,7 +422,7 @@ public sealed class JsonMetadataGeneratorTests
     [InlineData("/files/{**path}")]
     [InlineData("/files/{path=default}")]
     [InlineData("/files/{path:minlength(1)}")]
-    public void CatchAllAndDefaultRouteTokensAreNotBodyRoots(string route)
+    public void ShouldNotTreatTokensAsBodyRootsGivenCatchAllOrDefaultRouteTokens(string route)
     {
         // Arrange
         var source = $$""""
@@ -460,7 +460,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void ReportsRequestsDispatchedThroughNullConditionalCalls()
+    public void ShouldReportRequestsGivenDispatchThroughNullConditionalCalls()
     {
         // Arrange
         const string source = """
@@ -483,7 +483,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void RequiresJsonMetadataForOutcomeAwareRequestAndResultRoots()
+    public void ShouldRequireJsonMetadataGivenOutcomeAwareRequestAndResultRoots()
     {
         // Arrange
         const string source = """
@@ -509,7 +509,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void AcceptsAnUpcasterForAReferencedDomainEventUsedByTheApplication()
+    public void ShouldAcceptUpcasterGivenReferencedDomainEventUsedByApplication()
     {
         // Arrange
         var contracts = GeneratorCompilation.Reference("""

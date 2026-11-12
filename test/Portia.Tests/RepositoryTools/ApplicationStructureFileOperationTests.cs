@@ -11,7 +11,7 @@ public sealed class ApplicationStructureFileOperationTests
 {
     /// <summary>Only a file successfully opened with create-new is registered as staged.</summary>
     [Fact]
-    public void ShouldRegisterOnlyTheFileCreatedWithCreateNew()
+    public void ShouldRegisterOnlyCreatedFileGivenCreateNew()
     {
         // Arrange
         var directory = CreateTemporaryDirectory();
@@ -40,7 +40,7 @@ public sealed class ApplicationStructureFileOperationTests
 
     /// <summary>A colliding backup destination remains owned by its original creator.</summary>
     [Fact]
-    public void ShouldMoveToAnotherBackupPathWhenAConcurrentCollisionAppears()
+    public void ShouldMoveToAnotherBackupPathGivenConcurrentCollision()
     {
         // Arrange
         var directory = CreateTemporaryDirectory();

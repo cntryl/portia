@@ -74,7 +74,7 @@ public sealed class ApplicationStructureCodeFixTests
     }
 
     [Fact]
-    public async Task ShouldAllowMatchingDestinationNameInAnotherProject()
+    public async Task ShouldRenameFileGivenMatchingDestinationNameInAnotherProject()
     {
         // Arrange
         using var workspace = new AdhocWorkspace();
@@ -539,7 +539,7 @@ public sealed class ApplicationStructureCodeFixTests
     }
 
     [Fact]
-    public async Task ShouldBeIdempotentAfterSplittingTypes()
+    public async Task ShouldBeIdempotentGivenTypesSplitByCodeFix()
     {
         // Arrange
         using var workspace = new AdhocWorkspace();
@@ -559,7 +559,7 @@ public sealed class ApplicationStructureCodeFixTests
     }
 
     [Fact]
-    public async Task ShouldNotReportPartialTypeDeclarationsAsMultipleTypes()
+    public async Task ShouldNotReportMultipleTypesGivenPartialTypeDeclarations()
     {
         // Arrange
         using var workspace = new AdhocWorkspace();

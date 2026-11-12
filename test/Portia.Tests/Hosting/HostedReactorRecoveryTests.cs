@@ -20,7 +20,7 @@ public sealed class HostedReactorRecoveryTests
     ///     risk the whole batched-checkpointing feature exists to bound.
     /// </summary>
     [Fact]
-    public async Task ShouldResumeFromStoreCheckpointAfterFaultedPassRatherThanStaleLocalValue()
+    public async Task ShouldResumeFromStoreCheckpointGivenFaultedPassAndStaleLocalValue()
     {
         // Arrange
         var id = Uuid.CreateVersion4();

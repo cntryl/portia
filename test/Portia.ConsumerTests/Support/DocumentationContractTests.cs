@@ -33,7 +33,7 @@ public sealed partial class DocumentationContractTests
     ];
 
     [Fact]
-    public void WorkloadContractsExposeLeaseLifetimeWithoutPortiaFencingProtocol()
+    public void ShouldExposeLeaseLifetimeWithoutFencingProtocolGivenWorkloadContracts()
     {
         // Arrange
         var contextType = typeof(WorkloadContext);
@@ -51,7 +51,7 @@ public sealed partial class DocumentationContractTests
     }
 
     [Fact]
-    public void MaintainedMarkdownHasValidLocalLinks()
+    public void ShouldHaveValidLocalLinksGivenMaintainedMarkdown()
     {
         // Arrange
         var missing = new List<string>();
@@ -81,7 +81,7 @@ public sealed partial class DocumentationContractTests
     }
 
     [Fact]
-    public void AnalyzerManifestsListEveryCompilerDiagnostic()
+    public void ShouldListEveryCompilerDiagnosticGivenAnalyzerManifests()
     {
         // Arrange
         var declared = DiagnosticSourceDirectories
@@ -102,7 +102,7 @@ public sealed partial class DocumentationContractTests
     }
 
     [Fact]
-    public void MaintainedDocumentationRejectsLegacyContracts()
+    public void ShouldRejectLegacyContractsGivenMaintainedDocumentation()
     {
         // Arrange
         var paths = Maintained.Select(path => Path.Combine(Root, path)).ToArray();
@@ -126,7 +126,7 @@ public sealed partial class DocumentationContractTests
     }
 
     [Fact]
-    public void EveryProductProjectGeneratesXmlDocumentation()
+    public void ShouldGenerateXmlDocumentationGivenEveryProductProject()
     {
         // Arrange
         var projects = Directory.EnumerateDirectories(Path.Combine(Root, "src"), "Portia.*")
@@ -147,7 +147,7 @@ public sealed partial class DocumentationContractTests
     }
 
     [Fact]
-    public void GeneratedXmlContainsNewPublicSafetyContracts()
+    public void ShouldContainPublicSafetyContractsGivenGeneratedXml()
     {
         // Arrange
         (string Project, string[] Members)[] expected =

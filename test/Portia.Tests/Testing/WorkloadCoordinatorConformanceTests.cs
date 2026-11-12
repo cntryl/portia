@@ -7,7 +7,7 @@ public sealed class WorkloadCoordinatorConformanceTests
 {
     /// <summary>A shared exclusive owner registry satisfies the black-box contract.</summary>
     [Fact]
-    public async Task ShouldAcceptExclusiveCoordinator()
+    public async Task ShouldAcceptCoordinatorGivenExclusiveOwnership()
     {
         // Arrange
         var probe = new SharedProbe(false);
@@ -21,7 +21,7 @@ public sealed class WorkloadCoordinatorConformanceTests
 
     /// <summary>Independent workers that both claim every workload are rejected.</summary>
     [Fact]
-    public async Task ShouldRejectDuplicateOwners()
+    public async Task ShouldRejectCoordinatorGivenDuplicateOwners()
     {
         // Arrange
         var probe = new SharedProbe(true);
@@ -37,7 +37,7 @@ public sealed class WorkloadCoordinatorConformanceTests
 
     /// <summary>A surviving worker that never acquires released work is rejected.</summary>
     [Fact]
-    public async Task ShouldRejectMissingTakeover()
+    public async Task ShouldRejectCoordinatorGivenMissingTakeover()
     {
         // Arrange
         var probe = new MissingTakeoverProbe();
@@ -53,7 +53,7 @@ public sealed class WorkloadCoordinatorConformanceTests
 
     /// <summary>Releasing a lease before its old callback stops is rejected after takeover.</summary>
     [Fact]
-    public async Task ShouldRejectOverlapDuringTakeover()
+    public async Task ShouldRejectCoordinatorGivenOverlapDuringTakeover()
     {
         // Arrange
         var probe = new SharedProbe(false, true);
@@ -69,7 +69,7 @@ public sealed class WorkloadCoordinatorConformanceTests
 
     /// <summary>A retained workload that silently stops is not considered stable.</summary>
     [Fact]
-    public async Task ShouldRejectStoppedRetainedWorkload()
+    public async Task ShouldRejectCoordinatorGivenStoppedRetainedWorkload()
     {
         // Arrange
         var probe = new ReconciliationFailureProbe(ReconciliationFailure.DropRetained);
@@ -86,7 +86,7 @@ public sealed class WorkloadCoordinatorConformanceTests
 
     /// <summary>A revoked workload reacquired on a later reconciliation is rejected.</summary>
     [Fact]
-    public async Task ShouldRejectReacquiredRevokedWorkload()
+    public async Task ShouldRejectCoordinatorGivenReacquiredRevokedWorkload()
     {
         // Arrange
         var probe = new ReconciliationFailureProbe(ReconciliationFailure.ReacquireRevoked);
@@ -103,7 +103,7 @@ public sealed class WorkloadCoordinatorConformanceTests
 
     /// <summary>A coordinator that never starts work reports initial acquisition, not takeover.</summary>
     [Fact]
-    public async Task ShouldReportMissingInitialAcquisition()
+    public async Task ShouldReportMissingAcquisitionGivenNoInitialAcquisition()
     {
         // Arrange
         var probe = new NoStartProbe();
@@ -119,7 +119,7 @@ public sealed class WorkloadCoordinatorConformanceTests
 
     /// <summary>A coordinator that ignores shutdown cancellation is rejected within a bounded time.</summary>
     [Fact]
-    public async Task ShouldBoundCancellationCleanup()
+    public async Task ShouldBoundCleanupGivenProbeIgnoringCancellation()
     {
         // Arrange
         var verification = WorkloadCoordinatorConformance.VerifyAsync(new IgnoringCancellationProbe()).AsTask();
@@ -137,7 +137,7 @@ public sealed class WorkloadCoordinatorConformanceTests
 
     /// <summary>A cleanup timeout does not replace an earlier ownership violation.</summary>
     [Fact]
-    public async Task ShouldPreservePrimaryViolationWhenCleanupAlsoFails()
+    public async Task ShouldPreservePrimaryViolationGivenCleanupAlsoFails()
     {
         // Arrange
         var probe = new IgnoringCancellationProbe(true);

@@ -8,7 +8,7 @@ public sealed partial class OperationalExecutionTests
 
     /// <summary>A restart preserves the block, and approved retry preserves effects and refreshes execution IDs.</summary>
     [Fact]
-    public async Task ShouldRecoverOriginalBatchWithoutDuplicatingEarlierEffect()
+    public async Task ShouldRecoverOriginalBatchWithoutDuplicatingEarlierEffectGivenFailedReactor()
     {
         // Arrange
         var journal = new FitzOperationalStore(new FakeKvClient(), "kv://test/operations/progress");
@@ -57,7 +57,7 @@ public sealed partial class OperationalExecutionTests
 
     /// <summary>A lost commit acknowledgement is resolved by reading the atomic receipt.</summary>
     [Fact]
-    public async Task ShouldResolveLostReactorCommitAcknowledgementWithoutReplay()
+    public async Task ShouldResolveWithoutReplayGivenLostReactorCommitAcknowledgement()
     {
         // Arrange
         var journal = new MemoryOperationalStore();
@@ -77,7 +77,7 @@ public sealed partial class OperationalExecutionTests
 
     /// <summary>A changed source set is rejected before any recovery handler starts.</summary>
     [Fact]
-    public async Task ShouldRejectChangedRecoverySourcesBeforeInvocation()
+    public async Task ShouldRejectBeforeInvocationGivenChangedRecoverySources()
     {
         // Arrange
         var journal = new MemoryOperationalStore();
@@ -104,7 +104,7 @@ public sealed partial class OperationalExecutionTests
 
     /// <summary>Interrupted evidence survives automatic replay with stable effect identities.</summary>
     [Fact]
-    public async Task ShouldPreserveInterruptedAttemptsWhenAutomaticReplaySucceeds()
+    public async Task ShouldPreserveInterruptedAttemptsGivenAutomaticReplaySucceeds()
     {
         // Arrange
         var journal = new MemoryOperationalStore();
@@ -129,7 +129,7 @@ public sealed partial class OperationalExecutionTests
 
     /// <summary>Fitz stores starts synchronously and releases every journal lock before application code.</summary>
     [Fact]
-    public async Task ShouldPersistStartBeforeInvokingOutsideTransactions()
+    public async Task ShouldPersistStartBeforeInvokingGivenOutsideTransactionEffect()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -156,7 +156,7 @@ public sealed partial class OperationalExecutionTests
 
     /// <summary>Required journal outages pause all handler invocation until start evidence can persist.</summary>
     [Fact]
-    public async Task ShouldPauseInvocationWhileRequiredJournalIsUnavailable()
+    public async Task ShouldPauseInvocationGivenRequiredJournalUnavailable()
     {
         // Arrange
         var journal = new MemoryOperationalStore();
@@ -182,7 +182,7 @@ public sealed partial class OperationalExecutionTests
 
     /// <summary>Detached work from an earlier unit cannot appear as a child of the next attempt.</summary>
     [Fact]
-    public async Task ShouldKeepDetachedTraceEvidenceOutOfTheNextAttempt()
+    public async Task ShouldKeepTraceEvidenceOutOfNextAttemptGivenDetachedTrace()
     {
         // Arrange
         var journal = new MemoryOperationalStore();

@@ -34,7 +34,7 @@ public sealed class JwtRequestActorValidatorTests
     ///     principal carrying the token's claims.
     /// </summary>
     [Fact]
-    public async Task ShouldValidateWellFormedToken()
+    public async Task ShouldValidateTokenGivenWellFormedToken()
     {
         // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);
@@ -55,7 +55,7 @@ public sealed class JwtRequestActorValidatorTests
     ///     mapped the way ASP.NET Core's JWT bearer authentication maps them by default.
     /// </summary>
     [Fact]
-    public async Task ShouldMapInboundClaimsLikeJwtBearerByDefault()
+    public async Task ShouldMapInboundClaimsLikeJwtBearerGivenDefaultOptions()
     {
         // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);
@@ -73,7 +73,7 @@ public sealed class JwtRequestActorValidatorTests
 
     /// <summary>An application that turned claim mapping off for its bearer authentication turns it off here too.</summary>
     [Fact]
-    public async Task ShouldKeepTokenClaimNamesWhenInboundMappingIsOff()
+    public async Task ShouldKeepTokenClaimNamesGivenInboundMappingOff()
     {
         // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters, mapInboundClaims: false);
@@ -94,7 +94,7 @@ public sealed class JwtRequestActorValidatorTests
     ///     is always honored, never skipped because the token "looks fine otherwise."
     /// </summary>
     [Fact]
-    public async Task ShouldRejectExpiredToken()
+    public async Task ShouldRejectTokenGivenExpiredToken()
     {
         // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);
@@ -113,7 +113,7 @@ public sealed class JwtRequestActorValidatorTests
     ///     validation.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectTokenSignedWithWrongKey()
+    public async Task ShouldRejectTokenGivenWrongSigningKey()
     {
         // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);
@@ -144,7 +144,7 @@ public sealed class JwtRequestActorValidatorTests
     ///     that a caller can no longer reproduce it, however they construct their own parameters.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectRecentlyExpiredTokenEvenWhenCallerUsesDefaultClockSkew()
+    public async Task ShouldRejectRecentlyExpiredTokenGivenCallerUsingDefaultClockSkew()
     {
         // Arrange
         var parametersWithDefaultClockSkew = new TokenValidationParameters
@@ -177,7 +177,7 @@ public sealed class JwtRequestActorValidatorTests
     ///     clock skew silently zeroed everywhere just because it was also handed to this class.
     /// </summary>
     [Fact]
-    public void ShouldNotMutateCallersOwnValidationParameters()
+    public void ShouldNotMutateValidationParametersGivenCallerOwnedParameters()
     {
         // Arrange
         var callerOwned = new TokenValidationParameters
@@ -203,7 +203,7 @@ public sealed class JwtRequestActorValidatorTests
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]
-    public async Task ShouldRejectMissingToken(string? token)
+    public async Task ShouldRejectTokenGivenMissingToken(string? token)
     {
         // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);
@@ -221,7 +221,7 @@ public sealed class JwtRequestActorValidatorTests
     ///     gracefully instead of throwing.
     /// </summary>
     [Fact]
-    public async Task ShouldRejectMalformedToken()
+    public async Task ShouldRejectTokenGivenMalformedToken()
     {
         // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);
@@ -240,7 +240,7 @@ public sealed class JwtRequestActorValidatorTests
     ///     and this message crosses transports into wire outcomes and logs.
     /// </summary>
     [Fact]
-    public async Task ShouldNotDiscloseTokenValidationDiagnosticsToTheCaller()
+    public async Task ShouldNotDiscloseDiagnosticsGivenFailedTokenValidation()
     {
         // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);
@@ -258,7 +258,7 @@ public sealed class JwtRequestActorValidatorTests
 
     /// <summary>Validation observes cancellation rather than accepting a token after the caller gave up.</summary>
     [Fact]
-    public async Task ShouldObserveCancellation()
+    public async Task ShouldObserveCancellationGivenCanceledToken()
     {
         // Arrange
         var validator = new JwtRequestActorValidator(ValidationParameters);

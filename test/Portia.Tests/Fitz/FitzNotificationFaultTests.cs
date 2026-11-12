@@ -67,7 +67,7 @@ public sealed class FitzNotificationFaultTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldRetryTransientScheduledValidationWithInjectedClockAndFreshScopes(bool throws)
+    public async Task ShouldRetryWithInjectedClockAndFreshScopesGivenTransientScheduledValidation(bool throws)
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -101,7 +101,7 @@ public sealed class FitzNotificationFaultTests
 
     /// <summary>A validator retry delay remains cancellable and disposes its failed attempt scope.</summary>
     [Fact]
-    public async Task ShouldCancelScheduledValidatorRetry()
+    public async Task ShouldCancelRetryGivenScheduledValidatorFailingTransiently()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -131,7 +131,7 @@ public sealed class FitzNotificationFaultTests
 
     /// <summary>A transient validator outage longer than three attempts must not discard a live firing.</summary>
     [Fact]
-    public async Task ShouldKeepRetryingScheduledValidationUntilTheValidatorRecovers()
+    public async Task ShouldKeepRetryingUntilValidatorRecoversGivenTransientScheduledValidation()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -166,7 +166,7 @@ public sealed class FitzNotificationFaultTests
 
     /// <summary>Long outages cap retry delay and cancellation releases the pending firing.</summary>
     [Fact]
-    public async Task ShouldCapScheduledValidationBackoffAndCancel()
+    public async Task ShouldCapBackoffAndCancelGivenScheduledValidationAlwaysTransient()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -204,7 +204,7 @@ public sealed class FitzNotificationFaultTests
     ///     and delivered first, and the earlier firing is still delivered once its retry succeeds.
     /// </summary>
     [Fact]
-    public async Task ShouldDeliverLaterScheduledFiringWhileEarlierFiringWaitsToRetryValidation()
+    public async Task ShouldDeliverLaterFiringGivenEarlierFiringWaitingToRetryValidation()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -236,7 +236,7 @@ public sealed class FitzNotificationFaultTests
 
     /// <summary>A malformed nested request is dropped before actor validation can enter its retry loop.</summary>
     [Fact]
-    public async Task ShouldNotValidateActorForMalformedScheduledRequestEnvelope()
+    public async Task ShouldNotValidateActorGivenMalformedScheduledRequestEnvelope()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -263,7 +263,7 @@ public sealed class FitzNotificationFaultTests
 
     /// <summary>A definite validator rejection is dropped without scheduling a retry.</summary>
     [Fact]
-    public async Task ShouldDropNonTransientScheduledValidatorRejection()
+    public async Task ShouldDropNotificationGivenNonTransientValidatorRejection()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -287,7 +287,7 @@ public sealed class FitzNotificationFaultTests
 
     /// <summary>Hosted schedule validation gets one disposed dependency-injection scope per firing.</summary>
     [Fact]
-    public async Task ShouldResolveAndDisposeDistinctScopedValidatorsForScheduledNotifications()
+    public async Task ShouldResolveAndDisposeDistinctScopedValidatorsGivenScheduledNotifications()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -320,7 +320,7 @@ public sealed class FitzNotificationFaultTests
 
     /// <summary>Verifies a pre-envelope schedule entry is dropped and counted as a validation fault.</summary>
     [Fact]
-    public async Task ShouldReportLegacyScheduleEntriesAsAValidationFault()
+    public async Task ShouldReportValidationFaultGivenLegacyScheduleEntry()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -335,7 +335,7 @@ public sealed class FitzNotificationFaultTests
 
     /// <summary>Verifies an envelope without a complete system identity is dropped and counted the same way.</summary>
     [Fact]
-    public async Task ShouldReportAnIncompleteSystemIdentityAsAValidationFault()
+    public async Task ShouldReportValidationFaultGivenIncompleteSystemIdentity()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
@@ -355,7 +355,7 @@ public sealed class FitzNotificationFaultTests
     ///     has to take, now that it is reported rather than thrown at the caller.
     /// </summary>
     [Fact]
-    public void ShouldNameTheRouteAndRemedyInTheLegacyScheduleDiagnostic()
+    public void ShouldNameRouteAndRemedyGivenLegacyScheduledRequestException()
     {
         // Arrange
         // Act

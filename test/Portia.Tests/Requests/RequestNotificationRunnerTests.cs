@@ -23,7 +23,7 @@ public sealed class RequestNotificationRunnerTests
     [InlineData(false, true, true)]
     [InlineData(true, false, true)]
     [InlineData(true, true, true)]
-    public async Task ShouldExportCorrelatedActualNotificationOutcomeLogs(bool fault, bool ambient, bool schedule)
+    public async Task ShouldExportCorrelatedOutcomeLogsGivenFaultAmbientAndScheduleVariations(bool fault, bool ambient, bool schedule)
     {
         // Arrange
         using var capture = new RunnerExportCapture();
@@ -54,7 +54,7 @@ public sealed class RequestNotificationRunnerTests
     ///     Verifies that every delivered request is dispatched to its handler.
     /// </summary>
     [Fact]
-    public async Task ShouldDispatchEveryDeliveredRequest()
+    public async Task ShouldDispatchEveryRequestGivenDeliveredRequests()
     {
         // Arrange
         var handler = new ChangeValueHandler();
@@ -84,7 +84,7 @@ public sealed class RequestNotificationRunnerTests
     ///     abandon or redeliver at this level).
     /// </summary>
     [Fact]
-    public async Task ShouldContinueAfterDispatchFailure()
+    public async Task ShouldContinueGivenDispatchFailure()
     {
         // Arrange
         var handler = new ChangeValueHandler();
@@ -113,7 +113,7 @@ public sealed class RequestNotificationRunnerTests
     ///     make for this transport shape.
     /// </summary>
     [Fact]
-    public async Task ShouldSkipDispatchWhenActorTokenFailsRevalidation()
+    public async Task ShouldSkipDispatchGivenActorTokenFailingRevalidation()
     {
         // Arrange
         var handler = new ChangeValueHandler();
@@ -138,7 +138,7 @@ public sealed class RequestNotificationRunnerTests
     ///     deliveries that follow it still dispatch normally.
     /// </summary>
     [Fact]
-    public async Task ShouldContinueAfterActorTokenRevalidationFailure()
+    public async Task ShouldContinueGivenActorTokenRevalidationFailure()
     {
         // Arrange
         var handler = new ChangeValueHandler();
@@ -167,7 +167,7 @@ public sealed class RequestNotificationRunnerTests
     ///     authentication path a delivery happened to take.
     /// </summary>
     [Fact]
-    public async Task ShouldReportInvocationTransportOnBothDeliveryPaths()
+    public async Task ShouldReportInvocationTransportGivenBothDeliveryPaths()
     {
         // The listener is process-wide and other tests dispatch concurrently, so capture is
         // thread-safe and narrowed to the schedule transport, which only this test produces.

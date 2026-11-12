@@ -19,7 +19,7 @@ public sealed class PortiaTelemetryTests
     ///     tagged as successful, with no error status.
     /// </summary>
     [Fact]
-    public async Task ShouldRecordSuccessfulActivity()
+    public async Task ShouldRecordActivityGivenSuccessfulRequest()
     {
         // Arrange
         using var listener = Listen(out var activities);
@@ -49,7 +49,7 @@ public sealed class PortiaTelemetryTests
     ///     with the failure's category, not just silently swallowed.
     /// </summary>
     [Fact]
-    public async Task ShouldRecordHandlerFailureAsErrorStatus()
+    public async Task ShouldRecordErrorStatusGivenHandlerFailure()
     {
         // Arrange
         using var listener = Listen(out var activities);
@@ -74,7 +74,7 @@ public sealed class PortiaTelemetryTests
     ///     the dispatch goes untraced.
     /// </summary>
     [Fact]
-    public async Task ShouldRecordPermissionDenialAsErrorStatus()
+    public async Task ShouldRecordErrorStatusGivenPermissionDenial()
     {
         // Arrange
         using var listener = Listen(out var activities);
@@ -96,7 +96,7 @@ public sealed class PortiaTelemetryTests
     ///     open (not yet stopped) while items are being enumerated.
     /// </summary>
     [Fact]
-    public async Task ShouldRecordActivityForStreamedRequest()
+    public async Task ShouldRecordActivityGivenStreamedRequest()
     {
         // Arrange
         using var listener = Listen(out var activities);

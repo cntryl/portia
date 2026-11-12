@@ -6,7 +6,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class CheckpointIdentityTests
 {
     [Fact]
-    public async Task CheckpointIdentitiesResumeIndependentlyAcrossTenantsAndPatterns()
+    public async Task ShouldResumeIndependentlyGivenIdentitiesAcrossTenantsAndPatterns()
     {
         // Arrange
         var store = new InMemoryProjectionCheckpointStore();
@@ -31,7 +31,7 @@ public sealed class CheckpointIdentityTests
     }
 
     [Fact]
-    public async Task RebuildGenerationsResumeAndLeaveLiveDataUntouched()
+    public async Task ShouldResumeRebuildAndLeaveLiveDataUntouchedGivenRebuildGenerations()
     {
         // Arrange
         var events = new InMemoryEventStore();
@@ -79,12 +79,12 @@ public sealed class CheckpointIdentityTests
     [InlineData(" ", null)]
     [InlineData("component", "")]
     [InlineData("component", " ")]
-    public void IdentityRejectsBlankNamesAndNonNullBlankGenerations(string component, string? rebuild)
+    public void ShouldRejectIdentityGivenBlankNameOrNonNullBlankGeneration(string component, string? rebuild)
         => Assert.Throws<ArgumentException>(() =>
             new CheckpointIdentity(component, EventStreamPattern.ForPattern("tenant"), rebuild));
 
     [Fact]
-    public async Task PublicRunnerReloadsEachPatternAndResumesInterruptedRebuild()
+    public async Task ShouldReloadEachPatternAndResumeRebuildGivenInterruptedRebuild()
     {
         // Arrange
         var events = new InMemoryEventStore();

@@ -9,7 +9,7 @@ public sealed class FitzQueueOptionsIntegrationTests(FitzBrokerFixture broker)
 {
     /// <summary>Initial delay and native NACK delay preserve the original request until successful acknowledgement.</summary>
     [Fact]
-    public async Task ShouldPublishDelayedRequestWithLifetimeAndRetrySameEnvelopeThroughNativeNack()
+    public async Task ShouldPublishDelayedRequestAndRetrySameEnvelopeGivenLifetimeAndNativeNack()
     {
         // Arrange
         await using var connection = await broker.CreateClientAsync();

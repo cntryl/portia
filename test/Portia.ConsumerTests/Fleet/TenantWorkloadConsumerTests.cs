@@ -10,7 +10,7 @@ public sealed class TenantWorkloadConsumerTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task FaultedWorkloadRestartsUnlessRemovedAndRepeatedAddsDoNotDuplicate(bool removeDuringBackoff)
+    public async Task ShouldRestartWorkloadUnlessRemovedGivenFaultedWorkloadAndRepeatedAdds(bool removeDuringBackoff)
     {
         // Arrange
         var clock = new ManualClock();
@@ -61,7 +61,7 @@ public sealed class TenantWorkloadConsumerTests
     }
 
     [Fact]
-    public async Task TwoHostedWorkloadsSharingDirectoryObserveEveryLifecycleChange()
+    public async Task ShouldObserveEveryLifecycleChangeGivenTwoWorkloadsSharingDirectory()
     {
         // Arrange
         var clock = new ManualClock();

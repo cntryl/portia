@@ -8,7 +8,7 @@ public sealed class InMemoryEventStoreProgressTests
     [InlineData("orders", "one", 3UL)]
     [InlineData("orders", null, 5UL)]
     [InlineData(null, null, 6UL)]
-    public async Task ShouldReportExactScopeProgressIncludingAudits(string? area, string? resource, ulong head)
+    public async Task ShouldReportExactScopeProgressGivenAuditsAndScopes(string? area, string? resource, ulong head)
     {
         // Arrange
         var store = new InMemoryEventStore();
@@ -35,7 +35,7 @@ public sealed class InMemoryEventStoreProgressTests
 
     /// <summary>A checkpoint beyond available source history keeps its invalidity visible.</summary>
     [Fact]
-    public async Task ShouldNotTreatACheckpointAheadOfTheSourceAsCaughtUp()
+    public async Task ShouldNotReportCaughtUpGivenCheckpointAheadOfSource()
     {
         // Arrange
         var store = new InMemoryEventStore();

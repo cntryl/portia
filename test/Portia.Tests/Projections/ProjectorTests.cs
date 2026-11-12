@@ -11,7 +11,7 @@ public sealed class ProjectorTests
     ///     Verifies that multiple async handlers share one batch-scoped projection.
     /// </summary>
     [Fact]
-    public async Task ShouldDispatchHandlersThroughSameProjection()
+    public async Task ShouldDispatchHandlersGivenSameProjection()
     {
         // Arrange
         var projector = new TestProjector(new RecordingProjectionTarget());
@@ -37,7 +37,7 @@ public sealed class ProjectorTests
     ///     Verifies trickle and rebuild execution use the same bounded batch pipeline.
     /// </summary>
     [Fact]
-    public async Task ShouldCommitBoundedBatchesAndAdvanceCheckpointWhenRun()
+    public async Task ShouldCommitBoundedBatchesAndAdvanceCheckpointGivenRun()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -67,7 +67,7 @@ public sealed class ProjectorTests
 
     /// <summary>A pass stops at its record budget and resumes from the returned checkpoint.</summary>
     [Fact]
-    public async Task ShouldBoundPassWithoutReadingAheadAndResume()
+    public async Task ShouldBoundPassAndResumeGivenPassBudgetWithoutReadAhead()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -97,7 +97,7 @@ public sealed class ProjectorTests
 
     /// <summary>A pass commits its full batches and its budget-limited partial batch.</summary>
     [Fact]
-    public async Task ShouldCommitPartialBatchAtNonDivisiblePassBudgetAndResume()
+    public async Task ShouldCommitPartialBatchAndResumeGivenNonDivisiblePassBudget()
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -130,7 +130,7 @@ public sealed class ProjectorTests
 
     /// <summary>A full pass that cannot advance its checkpoint must not request a hot retry.</summary>
     [Fact]
-    public async Task ShouldNotContinueImmediatelyWhenBudgetExhaustionMakesNoProgress()
+    public async Task ShouldNotContinueImmediatelyGivenBudgetExhaustionWithNoProgress()
     {
         // Arrange
         var stream = new EventStreamAddress("test", "projectors", "stale");
@@ -149,7 +149,7 @@ public sealed class ProjectorTests
 
     /// <summary>Non-positive pass budgets are rejected before enumeration.</summary>
     [Fact]
-    public async Task ShouldRejectNonPositivePassBudget()
+    public async Task ShouldRejectPassBudgetGivenNonPositiveBudget()
     {
         // Arrange
         var runner = new ProjectorRunner(new InMemoryEventStore());
@@ -168,7 +168,7 @@ public sealed class ProjectorTests
     ///     handler interfaces) is exactly how that's supposed to work.
     /// </summary>
     [Fact]
-    public async Task ShouldSkipUnhandledEventType()
+    public async Task ShouldSkipEventGivenUnhandledEventType()
     {
         // Arrange
         var projector = new TestProjector(new RecordingProjectionTarget());

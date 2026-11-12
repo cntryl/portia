@@ -8,7 +8,7 @@ public sealed class ProcessorStatusRpcTests
 {
     /// <summary>Shared status contracts do not activate a general RPC listener or its startup requirements.</summary>
     [Fact]
-    public void ShouldKeepProcessorStatusSeparateFromGeneralRequestWorkerSelection()
+    public void ShouldKeepProcessorStatusSeparateGivenGeneralRequestWorkerSelection()
     {
         // Arrange
         var application = new ServiceCollection().AddPortia();
@@ -23,7 +23,7 @@ public sealed class ProcessorStatusRpcTests
 
     /// <summary>ApplicationName's mapped fleet and an explicit status namespace use identical addresses.</summary>
     [Fact]
-    public void ShouldShareStatusNamespaceWithApplicationFleetConfiguration()
+    public void ShouldShareStatusNamespaceGivenApplicationFleetConfiguration()
     {
         // Arrange
         var fleet = new PortiaFitzBuilder(new ServiceCollection().AddPortia());
@@ -41,7 +41,7 @@ public sealed class ProcessorStatusRpcTests
 
     /// <summary>Arbitrary stable names produce exact, distinct application and tenant routes.</summary>
     [Fact]
-    public void ShouldAddressExactApplicationProcessorAndTenantWithoutRestrictingComponentNames()
+    public void ShouldAddressExactProcessorGivenApplicationAndTenantWithUnrestrictedComponentNames()
     {
         // Arrange
         var workload = new WorkloadIdentity("account balances / \u03b1", new TenantId("tenant-a"));
@@ -61,7 +61,7 @@ public sealed class ProcessorStatusRpcTests
 
     /// <summary>The built-in status contract never creates a broad callable listener.</summary>
     [Fact]
-    public async Task ShouldLeaveStatusRpcDormantOutsideWorkloadOwnership()
+    public async Task ShouldLeaveStatusRpcDormantGivenNoWorkloadOwnership()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -88,7 +88,7 @@ public sealed class ProcessorStatusRpcTests
     [InlineData("different-processor", "tenant-a")]
     [InlineData("balances", "tenant-b")]
     [InlineData("balances", null)]
-    public async Task ShouldRejectRequestThatDoesNotBelongToConcreteEndpoint(string processor, string? tenant)
+    public async Task ShouldRejectRequestGivenRequestNotBelongingToConcreteEndpoint(string processor, string? tenant)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -127,7 +127,7 @@ public sealed class ProcessorStatusRpcTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public async Task ShouldRejectStaleCallbackWhenNativeWithdrawalFails(bool cancelOwnership)
+    public async Task ShouldRejectStaleCallbackGivenNativeWithdrawalFailure(bool cancelOwnership)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -185,7 +185,7 @@ public sealed class ProcessorStatusRpcTests
 
     /// <summary>A failed native withdrawal is retried before reacquiring the same component endpoint.</summary>
     [Fact]
-    public async Task ShouldReacquireEndpointAfterFailedNativeWithdrawal()
+    public async Task ShouldReacquireEndpointGivenFailedNativeWithdrawal()
     {
         // Arrange
         var clock = new ManualTestClock();
@@ -234,7 +234,7 @@ public sealed class ProcessorStatusRpcTests
 
     /// <summary>Failed withdrawal retries without reacquisition so an inactive listener cannot keep competing.</summary>
     [Fact]
-    public async Task ShouldWithdrawRetainedEndpointWithoutReacquiringWorkload()
+    public async Task ShouldWithdrawRetainedEndpointGivenWorkloadNotReacquired()
     {
         // Arrange
         var (services, handler) = CountingStatusServices();
@@ -266,7 +266,7 @@ public sealed class ProcessorStatusRpcTests
 
     /// <summary>Shutdown shares one withdrawal deadline instead of waiting once per retained endpoint.</summary>
     [Fact]
-    public async Task ShouldShareOneFinalWithdrawalBudgetAcrossRetainedEndpoints()
+    public async Task ShouldShareOneFinalWithdrawalBudgetGivenRetainedEndpoints()
     {
         // Arrange
         var (services, _) = CountingStatusServices();
