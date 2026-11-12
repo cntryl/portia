@@ -261,10 +261,10 @@ This output partitioning was added after the timing campaign below; its performa
 included in those results.
 
 The previous registration emitter repeated the event catalog inside every interceptor. A
-Platform.Core source probe with 2,874 files, 1,452 registration sites, and 874 events produced
+downstream Core source probe with 2,874 files, 1,452 registration sites, and 874 events produced
 1,278,252 interceptor lines and 206,939,136 bytes. The shared emitter produced 11,583 lines and
 1,263,483 bytes with the same interceptor and event counts and no generator diagnostics. This
-is generated-output evidence against that input snapshot, rather than a full Platform application
+is generated-output evidence against that input snapshot, rather than a full downstream application
 build or deployment qualification.
 
 Generated typed batches use one exact-sized array for each contiguous handler group. The

@@ -6,21 +6,40 @@ public sealed class ApplicationBoundaryAnalyzerTests
     public void ShouldRecognizeApplicationBoundaryGivenQualifiedAssemblyNames()
     {
         // Arrange
-        var reference = GeneratorCompilation.ReferenceNamed("Coco.Shop.Api", "public class Dependency;");
+        var reference = GeneratorCompilation.ReferenceNamed("Example.Shop.Api", "public class Dependency;");
 
         // Act
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationBoundaryAnalyzer(),
             [("Features/Orders/Values/Price.cs", "public record Price;")],
-            references: [reference], assemblyName: "Coco.Shop.Core");
+            references: [reference], assemblyName: "Example.Shop.Core");
 
         // Assert
         _ = Assert.Single(diagnostics, item => item.Id == "PORTIA206");
+    }
+
+    [Fact]
+    public void ShouldAllowAbstractionsGivenQualifiedCoreAssemblyName()
+    {
+        // Arrange
+        var reference = GeneratorCompilation.ReferenceNamed("Example.Shop.Abstractions", "public class Port;");
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationBoundaryAnalyzer(),
+            [("Features/Orders/Values/Price.cs", "public record Price;")],
+            references: [reference], assemblyName: "Example.Shop.Core");
+
+        // Assert
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA206");
     }
 
     [Theory]
     [InlineData("Shop.Common", "Shop.Core", true)]
     [InlineData("Shop.Core", "Shop.Api", true)]
     [InlineData("Shop.Core", "Shop.Common", false)]
+    [InlineData("Shop.Core", "Shop.Abstractions", false)]
+    [InlineData("Shop.Core", "Shop.Billing.Abstractions", false)]
+    [InlineData("Shop.Core", "Shop.AbstractionsHost", true)]
+    [InlineData("Shop.Common", "Shop.Abstractions", true)]
     [InlineData("Shop.Api", "Shop.Core", false)]
     [InlineData("Shop.Worker", "Shop.Core", false)]
     [InlineData("Shop.Core", "Cntryl.Portia.Cassie", false)]

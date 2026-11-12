@@ -15,7 +15,7 @@ diagnostics to accommodate a violation.
 | Project | Owns |
 | --- | --- |
 | `{App}.Common` | Commands, queries, events, models, and shared values grouped by feature; data contracts without executable behavior. |
-| `{App}.Core` | Aggregates, handlers, reactors, projectors, repositories, and their feature registration. Its application project dependency is Common. |
+| `{App}.Core` | Aggregates, handlers, reactors, projectors, repositories, and their feature registration. Its application project dependencies are Common and any `{App}.*.Abstractions` projects. |
 | `{App}.Api` | HTTP routes, transport mapping, and application composition. |
 | `{App}.Worker` | Background hosting and application composition, calling the same Core operations. |
 
@@ -164,7 +164,7 @@ retain their behavior regardless of this opt-in.
 | PORTIA203 | Common/Core files fall outside the closed feature folders. | Diagnostic explains the allowed folders. |
 | PORTIA204 | A known component role is in the wrong folder, or a port is not an interface. | Diagnostic identifies the folder's responsibility. |
 | PORTIA205 | One handler implements contracts for multiple requests. | Separate the operations deliberately. |
-| PORTIA206 | Common/Core reference other application layers or known infrastructure adapters; Cassie connection setup occurs outside Api/Worker. | Move composition to a root; Core's Cassie repository API is allowed. |
+| PORTIA206 | Common references another application project, or Core references one other than Common or a `*.Abstractions` project; either references a known infrastructure adapter; Cassie connection setup occurs outside Api/Worker. | Move composition to a root; Core's Cassie repository API is allowed. |
 | PORTIA207 | Core component registration occurs outside its feature registration file. | Diagnostic names the destination file. |
 | PORTIA208 | An aggregate file exceeds 400 lines. | Compose smaller rule/state objects; choose the boundary deliberately. |
 | PORTIA209 | Common declares executable members, except construction of sealed record values in Values. | Move other behavior into Core. |
