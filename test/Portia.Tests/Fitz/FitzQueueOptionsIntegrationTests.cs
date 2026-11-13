@@ -56,13 +56,13 @@ public sealed class FitzQueueOptionsIntegrationTests(FitzBrokerFixture broker)
         Assert.Equal(request, first.Request);
         Assert.Equal(metadata, first.Metadata);
         Assert.Equal("original-actor", first.ActorToken);
-        Assert.Equal(QueueItem.AttemptUnavailable, first.Attempt);
+        Assert.Equal(0U, first.Attempt);
         Assert.Empty(reservedAfterRetry);
         Assert.True(readRetried);
         Assert.Equal(request, retried.Request);
         Assert.Equal(metadata, retried.Metadata);
         Assert.Equal(first.ActorToken, retried.ActorToken);
-        Assert.Equal(QueueItem.AttemptUnavailable, retried.Attempt);
+        Assert.Equal(0U, retried.Attempt);
         Assert.Empty(reservedAfterComplete);
     }
 }

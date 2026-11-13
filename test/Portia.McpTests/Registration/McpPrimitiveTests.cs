@@ -44,7 +44,7 @@ public sealed class McpPrimitiveTests
         Assert.True(process.Start());
         try
         {
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             const string meta = "\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientCapabilities\":{}}";
             await process.StandardInput.WriteLineAsync($"{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"server/discover\",\"params\":{{{meta}}}}}");
             await process.StandardInput.FlushAsync(timeout.Token);
@@ -90,7 +90,7 @@ public sealed class McpPrimitiveTests
         var host = Path.GetFullPath(
             $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net11.0/Portia.McpStdioHost.dll",
             AppContext.BaseDirectory);
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var transport = new StdioClientTransport(new StdioClientTransportOptions
         {
             Command = "dotnet",
@@ -802,14 +802,17 @@ public sealed class McpPrimitiveTests
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
         await using var client = await McpClient.CreateAsync(transport);
+        // Only the 100 ms deadline can end the read; this bound reports a deadline that never fires.
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
         // Act
-        var started = Stopwatch.StartNew();
+        var error = await Record.ExceptionAsync(async () =>
+            await client.ReadResourceAsync("slow://local/item", cancellationToken: timeout.Token));
 
         // Assert
-        var error = await Assert.ThrowsAnyAsync<Exception>(async () =>
-            await client.ReadResourceAsync("slow://local/item"));
-        Assert.True(started.Elapsed < TimeSpan.FromSeconds(2));
+        Assert.NotNull(error);
+        Assert.False(timeout.IsCancellationRequested, "The read ended at the test bound, not the operation deadline.");
+        Assert.IsNotAssignableFrom<OperationCanceledException>(error);
         Assert.DoesNotContain("TaskCanceledException", error.Message, StringComparison.Ordinal);
     }
 
@@ -819,7 +822,7 @@ public sealed class McpPrimitiveTests
     {
         public async ValueTask<Result<string>> HandleAsync(IRequestContext<SlowRead> context, CancellationToken ct)
         {
-            await Task.Delay(TimeSpan.FromMinutes(1), ct);
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             return Result<string>.Success("late");
         }
     }

@@ -1,14 +1,32 @@
 # Migrating to Portia 0.11.1
 
-Portia 0.11.1 is a patch release on the .NET 11 and Fitz 4.1 baseline of 0.11.0. Keep the complete
-`Cntryl.Portia.*` package family on 0.11.1. Applications upgrading from an earlier version must
-first follow the [0.11.0 migration notes](migration-0.11.0.md).
+Portia 0.11.1 is a release on the .NET 11 baseline of 0.11.0 that moves to Fitz .NET 4.2.0, which
+breaks the Fitz API. Keep the complete `Cntryl.Portia.*` package family on 0.11.1. Applications
+upgrading from an earlier version must first follow the [0.11.0 migration notes](migration-0.11.0.md).
 
 ## Dependencies
 
 `Cntryl.Portia.Storage.Aws` now depends on AWSSDK.S3 4.1.0. Update a direct or central AWSSDK.S3
-reference to at least 4.1.0 instead of suppressing the downgrade diagnostic. Fitz .NET stays on 4.1.0,
-with the same Fitz server 0.4.0 / Wire 3 requirement as 0.11.0.
+reference to at least 4.1.0 instead of suppressing the downgrade diagnostic.
+
+## Fitz .NET 4.2.0
+
+Fitz .NET moves to 4.2.0 and keeps the Fitz server 0.4.0 / Wire 3 requirement of 0.11.0. Update
+direct `Cntryl.Fitz.*` references to 4.2.0. Its [release notes](https://github.com/cntryl/fitz-dotnet/blob/v4.2.0/CHANGELOG.md)
+list every API change; the ones that reach Portia applications are:
+
+- `Client` is now `FitzClient`. `UseFitzClient` takes a `FitzClient`.
+- `IKvTransaction.GetAsync` returns a `KvGetResult` union. Replace `result.Found` and
+  `result.Value` with `result is KvFound { Value: var bytes }` in custom Fitz KV projection stores.
+- Fitz reserved queue items no longer expose an attempt count, which the wire never reported.
+  Fitz queue deliveries keep reporting an `Attempt` of `0` with `SupportsDurableAttempts` of
+  `false`, so `QueueRunnerOptions.TerminalAttempt` remains unavailable for Fitz workers.
+- An RPC call that reaches a worker whose capacity is busy now waits for a free slot within its own
+  deadline. Fitz returns `FitzErrorCodes.RpcBackpressure` only when its bounded wait queue is full,
+  so status calls made right after a response are held until worker cleanup finishes instead of
+  being rejected.
+- Fitz analyzers FITZ001–FITZ004 now report errors. A literal route of the wrong kind, or a
+  discarded RPC worker registration, fails the build.
 
 ## MCP HTTP session mode
 

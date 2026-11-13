@@ -75,8 +75,8 @@ public sealed class AccountRepository : FitzKvProjectionStore, IAccountReadRepos
         CancellationToken ct)
     {
         var value = await transaction.GetAsync(Key(accountId), ct).ConfigureAwait(false);
-        return value.Found
-            ? JsonSerializer.Deserialize(value.Value!.Value.Span, AccountsJsonContext.Default.AccountReadModel)
+        return value is KvFound { Value: var bytes }
+            ? JsonSerializer.Deserialize(bytes.Span, AccountsJsonContext.Default.AccountReadModel)
             : null;
     }
 

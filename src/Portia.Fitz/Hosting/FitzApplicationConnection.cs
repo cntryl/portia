@@ -2,13 +2,13 @@ using Microsoft.Extensions.Hosting;
 
 namespace Cntryl.Portia;
 
-sealed class FitzApplicationConnection(Client client, bool owned, TimeSpan timeout) : IHostedService, IAsyncDisposable
+sealed class FitzApplicationConnection(FitzClient client, bool owned, TimeSpan timeout) : IHostedService, IAsyncDisposable
 {
     readonly SemaphoreSlim _gate = new(1);
     bool _connected;
     bool _disposed;
 
-    internal Client Client { get; } = client;
+    internal FitzClient Client { get; } = client;
 
     public async ValueTask DisposeAsync()
     {

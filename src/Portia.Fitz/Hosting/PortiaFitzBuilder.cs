@@ -14,7 +14,7 @@ public sealed class PortiaFitzBuilder
         [RequestTransportId.Callable, RequestTransportId.Queue, RequestTransportId.Notice, RequestTransportId.Schedule];
 
     readonly PortiaBuilder _application;
-    readonly Client? _borrowedClient;
+    readonly FitzClient? _borrowedClient;
     readonly HashSet<string> _capabilities = [with(StringComparer.Ordinal)];
     readonly HashSet<RequestTransportId> _requiredWorkerTransports = [];
     readonly HashSet<RequestTransportId> _workerTransports = [.. AllBuiltInTransports];
@@ -63,7 +63,7 @@ public sealed class PortiaFitzBuilder
         return this;
     }
 
-    internal PortiaFitzBuilder(PortiaBuilder application, Client? borrowedClient = null)
+    internal PortiaFitzBuilder(PortiaBuilder application, FitzClient? borrowedClient = null)
     {
         _application = application;
         _borrowedClient = borrowedClient;

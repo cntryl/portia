@@ -24,7 +24,7 @@ static partial class Program
     {
         var mode = args[0];
         var signal = args.Length > 1 ? args[1] : null;
-        await using var client = new Client(new ClientConfig(new Uri(
+        await using var client = new FitzClient(new ClientConfig(new Uri(
             Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT") ?? "ws://127.0.0.1:24090/ws")));
         await client.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(TimeSpan.FromSeconds(20)));
         var events = new FitzEventStore(client.Stream, new JsonDomainEventSerializer(new DomainEventTypeCatalog()

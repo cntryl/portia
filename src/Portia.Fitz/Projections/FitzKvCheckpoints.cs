@@ -73,7 +73,7 @@ static class FitzKvCheckpoints
         await using var tx = await BeginAsync(client, route, KvMode.ReadOnly, "Checkpoint", identity, ct)
             .ConfigureAwait(false);
         var result = await tx.GetAsync(Key(identity), ct).ConfigureAwait(false);
-        return result.Found ? new ProjectionCheckpoint(Decode(result.Value!.Value.Span)) : ProjectionCheckpoint.Start;
+        return result is KvFound { Value: var resultBytes } ? new ProjectionCheckpoint(Decode(resultBytes.Span)) : ProjectionCheckpoint.Start;
     }
 
     /// <summary>

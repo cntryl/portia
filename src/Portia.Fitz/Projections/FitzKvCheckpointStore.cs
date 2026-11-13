@@ -66,8 +66,8 @@ public sealed class FitzKvCheckpointStore(IKvClient client, string route) :
             if (expected is { } expectedCheckpoint)
             {
                 var stored = await tx.GetAsync(FitzKvCheckpoints.Key(identity), ct).ConfigureAwait(false);
-                var actual = stored.Found
-                    ? new ProjectionCheckpoint(FitzKvCheckpoints.Decode(stored.Value!.Value.Span))
+                var actual = stored is KvFound { Value: var storedBytes }
+                    ? new ProjectionCheckpoint(FitzKvCheckpoints.Decode(storedBytes.Span))
                     : ProjectionCheckpoint.Start;
                 if (actual != expectedCheckpoint)
                     throw new ProjectionConcurrencyException(

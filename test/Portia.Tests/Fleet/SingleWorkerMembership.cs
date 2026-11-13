@@ -16,7 +16,7 @@ sealed class SingleWorkerMembership : IFleetMembership
         public IReadOnlyDictionary<string, LeaseListItem> View { get; } = new Dictionary<string, LeaseListItem>
         {
             [options.MembershipSelector[..^1] + options.WorkerId] =
-                new(options.MembershipSelector[..^1] + options.WorkerId, "owner", 1, "", TimeSpan.FromSeconds(30), 0)
+                new(options.MembershipSelector[..^1] + options.WorkerId, "owner", 1, DateTimeOffset.UnixEpoch, TimeSpan.FromSeconds(30), 0)
         };
 
         public IAsyncEnumerable<LeaseInventoryUpdate> Updates => throw new NotSupportedException();

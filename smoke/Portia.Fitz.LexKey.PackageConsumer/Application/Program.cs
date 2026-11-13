@@ -73,6 +73,6 @@ sealed class TeamRepository(IKvClient kv) : FitzKvProjectionStore(kv, "kv://cons
     {
         await using var transaction = await BeginReadAsync(realm);
         var result = await transaction.GetAsync(key.AsMemory());
-        return result.Found ? result.Value : null;
+        return result is KvFound { Value: var bytes } ? bytes : null;
     }
 }

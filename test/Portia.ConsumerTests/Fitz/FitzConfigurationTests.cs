@@ -164,7 +164,7 @@ public sealed class FitzConfigurationTests
 
         // Assert
         var error = Assert.Throws<InvalidOperationException>(() =>
-            portia.UseFitzClient(new Client(new ClientConfig(new Uri("ws://127.0.0.1:4090/ws"))), _ => { }));
+            portia.UseFitzClient(new FitzClient(new ClientConfig(new Uri("ws://127.0.0.1:4090/ws"))), _ => { }));
 
         Assert.Contains("conflicting Fitz connections", error.Message, StringComparison.Ordinal);
     }

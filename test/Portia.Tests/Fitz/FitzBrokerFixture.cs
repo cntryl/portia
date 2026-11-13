@@ -23,9 +23,9 @@ public sealed class FitzBrokerFixture
     ///     Creates and connects a real Fitz .NET client to the isolated broker.
     /// </summary>
     /// <returns>A connected client owned by the caller.</returns>
-    public async Task<Client> CreateClientAsync()
+    public async Task<FitzClient> CreateClientAsync()
     {
-        var client = new Client(new ClientConfig(
+        var client = new FitzClient(new ClientConfig(
             _endpoint,
             Timeout: TimeSpan.FromSeconds(10)));
 

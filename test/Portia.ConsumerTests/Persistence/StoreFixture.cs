@@ -4,11 +4,11 @@ namespace Cntryl.Portia.Consumer;
 
 sealed class StoreFixture : IAsyncDisposable
 {
-    readonly Client? _client;
+    readonly FitzClient? _client;
     readonly ServiceProvider _provider;
     readonly AsyncServiceScope _scope;
 
-    StoreFixture(IEventStore store, Client? client)
+    StoreFixture(IEventStore store, FitzClient? client)
     {
         Store = store;
         _client = client;
@@ -43,7 +43,7 @@ sealed class StoreFixture : IAsyncDisposable
         }
 
         var endpoint = new Uri(Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT") ?? "ws://127.0.0.1:4090/ws");
-        var client = new Client(new ClientConfig(endpoint, Timeout: TimeSpan.FromSeconds(10)));
+        var client = new FitzClient(new ClientConfig(endpoint, Timeout: TimeSpan.FromSeconds(10)));
         try
         {
             await client.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(TimeSpan.FromSeconds(15)));

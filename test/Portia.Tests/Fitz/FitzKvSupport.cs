@@ -84,11 +84,11 @@ sealed class FakeKvTransaction(FakeKvClient client, string route, KvMode mode)
         client.CancelDuringGet?.Cancel();
         ct.ThrowIfCancellationRequested();
         var name = Encoding.UTF8.GetString(key.Span);
-        return Task.FromResult(_staged.TryGetValue(name, out var staged)
-            ? new KvGetResult(true, staged)
+        return Task.FromResult<KvGetResult>(_staged.TryGetValue(name, out var staged)
+            ? new KvFound(staged)
             : client.Committed.TryGetValue(name, out var committed)
-                ? new KvGetResult(true, committed)
-                : new KvGetResult(false));
+                ? new KvFound(committed)
+                : KvNotFound.Instance);
     }
 
     public Task PutAsync(ReadOnlyMemory<byte> key, ReadOnlyMemory<byte> value, CancellationToken ct = default)

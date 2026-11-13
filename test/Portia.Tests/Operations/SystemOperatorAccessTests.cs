@@ -72,7 +72,7 @@ public sealed class SystemOperatorAccessTests
     {
         // Arrange
         var topology = new ObservedTopology();
-        await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
+        await using var client = new FitzClient(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
         var services = new ServiceCollection();
         _ = services.AddSingleton<IConfiguration>(TestOperationalAuthorizer.Configuration());
         _ = services.AddSingleton<IApplicationTopology>(topology);

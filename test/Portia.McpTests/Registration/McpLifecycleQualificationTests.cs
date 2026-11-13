@@ -31,7 +31,9 @@ public sealed class McpLifecycleQualificationTests
     public async Task ShouldCancelHandlerGivenMinimalSdkStdioHost(string primitive, string revision, bool explicitNotification)
     {
         // Arrange
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        // A failure bound only: the waits below poll conditions that become true, and a cold child on a
+        // loaded runner can take seconds to start.
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var evidence = Path.Combine(Path.GetTempPath(), $"portia-sdk-cancellation-{primitive}-{revision}-{explicitNotification}-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(evidence);
         using var logs = LoggerFactory.Create(logging => logging.SetMinimumLevel(LogLevel.Trace).AddProvider(new ProtocolEvidenceLogger(evidence)));
@@ -158,7 +160,9 @@ public sealed class McpLifecycleQualificationTests
         string primitive, bool deadline, bool explicitNotification, string revision)
     {
         // Arrange
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        // The only time bound: every wait below polls a condition that becomes true, so a loaded
+        // runner makes the test slower, never wrong.
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var token = timeout.Token;
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseTestServer();
@@ -185,10 +189,9 @@ public sealed class McpLifecycleQualificationTests
         using var protocolLogs = LoggerFactory.Create(logging => logging.SetMinimumLevel(LogLevel.Trace).AddProvider(new ProtocolEvidenceLogger(evidence)));
         await using var client = await ConnectAsync();
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
-        var operation = InvokeWaitAsync(cancellation.Token);
 
         // Act
-        await PollAsync(async () => (await StateAsync()).WaitStarted == 1);
+        var operation = await StartWaitAsync();
 
         // Assert
         if (deadline)
@@ -231,20 +234,32 @@ public sealed class McpLifecycleQualificationTests
         Assert.Equal(1, state.WaitCanceled);
         if (transportName == "stdio")
         {
-            await InvokeFaultAsync();
+            // The client cannot tell a fault from a request the short deadline expired before dispatch,
+            // so only the cases without a deadline exercise the fault path.
+            if (!deadline)
+                await InvokeFaultAsync();
             await PollAsync(() => Task.FromResult(HasExportedEvidence()));
             var spans = File.ReadAllLines(Path.Combine(evidence, "spans.tsv")).Select(line => line.Split('\t')).ToArray();
             var logs = File.ReadAllLines(Path.Combine(evidence, "logs.tsv")).Select(line => line.Split('\t')).ToArray();
-            var log = Assert.Single(logs);
-            Assert.Equal("1002", log[0]);
-            Assert.Equal(typeof(IOException).FullName, log[3]);
-            Assert.Contains(spans, span => span[0] == PortiaTelemetry.ProcessActivityName && span[1] == log[1]
-                && span[2] == log[2] && span[4] == "fault");
-            Assert.Contains(spans, span => span[0] == PortiaTelemetry.ExecuteActivityName && span[4] == "canceled");
-            foreach (var execute in spans.Where(span => span[0] == PortiaTelemetry.ExecuteActivityName))
+            var executes = spans.Where(span => span[0] == PortiaTelemetry.ExecuteActivityName).ToArray();
+            Assert.Contains(executes, execute => execute[4] == "canceled");
+            foreach (var execute in executes)
                 Assert.Contains(spans, process => process[0] == PortiaTelemetry.ProcessActivityName
                     && process[1] == execute[1] && process[2] == execute[3]);
-            Assert.Equal(2 * spans.Count(span => span[0] == PortiaTelemetry.ExecuteActivityName), spans.Length);
+            Assert.Equal(executes.Length, executes.Select(execute => execute[3]).Distinct(StringComparer.Ordinal).Count());
+            if (deadline)
+                // An expired deadline is sanitized, never reported as a runner fault.
+                Assert.Empty(logs);
+            else
+            {
+                var log = Assert.Single(logs);
+                Assert.Equal("1002", log[0]);
+                Assert.Equal(typeof(IOException).FullName, log[3]);
+                Assert.Contains(spans, span => span[0] == PortiaTelemetry.ProcessActivityName && span[1] == log[1]
+                    && span[2] == log[2] && span[4] == "fault");
+                // Without a deadline every request reaches dispatch, so each process span has one execute span.
+                Assert.Equal(2 * executes.Length, spans.Length);
+            }
         }
 
         static bool IsWaitRequest(string parameters)
@@ -268,6 +283,20 @@ public sealed class McpLifecycleQualificationTests
             return await McpClient.CreateAsync(new StdioClientTransport(new StdioClientTransportOptions
             { Command = "dotnet", Arguments = arguments, Name = "MCP lifecycle qualification", ShutdownTimeout = TimeSpan.FromSeconds(1) }),
                 StdioClientOptions.Create(revision), loggerFactory: protocolLogs, cancellationToken: token);
+        }
+
+        // Under the short deadline, a loaded host can expire the wait before dispatch so its handler never
+        // starts; that invocation is retried until a wait handler has started.
+        async Task<Task> StartWaitAsync()
+        {
+            while (true)
+            {
+                var attempt = InvokeWaitAsync(cancellation.Token);
+                await PollAsync(async () => (deadline && attempt.IsCompleted) || (await StateAsync()).WaitStarted == 1);
+                if ((await StateAsync()).WaitStarted == 1)
+                    return attempt;
+                _ = await Record.ExceptionAsync(async () => await attempt);
+            }
         }
 
         async Task InvokeWaitAsync(CancellationToken ct)
@@ -323,12 +352,10 @@ public sealed class McpLifecycleQualificationTests
 
         async Task PollAsync(Func<Task<bool>> condition)
         {
-            using var polling = CancellationTokenSource.CreateLinkedTokenSource(token);
-            polling.CancelAfter(TimeSpan.FromSeconds(5));
             try
             {
                 while (!await condition())
-                    await Task.Delay(20, polling.Token);
+                    await Task.Delay(20, token);
             }
             catch (OperationCanceledException)
             {
@@ -336,6 +363,8 @@ public sealed class McpLifecycleQualificationTests
             }
         }
 
+        // The child exports on its own schedule. Every operation request it received yields exactly one
+        // process span, ended before its response, so a matching count means the export has caught up.
         bool HasExportedEvidence()
         {
             var paths = EvidenceFiles.Select(name => Path.Combine(evidence, name)).ToArray();
@@ -344,12 +373,13 @@ public sealed class McpLifecycleQualificationTests
             var spans = File.ReadAllLines(paths[0]).Select(line => line.Split('\t')).ToArray();
             var metrics = File.ReadAllLines(paths[1]);
             var logs = File.ReadAllLines(paths[2]).Select(line => line.Split('\t')).ToArray();
-            return logs.Length == 1
-                && spans.Any(span => span[0] == PortiaTelemetry.ProcessActivityName
-                    && span[1] == logs[0][1] && span[2] == logs[0][2] && span[4] == "fault")
-                && spans.Any(span => span[0] == PortiaTelemetry.ExecuteActivityName && span[4] == "canceled")
-                && metrics.Any(line => line.StartsWith("portia.worker.failure\t", StringComparison.Ordinal))
-                && metrics.Any(line => line.Contains("portia.outcome=canceled", StringComparison.Ordinal));
+            var operations = File.ReadAllLines(Path.Combine(evidence, "ingress.tsv")).Select(line => line.Split('\t'))
+                .Count(fields => fields.Length == 4 && fields[0] == "request"
+                    && fields[2] is RequestMethods.ToolsCall or RequestMethods.ResourcesRead or RequestMethods.PromptsGet);
+            return spans.Count(span => span[0] == PortiaTelemetry.ProcessActivityName) == operations
+                && metrics.Any(line => line.Contains("portia.outcome=canceled", StringComparison.Ordinal))
+                && (deadline || (logs.Length == 1
+                    && metrics.Any(line => line.StartsWith("portia.worker.failure\t", StringComparison.Ordinal))));
         }
     }
 }

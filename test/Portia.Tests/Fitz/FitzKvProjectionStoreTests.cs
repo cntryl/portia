@@ -682,7 +682,7 @@ public sealed class FitzKvProjectionStoreTests
         {
             await using var tx = await BeginReadAsync(realm);
             var result = await tx.GetAsync(DataKey(name));
-            return result.Found ? Encoding.UTF8.GetString(result.Value!.Value.Span) : null;
+            return result is KvFound { Value: var resultBytes } ? Encoding.UTF8.GetString(resultBytes.Span) : null;
         }
     }
 }

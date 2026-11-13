@@ -122,8 +122,8 @@ static Cntryl.Portia.PortiaFitzApplicationExtensions.AddFitz(this Cntryl.Portia.
 static Cntryl.Portia.PortiaFitzApplicationExtensions.AddFitz(this Cntryl.Portia.PortiaBuilder! application, Cntryl.Fitz.ClientConfig! configuration, System.TimeSpan? startupTimeout = null) -> Cntryl.Portia.PortiaBuilder!
 static Cntryl.Portia.PortiaFitzApplicationExtensions.AddFitz(this Cntryl.Portia.PortiaBuilder! application, Microsoft.Extensions.Configuration.IConfiguration! configuration) -> Cntryl.Portia.PortiaBuilder!
 static Cntryl.Portia.PortiaFitzApplicationExtensions.AddFitz(this Cntryl.Portia.PortiaBuilder! application, Microsoft.Extensions.Configuration.IConfiguration! configuration, System.Action<Cntryl.Portia.PortiaFitzBuilder!>! configure) -> Cntryl.Portia.PortiaBuilder!
-static Cntryl.Portia.PortiaFitzApplicationExtensions.UseFitzClient(this Cntryl.Portia.PortiaBuilder! application, Cntryl.Fitz.Client! client) -> Cntryl.Portia.PortiaBuilder!
-static Cntryl.Portia.PortiaFitzApplicationExtensions.UseFitzClient(this Cntryl.Portia.PortiaBuilder! application, Cntryl.Fitz.Client! client, System.Action<Cntryl.Portia.PortiaFitzBuilder!>! configure) -> Cntryl.Portia.PortiaBuilder!
+static Cntryl.Portia.PortiaFitzApplicationExtensions.UseFitzClient(this Cntryl.Portia.PortiaBuilder! application, Cntryl.Fitz.FitzClient! client) -> Cntryl.Portia.PortiaBuilder!
+static Cntryl.Portia.PortiaFitzApplicationExtensions.UseFitzClient(this Cntryl.Portia.PortiaBuilder! application, Cntryl.Fitz.FitzClient! client, System.Action<Cntryl.Portia.PortiaFitzBuilder!>! configure) -> Cntryl.Portia.PortiaBuilder!
 static readonly Cntryl.Portia.FleetPartitionRunner.MaximumRetryBackoff -> System.TimeSpan
 Cntryl.Portia.FitzKvCheckpointStore.FitzKvCheckpointStore(Cntryl.Fitz.IKvClient! client, string! route, Cntryl.Fitz.KvDurability durability) -> void
 Cntryl.Portia.FitzKvProjectionStore.FitzKvProjectionStore(Cntryl.Fitz.IKvClient! client, string! route, string! componentName, Cntryl.Fitz.KvDurability durability) -> void

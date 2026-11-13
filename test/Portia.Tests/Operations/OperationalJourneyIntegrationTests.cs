@@ -94,7 +94,7 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         }
     }
 
-    static ServiceCollection Services(Client client, IEventStore events, JourneyControl control, string route)
+    static ServiceCollection Services(FitzClient client, IEventStore events, JourneyControl control, string route)
     {
         var services = new ServiceCollection();
         services.AddSingleton(events);

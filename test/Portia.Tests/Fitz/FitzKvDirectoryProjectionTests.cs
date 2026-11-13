@@ -107,7 +107,7 @@ public sealed class FitzKvDirectoryProjectionTests(FitzBrokerFixture broker)
         await services.GetRequiredService<ProjectorRegistration>().RunPass(scope.ServiceProvider, null, default);
     }
 
-    static FitzEventStore EventStore(Client client) => new(client.Stream, TestJson.DomainSerializer(
+    static FitzEventStore EventStore(FitzClient client) => new(client.Stream, TestJson.DomainSerializer(
         new DomainEventTypeCatalog().Register<TeamCreated>(1, "team.created").Register<TeamRenamed>(1, "team.renamed")));
 
     static async Task AppendAsync(FitzEventStore events, TenantId tenant, Uuid team, params DomainEvent[] changes)
@@ -146,7 +146,7 @@ sealed class TeamRepository(IKvClient kv, string route)
         return await Teams.GetAsync(tx, id, ct);
     }
 
-    public async ValueTask<Page<Team>> ListAsync(TenantId tenant, int take, string? cursor, CancellationToken ct)
+    public async ValueTask<KvDirectoryPage<Team>> ListAsync(TenantId tenant, int take, string? cursor, CancellationToken ct)
     {
         await using var tx = await BeginReadAsync(tenant.Value, ct);
         return await Teams.QueryAsync(tx, ByName.Query().Take(take).After(cursor), ct);
@@ -193,7 +193,7 @@ public interface ITeamDirectory
     /// <param name="cursor">The previous page's cursor, or <see langword="null" /> for the first page.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The page and the cursor for the next one.</returns>
-    ValueTask<Page<Team>> ListAsync(TenantId tenant, int take, string? cursor, CancellationToken ct);
+    ValueTask<KvDirectoryPage<Team>> ListAsync(TenantId tenant, int take, string? cursor, CancellationToken ct);
 }
 
 [JsonSerializable(typeof(Team))]

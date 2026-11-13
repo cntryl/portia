@@ -163,7 +163,7 @@ public sealed class NotificationExecutionTests
         var wire = new Wire();
         var request = serializer.Serialize(new BrokerExecutionContextTests.Command(2), null,
             RequestMetadata.Create(), null);
-        await wire.PublishAsync("schedule://context/work/actual/execute", JsonSerializer.SerializeToUtf8Bytes(
+        await wire.InjectScheduleAsync("schedule://context/work/actual/execute", JsonSerializer.SerializeToUtf8Bytes(
             new { version, system_subject = subject, system_issuer = issuer, request_envelope = request.ToArray() }));
         var consumer = new FitzScheduledRequestConsumer(wire, serializer, "schedule://context/work/*/execute",
             ConsumerJson.Catalog(), new AllowScheduledRequestActorValidator());
@@ -184,7 +184,7 @@ public sealed class NotificationExecutionTests
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
         var wire = new Wire();
-        await wire.PublishAsync("schedule://context/work/actual/execute",
+        await wire.InjectScheduleAsync("schedule://context/work/actual/execute",
             serializer.Serialize(new BrokerExecutionContextTests.Command(2), "legacy-bearer-token",
                 RequestMetadata.Create(), null));
         var consumer = new FitzScheduledRequestConsumer(wire, serializer, "schedule://context/work/*/execute",
@@ -304,6 +304,9 @@ public sealed class NotificationExecutionTests
         public List<string> Cancellations { get; } = [];
         public bool ReturnNoIdentity { get; init; }
 
+        // Delivers a schedule notification through the shared subscription, as the broker would.
+        public Task InjectScheduleAsync(string route, ReadOnlyMemory<byte> body) => PublishAsync(route, body);
+
         public Task UnsubscribeAllAsync(CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task PublishAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default)
@@ -341,10 +344,7 @@ public sealed class NotificationExecutionTests
         public Task CreateBatchAsync(IReadOnlyList<ScheduleEntry> entries, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task<ScheduleCursorPage> ListV2Async(string? cursor, ulong? limit, CancellationToken ct = default) =>
-            throw new NotSupportedException();
-
-        public Task<ScheduleListPage> ListAsync(ulong? offset, ulong? limit, CancellationToken ct = default) =>
+        public Task<ScheduleListPage> ListAsync(string? continuation, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<ScheduleEntry>>

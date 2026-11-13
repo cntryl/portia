@@ -8,7 +8,7 @@ public sealed class OperationalConfigurationTests
     public async Task ShouldRequireQuiescedCutoverGivenOperationsEnabledWithoutIt()
     {
         // Arrange
-        await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
+        await using var client = new FitzClient(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
 
         // Act
         var services = new ServiceCollection();
@@ -28,7 +28,7 @@ public sealed class OperationalConfigurationTests
     public async Task ShouldRejectMixedCheckpointOwnershipGivenOperationsAndCheckpointsInEitherOrder(bool operationsFirst)
     {
         // Arrange
-        await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
+        await using var client = new FitzClient(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
 
         // Act
         var services = new ServiceCollection();
@@ -55,7 +55,7 @@ public sealed class OperationalConfigurationTests
     public async Task ShouldKeepClientOutsideProviderDisposalGivenBorrowedFitzClient()
     {
         // Arrange
-        await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
+        await using var client = new FitzClient(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
         var services = new ServiceCollection();
 
         // Act

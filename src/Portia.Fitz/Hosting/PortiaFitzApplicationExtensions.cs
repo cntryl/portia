@@ -72,7 +72,7 @@ public static class PortiaFitzApplicationExtensions
             }
 
             configure(builder);
-        }, _ => new FitzApplicationConnection(new Client(settings), true, timeout), (uri, token, timeout));
+        }, _ => new FitzApplicationConnection(new FitzClient(settings), true, timeout), (uri, token, timeout));
     }
 
     /// <summary>Configures an owned client, including an optional rotating backend token provider.</summary>
@@ -105,7 +105,7 @@ public static class PortiaFitzApplicationExtensions
         var timeout = startupTimeout ?? TimeSpan.FromSeconds(15);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
         return Register(application, configure,
-            provider => new FitzApplicationConnection(new Client(configuration), true, timeout),
+            provider => new FitzApplicationConnection(new FitzClient(configuration), true, timeout),
             (configuration, timeout));
     }
 
@@ -113,7 +113,7 @@ public static class PortiaFitzApplicationExtensions
     /// <param name="application">The application composition root to connect to Fitz.</param>
     /// <param name="client">The caller-owned client; Portia does not dispose it.</param>
     /// <returns>The same composition root, for chaining.</returns>
-    public static PortiaBuilder UseFitzClient(this PortiaBuilder application, Client client) =>
+    public static PortiaBuilder UseFitzClient(this PortiaBuilder application, FitzClient client) =>
         application.UseFitzClient(client, static _ => { });
 
     /// <summary>Uses an already connected client with optional worker selection or fleet membership.</summary>
@@ -121,7 +121,7 @@ public static class PortiaFitzApplicationExtensions
     /// <param name="client">The caller-owned client; Portia does not dispose it.</param>
     /// <param name="configure">Selects which workers run and how the fleet is composed.</param>
     /// <returns>The same composition root, for chaining.</returns>
-    public static PortiaBuilder UseFitzClient(this PortiaBuilder application, Client client,
+    public static PortiaBuilder UseFitzClient(this PortiaBuilder application, FitzClient client,
         Action<PortiaFitzBuilder> configure)
     {
         ArgumentNullException.ThrowIfNull(client);
@@ -152,7 +152,7 @@ public static class PortiaFitzApplicationExtensions
             _ = services.AddSingleton(connection);
             _ = services.AddSingleton<IHostedService>(provider =>
                 provider.GetRequiredService<FitzApplicationConnection>());
-            var builder = new PortiaFitzBuilder(application, identity as Client);
+            var builder = new PortiaFitzBuilder(application, identity as FitzClient);
             Setups.Add(application, new FitzSetup(identity, builder));
             services.TryAddSingleton<IWorkloadCoordinator>(provider => new FitzWorkloadCoordinator(
                 provider.GetRequiredService<FitzApplicationConnection>(), builder,
