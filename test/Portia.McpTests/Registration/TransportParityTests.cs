@@ -70,7 +70,8 @@ public sealed class TransportParityTests
                 $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net11.0/Portia.McpStdioHost.dll",
                 AppContext.BaseDirectory);
             client = await McpClient.CreateAsync(new StdioClientTransport(new StdioClientTransportOptions
-            { Command = "dotnet", Arguments = [host, "--qualification"], Name = "Application parity" }));
+            { Command = "dotnet", Arguments = [host, "--qualification"], Name = "Application parity" }),
+                StdioClientOptions.Create());
         }
         await using var ownedClient = client;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));

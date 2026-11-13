@@ -200,7 +200,7 @@ public sealed class McpSchemaFidelityTests
                 Arguments = [host],
                 Name = "MCP schema qualification",
                 ShutdownTimeout = TimeSpan.FromSeconds(1)
-            }));
+            }), StdioClientOptions.Create());
 
         // Assert
         var tool = Assert.Single(await client.ListToolsAsync());

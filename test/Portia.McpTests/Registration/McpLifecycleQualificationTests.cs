@@ -42,7 +42,7 @@ public sealed class McpLifecycleQualificationTests
             Command = "dotnet",
             Arguments = [host, "--sdk-cancellation", "--evidence-dir", evidence],
             ShutdownTimeout = TimeSpan.FromSeconds(1)
-        }), new McpClientOptions { ProtocolVersion = revision }, loggerFactory: logs, cancellationToken: timeout.Token);
+        }), StdioClientOptions.Create(revision), loggerFactory: logs, cancellationToken: timeout.Token);
         using var cancellation = new CancellationTokenSource();
         var operation = InvokeAsync();
         await PollAsync("started");
@@ -267,7 +267,7 @@ public sealed class McpLifecycleQualificationTests
                 arguments.Add("--short-deadline");
             return await McpClient.CreateAsync(new StdioClientTransport(new StdioClientTransportOptions
             { Command = "dotnet", Arguments = arguments, Name = "MCP lifecycle qualification", ShutdownTimeout = TimeSpan.FromSeconds(1) }),
-                new McpClientOptions { ProtocolVersion = revision }, loggerFactory: protocolLogs, cancellationToken: token);
+                StdioClientOptions.Create(revision), loggerFactory: protocolLogs, cancellationToken: token);
         }
 
         async Task InvokeWaitAsync(CancellationToken ct)
@@ -305,8 +305,17 @@ public sealed class McpLifecycleQualificationTests
 
         async Task<QualifiedState> StateAsync()
         {
+            // With the short deadline, an observation read on a loaded runner can itself exceed it and
+            // return an error result; that read is retried rather than mistaken for missing state.
             var result = await client.CallToolAsync("qualification.read", new Dictionary<string, object?>
             { ["tenant"] = QualifiedObservations.Tenant }, cancellationToken: token);
+            while (deadline && result.IsError == true)
+            {
+                await Task.Delay(20, token);
+                result = await client.CallToolAsync("qualification.read", new Dictionary<string, object?>
+                { ["tenant"] = QualifiedObservations.Tenant }, cancellationToken: token);
+            }
+
             var json = app.Services.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
             return (QualifiedState)result.StructuredContent!.Value.GetProperty("result")
                 .Deserialize(json.GetTypeInfo<QualifiedState>())!;
