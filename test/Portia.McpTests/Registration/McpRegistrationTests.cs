@@ -1121,7 +1121,7 @@ public sealed class McpRegistrationTests
             Name = "Portia stdio integration test",
             ShutdownTimeout = TimeSpan.FromSeconds(5)
         }, NullLoggerFactory.Instance);
-        await using var client = await McpClient.CreateAsync(transport,
+        await using var client = await McpClient.CreateAsync(transport, StdioClientOptions.Create(),
             cancellationToken: timeout.Token);
 
         // Act

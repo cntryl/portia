@@ -99,7 +99,8 @@ public sealed class McpPrimitiveTests
         }, NullLoggerFactory.Instance);
 
         // Act
-        await using var client = await McpClient.CreateAsync(transport, cancellationToken: timeout.Token);
+        await using var client = await McpClient.CreateAsync(transport, StdioClientOptions.Create(),
+            cancellationToken: timeout.Token);
 
         // Assert
         if (mode == "--resource-only")
