@@ -87,17 +87,12 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Verify Runtime Async requires an explicit opt-in
+      - name: Verify Runtime Async is enabled
         shell: bash
         run: |
-          default_features="$(dotnet msbuild src/Portia.Core/Portia.Core.csproj -nologo -getProperty:Features)"
-          if [[ "$default_features" == *runtime-async=on* ]]; then
-            echo "Runtime Async must remain disabled in the default build." >&2
-            exit 1
-          fi
-          explicit_features="$(dotnet msbuild src/Portia.Core/Portia.Core.csproj -nologo -getProperty:Features -p:UseRuntimeAsync=true)"
-          if [[ "$explicit_features" != *runtime-async=on* ]]; then
-            echo "UseRuntimeAsync=true did not enable the preview feature." >&2
+          features="$(dotnet msbuild src/Portia.Core/Portia.Core.csproj -nologo -getProperty:Features)"
+          if [[ "$features" != *runtime-async=on* ]]; then
+            echo "Portia's net11.0 build must enable Runtime Async." >&2
             exit 1
           fi
 
