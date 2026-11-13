@@ -807,7 +807,10 @@ public sealed class MultiTenancyTests
         Assert.True(stopToken.IsCancellationRequested);
     }
 
-    /// <summary>Host cancellation during normal removal is not reported as a tenant timeout.</summary>
+    /// <summary>
+    ///     Host cancellation during normal removal is not reported as a tenant timeout, even when the
+    ///     workload outlasts the shutdown grace.
+    /// </summary>
     [Fact]
     public async Task ShouldNotReportTenantTimeoutGivenHostCancellationDuringRemoval()
     {
@@ -831,8 +834,63 @@ public sealed class MultiTenancyTests
         // Assert
         Assert.Equal(TimeSpan.FromSeconds(5), await clock.WaitForDelayAsync());
         cancellation.Cancel();
+        Assert.Equal(new MultiTenantRunnerOptions().ShutdownGrace, await clock.WaitForDelayAsync());
+        clock.Advance(new MultiTenantRunnerOptions().ShutdownGrace);
 
         await run.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    /// <summary>
+    ///     Host cancellation that interrupts a removal hands the tenant to shutdown: its stop callback
+    ///     still waits for the workload, and the run does not end while the workload is running.
+    /// </summary>
+    [Fact]
+    public async Task ShouldObserveWorkloadBeforeStopCallbackGivenHostCancellationDuringRemoval()
+    {
+        // Arrange
+        var directory = new RemovalDirectory();
+        var clock = new ManualTestClock();
+        var grace = TimeSpan.FromSeconds(7);
+        var runner = new MultiTenantRunner(directory, new MultiTenantRunnerOptions { ShutdownGrace = grace }, null,
+            clock);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stopped = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var exited = 0;
+        using var cancellation = new CancellationTokenSource();
+        var run = runner.RunAsync(async (tenant, token) =>
+        {
+            _ = tenant;
+            _ = started.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, token);
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+                await release.Task;
+                Volatile.Write(ref exited, 1);
+            }
+        }, (_, _) =>
+        {
+            _ = stopped.TrySetResult(Volatile.Read(ref exited) == 1);
+            return Task.CompletedTask;
+        }, cancellation.Token);
+
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        directory.Remove();
+        Assert.Equal(TimeSpan.FromSeconds(5), await clock.WaitForDelayAsync());
+
+        // Act
+        await cancellation.CancelAsync();
+
+        // Assert
+        Assert.Equal(grace, await clock.WaitForDelayAsync());
+        Assert.False(stopped.Task.IsCompleted);
+        Assert.False(run.IsCompleted);
+        release.SetResult();
+        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(await stopped.Task.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
     /// <summary>Every configurable runner duration must be strictly positive.</summary>
