@@ -15,11 +15,13 @@ namespace Cntryl.Portia;
 sealed class FitzWakeupSubscription<T> : IAsyncDisposable
 {
     readonly string _endedMessage;
+    readonly Lock _gate = new();
     readonly CancellationTokenSource _stop = new();
     readonly Func<CancellationToken, Task<SubscriptionHandle<T>>> _subscribe;
     IAsyncEnumerator<T> _notifications;
     Task<bool>? _pending;
     SubscriptionHandle<T> _subscription;
+    bool _disposed;
 
     FitzWakeupSubscription(Func<CancellationToken, Task<SubscriptionHandle<T>>> subscribe, string endedMessage,
         SubscriptionHandle<T> subscription)
@@ -82,6 +84,16 @@ sealed class FitzWakeupSubscription<T> : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        IAsyncEnumerator<T> notifications;
+        SubscriptionHandle<T> subscription;
+        lock (_gate)
+        {
+            // A replacement still being established is released by ResubscribeAsync, which sees this.
+            _disposed = true;
+            notifications = _notifications;
+            subscription = _subscription;
+        }
+
         await _stop.CancelAsync().ConfigureAwait(false);
         try
         {
@@ -89,17 +101,18 @@ sealed class FitzWakeupSubscription<T> : IAsyncDisposable
             // only has to release the subscription.
             if (_pending is not null)
                 await ((Task)_pending).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
-            await _notifications.DisposeAsync().ConfigureAwait(false);
+            await notifications.DisposeAsync().ConfigureAwait(false);
         }
         finally
         {
             try
             {
-                await _subscription.DisposeAsync().ConfigureAwait(false);
+                await subscription.DisposeAsync().ConfigureAwait(false);
             }
             finally
             {
-                _stop.Dispose();
+                lock (_gate)
+                    _stop.Dispose();
             }
         }
     }
@@ -110,9 +123,24 @@ sealed class FitzWakeupSubscription<T> : IAsyncDisposable
     // a caller's per-wait backstop firing mid-subscribe would otherwise leave it holding the ended handle.
     async ValueTask ResubscribeAsync()
     {
+        // Read once: disposal may complete, and dispose the source, while the replacement is awaited.
+        CancellationToken stop;
+        lock (_gate)
+            stop = _stop.Token;
         await _notifications.DisposeAsync().ConfigureAwait(false);
         await _subscription.DisposeAsync().ConfigureAwait(false);
-        _subscription = await _subscribe(_stop.Token).ConfigureAwait(false);
-        _notifications = _subscription.GetAsyncEnumerator(_stop.Token);
+        var replacement = await _subscribe(stop).ConfigureAwait(false);
+        lock (_gate)
+        {
+            if (!_disposed)
+            {
+                _subscription = replacement;
+                _notifications = replacement.GetAsyncEnumerator(stop);
+                return;
+            }
+        }
+
+        // Disposal already released the old handle and returned, so nothing else will release this one.
+        await replacement.DisposeAsync().ConfigureAwait(false);
     }
 }

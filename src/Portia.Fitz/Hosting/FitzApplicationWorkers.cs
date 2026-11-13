@@ -30,6 +30,7 @@ sealed class FitzApplicationWorkers(
     readonly WorkloadRegistration[] _workloads = [.. workloads];
     bool _deferredStart;
     IAsyncDisposable? _rpc;
+    int _stopRequested;
 
     public async ValueTask DisposeAsync()
     {
@@ -95,6 +96,9 @@ sealed class FitzApplicationWorkers(
 
     public override async Task StopAsync(CancellationToken cancellationToken)
     {
+        // Published before anything is released, so a start still in flight either sees it or
+        // has already stored what this stop releases.
+        Volatile.Write(ref _stopRequested, 1);
         try
         {
             await base.StopAsync(cancellationToken).ConfigureAwait(false);
@@ -119,6 +123,9 @@ sealed class FitzApplicationWorkers(
 
     async Task StartWorkersAsync(CancellationToken cancellationToken)
     {
+        // A stop that arrived while a deferred start waited must not be followed by workers.
+        if (Volatile.Read(ref _stopRequested) != 0)
+            return;
         await connection.StartAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -128,7 +135,20 @@ sealed class FitzApplicationWorkers(
                     .RegisterRequestsAsync(cancellationToken).ConfigureAwait(false);
             }
 
+            if (Volatile.Read(ref _stopRequested) != 0)
+            {
+                // The stop may have run before the registrations were stored, so it released nothing.
+                await ReleaseRpcAsync().ConfigureAwait(false);
+                return;
+            }
+
             await base.StartAsync(cancellationToken).ConfigureAwait(false);
+            if (Volatile.Read(ref _stopRequested) != 0)
+            {
+                // The stop may have run before the executing task existed, so it stopped nothing.
+                await base.StopAsync(CancellationToken.None).ConfigureAwait(false);
+                await ReleaseRpcAsync().ConfigureAwait(false);
+            }
         }
         catch
         {
