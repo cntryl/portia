@@ -25,7 +25,8 @@ public sealed class FitzRequestQueuePublisherOptionsTests
 
         // Assert
         Assert.Equal("queue://test/shared/action", queue.Route);
-        Assert.Equal(new QueueEnqueueOptions(options.Delay, options.TtlHours), queue.Options);
+        Assert.Equal(new QueueEnqueueOptions(options.Delay,
+            options.TtlHours is { } ttl ? TimeSpan.FromHours(ttl) : null), queue.Options);
         Assert.Equal(1, queue.Accepted);
         Assert.Equal(0, queue.LegacyCalls);
         var envelope = serializer.DeserializeEnvelope(queue.Body);
@@ -223,11 +224,11 @@ public sealed class FitzRequestQueuePublisherOptionsTests
             return Accept(route, body, new QueueEnqueueOptions(delay));
         }
 
-        public Task<ulong> EnqueueWithOptionsAsync(string route, ReadOnlyMemory<byte> body, QueueEnqueueOptions options,
+        public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body, QueueEnqueueOptions options,
             CancellationToken ct = default)
         {
             OptionCalls++;
-            if (options.TtlHours is not null && !SupportsLifetime)
+            if (options.TimeToLive is not null && !SupportsLifetime)
                 return Task.FromException<ulong>(new NotSupportedException("Queue TTL capability was not negotiated."));
             return Accept(route, body, options);
         }

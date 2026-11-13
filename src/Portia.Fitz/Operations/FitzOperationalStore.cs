@@ -38,7 +38,7 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
         await using (var tx = await _client.BeginAsync(IndexRoute(scope), KvMode.ReadOnly, ct).ConfigureAwait(false))
         {
             var value = await tx.GetAsync(IndexKey(scope), ct).ConfigureAwait(false);
-            targets = value.Found ? JsonSerializer.Deserialize(value.Value!.Value.Span,
+            targets = value is KvFound { Value: var valueBytes } ? JsonSerializer.Deserialize(valueBytes.Span,
                 FitzJsonContext.Default.OperationalTargetArray)! : [];
         }
         var states = new List<OperationalProcessorState>();
@@ -96,7 +96,7 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
                 || attempt.OwnerSession != ownerSession || attempt.ExpectedCheckpoint != expectedCheckpoint)
                 return false;
             var stored = await tx.GetAsync(FitzKvCheckpoints.Key(identity), ct).ConfigureAwait(false);
-            var checkpoint = stored.Found ? FitzKvCheckpoints.Decode(stored.Value!.Value.Span).Value : null;
+            var checkpoint = stored is KvFound { Value: var storedBytes } ? FitzKvCheckpoints.Decode(storedBytes.Span).Value : null;
             if (checkpoint != expectedCheckpoint)
                 throw new OperationalCheckpointConflictException();
             var receipt = replacement.Attempts.Single(a => a.Id == attemptId);
@@ -131,7 +131,7 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
         CancellationToken ct)
     {
         var value = await tx.GetAsync(Key(target), ct).ConfigureAwait(false);
-        var state = value.Found ? JsonSerializer.Deserialize(value.Value!.Value.Span,
+        var state = value is KvFound { Value: var valueBytes } ? JsonSerializer.Deserialize(valueBytes.Span,
             FitzJsonContext.Default.OperationalProcessorState) : null;
         if (state is not null && state.Target != target)
             throw new InvalidDataException("The operational document does not match the requested target.");
@@ -152,7 +152,7 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
     {
         await using var tx = await _client.BeginAsync(IndexRoute(target.Scope), KvMode.ReadWrite, ct).ConfigureAwait(false);
         var value = await tx.GetAsync(IndexKey(target.Scope), ct).ConfigureAwait(false);
-        var existing = value.Found ? JsonSerializer.Deserialize(value.Value!.Value.Span,
+        var existing = value is KvFound { Value: var valueBytes } ? JsonSerializer.Deserialize(valueBytes.Span,
             FitzJsonContext.Default.OperationalTargetArray)! : [];
         if (existing.Contains(target))
             return;

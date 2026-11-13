@@ -66,7 +66,7 @@ public sealed class BrokerExecutionContextTests
         Assert.True(await deliveries.MoveNextAsync());
         var second = deliveries.Current;
         Assert.Equal(metadata, second.Metadata);
-        Assert.Equal(QueueItem.AttemptUnavailable, second.Attempt);
+        Assert.Equal(0U, second.Attempt);
         Assert.Equal(new QueueInvocation(route, second.Attempt) { MessagingSystem = "fitz" }, second.Invocation);
         var secondExecution = new RequestDispatchContext(RequestActor.System, second.Invocation, second.Metadata);
         Assert.Equal(firstExecution.RequestId, secondExecution.RequestId);

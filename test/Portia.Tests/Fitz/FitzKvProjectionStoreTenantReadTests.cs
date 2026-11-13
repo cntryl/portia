@@ -64,7 +64,7 @@ public sealed class FitzKvProjectionStoreTenantReadTests
         static async Task<string?> ReadAsync(IKvTransaction tx, string name)
         {
             var result = await tx.GetAsync(Encoding.UTF8.GetBytes("balance\0" + name));
-            return result.Found ? Encoding.UTF8.GetString(result.Value!.Value.Span) : null;
+            return result is KvFound { Value: var resultBytes } ? Encoding.UTF8.GetString(resultBytes.Span) : null;
         }
     }
 }

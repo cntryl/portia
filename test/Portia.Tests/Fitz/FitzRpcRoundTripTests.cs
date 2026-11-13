@@ -32,7 +32,7 @@ public sealed class FitzRpcRoundTripTests
         var serializer = TestJson.Serializer(typeof(RpcGetValue));
         using var busHost = TestRequestBus.Create();
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
-        _ = await server.RegisterAsync<RpcGetValue, int>();
+        await using var registration = await server.RegisterAsync<RpcGetValue, int>();
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
 
         // Act
@@ -52,7 +52,7 @@ public sealed class FitzRpcRoundTripTests
         var serializer = TestJson.Serializer(typeof(RpcGetValue));
         using var busHost = TestRequestBus.Create();
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
-        _ = await server.RegisterAsync<RpcGetValue, int>();
+        await using var registration = await server.RegisterAsync<RpcGetValue, int>();
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
 
         // Act
@@ -236,7 +236,7 @@ public sealed class FitzRpcRoundTripTests
         var handler = new RpcChangeValueHandler();
         using var busHost = TestRequestBus.Create(rpcChangeValueHandler: handler);
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
-        _ = await server.RegisterAsync<RpcChangeValue>();
+        await using var registration = await server.RegisterAsync<RpcChangeValue>();
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
 
         // Act
@@ -262,7 +262,7 @@ public sealed class FitzRpcRoundTripTests
         using var busHost =
             TestRequestBus.Create(rpcChangeValueHandler: handler, actorValidator: new RejectingActorValidator());
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
-        _ = await server.RegisterAsync<RpcChangeValue>();
+        await using var registration = await server.RegisterAsync<RpcChangeValue>();
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
 
         // Act

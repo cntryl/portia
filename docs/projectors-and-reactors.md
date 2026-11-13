@@ -198,9 +198,10 @@ var result = await status.GetAsync("AccountBalanceProjector", tenant, actorToken
 ```
 
 Status calls use ordinary Fitz transport semantics. A completed response can precede worker scope
-cleanup, so a subsequent call may receive `RpcException` with `FitzErrorCodes.RpcBackpressure`,
-error class `5`, and effect `0` (not applied). Status polling can retry that response within its
-cancellation deadline. Authentication and authorization failures remain ordinary request results.
+cleanup; a call that arrives meanwhile waits for the worker's capacity within its own deadline. Fitz
+rejects with `RpcException` carrying `FitzErrorCodes.RpcBackpressure`, error class `5`, and effect `0`
+(not applied) only when its bounded wait queue is already full. Status polling can retry that
+response within its cancellation deadline. Authentication and authorization failures remain ordinary request results.
 
 Pass `null` for the tenant of a global component. Client and worker use the same Fitz application
 or fleet configuration. Requests pass through the ordinary RPC identity and authorization pipeline.
@@ -368,7 +369,7 @@ public sealed class AccountRepository(IKvClient kv)
     {
         var key = BalanceKey(accountId, rebuildId);
         var current = await Transaction.GetAsync(key, ct);
-        var balance = current.Found ? BinaryPrimitives.ReadInt64BigEndian(current.Value!.Value.Span) : 0;
+        var balance = current is KvFound { Value: var stored } ? BinaryPrimitives.ReadInt64BigEndian(stored.Span) : 0;
         var next = new byte[sizeof(long)];
         BinaryPrimitives.WriteInt64BigEndian(next, balance + amount);
         await Transaction.PutAsync(key, next, ct);
@@ -380,8 +381,8 @@ public sealed class AccountRepository(IKvClient kv)
     {
         await using var tx = await BeginTenantReadAsync(tenant, ct);
         var current = await tx.GetAsync(BalanceKey(accountId, rebuildId: null), ct);
-        return current.Found
-            ? new AccountReadModel(accountId, BinaryPrimitives.ReadInt64BigEndian(current.Value!.Value.Span))
+        return current is KvFound { Value: var stored }
+            ? new AccountReadModel(accountId, BinaryPrimitives.ReadInt64BigEndian(stored.Span))
             : null;
     }
 

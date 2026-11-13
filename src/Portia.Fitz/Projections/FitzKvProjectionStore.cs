@@ -147,8 +147,8 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
             _open = transaction;
             var checkpoint = await transaction.GetAsync(FitzKvCheckpoints.Key(context.Identity), ct)
                 .ConfigureAwait(false);
-            var current = checkpoint.Found
-                ? new ProjectionCheckpoint(FitzKvCheckpoints.Decode(checkpoint.Value!.Value.Span))
+            var current = checkpoint is KvFound { Value: var checkpointBytes }
+                ? new ProjectionCheckpoint(FitzKvCheckpoints.Decode(checkpointBytes.Span))
                 : ProjectionCheckpoint.Start;
             if (current != context.Checkpoint)
             {

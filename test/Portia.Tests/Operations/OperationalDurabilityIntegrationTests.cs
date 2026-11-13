@@ -191,9 +191,9 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
         }
     }
 
-    async Task<Client> ConnectAsync()
+    async Task<FitzClient> ConnectAsync()
     {
-        var client = new Client(new ClientConfig(_endpoint));
+        var client = new FitzClient(new ClientConfig(_endpoint));
         try
         {
             await client.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(TimeSpan.FromSeconds(20)));
@@ -208,7 +208,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
         }
     }
 
-    static FitzEventStore Events(Client client) => new(client.Stream, TestJson.DomainSerializer(new DomainEventTypeCatalog()
+    static FitzEventStore Events(FitzClient client) => new(client.Stream, TestJson.DomainSerializer(new DomainEventTypeCatalog()
         .Register<ValueChanged>(1, "portia.durability.changed")));
 
     static async Task<List<DomainEventRecord>> ReadAsync(FitzEventStore events, string area)

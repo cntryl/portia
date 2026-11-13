@@ -2,29 +2,32 @@ using Cntryl.Fitz;
 
 namespace Cntryl.Portia;
 
-/// <summary>Characterizes native backpressure while terminal-response callback cleanup is still running.</summary>
+/// <summary>Characterizes native worker capacity while terminal-response callback cleanup is still running.</summary>
 [Collection(FitzBrokerCollectionDefinition.Name)]
 [Trait("Category", "BrokerIntegration")]
 public sealed class FitzRpcWorkerCleanupIntegrationTests(FitzBrokerFixture broker)
 {
-    /// <summary>Cleanup can reject a later call without dispatch, while greater declared capacity admits it.</summary>
+    /// <summary>
+    ///     Cleanup holds a later call without dispatch until the slot frees, while greater declared capacity
+    ///     admits it at once. Fitz rejects with backpressure only once its bounded wait queue is full.
+    /// </summary>
     /// <param name="portia">Whether Portia owns the callback and asynchronous application scope.</param>
     /// <param name="maxConcurrency">Native per-worker execution capacity; two is the positive control.</param>
     [Theory]
     [InlineData(false, 1U)]
     [InlineData(false, 2U)]
     [InlineData(true, 1U)]
-    public async Task ShouldExposeDeclaredBackpressureGivenWorkerCleanupInProgress(bool portia, uint maxConcurrency)
+    public async Task ShouldHoldCallUntilCapacityFreesGivenWorkerCleanupInProgress(bool portia, uint maxConcurrency)
     {
         // Arrange
         var endpoint = new Uri(Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT")
             ?? "ws://127.0.0.1:4090/ws");
         // Keep domain dispatch parallel enough to expose the independent per-worker limit on any CPU count.
-        await using var workerClient = new Client(new ClientConfig(endpoint,
+        await using var workerClient = new FitzClient(new ClientConfig(endpoint,
             AsyncHandlers: new AsyncHandlerOptions(MaxConcurrency: 4)));
         await workerClient.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(TimeSpan.FromSeconds(15)));
         await using var callerClient = await broker.CreateClientAsync();
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         using var bus = TestRequestBus.Create();
         var resource = "worker-cleanup-" + Uuid.CreateVersion4();
         var route = $"rpc://test/cleanup/{resource}/call";
@@ -70,27 +73,29 @@ public sealed class FitzRpcWorkerCleanupIntegrationTests(FitzBrokerFixture broke
                     deadline.Token), deadline.Token);
             }
 
-            Assert.Equal(portia ? 7 : 42, await call().WaitAsync(TimeSpan.FromSeconds(5)));
-            await cleanup.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var expected = portia ? 7 : 42;
+            Assert.Equal(expected, await call().WaitAsync(deadline.Token));
+            await cleanup.Entered.Task.WaitAsync(deadline.Token);
             second = call();
             if (maxConcurrency == 1)
             {
-                // Normal terminal frames release broker credit before local callback cleanup.
-                // The SDK's still-occupied slot rejects admission with a known-not-applied result.
-                var error = await Assert.ThrowsAsync<RpcException>(() => second.WaitAsync(TimeSpan.FromSeconds(5)));
-                Assert.Equal("BUSY", error.Code);
-                Assert.Equal(FitzErrorCodes.RpcBackpressure, error.DomainCode);
-                Assert.Equal((byte)1, error.Status);
-                Assert.Equal((byte)5, error.ErrorClass);
-                Assert.Equal((byte)0, error.ErrorEffect);
+                // Normal terminal frames release broker credit before local callback cleanup, so the
+                // broker delivers the call while the SDK's only slot is still occupied. The SDK holds it
+                // in its bounded wait rather than dispatching or rejecting it. A correct SDK never
+                // completes it inside this window, so the window cannot produce a false failure.
+                var early = await Task.WhenAny(second, Task.Delay(TimeSpan.FromMilliseconds(500), deadline.Token));
+                Assert.NotSame(second, early);
                 Assert.Equal(1, cleanup.Invocations);
+                cleanup.Release.TrySetResult();
+                Assert.Equal(expected, await second.WaitAsync(deadline.Token));
+                Assert.Equal(2, cleanup.Invocations);
             }
             else
             {
-                Assert.Equal(42, await second.WaitAsync(TimeSpan.FromSeconds(5)));
+                Assert.Equal(42, await second.WaitAsync(deadline.Token));
                 Assert.Equal(2, cleanup.Invocations);
+                Assert.False(cleanup.Release.Task.IsCompleted);
             }
-            Assert.False(cleanup.Release.Task.IsCompleted);
         }
         finally
         {

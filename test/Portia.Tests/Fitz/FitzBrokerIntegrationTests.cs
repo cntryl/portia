@@ -733,7 +733,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         }
     }
 
-    sealed class FitzEventStoreProbe(Client client) : IEventStoreConformanceProbe
+    sealed class FitzEventStoreProbe(FitzClient client) : IEventStoreConformanceProbe
     {
         public string Realm => "portia-integration";
 
@@ -793,7 +793,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     }
 
     sealed class FitzWorkloadCoordinatorWorker(
-        Client client,
+        FitzClient client,
         FitzApplicationConnection connection,
         IWorkloadCoordinator coordinator) : IWorkloadCoordinatorConformanceWorker
     {
@@ -847,7 +847,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     // One independent repository session: its own FitzKvProjectionStore instance, so each session owns
     // one Fitz KV transaction exactly as a scoped application repository would. Begin, commit, and
     // rollback all run through the real store; this only arms the suite's single injected failure.
-    sealed class FitzKvProjectionSession(Client client, FitzKvValueRepository repository)
+    sealed class FitzKvProjectionSession(FitzClient client, FitzKvValueRepository repository)
         : IProjectionStoreConformanceSession, IProjectionStore
     {
         bool _failNextCommit;
@@ -914,7 +914,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         {
             await using var tx = await BeginReadAsync(identity.Pattern.Realm, ct);
             var result = await tx.GetAsync(ValueKey(identity), ct);
-            return result.Found ? Encoding.UTF8.GetString(result.Value!.Value.Span) : null;
+            return result is KvFound { Value: var resultBytes } ? Encoding.UTF8.GetString(resultBytes.Span) : null;
         }
 
         static ReadOnlyMemory<byte> ValueKey(CheckpointIdentity identity) =>

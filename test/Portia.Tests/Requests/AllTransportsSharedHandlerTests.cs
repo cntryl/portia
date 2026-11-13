@@ -46,7 +46,7 @@ public sealed class AllTransportsSharedHandlerTests
         var rpc = new InMemoryRpcClient();
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
-        _ = await server.RegisterAsync<UniversalAction>();
+        await using var registration = await server.RegisterAsync<UniversalAction>();
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
         var rpcResult = await sender.SendAsync(new UniversalAction(3), new RequestRouteValues(), null);
         Assert.True(rpcResult.IsSuccess);

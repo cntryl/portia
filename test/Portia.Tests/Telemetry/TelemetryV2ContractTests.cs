@@ -476,11 +476,7 @@ public sealed class TelemetryV2ContractTests
 
         public Task CreateBatchAsync(IReadOnlyList<ScheduleEntry> entries, CancellationToken ct = default) =>
             throw new NotSupportedException();
-
-        public Task<ScheduleCursorPage> ListV2Async(string? cursor, ulong? limit, CancellationToken ct = default) =>
-            throw new NotSupportedException();
-
-        public Task<ScheduleListPage> ListAsync(ulong? offset, ulong? limit, CancellationToken ct = default) =>
+        public Task<ScheduleListPage> ListAsync(string? continuation, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
         public Task<IReadOnlyList<ScheduleEntry>> ListBySelectorAsync(string selector,

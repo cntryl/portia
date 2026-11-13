@@ -49,7 +49,7 @@ public sealed class ApplicationFleetTests
         Assert.Equal(probe.Created, probe.Disposed);
     }
 
-    static IHost Build(Client client, string worker, string realm, InMemoryEventStore store, Probe probe)
+    static IHost Build(FitzClient client, string worker, string realm, InMemoryEventStore store, Probe probe)
     {
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddSingleton<IDomainEventReader>(store);

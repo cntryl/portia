@@ -157,14 +157,15 @@ public sealed class FitzRequestQueueConsumer(
         public RequestMetadata Metadata => _envelope.Value.Metadata;
         public RequestTraceContext? TraceContext => _envelope.Value.TraceContext;
 
-        public RequestInvocation Invocation => new QueueInvocation(_item.Route, _item.Attempt)
+        // Fitz does not report a delivery attempt, and Portia does not synthesize one, so the attempt is
+        // always 0 and never durable.
+        public RequestInvocation Invocation => new QueueInvocation(_item.Route, 0)
         {
             MessagingSystem = "fitz"
         };
 
         public string? ActorToken => _envelope.Value.ActorToken;
-        public uint Attempt => _item.Attempt;
-        public bool SupportsDurableAttempts => _item.Attempt != QueueItem.AttemptUnavailable;
+        public uint Attempt => 0;
         public CancellationToken ReservationCancellation => _lostToken;
 
         public async ValueTask CompleteAsync(CancellationToken ct = default)

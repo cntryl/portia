@@ -25,7 +25,6 @@ public sealed class QueueBrokerTests
         // Assert
         Assert.True(await reader.MoveNextAsync());
         var malformed = reader.Current;
-        var attempt = malformed.Attempt;
         _ = Assert.ThrowsAny<JsonException>(() => malformed.Request);
         await malformed.RetryAsync(TimeSpan.FromSeconds(1));
         Assert.True(await reader.MoveNextAsync());
@@ -34,8 +33,6 @@ public sealed class QueueBrokerTests
         var redelivered = Assert.Single(await client.Queue.ReserveAsync(
             route, TimeSpan.FromSeconds(30), wait: TimeSpan.FromSeconds(3)));
         Assert.Equal("{"u8.ToArray(), redelivered.Body.ToArray());
-        // Fitz supplies 1 for RESERVE responses; Portia preserves that SDK value.
-        Assert.Equal(attempt, redelivered.Attempt);
         // Test cleanup acknowledges the observed redelivery; Portia never acknowledged the malformed delivery.
         await redelivered.CompleteAsync();
         Assert.Empty(await client.Queue.ReserveAsync(route, TimeSpan.FromSeconds(1), wait: TimeSpan.Zero));
@@ -116,8 +113,6 @@ public sealed class QueueBrokerTests
             route, TimeSpan.FromSeconds(30), wait: TimeSpan.FromSeconds(3)));
         var request = serializer.DeserializeEnvelope(redelivered.Body).Request;
         Assert.Equal(id, Assert.IsType<ScopeRequest>(request).Id);
-        // The pinned SDK does not expose the broker's durable delivery counter.
-        Assert.Equal(QueueItem.AttemptUnavailable, redelivered.Attempt);
         await redelivered.CompleteAsync();
         Assert.All(provider.GetRequiredService<ConsumerHost.Effects>().Scopes.Values, Assert.True);
     }

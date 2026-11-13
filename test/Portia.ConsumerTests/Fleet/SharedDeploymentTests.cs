@@ -146,7 +146,7 @@ public sealed class SharedDeploymentTests
         Assert.Contains(nameof(ITenantDirectory), error.Message, StringComparison.Ordinal);
     }
 
-    static PortiaBuilder Shared(IServiceCollection services, Client client, ConsumerHost.Effects effects, Uuid first)
+    static PortiaBuilder Shared(IServiceCollection services, FitzClient client, ConsumerHost.Effects effects, Uuid first)
     {
         foreach (var descriptor in ConsumerHost.CreateServices())
             services.Add(descriptor);

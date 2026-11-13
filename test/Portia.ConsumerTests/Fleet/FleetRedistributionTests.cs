@@ -353,7 +353,7 @@ public sealed class FleetRedistributionTests
 
         public void Set(params string[] workers) => _view = workers.ToDictionary(
             worker => "lease://fleet/members/" + worker,
-            worker => new LeaseListItem("lease://fleet/members/" + worker, "owner", 1, "",
+            worker => new LeaseListItem("lease://fleet/members/" + worker, "owner", 1, DateTimeOffset.UnixEpoch,
                 TimeSpan.FromSeconds(30), 0));
     }
 }

@@ -53,8 +53,8 @@ not substituted for the actual route received. Custom transports can define anot
 
 Fitz's delivery objects do not expose broker message, call, reservation, or schedule
 occurrence IDs. Portia does not invent them. Fitz's current queue wire also does not report
-delivery attempts, so every Fitz queue delivery exposes
-`QueueItem.AttemptUnavailable` (`0`). Treat `Attempt` as transport-reported information,
+delivery attempts, so every Fitz queue delivery reports an `Attempt` of `0` and
+`SupportsDurableAttempts` of `false`. Treat `Attempt` as transport-reported information,
 not an application idempotency key or a guaranteed monotonic counter.
 
 ## Child requests and credentials

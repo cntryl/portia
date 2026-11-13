@@ -13,7 +13,7 @@ public sealed class QueueConsumerContractTests
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
-        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 7)
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())))
         { SupportsNack = true };
         var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
             "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), (ulong)leaseSeconds,
@@ -30,7 +30,6 @@ public sealed class QueueConsumerContractTests
         Assert.Equal(1, item.Nacks);
         Assert.Equal(TimeSpan.FromSeconds(leaseSeconds), item.NackDelay);
         Assert.Equal(0, item.Completions);
-        Assert.Equal(7U, item.Attempt);
     }
 
     [Theory]
@@ -40,7 +39,7 @@ public sealed class QueueConsumerContractTests
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
-        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 2)
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())))
         { SupportsNack = true };
         var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
             "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), timeProvider: new ManualClock());
@@ -56,7 +55,6 @@ public sealed class QueueConsumerContractTests
         Assert.Equal(1, item.Nacks);
         Assert.Equal(TimeSpan.FromSeconds(seconds), item.NackDelay);
         Assert.Equal(0, item.Completions);
-        Assert.Equal(2U, item.Attempt);
     }
 
     [Fact]
@@ -64,8 +62,8 @@ public sealed class QueueConsumerContractTests
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
-        var implicitItem = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
-        var explicitItem = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
+        var implicitItem = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())));
+        var explicitItem = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())));
         var queue = new QueueClient([implicitItem, explicitItem]);
         var consumer = new FitzRequestQueueConsumer(queue, serializer,
             "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), timeProvider: new ManualClock());
@@ -94,7 +92,7 @@ public sealed class QueueConsumerContractTests
         // Arrange
         var clock = new ManualClock();
         var serializer = ConsumerJson.CreateSerializer();
-        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1)
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())))
         { SupportsNack = true, BlockNack = true, CloseOnNack = true };
         var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
             "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), 4, timeProvider: clock);
@@ -127,7 +125,7 @@ public sealed class QueueConsumerContractTests
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
-        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1)
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())))
         { SupportsNack = true, FailCompletion = true };
         var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
             "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), timeProvider: new ManualClock());
@@ -151,7 +149,7 @@ public sealed class QueueConsumerContractTests
         // Arrange
         var clock = new ManualClock();
         var serializer = ConsumerJson.CreateSerializer();
-        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1)
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())))
         { SupportsNack = true, FailExtension = true };
         var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
             "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), 4, timeProvider: clock);
@@ -184,14 +182,14 @@ public sealed class QueueConsumerContractTests
         var delay = TimeSpan.FromSeconds(3);
 
         // Act
-        _ = await queue.EnqueueWithOptionsAsync("queue://consumer/scopes/delivery", ReadOnlyMemory<byte>.Empty,
+        _ = await queue.EnqueueAsync("queue://consumer/scopes/delivery", ReadOnlyMemory<byte>.Empty,
             new QueueEnqueueOptions(Delay: delay));
 
         // Assert
         Assert.Equal(1, queue.Enqueues);
         Assert.Equal(delay, queue.EnqueueDelay);
-        await Assert.ThrowsAsync<NotSupportedException>(() => queue.EnqueueWithOptionsAsync(
-            "queue://consumer/scopes/delivery", ReadOnlyMemory<byte>.Empty, new QueueEnqueueOptions(TtlHours: 1)));
+        await Assert.ThrowsAsync<NotSupportedException>(() => queue.EnqueueAsync(
+            "queue://consumer/scopes/delivery", ReadOnlyMemory<byte>.Empty, new QueueEnqueueOptions(TimeToLive: TimeSpan.FromHours(1))));
         Assert.Equal(1, queue.Enqueues);
     }
 
@@ -199,7 +197,7 @@ public sealed class QueueConsumerContractTests
     public async Task ShouldNotAcknowledgeOrDisposeReservationGivenUnsupportedNativeNack()
     {
         // Arrange
-        var item = new Reserved(ReadOnlyMemory<byte>.Empty, QueueItem.AttemptUnavailable);
+        var item = new Reserved(ReadOnlyMemory<byte>.Empty);
 
         // Act
         var error = await Record.ExceptionAsync(() => item.NackAsync());
@@ -208,7 +206,6 @@ public sealed class QueueConsumerContractTests
         _ = Assert.IsType<NotSupportedException>(error);
         Assert.Equal(0, item.Completions);
         Assert.Equal(0, item.Disposals);
-        Assert.Equal(QueueItem.AttemptUnavailable, item.Attempt);
     }
 
     [Theory]
@@ -219,7 +216,7 @@ public sealed class QueueConsumerContractTests
         // Arrange
         var clock = new ManualClock();
         var serializer = ConsumerJson.CreateSerializer();
-        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())));
         var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
             "queue://consumer/scopes/delivery",
             ConsumerJson.Catalog(), 4, timeProvider: clock);
@@ -250,7 +247,7 @@ public sealed class QueueConsumerContractTests
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
-        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())));
         var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
             "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), 4, timeProvider: new ManualClock());
 
@@ -281,7 +278,7 @@ public sealed class QueueConsumerContractTests
         // Arrange
         var clock = new ManualClock();
         var serializer = ConsumerJson.CreateSerializer();
-        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1)
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())))
         { BlockCompletion = true, CloseOnCompletion = true };
         var consumer = new FitzRequestQueueConsumer(new QueueClient([item]), serializer,
             "queue://consumer/scopes/delivery",
@@ -321,7 +318,7 @@ public sealed class QueueConsumerContractTests
         var serializer = ConsumerJson.CreateSerializer();
         var queue = new WakingQueueClient(4);
         for (var index = 0; index < 3; index++)
-            queue.Enqueue(new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1));
+            queue.Enqueue(new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4()))));
         var consumer = new FitzRequestQueueConsumer(queue, serializer, "queue://consumer/scopes/delivery",
             ConsumerJson.Catalog(), 4, timeProvider: new ManualClock());
 
@@ -333,7 +330,7 @@ public sealed class QueueConsumerContractTests
         {
             Assert.True(await reader.MoveNextAsync());
             await reader.Current.CompleteAsync();
-            queue.Enqueue(new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1));
+            queue.Enqueue(new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4()))));
         }
 
         await DrainAndWakeAsync(reader, queue, serializer, 3);
@@ -351,7 +348,7 @@ public sealed class QueueConsumerContractTests
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
         var queue = new WakingQueueClient(2);
-        queue.Enqueue(new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1));
+        queue.Enqueue(new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4()))));
         var consumer = new FitzRequestQueueConsumer(queue, serializer, "queue://consumer/scopes/delivery",
             ConsumerJson.Catalog(), 4, timeProvider: new ManualClock());
 
@@ -361,7 +358,7 @@ public sealed class QueueConsumerContractTests
         // Assert
         Assert.True(await reader.MoveNextAsync());
         for (var index = 0; index < 5; index++)
-            queue.Enqueue(new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1));
+            queue.Enqueue(new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4()))));
         await reader.Current.CompleteAsync();
 
         await DrainAndWakeAsync(reader, queue, serializer, 5);
@@ -384,7 +381,7 @@ public sealed class QueueConsumerContractTests
         var parked = queue.Parked;
         var next = reader.MoveNextAsync().AsTask();
         await parked.WaitAsync(TimeSpan.FromSeconds(5));
-        queue.Enqueue(new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1));
+        queue.Enqueue(new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4()))));
         Assert.True(await next.WaitAsync(TimeSpan.FromSeconds(5)));
         await reader.Current.CompleteAsync();
     }
@@ -395,9 +392,9 @@ public sealed class QueueConsumerContractTests
         // Arrange
         var clock = new ManualClock();
         var serializer = ConsumerJson.CreateSerializer();
-        var failed = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4(), 2)), 6)
+        var failed = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4(), 2)))
         { FailExtension = true };
-        var success = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
+        var success = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())));
         var queue = new QueueClient([failed, success]);
         var services = ConsumerHost.CreateServices();
         _ = services.AddAccounts();
@@ -424,7 +421,6 @@ public sealed class QueueConsumerContractTests
             Assert.Equal(0, failed.Completions);
             Assert.Equal(0, failed.NackCalls);
             Assert.Equal(1, success.Completions);
-            Assert.Equal(6U, failed.Attempt);
             Assert.Equal(0, queue.Enqueues);
             Assert.All(provider.GetRequiredService<ConsumerHost.Effects>().Scopes.Values, Assert.True);
             Assert.All(provider.GetRequiredService<ConsumerHost.Effects>().Scopes.Values, Assert.True);
@@ -448,9 +444,9 @@ public sealed class QueueConsumerContractTests
         // Arrange
         var clock = new ManualClock();
         var serializer = ConsumerJson.CreateSerializer();
-        var failed = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1)
+        var failed = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())))
         { FailExtension = true };
-        var success = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
+        var success = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())));
         var consumer = new FitzRequestQueueConsumer(new QueueClient([failed, success]), serializer,
             "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), 4, timeProvider: clock);
 
@@ -476,11 +472,11 @@ public sealed class QueueConsumerContractTests
     }
 
     [Fact]
-    public async Task ShouldSubscribeBeforeReserveGivenImmediateReserveWithoutChangingAttempt()
+    public async Task ShouldSubscribeBeforeReserveAndReportNoAttemptGivenImmediateReserve()
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
-        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 9);
+        var item = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())));
         var queue = new QueueClient([item]);
         var consumer = new FitzRequestQueueConsumer(queue, serializer, "queue://consumer/scopes/delivery",
             ConsumerJson.Catalog());
@@ -492,7 +488,8 @@ public sealed class QueueConsumerContractTests
         Assert.True(await reader.MoveNextAsync());
         Assert.True(queue.SubscribedBeforeReserve);
         Assert.Equal((0, 1), (queue.WaitSeconds, queue.BatchSize));
-        Assert.Equal(9U, reader.Current.Attempt);
+        Assert.Equal(0U, reader.Current.Attempt);
+        Assert.False(reader.Current.SupportsDurableAttempts);
         await reader.Current.CompleteAsync();
         Assert.Equal(1, item.Completions);
         Assert.Equal(0, queue.Enqueues);
@@ -503,10 +500,10 @@ public sealed class QueueConsumerContractTests
     {
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
-        var malformed = new Reserved("{"u8.ToArray(), 4);
-        var failed = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4(), 1)), 6);
-        var terminal = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4(), 3)), 1);
-        var success = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())), 1);
+        var malformed = new Reserved("{"u8.ToArray());
+        var failed = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4(), 1)));
+        var terminal = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4(), 3)));
+        var success = new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4())));
         var queue = new QueueClient([malformed, failed, terminal, success]);
         var terminalHandler = new TerminalHandler();
         var services = ConsumerHost.CreateServices();
@@ -544,8 +541,6 @@ public sealed class QueueConsumerContractTests
                     Assert.Equal(QueuedRequestTerminalReason.PermanentFailure, terminalContext.Reason);
                     Assert.Equal("Terminal rejection", terminalContext.Error?.Message);
                 });
-            Assert.Equal(4U, malformed.Attempt);
-            Assert.Equal(6U, failed.Attempt);
             Assert.Equal(0, queue.Enqueues);
         }
         finally
@@ -572,7 +567,7 @@ public sealed class QueueConsumerContractTests
         var serializer = new JsonRequestSerializer([registration], ConsumerJson.Options());
         var metadata = RequestMetadata.Create();
         var request = new ScopeRequest(Uuid.CreateVersion4());
-        var item = new Reserved(serializer.Serialize(request, null, metadata, null), 1);
+        var item = new Reserved(serializer.Serialize(request, null, metadata, null));
         var queue = new QueueClient([item]);
         var terminalHandler = new TerminalHandler();
         var services = ConsumerHost.CreateServices();
@@ -646,12 +641,12 @@ public sealed class QueueConsumerContractTests
             return Task.FromResult(0UL);
         }
 
-        public Task<ulong> EnqueueWithOptionsAsync(string route, ReadOnlyMemory<byte> body,
+        public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body,
             QueueEnqueueOptions options, CancellationToken ct = default)
         {
             ArgumentNullException.ThrowIfNull(options);
             ct.ThrowIfCancellationRequested();
-            return options.TtlHours is not null
+            return options.TimeToLive is not null
                 ? Task.FromException<ulong>(new NotSupportedException("This fixture does not implement message lifetime."))
                 : EnqueueAsync(route, body, options.Delay, ct);
         }
@@ -723,7 +718,7 @@ public sealed class QueueConsumerContractTests
             }
 
             if (notifications is not null &&
-                !notifications.Writer.TryWrite(new QueueAvailabilityEvent(item.Route, default)))
+                !notifications.Writer.TryWrite(new QueueAvailabilityEvent(item.Route, 1, 0, 0)))
             {
                 _ = Interlocked.Increment(ref _overflows);
                 _ = notifications.Writer.TryComplete(
@@ -734,7 +729,7 @@ public sealed class QueueConsumerContractTests
         public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? delay = null,
             CancellationToken ct = default) => throw new NotSupportedException();
 
-        public Task<ulong> EnqueueWithOptionsAsync(string route, ReadOnlyMemory<byte> body,
+        public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body,
             QueueEnqueueOptions options, CancellationToken ct = default)
         {
             ArgumentNullException.ThrowIfNull(options);
@@ -769,7 +764,7 @@ public sealed class QueueConsumerContractTests
         }
     }
 
-    internal sealed class Reserved(ReadOnlyMemory<byte> body, uint attempt) : IQueueReservedItem
+    internal sealed class Reserved(ReadOnlyMemory<byte> body) : IQueueReservedItem
     {
         public int Completions { get; private set; }
         public int Extensions { get; private set; }
@@ -798,7 +793,6 @@ public sealed class QueueConsumerContractTests
 
         public string Route => "queue://consumer/scopes/delivery";
         public ReadOnlyMemory<byte> Body => body;
-        public uint Attempt => attempt;
 
         public async Task NackAsync(TimeSpan visibilityDelay = default, CancellationToken ct = default)
         {

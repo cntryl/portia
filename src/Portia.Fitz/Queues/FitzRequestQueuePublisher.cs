@@ -62,10 +62,10 @@ public sealed class FitzRequestQueuePublisher(
             var route = FitzRouting.ResolveQueueRoute(_catalog, request, routeValues);
             var body = _serializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
             if (options is null)
-                _ = await _queue.EnqueueAsync(route, body, null, ct).ConfigureAwait(false);
+                _ = await _queue.EnqueueAsync(route, body, (TimeSpan?)null, ct).ConfigureAwait(false);
             else
-                _ = await _queue.EnqueueWithOptionsAsync(route, body,
-                    new QueueEnqueueOptions(options.Delay, options.TtlHours), ct).ConfigureAwait(false);
+                _ = await _queue.EnqueueAsync(route, body, new QueueEnqueueOptions(options.Delay,
+                    options.TtlHours is { } hours ? TimeSpan.FromHours(hours) : null), ct).ConfigureAwait(false);
             PortiaTelemetry.RecordOutcome(activity, true, null);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

@@ -109,7 +109,7 @@ public sealed class PortiaFitzBuilderTests
         var application = services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
         _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Queue]));
-        await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
+        await using var client = new FitzClient(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
         _ = application.UseFitzClient(client, fitz => _ = fitz.AddQueueWorkers()).AddWorkers();
         await using var provider = services.BuildServiceProvider();
 
@@ -140,7 +140,7 @@ public sealed class PortiaFitzBuilderTests
         var application = services.AddPortia();
         _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
         _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Queue]));
-        await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
+        await using var client = new FitzClient(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
         _ = application.UseFitzClient(client, fitz => _ = fitz.AddQueueWorkers()).AddWorkers();
         await using var provider = services.BuildServiceProvider();
         var validation = provider.GetRequiredService<PortiaStartupValidationRegistry>().BeginEndpointValidation();
@@ -171,7 +171,7 @@ public sealed class PortiaFitzBuilderTests
     {
         // Arrange
         var application = new ServiceCollection().AddPortia();
-        await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
+        await using var client = new FitzClient(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
         var locked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var release = new ManualResetEventSlim();
         var holder = Task.Run(() =>

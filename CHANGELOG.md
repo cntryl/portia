@@ -25,10 +25,16 @@ release steps.
   the session open.
 - `PORTIA206` allows Core to reference application projects whose names end in `.Abstractions`.
   Common's dependency boundary is unchanged.
-- Upgrade AWSSDK.S3 to 4.1.0, Cntryl.Fitz.* to 4.1.1, JsonSchema.Net to 9.7.0, and
-  Microsoft.NET.Test.Sdk to 18.12.0. Fitz 4.1.1 enables .NET 11 runtime-async compilation in its
-  assemblies and keeps the Fitz 0.4.0 / Wire 3 broker requirement. The Accounts example uses
-  ASP.NET Core instrumentation 1.21.0.
+- Upgrade AWSSDK.S3 to 4.1.0, JsonSchema.Net to 9.7.0, and Microsoft.NET.Test.Sdk to 18.12.0.
+  The Accounts example uses ASP.NET Core instrumentation 1.21.0.
+- Upgrade Cntryl.Fitz.* to 4.2.0, which breaks the Fitz API and keeps the Fitz 0.4.0 / Wire 3
+  broker requirement. `UseFitzClient` takes the renamed `FitzClient`. Fitz KV reads return the
+  `KvGetResult` union, and Fitz analyzers FITZ001–FITZ004 report errors.
+- Fitz queue deliveries report an `Attempt` of `0` directly, because Fitz 4.2.0 removed the
+  attempt sentinel its wire never filled. Observable values are unchanged.
+- An RPC call that reaches a busy Fitz worker, such as a status call made while the previous call's
+  scope is still being disposed, now waits for worker capacity within its deadline instead of
+  failing at once with `RpcBackpressure`.
 
 ### Fixed
 

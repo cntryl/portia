@@ -5,7 +5,7 @@ namespace Cntryl.Portia;
 
 /// <summary>The ambient dependencies a Fitz worker needs to build its runner.</summary>
 sealed record FitzWorkerHost(
-    Client Client,
+    FitzClient Client,
     IServiceScopeFactory Scopes,
     IRequestDeserializer Serializer,
     RequestTransportCatalog Catalog,

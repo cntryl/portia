@@ -26,7 +26,7 @@ public sealed class FitzKvTenantDirectorySnapshotStore(IKvClient client, string 
         await using var tx = await _client.BeginAsync(Route(pattern), KvMode.ReadOnly, ct)
             .ConfigureAwait(false);
         var stored = await tx.GetAsync(Key, ct).ConfigureAwait(false);
-        return stored.Found ? Decode(stored.Value!.Value.Span) : null;
+        return stored is KvFound { Value: var storedBytes } ? Decode(storedBytes.Span) : null;
     }
 
     /// <inheritdoc />
@@ -54,7 +54,7 @@ public sealed class FitzKvTenantDirectorySnapshotStore(IKvClient client, string 
             try
             {
                 var stored = await tx.GetAsync(Key, ct).ConfigureAwait(false);
-                var actual = stored.Found ? Decode(stored.Value!.Value.Span).Cursor : (EventCursor?)null;
+                var actual = stored is KvFound { Value: var storedBytes } ? Decode(storedBytes.Span).Cursor : (EventCursor?)null;
                 if (actual != expectedCursor)
                     return false;
                 var value = JsonSerializer.SerializeToUtf8Bytes(
