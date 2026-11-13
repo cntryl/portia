@@ -33,7 +33,7 @@ release steps.
 - Portia's `net11.0` assemblies compile with .NET 11 Runtime Async, as the .NET 11 libraries and
   Fitz 4.2.0 do. Async methods run as runtime-managed continuations instead of compiler-generated
   state machines, which changes live call stacks seen by profilers and debuggers; exception stack
-  traces are unchanged. Build with `UseRuntimeAsync=false` to opt a project out.
+  traces are unchanged.
 - Fitz queue deliveries report an `Attempt` of `0` directly, because Fitz 4.2.0 removed the
   attempt sentinel its wire never filled. Observable values are unchanged.
 - An RPC call that reaches a busy Fitz worker, such as a status call made while the previous call's

@@ -1,8 +1,7 @@
 <Project>
   <!-- .NET 11 supports Runtime Async without preview features and compiles its own libraries with it,
-       but SDK 11.0.100 leaves it off for project code. Portia's net11.0 assemblies enable it;
-       UseRuntimeAsync=false is the documented per-project opt-out. -->
-  <PropertyGroup Condition="'$(TargetFramework)' == 'net11.0' and '$(UseRuntimeAsync)' != 'false'">
+       but SDK 11.0.100 leaves it off for project code. Portia's net11.0 assemblies enable it. -->
+  <PropertyGroup Condition="'$(TargetFramework)' == 'net11.0'">
     <Features>$(Features);runtime-async=on</Features>
   </PropertyGroup>
 
