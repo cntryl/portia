@@ -159,6 +159,88 @@ public sealed class FitzEventStoreSubscriptionTests
         await subscription.WaitAsync(next.Token);
     }
 
+    /// <summary>
+    ///     Verifies disposal that finishes while a replacement subscription is still being established
+    ///     neither faults the waiter nor leaves the replacement subscribed.
+    /// </summary>
+    [Fact]
+    public async Task ShouldReleaseReplacementGivenDisposedWhileResubscribing()
+    {
+        // Arrange
+        var client = new GatedResubscribeClient();
+        var store = new FitzEventStore(client, TestJson.DomainSerializer(new DomainEventTypeCatalog()));
+        var subscription = await store.SubscribeAsync(Pattern);
+        client.Overflow();
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var wait = subscription.WaitAsync(deadline.Token).AsTask();
+        await client.ReplacementRequested.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Act
+        await subscription.DisposeAsync();
+        client.ReleaseReplacement();
+        var failure = await Record.ExceptionAsync(() => wait.WaitAsync(TimeSpan.FromSeconds(5)));
+
+        // Assert
+        Assert.Null(failure);
+        Assert.Equal(1, client.ReplacementUnsubscribes);
+    }
+
+    // The second subscription is held until released, as a slow broker would hold it.
+    sealed class GatedResubscribeClient : IStreamClient
+    {
+        readonly Channel<StreamCommitEvent> _first = Channel.CreateBounded<StreamCommitEvent>(1);
+        readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int _replacementUnsubscribes;
+        int _subscriptions;
+
+        public TaskCompletionSource ReplacementRequested { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public int ReplacementUnsubscribes => Volatile.Read(ref _replacementUnsubscribes);
+
+        public void Overflow() => _ = _first.Writer.TryComplete(
+            new SubscriptionBackpressureException("The local subscription buffer is full"));
+
+        public void ReleaseReplacement() => _release.TrySetResult();
+
+        public async Task<StreamSubscription> SubscribeAsync(string pattern, CancellationToken ct = default)
+        {
+            if (Interlocked.Increment(ref _subscriptions) == 1)
+            {
+                return new StreamSubscription(pattern, _first.Reader.ReadAllAsync(CancellationToken.None),
+                    static _ => ValueTask.CompletedTask);
+            }
+
+            _ = ReplacementRequested.TrySetResult();
+            await _release.Task.ConfigureAwait(false);
+            var replacement = Channel.CreateUnbounded<StreamCommitEvent>();
+            return new StreamSubscription(pattern, replacement.Reader.ReadAllAsync(CancellationToken.None),
+                token =>
+                {
+                    _ = Interlocked.Increment(ref _replacementUnsubscribes);
+                    _ = replacement.Writer.TryComplete();
+                    return ValueTask.CompletedTask;
+                });
+        }
+
+        public Task<StreamReadPage> ReadPageAsync(string route, ulong startOffset, ulong limit = 100,
+            StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null,
+            ulong? capturedWatermark = null, CancellationToken ct = default) => throw new NotSupportedException();
+
+        public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null,
+            CancellationToken ct = default) => throw new NotSupportedException();
+
+        public IAsyncEnumerable<StreamRecord> ReadAsync(string route, ulong startOffset, ulong limit = 100,
+            StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null,
+            ulong? capturedWatermark = null, CancellationToken ct = default) => throw new NotSupportedException();
+
+        public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<StreamMetadata> MetadataAsync(string route, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+    }
+
     // Buffers commit notifications per subscription and ends one with
     // SubscriptionBackpressureException on overflow, as Fitz's own stream subscription does.
     sealed class BoundedStreamClient(int capacity) : IStreamClient

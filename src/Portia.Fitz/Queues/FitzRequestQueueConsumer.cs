@@ -107,6 +107,9 @@ public sealed class FitzRequestQueueConsumer(
         readonly Lazy<DeserializedRequest> _envelope;
         readonly IQueueReservedItem _item;
         readonly CancellationTokenSource _lost;
+        // Captured up front: CancellationTokenSource.Token throws once the source is disposed, but
+        // a request is still read by its consumer after the reservation resources were released.
+        readonly CancellationToken _lostToken;
         readonly Task _renewal;
         readonly Lazy<IRequest> _request;
         readonly CancellationTokenSource _stop;
@@ -127,6 +130,7 @@ public sealed class FitzRequestQueueConsumer(
             _request = new Lazy<IRequest>(() => Validate(_envelope.Value.Request, catalog));
             _stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
             _lost = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            _lostToken = _lost.Token;
             _renewal = RenewAsync(leaseSeconds, interval, clock, logger);
         }
 
@@ -161,7 +165,7 @@ public sealed class FitzRequestQueueConsumer(
         public string? ActorToken => _envelope.Value.ActorToken;
         public uint Attempt => _item.Attempt;
         public bool SupportsDurableAttempts => _item.Attempt != QueueItem.AttemptUnavailable;
-        public CancellationToken ReservationCancellation => _lost.Token;
+        public CancellationToken ReservationCancellation => _lostToken;
 
         public async ValueTask CompleteAsync(CancellationToken ct = default)
         {
@@ -216,7 +220,7 @@ public sealed class FitzRequestQueueConsumer(
                     renewalError);
             }
 
-            _lost.Token.ThrowIfCancellationRequested();
+            _lostToken.ThrowIfCancellationRequested();
             ct.ThrowIfCancellationRequested();
         }
 
