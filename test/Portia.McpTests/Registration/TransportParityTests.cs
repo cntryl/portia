@@ -92,7 +92,8 @@ public sealed class TransportParityTests
         Assert.Equal(409, (await ChangeAsync(new QualifiedChange(QualifiedObservations.Tenant, 3, "conflict"))).Status);
         Assert.Equal(500, (await ChangeAsync(new QualifiedChange(QualifiedObservations.Tenant, 3, "fault"))).Status);
 
-        var state = await ReadAsync();
+        // A response can be observed before its asynchronous request-scope disposal continuation runs.
+        var state = await ReadDisposedAsync(6);
         Assert.Equal(CommittedValues, state.Values);
         Assert.Equal(new[] { QualifiedObservations.Tenant, QualifiedObservations.Tenant }, state.Actors);
         Assert.Equal(6, state.Scopes.Length);
@@ -124,12 +125,7 @@ public sealed class TransportParityTests
             ChangeAsync(new QualifiedChange(QualifiedObservations.Tenant, 3, "conflict"))));
         Assert.All(concurrent, result => Assert.Equal(409, result.Status));
 
-        // An HTTP response can be observed before its asynchronous request-scope disposal continuation runs.
-        var observations = app.Services.GetRequiredService<QualifiedObservations>();
-        for (var attempt = 0; observations.Completed.Count < 22 && attempt < 100; attempt++)
-            await Task.Delay(TimeSpan.FromMilliseconds(50), token);
-
-        var afterConcurrency = await ReadAsync();
+        var afterConcurrency = await ReadDisposedAsync(22);
         Assert.Equal(CommittedValues, afterConcurrency.Values);
         Assert.Equal(22, afterConcurrency.Scopes.Length);
         Assert.Equal(22, afterConcurrency.Scopes.Select(scope => scope.Id).Distinct().Count());
@@ -140,6 +136,18 @@ public sealed class TransportParityTests
         });
 
         JsonTypeInfo<T> TypeInfo<T>() => json.GetTypeInfo<T>();
+
+        async Task<QualifiedState> ReadDisposedAsync(int count)
+        {
+            var read = await ReadAsync();
+            while (read.Scopes.Length < count || !read.Scopes.All(scope => scope.Stages.LastOrDefault() == "disposed"))
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(20), token);
+                read = await ReadAsync();
+            }
+
+            return read;
+        }
 
         async Task<(int Status, QualifiedReply? Reply)> ChangeAsync(QualifiedChange request)
         {

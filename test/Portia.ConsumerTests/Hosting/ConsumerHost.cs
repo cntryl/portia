@@ -95,7 +95,10 @@ static class ConsumerHost
                     changed = _changed.Task;
                 }
 
-                await changed.WaitAsync(TimeSpan.FromSeconds(10));
+                // Queue deliveries can arrive only on the consumer's five-second idle backstop (the broker's
+                // availability wake-up has not been observed to arrive), so a tighter window leaves a
+                // loaded runner under a second of margin.
+                await changed.WaitAsync(TimeSpan.FromSeconds(30));
             }
         }
     }

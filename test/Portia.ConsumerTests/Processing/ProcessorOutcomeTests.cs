@@ -260,10 +260,25 @@ public sealed partial class ProcessorOutcomeTests
             await worker.StartAsync(default);
             if (transient)
             {
-                Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
-                clock.Advance(TimeSpan.FromSeconds(1));
+                // The single-process coordinator owns a one-second reconcile timer beside the workload's
+                // one-second failure back-off, and scheduling order between them is not fixed. Advancing
+                // once for whichever came first can leave the back-off unscheduled and never elapsing,
+                // so advance for each delay until the retry has run and the worker has ended.
+                using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                var ended = worker.ExecuteTask!;
+                while (!ended.IsCompleted)
+                {
+                    var scheduled = clock.WaitForDelayAsync(deadline.Token);
+                    if (await Task.WhenAny(ended, scheduled) == ended)
+                    {
+                        break;
+                    }
+
+                    Assert.Equal(TimeSpan.FromSeconds(1), await scheduled);
+                    clock.Advance(TimeSpan.FromSeconds(1));
+                }
             }
-            var terminal = await Assert.ThrowsAsync<WorkloadFailureException>(() => worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(3)));
+            var terminal = await Assert.ThrowsAsync<WorkloadFailureException>(() => worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(30)));
             Assert.Equal(transient ? 2 : 1, terminal.Attempts);
             var failure = Assert.IsType<ProcessorFailureException>(terminal.InnerException);
             Assert.Same(original, failure.InnerException);
