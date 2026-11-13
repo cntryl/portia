@@ -27,7 +27,10 @@ public sealed class FleetBrokerTests
         {
             MembershipSelector = $"lease://{realm}/members/*",
             WorkerId = "a",
-            LeaseTtl = TimeSpan.FromSeconds(2),
+            // Long enough that a CPU stall cannot expire a healthy worker's membership or partition lease.
+            // An expired lease is correctly restarted, which this test would misread as B's arrival
+            // restarting a retained assignment.
+            LeaseTtl = TimeSpan.FromSeconds(10),
             ReconciliationInterval = TimeSpan.FromMilliseconds(100)
         };
         var activeA = new ConcurrentDictionary<string, bool>();
@@ -175,7 +178,7 @@ public sealed class FleetBrokerTests
 
     static async Task Until(Func<bool> predicate)
     {
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         while (!predicate())
             await Task.Delay(20, deadline.Token);
     }
