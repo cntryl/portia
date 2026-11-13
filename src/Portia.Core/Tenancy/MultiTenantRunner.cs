@@ -283,20 +283,24 @@ public sealed class MultiTenantRunner
         CancellationToken timeoutToken = default,
         CancellationToken hostToken = default)
     {
-        if (!active.TryRemove(tenantId, out var run))
+        if (!active.TryGetValue(tenantId, out var run))
             return;
 
         Cancel(run.Cancellation);
 
+        var timedOut = false;
         try
         {
             await run.Task.WaitAsync(stopToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
         {
+            // Host shutdown that interrupts a removal leaves the tenant active, so shutdown still
+            // observes its workload within the grace interval before running its stop callback.
+            if (hostToken.IsCancellationRequested)
+                return;
             _ = ObserveLateStopAsync(run.Task);
-            if (throwOnTimeout && timeoutToken.IsCancellationRequested && !hostToken.IsCancellationRequested)
-                throw new TenantStopTimeoutException(tenantId, _tenantStopTimeout);
+            timedOut = throwOnTimeout && timeoutToken.IsCancellationRequested;
         }
         catch (OperationCanceledException)
         {
@@ -306,11 +310,12 @@ public sealed class MultiTenantRunner
         {
             ReportCleanupFault(ex);
         }
-        finally
-        {
-            run.Registration.Dispose();
-            run.Cancellation.Dispose();
-        }
+
+        _ = active.TryRemove(tenantId, out _);
+        run.Registration.Dispose();
+        run.Cancellation.Dispose();
+        if (timedOut)
+            throw new TenantStopTimeoutException(tenantId, _tenantStopTimeout);
 
         Task? stop = null;
         try

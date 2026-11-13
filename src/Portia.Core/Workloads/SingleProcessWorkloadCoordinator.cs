@@ -73,7 +73,15 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
                     }
 
                     var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    owned[identity] = new OwnedWorkload(cancellation, run(identity, cancellation.Token));
+                    try
+                    {
+                        owned[identity] = new OwnedWorkload(cancellation, run(identity, cancellation.Token));
+                    }
+                    catch
+                    {
+                        cancellation.Dispose();
+                        throw;
+                    }
                 }
 
                 await Task.Delay(_reconcileInterval, _clock, ct).ConfigureAwait(false);
@@ -108,6 +116,10 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
     {
         var workload = owned[identity];
         _ = owned.Remove(identity);
+
+        // A run that ended before its token was cancelled was not stopped by this coordinator, so
+        // any cancellation it ended with is its own failure, not a requested stop.
+        var stopRequested = !workload.Run.IsCompleted || workload.Cancellation.IsCancellationRequested;
         List<Exception> faults = [];
         try
         {
@@ -126,7 +138,7 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
             {
                 await workload.Run.ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (workload.Cancellation.IsCancellationRequested)
+            catch (OperationCanceledException) when (stopRequested)
             {
             }
             catch (Exception error)

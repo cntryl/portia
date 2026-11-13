@@ -144,6 +144,35 @@ public sealed class SingleProcessWorkloadCoordinatorTests
     }
 
     /// <summary>
+    ///     A workload that ends with its own cancellation, which the coordinator never requested,
+    ///     failed: coordination ends with that fault instead of restarting it as a completion.
+    /// </summary>
+    [Fact]
+    public async Task ShouldEndCoordinationGivenWorkloadEndingWithUnrequestedCancellation()
+    {
+        // Arrange
+        var coordinator = new SingleProcessWorkloadCoordinator(TimeSpan.FromMilliseconds(10));
+        var starts = 0;
+
+        // Act
+        var error = await Record.ExceptionAsync(() => coordinator.RunAsync(
+            () => [new WorkloadIdentity("only")],
+            async (identity, ct) =>
+            {
+                _ = identity;
+                _ = ct;
+                _ = Interlocked.Increment(ref starts);
+                await Task.Yield();
+                throw new OperationCanceledException("The workload's own operation was cancelled.");
+            }).WaitAsync(TimeSpan.FromSeconds(5)));
+
+        // Assert
+        var cancellation = Assert.IsAssignableFrom<OperationCanceledException>(error);
+        Assert.Equal("The workload's own operation was cancelled.", cancellation.Message);
+        Assert.Equal(1, Volatile.Read(ref starts));
+    }
+
+    /// <summary>
     ///     The explicit registration name is the hosted checkpoint identity. The constructor name
     ///     remains the default only when the component is driven manually outside hosting.
     /// </summary>
