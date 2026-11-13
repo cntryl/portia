@@ -28,9 +28,23 @@ sealed class PortiaWorkloadService(
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly ILogger<PortiaWorkloadService>? _logger = logger;
     readonly WorkloadRegistration[] _registrations = [.. registrations];
+    readonly Lock _startingGate = new();
     IWorkloadCoordinator? _coordinator;
+    Task? _starting;
 
-    public async Task StartingAsync(CancellationToken cancellationToken)
+    // The host calls StartingAsync and then StartAsync, which also validates for callers that start the
+    // service directly. Validation runs once; a failed or cancelled attempt may be retried.
+    public Task StartingAsync(CancellationToken cancellationToken)
+    {
+        lock (_startingGate)
+        {
+            if (_starting is null || _starting.IsFaulted || _starting.IsCanceled)
+                _starting = ValidateStartupAsync(cancellationToken);
+            return _starting;
+        }
+    }
+
+    async Task ValidateStartupAsync(CancellationToken cancellationToken)
     {
         if (_registrations.Length == 0)
         {

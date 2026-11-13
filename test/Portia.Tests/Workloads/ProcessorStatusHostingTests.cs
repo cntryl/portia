@@ -58,6 +58,48 @@ public sealed class ProcessorStatusHostingTests
         Assert.Equal(0, endpoints.Active);
     }
 
+    /// <summary>The host calls StartingAsync and then StartAsync; startup validation still runs once.</summary>
+    [Fact]
+    public async Task ShouldValidateOnceGivenHostLifecycleStart()
+    {
+        // Arrange
+        var source = new InMemoryEventStore();
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IEventStore>(source);
+        _ = services.AddSingleton<IDomainEventReader>(source);
+        _ = services.AddSingleton(new StatusHostingControl());
+        _ = services.AddSingleton<StatusHostingStore>();
+        _ = services.AddPortia().UseSingleProcessWorkloads()
+            .AddProjector<StatusHostingProjector>("projector", WorkloadScope.Global,
+                options => options.PollInterval = TimeSpan.FromMilliseconds(10))
+            .AddWorkers();
+        await using var provider = services.BuildServiceProvider();
+        var scopes = new CountingScopeFactory(provider.GetRequiredService<IServiceScopeFactory>());
+        using var worker = new PortiaWorkloadService(scopes, provider.GetServices<WorkloadRegistration>(),
+            provider.GetRequiredService<IServiceProviderIsService>(),
+            provider.GetServices<IWorkloadCoordinator>(), provider.GetService<ITenantDirectory>());
+
+        // Act
+        await worker.StartingAsync(default);
+        await worker.StartAsync(default);
+        await worker.StopAsync(default);
+
+        // Assert
+        Assert.Equal(1, scopes.Created);
+    }
+
+    sealed class CountingScopeFactory(IServiceScopeFactory inner) : IServiceScopeFactory
+    {
+        int _created;
+        internal int Created => Volatile.Read(ref _created);
+
+        public IServiceScope CreateScope()
+        {
+            _ = Interlocked.Increment(ref _created);
+            return inner.CreateScope();
+        }
+    }
+
     sealed class StatusHostingControl
     {
         internal TaskCompletionSource Projected { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
