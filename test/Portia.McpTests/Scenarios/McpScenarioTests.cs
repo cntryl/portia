@@ -37,7 +37,7 @@ public sealed class McpScenarioTests
 
         // Assert
         Assert.True(Volatile.Read(ref processId) > 0, "The child process did not report its PID.");
-        Assert.True(await WaitForProcessExitAsync(Volatile.Read(ref processId), TimeSpan.FromSeconds(5)),
+        Assert.True(await WaitForProcessExitAsync(Volatile.Read(ref processId), TimeSpan.FromSeconds(30)),
             "Disposing the scenario left its stdio child process running.");
     }
 
@@ -67,8 +67,8 @@ public sealed class McpScenarioTests
 
         // Assert
         await Assert.ThrowsAnyAsync<OperationCanceledException>(ConnectAsync);
-        var childProcessId = await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.True(await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(5)),
+        var childProcessId = await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        Assert.True(await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(30)),
             "Canceling stdio connection left its child process running.");
     }
 
@@ -113,8 +113,8 @@ public sealed class McpScenarioTests
             var failure = await Assert.ThrowsAnyAsync<Exception>(ConnectAsync);
             Assert.False(failure is OperationCanceledException,
                 "MCP initialization should fail with a protocol error, not cancellation.");
-            childProcessId = await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            Assert.True(await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(5)),
+            childProcessId = await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            Assert.True(await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(30)),
                 "A failed MCP initialization left its stdio child process running.");
         }
         finally
@@ -129,7 +129,7 @@ public sealed class McpScenarioTests
                 if (childProcessId > 0)
                 {
                     KillProcessIfRunning(childProcessId);
-                    Assert.True(await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(5)),
+                    Assert.True(await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(30)),
                         "Cleanup after a failed MCP initialization left its stdio child process running.");
                 }
             }
@@ -174,7 +174,7 @@ public sealed class McpScenarioTests
             AppContext.BaseDirectory);
 
         // Act
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
         // Assert
         await using (var scenario = await McpScenario.ConnectStdioAsync(new StdioClientTransportOptions

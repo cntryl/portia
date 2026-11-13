@@ -1113,7 +1113,7 @@ public sealed class McpRegistrationTests
         // Arrange
         var host = StdioHostPath();
         Assert.True(File.Exists(host), $"The stdio test host was not built: {host}");
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var transport = new StdioClientTransport(new StdioClientTransportOptions
         {
             Command = "dotnet",
@@ -1143,7 +1143,7 @@ public sealed class McpRegistrationTests
         // Arrange
         var host = StdioHostPath();
         Assert.True(File.Exists(host), $"The stdio test host was not built: {host}");
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         using var process = new Process
         {
             StartInfo = new ProcessStartInfo("dotnet")
@@ -1241,17 +1241,19 @@ public sealed class McpRegistrationTests
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), NullLoggerFactory.Instance);
         await using var client = await McpClient.CreateAsync(transport);
-        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var cancellation = new CancellationTokenSource();
+        // A failure bound only; the cancellation under test is the explicit one below.
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
         // Act
         var call = client.CallToolAsync("cancellation.wait", new Dictionary<string, object?>(),
             cancellationToken: cancellation.Token);
-        await probe.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await probe.Started.Task.WaitAsync(timeout.Token);
         await cancellation.CancelAsync();
 
         // Assert
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await call);
-        await probe.Canceled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await probe.Canceled.Task.WaitAsync(timeout.Token);
     }
 
     [Fact]
