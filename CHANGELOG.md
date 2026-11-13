@@ -25,8 +25,10 @@ release steps.
   the session open.
 - `PORTIA206` allows Core to reference application projects whose names end in `.Abstractions`.
   Common's dependency boundary is unchanged.
-- Upgrade AWSSDK.S3 to 4.1.0 and Microsoft.NET.Test.Sdk to 18.12.0. The Accounts example uses
-  ASP.NET Core instrumentation 1.21.0. Fitz .NET stays on 4.1.0.
+- Upgrade AWSSDK.S3 to 4.1.0, Cntryl.Fitz.* to 4.1.1, JsonSchema.Net to 9.7.0, and
+  Microsoft.NET.Test.Sdk to 18.12.0. Fitz 4.1.1 enables .NET 11 runtime-async compilation in its
+  assemblies and keeps the Fitz 0.4.0 / Wire 3 broker requirement. The Accounts example uses
+  ASP.NET Core instrumentation 1.21.0.
 
 ### Fixed
 

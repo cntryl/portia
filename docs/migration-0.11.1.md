@@ -7,8 +7,8 @@ first follow the [0.11.0 migration notes](migration-0.11.0.md).
 ## Dependencies
 
 `Cntryl.Portia.Storage.Aws` now depends on AWSSDK.S3 4.1.0. Update a direct or central AWSSDK.S3
-reference to at least 4.1.0 instead of suppressing the downgrade diagnostic. Fitz .NET stays on 4.1.0,
-with the same Fitz server 0.4.0 / Wire 3 requirement as 0.11.0.
+reference to at least 4.1.0 instead of suppressing the downgrade diagnostic. Fitz .NET moves to
+4.1.1, which keeps the same Fitz server 0.4.0 / Wire 3 requirement as 0.11.0.
 
 ## MCP HTTP session mode
 
