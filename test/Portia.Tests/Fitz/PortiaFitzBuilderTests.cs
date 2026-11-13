@@ -129,6 +129,77 @@ public sealed class PortiaFitzBuilderTests
         await worker.StopAsync(default);
     }
 
+    /// <summary>A worker stopped while its deferred start waits for validation must not start afterwards.</summary>
+    [Fact]
+    public async Task ShouldNotStartFitzWorkersGivenStopWhileValidationPending()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IRequestActorValidator, TestRequestActorValidator>();
+        _ = services.AddScoped<IQueuedRequestTerminalHandler, TestTerminalHandler>();
+        var application = services.AddPortia();
+        _ = application.AddGeneratedHandler(new RequestRegistration<FitzHostedRequest, FitzHostedHandler>());
+        _ = application.AddGeneratedRequest(Transport<FitzHostedRequest>([RequestTransportId.Queue]));
+        await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
+        _ = application.UseFitzClient(client, fitz => _ = fitz.AddQueueWorkers()).AddWorkers();
+        await using var provider = services.BuildServiceProvider();
+        var validation = provider.GetRequiredService<PortiaStartupValidationRegistry>().BeginEndpointValidation();
+        var worker = Assert.IsType<FitzApplicationWorkers>(
+            Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
+        await worker.StartAsync(default);
+        var started = worker.StartedAsync(default);
+
+        // Act
+        await worker.StopAsync(default);
+        validation.Complete();
+        await started.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Assert
+        try
+        {
+            Assert.Null(worker.ExecuteTask);
+        }
+        finally
+        {
+            await worker.StopAsync(default);
+        }
+    }
+
+    /// <summary>The composition root is public, so a caller locking it must not block Fitz registration.</summary>
+    [Fact]
+    public async Task ShouldRegisterFitzGivenCallerHoldingApplicationLock()
+    {
+        // Arrange
+        var application = new ServiceCollection().AddPortia();
+        await using var client = new Client(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
+        var locked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var release = new ManualResetEventSlim();
+        var holder = Task.Run(() =>
+        {
+            lock (application)
+            {
+                _ = locked.TrySetResult();
+                _ = release.Wait(TimeSpan.FromSeconds(30));
+            }
+        });
+        await locked.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+        // Act
+        var registration = Task.Run(() => application.UseFitzClient(client));
+        var failure = await Record.ExceptionAsync(() => registration.WaitAsync(TimeSpan.FromSeconds(5)));
+
+        // Assert
+        try
+        {
+            Assert.Null(failure);
+        }
+        finally
+        {
+            release.Set();
+            await holder;
+        }
+    }
+
     /// <summary>Request listeners do not need workload fleet identity when no component is hosted.</summary>
     [Fact]
     public async Task ShouldAllowRequestOnlyWorkerStartupGivenNoFleetIdentity()

@@ -13,6 +13,9 @@ public static class PortiaFitzApplicationExtensions
 {
     static readonly ConditionalWeakTable<PortiaBuilder, FitzSetup> Setups = [];
 
+    // Private, because the composition root is public and a caller may lock it for its own purposes.
+    static readonly Lock SetupGate = new();
+
     /// <summary>Adds Fitz persistence, clients, coordination, and workers for every selected request transport.</summary>
     /// <param name="application">The application composition root to connect to Fitz.</param>
     /// <param name="configuration">The <c>Fitz</c> configuration section.</param>
@@ -132,7 +135,7 @@ public static class PortiaFitzApplicationExtensions
         ArgumentNullException.ThrowIfNull(application);
         ArgumentNullException.ThrowIfNull(configure);
         var services = application.Services;
-        lock (application)
+        lock (SetupGate)
         {
             if (Setups.TryGetValue(application, out var existing))
             {
