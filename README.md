@@ -131,7 +131,8 @@ See [application setup](docs/application-setup.md) and [Fitz upgrade notes](docs
 - [Validation authority](docs/validation-authority.md): local invariants, advisory reads, and authoritative outcome choreography.
 - [Request guards](docs/request-guards.md): authorization, reusable asynchronous preflight, and authoritative invariants
 - [Testing applications](docs/testing.md): aggregate, request, projector, and reactor scenarios
-- [Object storage](docs/object-storage.md): vendor-neutral contracts and the tenant-scoped AWS adapter
+- [Object storage](docs/object-storage.md): vendor-neutral contracts and tenant-scoped AWS, Azure and Google Cloud adapters
+- [Outbound mail and SMS](docs/communications.md): provider-neutral senders with SES, Azure and Twilio providers
 - [Cassie projections](docs/cassie-projections.md): native SQL repositories, typed projectors, and atomic checkpoints.
 - [Platform vision](docs/platform-vision.md): the fixed Fitz–Portia–Cassie boundary
 - [Scope](docs/scope.md) and [design decisions](docs/design-decisions.md): guarantees and deliberate limits

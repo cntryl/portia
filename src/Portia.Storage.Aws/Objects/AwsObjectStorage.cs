@@ -17,7 +17,8 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        var key = $"staging/{Guid.NewGuid():N}";
+        var objectKey = ResolveObjectKey(tenantId, expected);
+        var key = ResolveUploadKey(tenantId, objectKey);
         var response = await _client.InitiateMultipartUploadAsync(new InitiateMultipartUploadRequest
         {
             BucketName = location.BucketReference,
@@ -29,6 +30,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
         return new(new SessionPayload(
             location.BucketReference,
             location.EncryptionKeyReference,
+            objectKey,
             key,
             response.UploadId,
             expected.Sha256,
@@ -109,7 +111,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
             throw new InvalidDataException("S3 rejected the uploaded parts or their receipts.", exception);
         }
 
-        if (uploadIdGone && await HeadAndVerifyAsync(payload.Bucket, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
+        if (uploadIdGone && await HeadAndVerifyAsync(payload.Bucket, payload.ObjectKey, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
         {
             await TryCleanupStagingAsync(payload).ConfigureAwait(false);
             return;
@@ -129,7 +131,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
         {
             // A concurrent completion may have promoted and removed staging while this caller
             // was retrying. An absent destination leaves the outcome unresolved for another retry.
-            if (await HeadAndVerifyAsync(payload.Bucket, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
+            if (await HeadAndVerifyAsync(payload.Bucket, payload.ObjectKey, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
             {
                 await TryCleanupStagingAsync(payload).ConfigureAwait(false);
                 return;
@@ -170,7 +172,8 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        return await HeadAndVerifyAsync(location.BucketReference, expected.Sha256, expected.Length, ct)
+        var objectKey = ResolveObjectKey(tenantId, expected);
+        return await HeadAndVerifyAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct)
             .ConfigureAwait(false);
     }
 
@@ -180,7 +183,8 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
         ArgumentNullException.ThrowIfNull(expected);
         var duration = BoundLifetime(lifetime);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        if (!await HeadAndVerifyAsync(location.BucketReference, expected.Sha256, expected.Length, ct).ConfigureAwait(false))
+        var objectKey = ResolveObjectKey(tenantId, expected);
+        if (!await HeadAndVerifyAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct).ConfigureAwait(false))
         {
             throw new FileNotFoundException("The verified object was not found.");
         }
@@ -189,7 +193,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
         var url = _client.GetPreSignedURL(new GetPreSignedUrlRequest
         {
             BucketName = location.BucketReference,
-            Key = ContentKey(expected.Sha256),
+            Key = objectKey,
             Verb = HttpVerb.GET,
             Protocol = PresignedProtocol,
             Expires = expiresAt.UtcDateTime
@@ -202,7 +206,8 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        if (!await HeadAndVerifyAsync(location.BucketReference, expected.Sha256, expected.Length, ct)
+        var objectKey = ResolveObjectKey(tenantId, expected);
+        if (!await HeadAndVerifyAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct)
             .ConfigureAwait(false))
         {
             return null;
@@ -210,7 +215,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
 
         try
         {
-            var response = await _client.GetObjectAsync(location.BucketReference, ContentKey(expected.Sha256), ct).ConfigureAwait(false);
+            var response = await _client.GetObjectAsync(location.BucketReference, objectKey, ct).ConfigureAwait(false);
             return new ResponseStream(response);
         }
         catch (AmazonS3Exception exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -224,7 +229,8 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        await _client.DeleteObjectAsync(location.BucketReference, ContentKey(expected.Sha256), ct).ConfigureAwait(false);
+        var objectKey = ResolveObjectKey(tenantId, expected);
+        await _client.DeleteObjectAsync(location.BucketReference, objectKey, ct).ConfigureAwait(false);
     }
 
     async ValueTask<ObjectStorageLocation> ResolveAsync(TenantId tenantId, CancellationToken ct)
@@ -287,7 +293,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
                     SourceKey = payload.StagingKey,
                     ETagToMatch = stagedETag,
                     DestinationBucket = payload.Bucket,
-                    DestinationKey = ContentKey(payload.Sha256),
+                    DestinationKey = payload.ObjectKey,
                     MetadataDirective = S3MetadataDirective.REPLACE,
                     ServerSideEncryptionMethod = ServerSideEncryptionMethod.AWSKMS,
                     ServerSideEncryptionKeyManagementServiceKeyId = payload.KmsKey,
@@ -298,7 +304,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
             }
             catch (AmazonS3Exception exception) when (exception.StatusCode is System.Net.HttpStatusCode.PreconditionFailed or System.Net.HttpStatusCode.Conflict)
             {
-                if (await HeadAndVerifyAsync(payload.Bucket, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
+                if (await HeadAndVerifyAsync(payload.Bucket, payload.ObjectKey, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
                 {
                     return;
                 }
@@ -318,11 +324,11 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
         }
     }
 
-    async ValueTask<bool> HeadAndVerifyAsync(string bucket, string sha256, long length, CancellationToken ct)
+    async ValueTask<bool> HeadAndVerifyAsync(string bucket, string objectKey, string sha256, long length, CancellationToken ct)
     {
         try
         {
-            var response = await _client.GetObjectMetadataAsync(bucket, ContentKey(sha256), ct).ConfigureAwait(false);
+            var response = await _client.GetObjectMetadataAsync(bucket, objectKey, ct).ConfigureAwait(false);
             return response.ContentLength == length &&
                 response.Metadata[DigestMetadata] is { } digest && string.Equals(digest, sha256, StringComparison.Ordinal);
         }
@@ -407,11 +413,26 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
         }
     }
 
-    static string ContentKey(string digest) => $"content/sha256/{digest[..2]}/{digest}";
+    string ResolveObjectKey(TenantId tenantId, ObjectDigest expected)
+    {
+        var key = _tenantResolver.GetObjectKey(tenantId, expected);
+        return !string.IsNullOrWhiteSpace(key) ? key
+            : throw new InvalidOperationException("The application must resolve a nonblank object key.");
+    }
+
+    string ResolveUploadKey(TenantId tenantId, string objectKey)
+    {
+        var key = _tenantResolver.GetUploadKey(tenantId, Uuid.CreateVersion4());
+        if (string.IsNullOrWhiteSpace(key) || string.Equals(key, objectKey, StringComparison.Ordinal) ||
+            objectKey.StartsWith(key.TrimEnd('/') + "/", StringComparison.Ordinal))
+            throw new InvalidOperationException("The application must resolve a unique upload key disjoint from the object key.");
+        return key;
+    }
 
     internal sealed record SessionPayload(
         string Bucket,
         string KmsKey,
+        string ObjectKey,
         string StagingKey,
         string UploadId,
         string Sha256,
@@ -428,7 +449,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
                 var json = protector.Unprotect(token);
                 var payload = JsonSerializer.Deserialize(json, AwsUploadSessionJsonContext.Default.SessionPayload);
                 if (payload is null || string.IsNullOrWhiteSpace(payload.Bucket) || string.IsNullOrWhiteSpace(payload.KmsKey) ||
-                    string.IsNullOrWhiteSpace(payload.StagingKey) || string.IsNullOrWhiteSpace(payload.UploadId) ||
+                    string.IsNullOrWhiteSpace(payload.ObjectKey) || string.IsNullOrWhiteSpace(payload.StagingKey) || string.IsNullOrWhiteSpace(payload.UploadId) ||
                     string.IsNullOrWhiteSpace(payload.Sha256) || payload.Sha256.Length != 64 || !payload.Sha256.All(Uri.IsHexDigit) ||
                     payload.Length is < 0 or > ObjectStorageLimits.MaximumObjectLength || payload.ExpiresAt == default)
                 {

@@ -9,6 +9,7 @@ global using System.Threading;
 global using System.Threading.Tasks;
 global using Amazon.S3;
 global using Amazon.S3.Model;
+global using Cntryl.Portia.Communications;
 global using Cntryl.Portia.Storage;
 global using Cntryl.Portia.Storage.Aws;
 global using Cntryl.Portia.Testing;

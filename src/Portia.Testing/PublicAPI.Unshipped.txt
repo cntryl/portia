@@ -1,1 +1,35 @@
 #nullable enable
+Cntryl.Portia.Testing.FakeCommunicationsServiceCollectionExtensions
+Cntryl.Portia.Testing.FakeMailSender
+Cntryl.Portia.Testing.FakeMailSender.FakeMailSender() -> void
+Cntryl.Portia.Testing.FakeMailSender.SendAsync(Cntryl.Portia.TenantId tenant, Cntryl.Portia.Communications.SendId id, Cntryl.Portia.Communications.MailMessage! message, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Communications.SendOutcome!>
+Cntryl.Portia.Testing.FakeMailSender.Submissions.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.FakeSubmission<Cntryl.Portia.Communications.MailMessage!>!>!
+Cntryl.Portia.Testing.FakeSenderScript
+Cntryl.Portia.Testing.FakeSenderScript.Accept() -> void
+Cntryl.Portia.Testing.FakeSenderScript.Fail(System.Exception! exception) -> void
+Cntryl.Portia.Testing.FakeSenderScript.FakeSenderScript() -> void
+Cntryl.Portia.Testing.FakeSenderScript.Next() -> Cntryl.Portia.Communications.SendOutcome!
+Cntryl.Portia.Testing.FakeSenderScript.Reject(Cntryl.Portia.Communications.SendRejectionReason reason) -> void
+Cntryl.Portia.Testing.FakeSenderScript.ReturnUnknown() -> void
+Cntryl.Portia.Testing.FakeSenderScript.Throttle(System.TimeSpan? retryAfter = null) -> void
+Cntryl.Portia.Testing.FakeSmsSender
+Cntryl.Portia.Testing.FakeSmsSender.FakeSmsSender() -> void
+Cntryl.Portia.Testing.FakeSmsSender.SendAsync(Cntryl.Portia.TenantId tenant, Cntryl.Portia.Communications.SendId id, Cntryl.Portia.Communications.SmsMessage! message, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Communications.SendOutcome!>
+Cntryl.Portia.Testing.FakeSmsSender.Submissions.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Testing.FakeSubmission<Cntryl.Portia.Communications.SmsMessage!>!>!
+Cntryl.Portia.Testing.FakeSubmission<TMessage>
+Cntryl.Portia.Testing.FakeSubmission<TMessage>.<Clone>$() -> Cntryl.Portia.Testing.FakeSubmission<TMessage>!
+Cntryl.Portia.Testing.FakeSubmission<TMessage>.Deconstruct(out Cntryl.Portia.TenantId Tenant, out Cntryl.Portia.Communications.SendId Id, out TMessage Message) -> void
+Cntryl.Portia.Testing.FakeSubmission<TMessage>.Equals(Cntryl.Portia.Testing.FakeSubmission<TMessage>? other) -> bool
+Cntryl.Portia.Testing.FakeSubmission<TMessage>.FakeSubmission(Cntryl.Portia.TenantId Tenant, Cntryl.Portia.Communications.SendId Id, TMessage Message) -> void
+Cntryl.Portia.Testing.FakeSubmission<TMessage>.Id.get -> Cntryl.Portia.Communications.SendId
+Cntryl.Portia.Testing.FakeSubmission<TMessage>.Id.init -> void
+Cntryl.Portia.Testing.FakeSubmission<TMessage>.Message.get -> TMessage
+Cntryl.Portia.Testing.FakeSubmission<TMessage>.Message.init -> void
+Cntryl.Portia.Testing.FakeSubmission<TMessage>.Tenant.get -> Cntryl.Portia.TenantId
+Cntryl.Portia.Testing.FakeSubmission<TMessage>.Tenant.init -> void
+override Cntryl.Portia.Testing.FakeSubmission<TMessage>.Equals(object? obj) -> bool
+override Cntryl.Portia.Testing.FakeSubmission<TMessage>.GetHashCode() -> int
+override Cntryl.Portia.Testing.FakeSubmission<TMessage>.ToString() -> string!
+static Cntryl.Portia.Testing.FakeCommunicationsServiceCollectionExtensions.AddFakeCommunications(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Cntryl.Portia.Testing.FakeSubmission<TMessage>.operator !=(Cntryl.Portia.Testing.FakeSubmission<TMessage>? left, Cntryl.Portia.Testing.FakeSubmission<TMessage>? right) -> bool
+static Cntryl.Portia.Testing.FakeSubmission<TMessage>.operator ==(Cntryl.Portia.Testing.FakeSubmission<TMessage>? left, Cntryl.Portia.Testing.FakeSubmission<TMessage>? right) -> bool

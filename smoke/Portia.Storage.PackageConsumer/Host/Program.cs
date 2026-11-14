@@ -20,6 +20,12 @@ Console.WriteLine("Storage abstraction and separate AWS host package consumer pa
 
 sealed class SmokeTenantResolver : IObjectStorageTenantResolver
 {
+    public string GetObjectKey(Cntryl.Portia.TenantId tenantId, ObjectDigest expected) =>
+        $"assets/{tenantId.Value}/{expected.Sha256}";
+
+    public string GetUploadKey(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Uuid uploadId) =>
+        $"uploads/{tenantId.Value}/{uploadId:N}";
+
     public ValueTask<ObjectStorageLocation> ResolveAsync(Cntryl.Portia.TenantId tenantId, System.Threading.CancellationToken ct = default)
         => ValueTask.FromResult(new ObjectStorageLocation("smoke-bucket", "alias/smoke-key"));
 }

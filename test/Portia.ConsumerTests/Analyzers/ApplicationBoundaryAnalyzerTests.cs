@@ -48,6 +48,13 @@ public sealed class ApplicationBoundaryAnalyzerTests
     [InlineData("Shop.Common", "Portia.DependencyInjection", true)]
     [InlineData("Shop.Core", "Portia.Fitz", true)]
     [InlineData("Shop.Core", "Portia.Cassie", false)]
+    [InlineData("Shop.Core", "Portia.Communications.Abstractions", false)]
+    [InlineData("Shop.Common", "Portia.Communications.Abstractions", false)]
+    [InlineData("Shop.Core", "Portia.Storage.Azure", true)]
+    [InlineData("Shop.Core", "Cntryl.Portia.Storage.Gcp", true)]
+    [InlineData("Shop.Core", "Cntryl.Portia.Communications.Aws", true)]
+    [InlineData("Shop.Core", "Portia.Communications.Azure", true)]
+    [InlineData("Shop.Core", "Portia.Communications.Twilio", true)]
     [InlineData("Shop.Api", "Cntryl.Portia.Cassie", false)]
     public void ShouldEnforceBoundaryGivenProjectReference(string project, string dependency, bool forbidden)
     {

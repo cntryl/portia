@@ -7,6 +7,44 @@ namespace Cntryl.Portia.Tests.Storage;
 [Trait("Category", "StorageIntegration")]
 public sealed class AwsObjectStorageIntegrationTests
 {
+    /// <summary>Application-owned keys isolate tenants sharing one S3 bucket for the full object lifecycle.</summary>
+    [Fact]
+    public async Task ShouldPassConformanceGivenApplicationKeysAndSharedBucket()
+    {
+        // Arrange
+        var endpoint = Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT")
+            ?? throw new InvalidOperationException("Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
+        var bucket = $"portia-shared-{Guid.NewGuid():N}";
+        using var client = CreateClient(endpoint);
+        var services = new ServiceCollection();
+        services.AddDataProtection().UseEphemeralDataProtectionProvider();
+        services.AddSingleton<IObjectStorageTenantResolver>(new ApplicationStorageResolver("alias/shared-key", bucket));
+        services.AddAwsObjectStorage(builder => builder.UseClient(client));
+        using var host = services.BuildServiceProvider();
+        var storage = host.GetRequiredService<IObjectStorage>();
+        using var transfer = new HttpClient();
+        await client.PutBucketAsync(new PutBucketRequest { BucketName = bucket });
+        try
+        {
+            // Act
+            await ObjectStorageConformance.VerifyAsync(storage, new TenantId("tenant-one"), new TenantId("tenant-two"),
+                async (part, bytes, ct) =>
+                {
+                    using var response = await transfer.PutAsync(part.UploadUri, new ByteArrayContent(bytes.ToArray()), ct);
+                    response.EnsureSuccessStatusCode();
+                    return new ObjectPartReceipt(part.PartNumber, response.Headers.ETag!.Tag);
+                });
+
+            // Assert
+            var remaining = await client.ListObjectsV2Async(new ListObjectsV2Request { BucketName = bucket });
+            Assert.Empty(remaining.S3Objects ?? []);
+        }
+        finally
+        {
+            await client.DeleteBucketAsync(new DeleteBucketRequest { BucketName = bucket });
+        }
+    }
+
     /// <summary>Runs the reusable storage contract checks against the S3 adapter.</summary>
     [Fact]
     public async Task ShouldPassSharedConformanceGivenSqrzlS3Server()
@@ -274,6 +312,11 @@ public sealed class AwsObjectStorageIntegrationTests
 
     sealed class TestTenantResolver(IReadOnlyDictionary<string, ObjectStorageLocation> locations) : IObjectStorageTenantResolver
     {
+        public string GetObjectKey(TenantId tenantId, ObjectDigest expected) =>
+            $"content/sha256/{expected.Sha256[..2]}/{expected.Sha256}";
+
+        public string GetUploadKey(TenantId tenantId, Uuid uploadId) => $"staging/{uploadId:N}";
+
         public ValueTask<ObjectStorageLocation> ResolveAsync(TenantId tenantId, CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();

@@ -3,6 +3,57 @@ namespace Cntryl.Portia.Tests.Storage;
 /// <summary>Checks AWS request construction and object verification without cloud credentials.</summary>
 public sealed class AwsObjectStorageTests
 {
+    /// <summary>An older adapter cannot decode sessions whose destinations are now application-owned.</summary>
+    [Fact]
+    public async Task ShouldRejectNewSessionGivenLegacyProtector()
+    {
+        // Arrange
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var services = new ServiceCollection();
+        services.AddDataProtection().UseEphemeralDataProtectionProvider();
+        services.AddSingleton<IObjectStorageTenantResolver>(new ApplicationStorageResolver("alias/shared"));
+        services.AddAwsObjectStorage(builder => builder.UseClient(client));
+        using var provider = services.BuildServiceProvider();
+        var session = await provider.GetRequiredService<IObjectStorage>().CreateUploadAsync(
+            new TenantId("tenant-one"), new ObjectDigest(new string('a', 64), 1));
+        var legacyProtector = provider.GetRequiredService<IDataProtectionProvider>()
+            .CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1");
+
+        // Act
+        var exception = Record.Exception(() => legacyProtector.Unprotect(session.Token));
+
+        // Assert
+        Assert.IsType<CryptographicException>(exception);
+    }
+
+    /// <summary>Completion uses the application's bucket and keys captured when the upload started.</summary>
+    [Fact]
+    public async Task ShouldPinApplicationLayoutGivenResolverChangesDuringUpload()
+    {
+        // Arrange
+        var content = "application owned keys"u8.ToArray();
+        var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.Length);
+        var tenant = new TenantId("tenant-one");
+        var resolver = new ApplicationStorageResolver("alias/shared-key");
+        var expectedKey = resolver.GetObjectKey(tenant, digest);
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var proxy = (TestS3ClientProxy)(object)client;
+        proxy.Content = content;
+        var storage = new AwsObjectStorage(client, resolver, new EphemeralDataProtectionProvider().CreateProtector("layout"));
+        var session = await storage.CreateUploadAsync(tenant, digest);
+        resolver.ContentRoot = "moved";
+        resolver.UploadRoot = "new-uploads";
+
+        // Act
+        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "opaque-etag")]);
+
+        // Assert
+        Assert.Equal(ApplicationStorageResolver.Bucket, proxy.CopyRequest?.DestinationBucket);
+        Assert.Equal(expectedKey, proxy.CopyRequest?.DestinationKey);
+        Assert.StartsWith("pending/tenant-one/", proxy.InitiateRequest?.Key, StringComparison.Ordinal);
+        Assert.Equal(proxy.InitiateRequest?.Key, proxy.CopyRequest?.SourceKey);
+    }
+
     /// <summary>Checks encrypted staging, verified digest metadata, and conditional immutable promotion.</summary>
     [Fact]
     public async Task ShouldPromoteVerifiedContentConditionallyGivenTenantKey()
@@ -576,6 +627,13 @@ public sealed class AwsObjectStorageTests
     /// <summary>A tenant-to-bucket and KMS mapping used by the request-boundary tests.</summary>
     public sealed class TestTenantResolver : IObjectStorageTenantResolver
     {
+        /// <inheritdoc />
+        public string GetObjectKey(TenantId tenantId, ObjectDigest expected) =>
+            $"content/sha256/{expected.Sha256[..2]}/{expected.Sha256}";
+
+        /// <inheritdoc />
+        public string GetUploadKey(TenantId tenantId, Uuid uploadId) => $"staging/{uploadId:N}";
+
         /// <summary>Gets the location returned for the most recent tenant resolution.</summary>
         public ObjectStorageLocation? LastTenantLocation { get; private set; }
 

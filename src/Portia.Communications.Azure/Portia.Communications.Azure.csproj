@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Azure Communication Services mail provider for Portia: one provider call per send and honest outcomes.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Communication.Email"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Portia.Communications.Abstractions/Portia.Communications.Abstractions.csproj"/>
+  </ItemGroup>
+</Project>

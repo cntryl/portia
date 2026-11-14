@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Azure Blob Storage object storage provider for Portia with tenant-scoped encryption scopes.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Storage.Blobs"/>
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.Abstractions"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Portia.Storage.Abstractions/Portia.Storage.Abstractions.csproj"/>
+  </ItemGroup>
+</Project>

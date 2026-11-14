@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Google Cloud Storage object storage provider for Portia with tenant-scoped Cloud KMS (CMEK) encryption.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Cloud.Storage.V1"/>
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection.Abstractions"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Portia.Tests"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Portia.Storage.Abstractions/Portia.Storage.Abstractions.csproj"/>
+  </ItemGroup>
+</Project>

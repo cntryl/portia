@@ -1,1 +1,3 @@
 #nullable enable
+Cntryl.Portia.Storage.IObjectStorageTenantResolver.GetObjectKey(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Storage.ObjectDigest! expected) -> string!
+Cntryl.Portia.Storage.IObjectStorageTenantResolver.GetUploadKey(Cntryl.Portia.TenantId tenantId, Cntryl.Portia.Uuid uploadId) -> string!

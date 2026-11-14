@@ -16,7 +16,7 @@ public static class AwsObjectStorageServiceCollectionExtensions
         services.AddSingleton<IObjectStorage>(provider => new AwsObjectStorage(
             client,
             provider.GetRequiredService<IObjectStorageTenantResolver>(),
-            provider.GetRequiredService<IDataProtectionProvider>().CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1")));
+            provider.GetRequiredService<IDataProtectionProvider>().CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v2")));
         return services;
     }
 }
