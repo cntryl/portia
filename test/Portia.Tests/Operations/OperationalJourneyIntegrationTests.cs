@@ -102,8 +102,7 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         services.AddSingleton<IOperationalAuthorizer, TestOperationalAuthorizer>();
         services.AddSingleton<IConfiguration>(TestOperationalAuthorizer.Configuration());
         services.AddPortia().UseFitzClient(client, fitz => fitz.DisableRequestWorkers()
-                .UseFleet(new FleetRunOptions { MembershipSelector = $"lease://{control.Pattern.Realm}/portia-members/*" }).UseOperations(route,
-                options => options.QuiescedWorkerCutover = true))
+                .UseFleet(new FleetRunOptions { MembershipSelector = $"lease://{control.Pattern.Realm}/portia-members/*" }).UseOperations(route))
             .AddReactor<JourneyReactor>("journey", WorkloadScope.Global, options => options.PollInterval = TimeSpan.FromMilliseconds(10))
             .AddReactor<IndependentReactor>("independent", WorkloadScope.Global, options => options.PollInterval = TimeSpan.FromMilliseconds(10))
             .AddWorkers();

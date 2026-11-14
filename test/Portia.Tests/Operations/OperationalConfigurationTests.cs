@@ -3,25 +3,24 @@ namespace Cntryl.Portia;
 /// <summary>Operations activation is explicit and cannot silently replace checkpoint ownership.</summary>
 public sealed class OperationalConfigurationTests
 {
-    /// <summary>A host must acknowledge that legacy workers were quiesced.</summary>
+    /// <summary>A new host enables operations without acknowledging historical worker ownership.</summary>
     [Fact]
-    public async Task ShouldRequireQuiescedCutoverGivenOperationsEnabledWithoutIt()
+    public async Task ShouldEnableOperationsGivenNewHost()
     {
         // Arrange
         await using var client = new FitzClient(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
-
-        // Act
         var services = new ServiceCollection();
 
+        // Act
+        var exception = Record.Exception(() => services.AddPortia().UseFitzClient(client,
+            fitz => fitz.UseOperations("kv://test/state/progress")));
+
         // Assert
-        services.AddPortia().UseFitzClient(client, fitz =>
-        {
-            _ = Assert.Throws<InvalidOperationException>(() => fitz.UseOperations("kv://test/state/progress", _ => { }));
-        });
-        Assert.DoesNotContain(services, service => service.ServiceType == typeof(IOperationalStore));
+        Assert.Null(exception);
+        Assert.Contains(services, service => service.ServiceType == typeof(IOperationalStore));
     }
 
-    /// <summary>Legacy and operational checkpoint registrations conflict in either order.</summary>
+    /// <summary>Independent and operational checkpoint registrations conflict in either order.</summary>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -29,25 +28,25 @@ public sealed class OperationalConfigurationTests
     {
         // Arrange
         await using var client = new FitzClient(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
-
-        // Act
         var services = new ServiceCollection();
-
-        // Assert
+        PortiaFitzBuilder? configured = null;
         services.AddPortia().UseFitzClient(client, fitz =>
         {
+            configured = fitz;
             if (operationsFirst)
-            {
-                fitz.UseOperations("kv://test/state/progress", options => options.QuiescedWorkerCutover = true);
-                _ = Assert.Throws<InvalidOperationException>(() => fitz.UseKvCheckpoints("kv://test/state/progress"));
-            }
+                fitz.UseOperations("kv://test/state/progress");
             else
-            {
                 fitz.UseKvCheckpoints("kv://test/state/progress");
-                _ = Assert.Throws<InvalidOperationException>(() => fitz.UseOperations("kv://test/state/progress",
-                    options => options.QuiescedWorkerCutover = true));
-            }
         });
+
+        // Act
+        var exception = Record.Exception(() => operationsFirst
+            ? configured!.UseKvCheckpoints("kv://test/state/progress")
+            : configured!.UseOperations("kv://test/state/progress"));
+
+        // Assert
+        Assert.IsType<InvalidOperationException>(exception);
+        Assert.Single(services, service => service.ServiceType == typeof(IProjectionCheckpointStore));
     }
 
     /// <summary>Service providers borrow domain clients when the application owns the Fitz connection.</summary>

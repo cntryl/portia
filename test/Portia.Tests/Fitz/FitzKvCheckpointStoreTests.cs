@@ -71,9 +71,9 @@ public sealed class FitzKvCheckpointStoreTests
         Assert.Equal(KvMode.ReadWrite, client.Transactions[0].Mode);
     }
 
-    /// <summary>Reads the fixed-width unsigned big-endian checkpoint format published by Portia 0.1.x.</summary>
+    /// <summary>Rejects historical unversioned checkpoint bytes without changing stored progress.</summary>
     [Fact]
-    public async Task ShouldLoadCheckpointGivenLegacyBigEndianEncoding()
+    public async Task ShouldRejectCheckpointGivenLegacyBigEndianEncoding()
     {
         // Arrange
         var client = new FakeKvClient();
@@ -82,10 +82,11 @@ public sealed class FitzKvCheckpointStoreTests
         client.Committed[Encoding.UTF8.GetString(FitzKvCheckpoints.Key(Identity).Span)] = legacy;
 
         // Act
-        var checkpoint = await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints").LoadAsync(Identity);
+        var exception = await Record.ExceptionAsync(async () =>
+            await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints").LoadAsync(Identity));
 
         // Assert
-        Assert.Equal(new ProjectionCheckpoint(new EventCursor("4096")), checkpoint);
+        Assert.IsType<InvalidDataException>(exception);
         Assert.Equal(legacy, Assert.Single(client.Committed).Value);
     }
 

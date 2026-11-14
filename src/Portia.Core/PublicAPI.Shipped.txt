@@ -123,9 +123,6 @@ Cntryl.Portia.TenantStopTimeoutException
 Cntryl.Portia.TenantStopTimeoutException.TenantId.get -> Cntryl.Portia.TenantId
 Cntryl.Portia.TenantStopTimeoutException.TenantStopTimeoutException(Cntryl.Portia.TenantId tenantId, System.TimeSpan timeout) -> void
 Cntryl.Portia.TenantStopTimeoutException.Timeout.get -> System.TimeSpan
-Cntryl.Portia.TerminalHandlerMissingException
-Cntryl.Portia.TerminalHandlerMissingException.Reason.get -> Cntryl.Portia.QueuedRequestTerminalReason
-Cntryl.Portia.TerminalHandlerMissingException.TerminalHandlerMissingException(Cntryl.Portia.QueuedRequestTerminalReason reason) -> void
 Cntryl.Portia.AggregateExecutor
 Cntryl.Portia.AggregateExecutor.AggregateExecutor(Cntryl.Portia.IAggregateReader! reader, Cntryl.Portia.IAggregateWriter! writer) -> void
 Cntryl.Portia.AggregateExecutor.ExecuteAsync<TAggregate, TOut>(TAggregate! aggregate, System.Func<TAggregate!, Cntryl.Portia.AggregateOutcome<TOut>>! operation, Cntryl.Portia.IExecutionContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Result<TOut>>
@@ -265,8 +262,6 @@ Cntryl.Portia.OperationalOptions.JournalRetryDelay.set -> void
 Cntryl.Portia.OperationalOptions.MaxTraceEntries.get -> int
 Cntryl.Portia.OperationalOptions.MaxTraceEntries.set -> void
 Cntryl.Portia.OperationalOptions.OperationalOptions() -> void
-Cntryl.Portia.OperationalOptions.QuiescedWorkerCutover.get -> bool
-Cntryl.Portia.OperationalOptions.QuiescedWorkerCutover.set -> void
 Cntryl.Portia.OperationalOptions.RepairPlanLifetime.get -> System.TimeSpan
 Cntryl.Portia.OperationalOptions.RepairPlanLifetime.set -> void
 Cntryl.Portia.OperationalProcessingSettings

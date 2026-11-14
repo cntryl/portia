@@ -22,7 +22,7 @@ public interface IQueuedRequest
     RequestMetadata Metadata { get; }
 
     /// <summary>Gets the optional propagated W3C trace context for this delivery.</summary>
-    /// <remarks>The default preserves compatibility with queue adapters that do not propagate tracing.</remarks>
+    /// <remarks>Transports without upstream trace context report no parent activity.</remarks>
     RequestTraceContext? TraceContext => null;
 
     /// <summary>Gets the concrete ingress facts supplied by this transport.</summary>

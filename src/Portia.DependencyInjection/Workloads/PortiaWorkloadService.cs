@@ -77,7 +77,7 @@ sealed class PortiaWorkloadService(
             var checkpoints = operationalScope.ServiceProvider.GetServices<IProjectionCheckpointStore>().ToArray();
             if (checkpoints.Length != 1 || !ReferenceEquals(checkpoints[0],
                 operationalScope.ServiceProvider.GetService<IOperationalReactionCheckpointStore>()))
-                throw new InvalidOperationException("Operational workers require exactly one operational checkpoint registration; legacy checkpoint owners must be quiesced.");
+                throw new InvalidOperationException("Operational workers require exactly one operational checkpoint registration.");
         }
 
         foreach (var registration in _registrations)

@@ -11,12 +11,6 @@ public sealed class OperationalOptions
     public int MaxTraceEntries { get; set; } = 128;
     /// <summary>Gets or sets the delay while required operational persistence is unavailable.</summary>
     public TimeSpan JournalRetryDelay { get; set; } = TimeSpan.FromSeconds(1);
-    /// <summary>
-    /// Gets or sets whether the host acknowledges a quiesced cutover from legacy checkpoint owners.
-    /// Operations rejects activation until this is explicitly true.
-    /// </summary>
-    public bool QuiescedWorkerCutover { get; set; }
-
     internal void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(RepairPlanLifetime, TimeSpan.Zero);

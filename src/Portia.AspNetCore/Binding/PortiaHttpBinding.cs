@@ -160,18 +160,6 @@ public static partial class PortiaHttpBinding
             : result!;
     }
 
-    /// <summary>Reports whether the body supplies a constructor-bound member, so the query is not consulted.</summary>
-    /// <typeparam name="TRequest">The request type whose JSON contract names the member.</typeparam>
-    /// <typeparam name="TValue">The member's type.</typeparam>
-    /// <param name="body">The parsed request body.</param>
-    /// <param name="options">The application's frozen Portia JSON options.</param>
-    /// <param name="memberIndex">The member's position in the request's primary constructor.</param>
-    /// <param name="fallbackName">The wire name to use when JSON metadata is unavailable.</param>
-    /// <returns><see langword="true" /> when the body object contains the member, including as JSON null.</returns>
-    public static bool HasBodyMember<TRequest, TValue>(JsonElement body, JsonSerializerOptions options,
-        int memberIndex, string fallbackName) =>
-        HasBodyMemberCore<TRequest, TValue>(body, options, memberIndex, null, fallbackName);
-
     /// <summary>Reports whether the body supplies the identified constructor-bound member.</summary>
     /// <typeparam name="TRequest">The request type whose JSON contract names the member.</typeparam>
     /// <typeparam name="TValue">The member's type.</typeparam>
@@ -186,25 +174,13 @@ public static partial class PortiaHttpBinding
         HasBodyMemberCore<TRequest, TValue>(body, options, memberIndex, memberName, fallbackName);
 
     static bool HasBodyMemberCore<TRequest, TValue>(JsonElement body, JsonSerializerOptions options,
-        int memberIndex, string? memberName, string fallbackName)
+        int memberIndex, string memberName, string fallbackName)
     {
         if (body.ValueKind != JsonValueKind.Object)
             throw new BadHttpRequestException("Expected a JSON object.");
         var binding = ResolveBodyMember(options, typeof(TRequest), typeof(TValue), memberIndex, memberName, fallbackName);
         return TryGetBodyProperty(body, binding.Options, binding.Name, out _);
     }
-
-    /// <summary>Rejects a supplied JSON duplicate that disagrees with an authoritative routed value.</summary>
-    /// <typeparam name="TRequest">The request whose member metadata names the duplicate.</typeparam>
-    /// <typeparam name="TValue">The routed member type.</typeparam>
-    /// <param name="body">The parsed object body; the routed member may be omitted.</param>
-    /// <param name="options">The application's frozen JSON options.</param>
-    /// <param name="memberIndex">The primary-constructor member index.</param>
-    /// <param name="fallbackName">The wire name used without member metadata.</param>
-    /// <param name="expected">The value already bound from the route.</param>
-    public static void ValidateRoutedBody<TRequest, TValue>(JsonElement body, JsonSerializerOptions options,
-        int memberIndex, string fallbackName, TValue expected) =>
-        ValidateRoutedBodyCore<TRequest, TValue>(body, options, memberIndex, null, fallbackName, expected);
 
     /// <summary>Rejects a supplied JSON member that disagrees with its authoritative routed value.</summary>
     /// <typeparam name="TRequest">The request whose member metadata names the duplicate.</typeparam>
@@ -220,7 +196,7 @@ public static partial class PortiaHttpBinding
         ValidateRoutedBodyCore<TRequest, TValue>(body, options, memberIndex, memberName, fallbackName, expected);
 
     static void ValidateRoutedBodyCore<TRequest, TValue>(JsonElement body, JsonSerializerOptions options,
-        int memberIndex, string? memberName, string fallbackName, TValue expected)
+        int memberIndex, string memberName, string fallbackName, TValue expected)
     {
         if (body.ValueKind != JsonValueKind.Object)
             throw new BadHttpRequestException("Expected a JSON object.");
@@ -259,11 +235,11 @@ public static partial class PortiaHttpBinding
     }
 
     internal static BindingMetadata ResolveBodyMember(JsonSerializerOptions options, Type requestType,
-        Type valueType, int memberIndex, string? memberName, string fallbackName) =>
+        Type valueType, int memberIndex, string memberName, string fallbackName) =>
         BindingCaches.GetValue(options, static current => new OptionsBindingCache(current))
             .Get(requestType, valueType, memberIndex, memberName, fallbackName);
 
-    readonly record struct BindingKey(Type RequestType, Type ValueType, int MemberIndex, string? MemberName,
+    readonly record struct BindingKey(Type RequestType, Type ValueType, int MemberIndex, string MemberName,
         string FallbackName);
 
     internal sealed record BindingMetadata(string Name, JsonSerializerOptions Options);
@@ -272,7 +248,7 @@ public static partial class PortiaHttpBinding
     {
         readonly ConcurrentDictionary<BindingKey, Lazy<BindingMetadata>> _bindings = new();
 
-        internal BindingMetadata Get(Type requestType, Type valueType, int memberIndex, string? memberName,
+        internal BindingMetadata Get(Type requestType, Type valueType, int memberIndex, string memberName,
             string fallbackName) =>
             _bindings.GetOrAdd(new BindingKey(requestType, valueType, memberIndex, memberName, fallbackName),
                 static (key, state) => new Lazy<BindingMetadata>(() => Resolve(state, key),
@@ -297,13 +273,11 @@ public static partial class PortiaHttpBinding
             // associations retain declared identity; parameterless metadata can instead retain its
             // member provider. Reading that existing provider never enumerates request members.
             var identified = properties.Where(candidate => candidate.PropertyType == key.ValueType &&
-                (key.MemberName is null
-                    ? MatchesLegacyName(candidate, key.FallbackName, options)
-                    : string.Equals(DeclaredName(candidate), key.MemberName, StringComparison.OrdinalIgnoreCase)))
+                string.Equals(DeclaredName(candidate), key.MemberName, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
             var candidates = identified.Length > 0 ? identified : properties.Where(candidate =>
                 candidate.PropertyType == key.ValueType && candidate.Name == key.FallbackName &&
-                (key.MemberName is null || DeclaredName(candidate) is null)).ToArray();
+                DeclaredName(candidate) is null).ToArray();
             var property = candidates.Length switch
             {
                 1 => candidates[0],
@@ -326,17 +300,5 @@ public static partial class PortiaHttpBinding
         static string? DeclaredName(JsonPropertyInfo property) =>
             property.AssociatedParameter?.Name ?? (property.AttributeProvider as MemberInfo)?.Name;
 
-        static bool MatchesLegacyName(JsonPropertyInfo property, string fallbackName, JsonSerializerOptions options)
-        {
-            if (DeclaredName(property) is { } declaredName &&
-                string.Equals(options.PropertyNamingPolicy?.ConvertName(declaredName) ?? declaredName,
-                    fallbackName, StringComparison.OrdinalIgnoreCase))
-                return true;
-
-            // Older generated helpers pass the original wire name rather than the parameter name.
-            // The supplied member provider can retain an explicit alias after a resolver renames it.
-            return property.AttributeProvider?.GetCustomAttributes(typeof(JsonPropertyNameAttribute), false)
-                .OfType<JsonPropertyNameAttribute>().Any(attribute => attribute.Name == fallbackName) == true;
-        }
     }
 }

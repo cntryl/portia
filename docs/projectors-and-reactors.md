@@ -289,19 +289,11 @@ maps to its own outcome.
 `CreateEffectId(context, effectName)` derives a stable UUID from the reactor/checkpoint identity,
 source event ID, and effect name for use with an idempotent target. This does not make arbitrary
 effects exactly once: the effect and checkpoint are still not one atomic transaction.
-Its workload-identity text deliberately freezes the exact legacy persisted derivation. The
-explicit formatter prevents a future record-shape change from altering keys; it does not create
-new effect IDs or change any UUID already stored by an application. Ordinary names, including
-names with colons and valid Unicode, retain their exact IDs.
-
-`CreateEffectId` refuses identity text that can consume another field in that legacy format:
-a reactor name containing `:<canonical lowercase nonempty UUID>` after a nonblank prefix, with
-the UUID followed by `:` or the end of the name; a bound workload name containing `, Tenant = `;
-or a bound tenant containing ` } }:`. Effect names must contain well-formed UTF-16. The helper
-fails instead of silently rehashing those values. If an existing workload uses an affected identity,
-quiesce it and reconcile prior effects and target idempotency records before an explicit migration.
-Simply renaming a reactor or replaying under new keys can repeat effects. See the
-[0.10.0 migration notes](migration-0.10.0.md#check-legacy-effect-identities).
+Its workload name, tenant, reactor name, source event ID, and effect name are explicitly
+length-prefixed before UUID derivation. The format is independent of record `ToString()` output;
+valid names containing colons, UUIDs, or record-formatting text cannot consume adjacent fields.
+Effect names must contain well-formed UTF-16. The helper derives only a key; the application owns
+any deduplication, tracking, and resolution of pending or unknown external effects.
 
 Call an injected integration service directly when the action is inherently caused by the event
 and adding a request contract would add no useful application boundary:
@@ -448,11 +440,9 @@ replay. Reactor effects must tolerate replay regardless of persistence mode. Sel
 KV commits explicitly with `UseKvCheckpoints(route, KvDurability.Sync)`, the four-argument
 `FitzKvProjectionStore` base constructor, or the three-argument tenant snapshot store constructor.
 
-Checkpoint values use a fixed format prefix followed by the backend-owned cursor as UTF-8. Readers
-also accept the Portia 0.1.x representation—exactly eight bytes containing an unsigned big-endian
-offset—and expose it as an invariant decimal `EventCursor`. Unknown unversioned values are rejected;
-loading is non-mutating, and the next successful checkpoint commit upgrades a legacy value to the
-current versioned representation.
+Checkpoint values use a fixed format prefix followed by the backend-owned cursor as UTF-8.
+Readers accept this format only. Unversioned values, including historical eight-byte offsets,
+are rejected without rewriting stored progress.
 
 Fitz KV locks a route at BEGIN rather than detecting the conflict at COMMIT, so a losing writer is
 rejected before staging anything. Both stores translate that into the adapter-neutral

@@ -134,14 +134,14 @@ parallelism, or a hidden workload scheduler.
 `IResumableTenantDirectory` is an optional capability. `MultiTenantRunner` opens one cursor and
 reuses it across watch failures, so an `EventSourcedTenantDirectory` resumes at its next in-process
 offset and observes removals that occurred while disconnected. Separate cursors progress
-independently. Cursor progress is not persisted across process restarts. Legacy
-`ITenantDirectory` implementations continue to use a complete active-membership enumeration plus
+independently. Cursor progress is not persisted across process restarts. Snapshot/watch-only
+`ITenantDirectory` implementations reconcile a complete active-membership enumeration before each
 live watch.
 
 `EventSourcedTenantDirectory` reports each bounded read pass through
 `portia.tenant_directory.operation.duration`, `portia.tenant_directory.event.count`, and
 `portia.tenant_directory.active.count`. The bounded `portia.operation` tag identifies a snapshot,
-legacy watch, or resumable cursor; `portia.phase` distinguishes the initial `replay` from later
+live watch, or resumable cursor; `portia.phase` distinguishes the initial `replay` from later
 `catch_up` passes; and `portia.outcome` distinguishes success, cancellation, interruption, and a
 reader fault. Duration includes only time spent advancing the durable reader; downstream lifecycle
 consumer and workload backpressure is excluded. Tenant identities, stream addresses, and cursor

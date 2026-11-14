@@ -14,7 +14,7 @@ public sealed class DomainEventTypeCatalog
     /// <summary>Registers the domain events declared by the calling compilation.</summary>
     /// <returns>This catalog, for chaining.</returns>
     /// <remarks>Portia's generator supplies the registration at each concrete call site.</remarks>
-#pragma warning disable CA1822 // An instance entry point takes precedence over friend-visible legacy generated extensions.
+#pragma warning disable CA1822 // The generator intercepts this instance entry point at each calling compilation.
     public DomainEventTypeCatalog AddPortiaGeneratedDomainEvents() =>
         throw new InvalidOperationException(
             "Portia.Generators did not intercept this event catalog registration. Ensure analyzer assets are enabled "

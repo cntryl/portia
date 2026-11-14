@@ -91,8 +91,8 @@ public sealed class FitzScheduledRequestConsumer(
             {
                 await foreach (var notification in subscription.WithCancellation(ct).ConfigureAwait(false))
                 {
-                    // An entry this consumer cannot translate — a legacy envelope, or one without a
-                    // complete system identity — is reported and dropped rather than ending the
+                    // An entry with an invalid envelope or incomplete system identity is reported
+                    // and dropped rather than ending the
                     // subscription, which would stop every other schedule on this route too. The
                     // recorded fault is what tells an operator the entry needs recreating.
                     if (Translate(notification) is not { } firing)
@@ -169,14 +169,6 @@ public sealed class FitzScheduledRequestConsumer(
     {
         try
         {
-            using (var document = JsonDocument.Parse(notification.Payload))
-            {
-                if (document.RootElement.TryGetProperty("contract", out _))
-                {
-                    throw new LegacyScheduledRequestException(notification.Route);
-                }
-            }
-
             var scheduled = JsonSerializer.Deserialize(notification.Payload.Span,
                                 FitzJsonContext.Default.FitzScheduledRequestEnvelope)
                             ?? throw new InvalidOperationException("A fired schedule envelope deserialized to null.");

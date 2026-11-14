@@ -12,8 +12,6 @@ Cntryl.Portia.FitzKvCheckpointStore
 Cntryl.Portia.FitzKvCheckpointStore.FitzKvCheckpointStore(Cntryl.Fitz.IKvClient! client, string! route) -> void
 Cntryl.Portia.FitzKvCheckpointStore.LoadAsync(Cntryl.Portia.CheckpointIdentity! identity, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ProjectionCheckpoint>
 Cntryl.Portia.FitzKvCheckpointStore.SaveAsync(Cntryl.Portia.CheckpointIdentity! identity, Cntryl.Portia.ProjectionCheckpoint checkpoint, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-Cntryl.Portia.FitzKvConcurrencyException
-Cntryl.Portia.FitzKvConcurrencyException.FitzKvConcurrencyException(string! message, System.Exception? innerException = null) -> void
 Cntryl.Portia.FitzKvProjectionStore
 Cntryl.Portia.FitzKvProjectionStore.BeginAsync(Cntryl.Portia.ProjectionBatchContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.IProjectionBatch!>
 Cntryl.Portia.FitzKvProjectionStore.BeginReadAsync(string! realm, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Fitz.IKvTransaction!>
@@ -93,8 +91,6 @@ Cntryl.Portia.JsonRequestSerializer.JsonRequestSerializer(System.Collections.Gen
 Cntryl.Portia.JsonRequestSerializer.Serialize(Cntryl.Portia.IRequestBase! request, string? actorToken, Cntryl.Portia.RequestMetadata! metadata, Cntryl.Portia.RequestTraceContext? traceContext) -> System.ReadOnlyMemory<byte>
 Cntryl.Portia.JsonRequestSerializer.SerializeOutcome(Cntryl.Portia.Result outcome) -> System.ReadOnlyMemory<byte>
 Cntryl.Portia.JsonRequestSerializer.SerializeResult<TOut>(Cntryl.Portia.Result<TOut> result) -> System.ReadOnlyMemory<byte>
-Cntryl.Portia.LegacyScheduledRequestException
-Cntryl.Portia.LegacyScheduledRequestException.LegacyScheduledRequestException(string! route) -> void
 Cntryl.Portia.PortiaFitzApplicationExtensions
 Cntryl.Portia.PortiaFitzBuilder
 Cntryl.Portia.PortiaFitzBuilder.AddNoticeWorkers() -> Cntryl.Portia.PortiaFitzBuilder!
@@ -152,7 +148,7 @@ Cntryl.Portia.FitzOperationalStore.ListAsync(Cntryl.Portia.OperationalScope! sco
 Cntryl.Portia.FitzOperationalStore.LoadAsync(Cntryl.Portia.CheckpointIdentity! identity, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ProjectionCheckpoint>
 Cntryl.Portia.FitzOperationalStore.ReadAsync(Cntryl.Portia.OperationalTarget! target, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.OperationalProcessorState?>
 Cntryl.Portia.FitzOperationalStore.SaveAsync(Cntryl.Portia.CheckpointIdentity! identity, Cntryl.Portia.ProjectionCheckpoint checkpoint, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
-Cntryl.Portia.PortiaFitzBuilder.UseOperations(string! checkpointBaseRoute, System.Action<Cntryl.Portia.OperationalOptions!>! configure) -> Cntryl.Portia.PortiaFitzBuilder!
+Cntryl.Portia.PortiaFitzBuilder.UseOperations(string! checkpointBaseRoute, System.Action<Cntryl.Portia.OperationalOptions!>? configure = null) -> Cntryl.Portia.PortiaFitzBuilder!
 Cntryl.Portia.FitzEventStore.FitzEventStore(Cntryl.Fitz.IStreamClient! streams, Cntryl.Portia.IDomainEventSerializer! serializer, Microsoft.Extensions.Logging.ILogger<Cntryl.Portia.FitzEventStore!>? logger) -> void
 Cntryl.Portia.FitzRequestQueuePublisher.EnqueueWithOptionsAsync<TRequest>(TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, Cntryl.Portia.RequestQueueOptions! options, System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask
 Cntryl.Portia.FitzRequestQueuePublisher.EnqueueWithOptionsAsync<TRequest>(TRequest request, Cntryl.Portia.RequestRouteValues! routeValues, string? actorToken, Cntryl.Portia.RequestMetadata! metadata, Cntryl.Portia.RequestQueueOptions! options, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask

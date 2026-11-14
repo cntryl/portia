@@ -6,6 +6,23 @@ alerts are as breaking to change as an API.
 
 ## Unreleased
 
+### Changed
+
+- Simplify reactor effect IDs to length-prefixed workload, tenant, reactor, source-event, and
+  effect fields. Valid identity text no longer needs exclusions for historical record delimiters.
+  This changes previously derived IDs; Portia provides no compatibility derivation or automatic migration.
+- `UseOperations(route, configure = null)` activates operations directly. Remove the historical
+  `QuiescedWorkerCutover` acknowledgement; single checkpoint ownership and worker fencing remain enforced.
+
+### Removed
+
+- Historical eight-byte Fitz checkpoint decoding and automatic format upgrades; only the current
+  versioned opaque cursor encoding is accepted.
+- Compatibility-only `FitzKvConcurrencyException`, `TerminalHandlerMissingException`, and
+  `LegacyScheduledRequestException` types. Current provider-neutral failures and invalid-envelope handling remain.
+- Generated HTTP-binding overloads without declared member names and their legacy lookup path.
+  Rebuild consuming applications with the current generator.
+
 ## 0.11.1
 
 Read the [0.11.1 migration notes](docs/migration-0.11.1.md) before upgrading MCP HTTP hosts or code

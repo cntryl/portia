@@ -20,6 +20,15 @@ means processing is incomplete and prevents checkpoint advancement; retry or wor
 not replace the required business outcome. Projectors build derived data; reactors and commands
 perform outcome-validation choreography.
 
+# Compatibility during refinement
+
+Portia is pre-1.0 and does not require backward compatibility. Do not retain compatibility aliases,
+obsolete APIs, old Portia-format readers, or migration-only switches for prior Portia releases.
+Reject unsupported formats explicitly. Application event-schema evolution and intentionally supported
+provider protocols remain current features. Preserve correctness, authorization, fencing, cancellation,
+replay, and recovery guarantees when pruning code. Applications own business deduplication and
+send/delivery tracking; Portia owns the general contracts and provider implementations.
+
 # Tests
 
 - Structure every test as `// Arrange`, `// Act`, `// Assert` sections, in that order.

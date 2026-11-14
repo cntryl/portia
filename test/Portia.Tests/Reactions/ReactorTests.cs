@@ -89,12 +89,12 @@ public sealed class ReactorTests
         Assert.NotEqual(reactor.EffectId(context, "email"), reactor.EffectId(context, "audit"));
     }
 
-    /// <summary>Previously persisted effect IDs remain valid after framework upgrades.</summary>
+    /// <summary>Structured effect identities have a deterministic derivation for bound and unbound workloads.</summary>
     [Theory]
-    [InlineData(null, null, "abf6bc71-89ac-5e92-8c04-a3d15c49c658")]
-    [InlineData("orders", null, "c2a326cf-7e40-5cd7-97a0-4a3e792ab8f6")]
-    [InlineData("orders", "acme", "e44c94b5-3b26-5cd3-adf6-66b09d8b28a6")]
-    public void ShouldPreservePersistedEffectIdGivenExistingReactionIdentity(
+    [InlineData(null, null, "737f5296-5c8e-59c0-9a32-262dd8d0bc5c")]
+    [InlineData("orders", null, "8a529365-b054-5bc5-8749-b327f24b8e55")]
+    [InlineData("orders", "acme", "0d9152c1-6c33-5704-8297-c74eb6f552ea")]
+    public void ShouldCreateDeterministicEffectIdGivenReactionIdentity(
         string? workloadName, string? tenantValue, string expectedId)
     {
         // Arrange

@@ -1,5 +1,3 @@
-using System.Buffers.Binary;
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -46,19 +44,13 @@ static class FitzKvCheckpoints
         return value;
     }
 
-    /// <summary>Decodes a current cursor or a published 0.1.x unsigned big-endian offset.</summary>
+    /// <summary>Decodes the versioned opaque cursor format; unknown encodings are rejected.</summary>
     public static EventCursor Decode(ReadOnlySpan<byte> value)
     {
         if (value.StartsWith(FormatPrefix))
             return value.Length == FormatPrefix.Length
                 ? EventCursor.Start
                 : new EventCursor(Encoding.UTF8.GetString(value[FormatPrefix.Length..]));
-
-        if (value.Length == sizeof(ulong))
-        {
-            var offset = BinaryPrimitives.ReadUInt64BigEndian(value);
-            return new EventCursor(offset.ToString(CultureInfo.InvariantCulture));
-        }
 
         throw new InvalidDataException("The persisted Fitz checkpoint has an unknown encoding.");
     }

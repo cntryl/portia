@@ -87,56 +87,41 @@ public sealed class HttpBindingMetadataIdentityTests
             0, "a", "a", 11L);
     }
 
-    /// <summary>Previously generated body lookups retain their declared member despite a reordered JSON constructor.</summary>
+    /// <summary>Declared member identity finds an aliased property after application metadata renaming.</summary>
     [Fact]
-    public void ShouldPreserveLegacyBodyLookupGivenDifferentJsonConstructorOrder()
+    public void ShouldFindAliasedMemberGivenRenamedMetadata()
     {
         // Arrange
-        var options = RenamedLegacyOptions<LegacyConstructorBinding>();
-
-        // Act
-        using var body = JsonDocument.Parse("{\"wire_a\":11}");
-
-        // Assert
-        Assert.True(PortiaHttpBinding.HasBodyMember<LegacyConstructorBinding, int>(body.RootElement, options,
-            0, "a"));
-    }
-
-    /// <summary>Previously generated route validation must reject a conflicting declared member.</summary>
-    [Fact]
-    public void ShouldRejectLegacyRoutedBodyConflictGivenDifferentJsonConstructorOrder()
-    {
-        // Arrange
-        var options = RenamedLegacyOptions<LegacyConstructorBinding>();
-
-        // Act
-        using var body = JsonDocument.Parse("{\"wire_a\":999,\"wire_b\":11}");
-
-        // Assert
-        Assert.Throws<BadHttpRequestException>(() =>
-            PortiaHttpBinding.ValidateRoutedBody<LegacyConstructorBinding, int>(body.RootElement, options,
-                0, "a", 11));
-    }
-
-    /// <summary>Legacy helpers retain explicit aliases and member converters after metadata renaming.</summary>
-    [Fact]
-    public void ShouldPreserveLegacyAliasAndConverterGivenRenamedMetadata()
-    {
-        // Arrange
-        var options = RenamedLegacyOptions<AliasedLegacyBinding>();
+        var options = RenamedOptions<AliasedBinding>();
         using var body = JsonDocument.Parse("{\"wire_alias_a\":\"0x10\"}");
 
         // Act
-        using var conflict = JsonDocument.Parse("{\"wire_alias_a\":\"0x20\"}");
+        var found = PortiaHttpBinding.HasBodyMember<AliasedBinding, int>(body.RootElement, options,
+            0, "A", "alias_a");
 
         // Assert
-        Assert.True(PortiaHttpBinding.HasBodyMember<AliasedLegacyBinding, int>(body.RootElement, options,
-            0, "alias_a"));
-        PortiaHttpBinding.ValidateRoutedBody<AliasedLegacyBinding, int>(body.RootElement, options,
-            0, "alias_a", 16);
-        Assert.Throws<BadHttpRequestException>(() =>
-            PortiaHttpBinding.ValidateRoutedBody<AliasedLegacyBinding, int>(conflict.RootElement, options,
-                0, "alias_a", 16));
+        Assert.True(found);
+    }
+
+    /// <summary>Route validation retains aliases and member converters after application metadata renaming.</summary>
+    [Theory]
+    [InlineData("0x10", false)]
+    [InlineData("0x20", true)]
+    public void ShouldValidateAliasedMemberGivenRenamedMetadata(string value, bool conflict)
+    {
+        // Arrange
+        var options = RenamedOptions<AliasedBinding>();
+        using var body = JsonDocument.Parse($"{{\"wire_alias_a\":\"{value}\"}}");
+
+        // Act
+        var exception = Record.Exception(() => PortiaHttpBinding.ValidateRoutedBody<AliasedBinding, int>(
+            body.RootElement, options, 0, "A", "alias_a", 16));
+
+        // Assert
+        if (conflict)
+            Assert.IsType<BadHttpRequestException>(exception);
+        else
+            Assert.Null(exception);
     }
 
     /// <summary>Unidentifiable metadata is rejected rather than using an unrelated property's position.</summary>
@@ -203,7 +188,7 @@ public sealed class HttpBindingMetadataIdentityTests
             1, "Second", "second", false, false, 0));
     }
 
-    static JsonSerializerOptions RenamedLegacyOptions<T>()
+    static JsonSerializerOptions RenamedOptions<T>()
     {
         var resolver = new DefaultJsonTypeInfoResolver();
         resolver.Modifiers.Add(info =>
@@ -230,24 +215,7 @@ public sealed class HttpBindingMetadataIdentityTests
         AlternateConstructorBinding(int b, long a) : this(a, b) { }
     }
 
-    sealed class LegacyConstructorBinding
-    {
-        public LegacyConstructorBinding(int a, int b) : this(b, a, false) { }
-
-        [JsonConstructor]
-        LegacyConstructorBinding(int b, int a, bool marker)
-        {
-            A = a;
-            B = b;
-            Marker = marker;
-        }
-
-        public int A { get; }
-        public int B { get; }
-        public bool Marker { get; }
-    }
-
-    sealed record AliasedLegacyBinding(
+    sealed record AliasedBinding(
         [property: JsonPropertyName("alias_a"), JsonPropertyOrder(2), JsonConverter(typeof(HttpMemberHexConverter))] int A,
         [property: JsonPropertyOrder(1)] int B);
 

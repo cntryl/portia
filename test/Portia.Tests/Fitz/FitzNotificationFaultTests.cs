@@ -318,19 +318,19 @@ public sealed class FitzNotificationFaultTests
         Assert.Equal(2, tracker.Disposed);
     }
 
-    /// <summary>Verifies a pre-envelope schedule entry is dropped and counted as a validation fault.</summary>
+    /// <summary>A raw request without the required schedule envelope is dropped and counted as invalid.</summary>
     [Fact]
-    public async Task ShouldReportValidationFaultGivenLegacyScheduleEntry()
+    public async Task ShouldReportValidationFaultGivenUnwrappedScheduleRequest()
     {
         // Arrange
         var serializer = TestJson.Serializer(typeof(UniversalAction));
+        var payload = serializer.Serialize(new UniversalAction(1), "unwrapped-token", RequestMetadata.Create(), null);
 
         // Act
-        var legacy = serializer.Serialize(new UniversalAction(1), "legacy-bearer-token", RequestMetadata.Create(),
-            null);
+        var outcomes = await DrainAsync(serializer, payload);
 
         // Assert
-        Assert.Equal([("unknown", "schedule", "lost")], await DrainAsync(serializer, legacy));
+        Assert.Equal([("unknown", "schedule", "lost")], outcomes);
     }
 
     /// <summary>Verifies an envelope without a complete system identity is dropped and counted the same way.</summary>
@@ -348,22 +348,6 @@ public sealed class FitzNotificationFaultTests
 
         // Assert
         Assert.Equal([("unknown", "schedule", "lost")], await DrainAsync(serializer, payload));
-    }
-
-    /// <summary>
-    ///     Verifies the legacy entry's diagnostic still names the route and the action an operator
-    ///     has to take, now that it is reported rather than thrown at the caller.
-    /// </summary>
-    [Fact]
-    public void ShouldNameRouteAndRemedyGivenLegacyScheduledRequestException()
-    {
-        // Arrange
-        // Act
-        var exception = new LegacyScheduledRequestException("schedule://test/shared/action/run");
-
-        // Assert
-        Assert.Contains("Cancel and recreate", exception.Message, StringComparison.Ordinal);
-        Assert.Contains("schedule://test/shared/action/run", exception.Message, StringComparison.Ordinal);
     }
 
     static async Task<List<(string Request, string Transport, string Outcome)>> DrainAsync(

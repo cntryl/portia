@@ -20,11 +20,11 @@ can further restrict read access by scope. Durable diagnosis and repair operatio
 explicit policy, with separate `Read`, `Preview`, `Approve`, and `Execute` permissions. Holding the
 operator role alone does not approve a repair or authorize its execution.
 
-## Activation and cutover
+## Activation
 
-Stop all legacy owners of the affected workloads before enabling operations. Keep the same checkpoint
-base route: operations preserves the existing per-component/per-realm resource derivation and checkpoint
-keys, including legacy checkpoint encodings. Enabling both checkpoint registrations is rejected.
+Operations owns reactor checkpoints and adds synchronous completion receipts. Enabling both
+independent checkpoint storage and operations in one host is rejected: each workload has one
+checkpoint owner.
 Every reactor must use the registered operational checkpoint store. Projectors retain their native
 application repository and its transaction for both model data and progress.
 
@@ -32,10 +32,7 @@ application repository and its transaction for both model data and progress.
 services.AddSingleton<IOperationalAuthorizer, ApplicationOperationsPolicy>();
 services.AddPortia()
     .AddFitz(configuration.GetSection("Fitz"), fitz =>
-        fitz.UseOperations("kv://application/portia/checkpoints", options =>
-        {
-            options.QuiescedWorkerCutover = true;
-        }))
+        fitz.UseOperations("kv://application/portia/checkpoints"))
     // Register the application's requests, projectors, reactors, and workers as usual.
     .AddAdminMcpHttp();
 
