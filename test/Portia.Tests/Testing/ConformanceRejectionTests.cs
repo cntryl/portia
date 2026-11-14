@@ -328,15 +328,18 @@ public sealed class ConformanceRejectionTests
     ///     rejected: two batches opened before either commits would both pass that check, so the later
     ///     commit silently overwrites the earlier one.
     /// </summary>
-    [Fact]
-    public async Task ShouldRejectProjectionProbeGivenCheckpointComparedOnlyWhenBatchOpens()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(500)]
+    public async Task ShouldRejectProjectionProbeGivenCheckpointComparedOnlyWhenBatchOpens(int staleOpenDelayMilliseconds)
     {
         // Arrange
-        using var probe = new ShapedProjectionProbe(ProjectionStoreShape.ChecksCheckpointOnlyAtBegin);
+        using var probe = new ShapedProjectionProbe(ProjectionStoreShape.ChecksCheckpointOnlyAtBegin, staleOpenDelayMilliseconds);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            ProjectionStoreConformance.VerifyAsync(probe).AsTask());
+            ProjectionStoreConformance.VerifyAsync(probe, timeout.Token).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);
@@ -722,13 +725,17 @@ public sealed class ConformanceRejectionTests
             throw new InvalidOperationException("The suite must reject the identities before opening a session.");
     }
 
-    sealed class ShapedProjectionProbe(ProjectionStoreShape shape) : IProjectionStoreConformanceProbe, IDisposable
+    sealed class ShapedProjectionProbe(ProjectionStoreShape shape, int staleOpenDelayMilliseconds = 0)
+        : IProjectionStoreConformanceProbe, IDisposable
     {
         readonly Lock _gate = new();
         readonly Dictionary<CheckpointIdentity, (string? Value, ProjectionCheckpoint Checkpoint)> _states = [];
         readonly SemaphoreSlim _writer = new(1, 1);
+        volatile bool _winnerStaged;
+        TaskCompletionSource _overlappingBatchOpened = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         ProjectionStoreShape Shape => shape;
+        TimeSpan StaleOpenDelay => TimeSpan.FromMilliseconds(staleOpenDelayMilliseconds);
 
         public void Dispose() => _writer.Dispose();
 
@@ -742,6 +749,8 @@ public sealed class ConformanceRejectionTests
         {
             lock (_gate)
                 _states.Clear();
+            _winnerStaged = false;
+            _overlappingBatchOpened = new(TaskCreationOptions.RunContinuationsAsynchronously);
             return ValueTask.CompletedTask;
         }
 
@@ -775,6 +784,9 @@ public sealed class ConformanceRejectionTests
             public async ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context,
                 CancellationToken ct = default)
             {
+                var overlapping = _probe.Shape == ProjectionStoreShape.ChecksCheckpointOnlyAtBegin && _probe._winnerStaged;
+                if (overlapping)
+                    await Task.Delay(_probe.StaleOpenDelay, ct);
                 var locked = false;
                 if (_probe.Shape == ProjectionStoreShape.LocksAtBegin)
                 {
@@ -791,6 +803,11 @@ public sealed class ConformanceRejectionTests
                 }
 
                 _batch = new Batch(this, context, locked);
+                if (overlapping)
+                {
+                    _probe._winnerStaged = false;
+                    _ = _probe._overlappingBatchOpened.TrySetResult();
+                }
                 return _batch;
             }
 
@@ -799,6 +816,8 @@ public sealed class ConformanceRejectionTests
             public ValueTask StageValueAsync(string value, CancellationToken ct = default)
             {
                 _batch!.Value = value;
+                if (_probe.Shape == ProjectionStoreShape.ChecksCheckpointOnlyAtBegin && value == "winner")
+                    _probe._winnerStaged = true;
                 return ValueTask.CompletedTask;
             }
 
@@ -824,19 +843,21 @@ public sealed class ConformanceRejectionTests
 
                 public bool FailNext { get; set; }
 
-                public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+                public async ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
                 {
                     // Like a database transaction, a locking batch ends at commit whether or not it succeeds.
                     try
                     {
+                        // Inject the defective overlap explicitly: a delayed or unscheduled stale
+                        // opener must still observe the pre-commit checkpoint before the winner commits.
+                        if (session._probe.Shape == ProjectionStoreShape.ChecksCheckpointOnlyAtBegin && Value == "winner")
+                            await session._probe._overlappingBatchOpened.Task.WaitAsync(ct);
                         Commit(checkpoint);
                     }
                     finally
                     {
                         Unlock();
                     }
-
-                    return ValueTask.CompletedTask;
                 }
 
                 public ValueTask DisposeAsync()
