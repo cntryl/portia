@@ -1,7 +1,7 @@
 namespace Cntryl.Portia;
 
 // Framework identities are persisted as UTF-8 fields separated by NUL. Reject ambiguous text at
-// construction rather than changing the existing durable key format for ordinary identities.
+// construction so every accepted identity has distinct durable key bytes.
 static class IdentityText
 {
     public static string Require(string value, string parameterName)

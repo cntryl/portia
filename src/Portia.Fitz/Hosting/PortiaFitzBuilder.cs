@@ -28,22 +28,19 @@ public sealed class PortiaFitzBuilder
     string? _processorStatusNamespace;
 
     /// <summary>
-    /// Enables durable diagnosis and worker-owned recovery after a quiesced cutover. Reuses the
-    /// legacy checkpoint resource derivation and keys with synchronous completion receipts.
+    /// Enables durable diagnosis and worker-owned recovery with synchronous completion receipts.
+    /// Operations owns the reactor checkpoint registration for this host.
     /// </summary>
-    public PortiaFitzBuilder UseOperations(string checkpointBaseRoute, Action<OperationalOptions> configure)
+    public PortiaFitzBuilder UseOperations(string checkpointBaseRoute, Action<OperationalOptions>? configure = null)
     {
-        ArgumentNullException.ThrowIfNull(configure);
         var route = FitzKvCheckpoints.Route(checkpointBaseRoute, nameof(checkpointBaseRoute));
         if (_checkpointRoute is not null || _operations
             || _application.Services.Any(s => s.ServiceType == typeof(IProjectionCheckpointStore)
                 || s.ServiceType == typeof(IOperationalStore)))
-            throw new InvalidOperationException("Operations conflicts with an existing checkpoint or operational registration. Quiesce legacy owners before cutover.");
+            throw new InvalidOperationException("Operations conflicts with an existing checkpoint or operational registration.");
         var options = new OperationalOptions();
-        configure(options);
+        configure?.Invoke(options);
         options.Validate();
-        if (!options.QuiescedWorkerCutover)
-            throw new InvalidOperationException("UseOperations requires an explicitly acknowledged quiesced worker cutover.");
         _operations = true;
         _checkpointRoute = route;
         _checkpointDurability = KvDurability.Sync;
@@ -259,7 +256,7 @@ public sealed class PortiaFitzBuilder
     public PortiaFitzBuilder UseKvCheckpoints(string route, KvDurability durability)
     {
         if (_operations)
-            throw new InvalidOperationException("Legacy checkpoint registrations cannot coexist with operations.");
+            throw new InvalidOperationException("Independent checkpoint registrations cannot coexist with operations.");
         var validated = FitzKvCheckpoints.Route(route, nameof(route));
         _ = FitzKvCheckpoints.RequireDurability(durability);
         if (_checkpointRoute is not null)

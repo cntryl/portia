@@ -149,7 +149,6 @@ static Cntryl.Portia.PortiaHttpBinding.HasFormBody(Microsoft.AspNetCore.Http.Htt
 static Cntryl.Portia.PortiaHttpBinding.ReadForm(Microsoft.AspNetCore.Http.IFormCollection! form, string! name, bool emptyIsMissing) -> string?
 static Cntryl.Portia.PortiaHttpBinding.ReadFormBodyAsync(Microsoft.AspNetCore.Http.HttpContext! context, System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask<Microsoft.AspNetCore.Http.IFormCollection!>
 static Cntryl.Portia.PortiaHttpBinding.TryParseFormBoolean(string? value, out bool result) -> bool
-static Cntryl.Portia.PortiaHttpBinding.HasBodyMember<TRequest, TValue>(System.Text.Json.JsonElement body, System.Text.Json.JsonSerializerOptions! options, int memberIndex, string! fallbackName) -> bool
 Cntryl.Portia.PortiaHttpMember
 Cntryl.Portia.PortiaHttpMember.Name.get -> string!
 Cntryl.Portia.PortiaHttpMember.PortiaHttpMember(string! name, string! source, bool scalar) -> void
@@ -165,7 +164,6 @@ Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaType.get -> System.Func<System.Type
 Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaType.set -> void
 Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaCollectionElementIsNullable.get -> System.Func<System.Type!, System.Type!, bool?>?
 Cntryl.Portia.PortiaHttpOptions.OpenApiSchemaCollectionElementIsNullable.set -> void
-static Cntryl.Portia.PortiaHttpBinding.ValidateRoutedBody<TRequest, TValue>(System.Text.Json.JsonElement body, System.Text.Json.JsonSerializerOptions! options, int memberIndex, string! fallbackName, TValue expected) -> void
 Cntryl.Portia.PortiaOpenApiOperation.RequestType.get -> System.Type?
 Cntryl.Portia.PortiaOpenApiOperation.RequestType.init -> void
 static Cntryl.Portia.PortiaHttpBinding.HasBodyMember<TRequest, TValue>(System.Text.Json.JsonElement body, System.Text.Json.JsonSerializerOptions! options, int memberIndex, string! memberName, string! fallbackName) -> bool

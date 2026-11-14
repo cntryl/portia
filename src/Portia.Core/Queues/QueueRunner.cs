@@ -179,8 +179,7 @@ public sealed class QueueRunner(
                     }
                 }
                 catch (Exception ex) when (!ct.IsCancellationRequested &&
-                                           ex is not (TerminalHandlerFailureException or
-                                               TerminalHandlerMissingException))
+                                           ex is not TerminalHandlerFailureException)
                 {
                     if (ex is InvalidRequestTransportException mismatch)
                     {

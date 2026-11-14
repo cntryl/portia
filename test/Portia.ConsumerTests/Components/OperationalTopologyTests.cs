@@ -15,7 +15,7 @@ public sealed class OperationalTopologyTests
             .AddReactor<FirstReactor>("first", WorkloadScope.Global)
             .AddReactor<TenantFirstReactor>("tenant", WorkloadScope.PerTenant)
             .AddFitz(new Cntryl.Fitz.ClientConfig(new Uri("ws://127.0.0.1:1/ws")), fitz =>
-                fitz.UseOperations("kv://test/state/progress", options => options.QuiescedWorkerCutover = true));
+                fitz.UseOperations("kv://test/state/progress"));
         // These processors have unresolved application dependencies and Fitz is unreachable.
         // Describing generated registration metadata must require neither of them.
         using var provider = services.BuildServiceProvider();

@@ -245,8 +245,7 @@ sealed class FitzApplicationWorkers(
             {
                 break;
             }
-            catch (Exception ex) when (ex is TerminalHandlerFailureException or TerminalHandlerMissingException or
-                                           QueueConfigurationException)
+            catch (Exception ex) when (ex is TerminalHandlerFailureException or QueueConfigurationException)
             {
                 throw;
             }

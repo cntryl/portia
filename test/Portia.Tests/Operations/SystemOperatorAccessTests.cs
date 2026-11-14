@@ -78,7 +78,7 @@ public sealed class SystemOperatorAccessTests
         _ = services.AddSingleton<IApplicationTopology>(topology);
         _ = services.AddSingleton<IOperationalAuthorizer, PermissivePolicy>();
         _ = services.AddPortia().UseFitzClient(client, fitz => fitz.DisableRequestWorkers().UseOperations(
-            "kv://system-operator-tests/portia/checkpoints", options => options.QuiescedWorkerCutover = true));
+            "kv://system-operator-tests/portia/checkpoints"));
 
         // Act
         using var provider = services.BuildServiceProvider();

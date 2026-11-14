@@ -12,7 +12,7 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
     readonly IKvClient _client;
     readonly string _route;
 
-    /// <summary>Creates a journal using the same base route as the quiesced legacy checkpoint store.</summary>
+    /// <summary>Creates a journal using the application-configured checkpoint base route.</summary>
     public FitzOperationalStore(IKvClient client, string checkpointBaseRoute)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
@@ -75,7 +75,7 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
     public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
         => FitzKvCheckpoints.LoadAsync(_client, FitzKvCheckpoints.WorkloadRoute(_route, identity), identity, ct);
 
-    /// <summary>Rejects unfenced legacy writes after operational cutover.</summary>
+    /// <summary>Rejects writes without the owning worker's fenced completion receipt.</summary>
     public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint, CancellationToken ct = default)
         => ValueTask.FromException(new InvalidOperationException(
             "Operational reactor progress must commit through its owning worker and completion receipt."));

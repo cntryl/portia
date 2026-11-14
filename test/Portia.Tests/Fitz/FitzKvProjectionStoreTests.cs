@@ -176,27 +176,27 @@ public sealed class FitzKvProjectionStoreTests
         Assert.Equal(new ProjectionCheckpoint(new EventCursor("9")), await store.LoadCheckpointAsync(Identity));
     }
 
-    /// <summary>Accepts 0.1.x progress at begin and upgrades it only when the next batch commits.</summary>
+    /// <summary>Unversioned checkpoint bytes are rejected before a projection can stage writes.</summary>
     [Fact]
-    public async Task ShouldRewriteCheckpointOnCommitGivenLegacyCheckpoint()
+    public async Task ShouldRejectUnversionedCheckpointGivenProjectionBegin()
     {
         // Arrange
         var client = new FakeKvClient();
-        var legacy = new byte[sizeof(ulong)];
-        BinaryPrimitives.WriteUInt64BigEndian(legacy, 8);
+        var unversioned = new byte[sizeof(ulong)];
+        BinaryPrimitives.WriteUInt64BigEndian(unversioned, 8);
         var key = FitzKvCheckpoints.Key(Identity);
-        client.Committed[Encoding.UTF8.GetString(key.Span)] = legacy;
+        client.Committed[Encoding.UTF8.GetString(key.Span)] = unversioned;
         var store = new TotalsRepository(client, "kv://portia/state/orders");
 
         // Act
-        await using (var batch = await store.BeginAsync(new ProjectionBatchContext(
-                         Identity, new ProjectionCheckpoint(new EventCursor("8")))))
-            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("opaque-next")));
+        var exception = await Record.ExceptionAsync(async () =>
+            await store.BeginAsync(new ProjectionBatchContext(Identity, new ProjectionCheckpoint(new EventCursor("8")))));
 
         // Assert
-        Assert.Equal(new ProjectionCheckpoint(new EventCursor("opaque-next")),
-            await store.LoadCheckpointAsync(Identity));
-        Assert.Equal("portia-checkpoint-v1\0opaque-next", Encoding.UTF8.GetString(client.Read(key)!));
+        Assert.IsType<InvalidDataException>(exception);
+        Assert.Equal(unversioned, client.Read(key));
+        Assert.Equal(0, client.LastTransaction.Commits);
+        Assert.Equal(1, client.LastTransaction.Disposals);
     }
 
     /// <summary>

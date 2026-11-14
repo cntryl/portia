@@ -35,8 +35,7 @@ static partial class Program
         builder.Services.AddSingleton(new Control(mode, signal));
         builder.Services.AddSingleton<IOperationalAuthorizer, Policy>();
         builder.Services.AddPortia().UseFitzClient(client, fitz => fitz.DisableRequestWorkers()
-                .UseFleet(new FleetRunOptions { MembershipSelector = "lease://qualification/portia-members/*" }).UseOperations(Route,
-                options => options.QuiescedWorkerCutover = true))
+                .UseFleet(new FleetRunOptions { MembershipSelector = "lease://qualification/portia-members/*" }).UseOperations(Route))
             .AddReactor<DurabilityReactor>(Target.Processor, WorkloadScope.Global,
                 options => options.PollInterval = TimeSpan.FromMilliseconds(20)).AddWorkers();
         using var host = builder.Build();

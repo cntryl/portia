@@ -107,8 +107,8 @@ public sealed class MultiTenantRunner
                     }
                     else
                     {
-                        // The legacy contract has no cursor. Re-reading its complete snapshot on
-                        // reconnect closes the gap between separately opened watch streams.
+                        // Snapshot/watch directories have no resumable cursor. Re-reading complete
+                        // membership on reconnect closes the gap between separately opened watches.
                         var snapshot = new HashSet<TenantId>();
                         await foreach (var tenantId in _tenantDirectory.GetActiveTenantsAsync(ct).WithCancellation(ct)
                                            .ConfigureAwait(false))

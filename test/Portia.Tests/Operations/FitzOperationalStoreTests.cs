@@ -5,23 +5,23 @@ public sealed class FitzOperationalStoreTests
 {
     static readonly OperationalTarget Target = new("reactor", "stream://tenant/orders/*", OperationalScope.ForTenant(new TenantId("tenant")));
 
-    /// <summary>A quiesced cutover reads existing checkpoint keys and preserves their opaque values.</summary>
+    /// <summary>Unfenced writes cannot replace authoritative operational progress.</summary>
     [Fact]
-    public async Task ShouldPreserveLegacyProgressGivenUnfencedWriteAttempt()
+    public async Task ShouldPreserveProgressGivenUnfencedWriteAttempt()
     {
         // Arrange
         var client = new FakeKvClient();
-        var old = new FitzKvCheckpointStore(client, "kv://test/state/progress", KvDurability.Sync);
+        var checkpoints = new FitzKvCheckpointStore(client, "kv://test/state/progress", KvDurability.Sync);
         var checkpoint = new ProjectionCheckpoint(new EventCursor("opaque/not-a-number:99"));
-        await old.SaveAsync(Target.Identity, checkpoint);
-
-        // Act
+        await checkpoints.SaveAsync(Target.Identity, checkpoint);
         var operations = new FitzOperationalStore(client, "kv://test/state/progress");
 
+        // Act
+        var exception = await Record.ExceptionAsync(async () => await operations.SaveAsync(Target.Identity, ProjectionCheckpoint.Start));
+
         // Assert
+        Assert.IsType<InvalidOperationException>(exception);
         Assert.Equal(checkpoint, await operations.LoadAsync(Target.Identity));
-        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => operations.SaveAsync(Target.Identity, ProjectionCheckpoint.Start).AsTask());
-        Assert.Equal(checkpoint, await old.LoadAsync(Target.Identity));
     }
 
     /// <summary>A failed commit preserves both progress and running evidence, and rejects stale owners.</summary>
