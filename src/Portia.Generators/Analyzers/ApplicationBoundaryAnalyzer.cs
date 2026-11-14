@@ -72,9 +72,10 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
                     || name.EndsWith(".Abstractions", StringComparison.Ordinal)));
             var frameworkName = name.StartsWith("Cntryl.Portia.", StringComparison.Ordinal) ? name.Substring(7) : name;
             var commonBehavior = project.Role == "Common" && frameworkName.StartsWith("Portia.", StringComparison.Ordinal)
-                && frameworkName is not ("Portia.Abstractions" or "Portia.Storage.Abstractions");
+                && frameworkName is not ("Portia.Abstractions" or "Portia.Storage.Abstractions" or "Portia.Communications.Abstractions");
             var infrastructure = frameworkName is "Portia.Fitz" or "Portia.AspNetCore" or "Portia.Mcp.AspNetCore"
-                or "Portia.Admin.Mcp.AspNetCore" or "Portia.Storage.Aws"
+                or "Portia.Admin.Mcp.AspNetCore" or "Portia.Storage.Aws" or "Portia.Storage.Azure" or "Portia.Storage.Gcp"
+                or "Portia.Communications.Aws" or "Portia.Communications.Azure" or "Portia.Communications.Twilio"
                 || name is "Cntryl.Fitz.Core" or "Cntryl.Fitz.Extensions"
                 || name == "Cntryl.Cassie" && !(project.Role == "Core" && cassieApi);
             if (applicationDependency || commonBehavior || infrastructure)

@@ -37,6 +37,11 @@
     <ProjectReference Include="../../src/Portia.Cassie/Portia.Cassie.csproj"/>
     <ProjectReference Include="../../src/Portia.Testing/Portia.Testing.csproj"/>
     <ProjectReference Include="../../src/Portia.Storage.Aws/Portia.Storage.Aws.csproj"/>
+    <ProjectReference Include="../../src/Portia.Storage.Azure/Portia.Storage.Azure.csproj"/>
+    <ProjectReference Include="../../src/Portia.Storage.Gcp/Portia.Storage.Gcp.csproj"/>
+    <ProjectReference Include="../../src/Portia.Communications.Aws/Portia.Communications.Aws.csproj"/>
+    <ProjectReference Include="../../src/Portia.Communications.Azure/Portia.Communications.Azure.csproj"/>
+    <ProjectReference Include="../../src/Portia.Communications.Twilio/Portia.Communications.Twilio.csproj"/>
     <ProjectReference Include="../../src/Portia.Telemetry/Portia.Telemetry.csproj"/>
     <ProjectReference Include="../../src/Portia.DependencyInjection/Portia.DependencyInjection.csproj"/>
     <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj"/>

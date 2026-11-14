@@ -1,0 +1,28 @@
+#nullable enable
+Cntryl.Portia.Communications.Aws.AwsMailBuilder
+Cntryl.Portia.Communications.Aws.AwsMailBuilder.AwsMailBuilder() -> void
+Cntryl.Portia.Communications.Aws.AwsMailBuilder.UseClient(Amazon.SimpleEmailV2.IAmazonSimpleEmailServiceV2! client) -> Cntryl.Portia.Communications.Aws.AwsMailBuilder!
+Cntryl.Portia.Communications.Aws.AwsMailEventIngester
+Cntryl.Portia.Communications.Aws.AwsMailEventIngester.AwsMailEventIngester(Cntryl.Portia.Communications.IDeliveryEventReceiver! receiver) -> void
+Cntryl.Portia.Communications.Aws.AwsMailEventIngester.IngestAsync(string! json, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Cntryl.Portia.Communications.Aws.AwsMailIdentity
+Cntryl.Portia.Communications.Aws.AwsMailIdentity.<Clone>$() -> Cntryl.Portia.Communications.Aws.AwsMailIdentity!
+Cntryl.Portia.Communications.Aws.AwsMailIdentity.AwsMailIdentity(string! FromAddress, string? ConfigurationSetName = null) -> void
+Cntryl.Portia.Communications.Aws.AwsMailIdentity.ConfigurationSetName.get -> string?
+Cntryl.Portia.Communications.Aws.AwsMailIdentity.ConfigurationSetName.init -> void
+Cntryl.Portia.Communications.Aws.AwsMailIdentity.Deconstruct(out string! FromAddress, out string? ConfigurationSetName) -> void
+Cntryl.Portia.Communications.Aws.AwsMailIdentity.Equals(Cntryl.Portia.Communications.Aws.AwsMailIdentity? other) -> bool
+Cntryl.Portia.Communications.Aws.AwsMailIdentity.FromAddress.get -> string!
+Cntryl.Portia.Communications.Aws.AwsMailIdentity.FromAddress.init -> void
+Cntryl.Portia.Communications.Aws.AwsMailSender
+Cntryl.Portia.Communications.Aws.AwsMailSender.AwsMailSender(Amazon.SimpleEmailV2.IAmazonSimpleEmailServiceV2! client, Cntryl.Portia.Communications.Aws.IAwsMailTenantResolver! tenantResolver) -> void
+Cntryl.Portia.Communications.Aws.AwsMailSender.SendAsync(Cntryl.Portia.TenantId tenant, Cntryl.Portia.Communications.SendId id, Cntryl.Portia.Communications.MailMessage! message, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Communications.SendOutcome!>
+Cntryl.Portia.Communications.Aws.AwsMailServiceCollectionExtensions
+Cntryl.Portia.Communications.Aws.IAwsMailTenantResolver
+Cntryl.Portia.Communications.Aws.IAwsMailTenantResolver.ResolveAsync(Cntryl.Portia.TenantId tenantId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Communications.Aws.AwsMailIdentity!>
+override Cntryl.Portia.Communications.Aws.AwsMailIdentity.Equals(object? obj) -> bool
+override Cntryl.Portia.Communications.Aws.AwsMailIdentity.GetHashCode() -> int
+override Cntryl.Portia.Communications.Aws.AwsMailIdentity.ToString() -> string!
+static Cntryl.Portia.Communications.Aws.AwsMailIdentity.operator !=(Cntryl.Portia.Communications.Aws.AwsMailIdentity? left, Cntryl.Portia.Communications.Aws.AwsMailIdentity? right) -> bool
+static Cntryl.Portia.Communications.Aws.AwsMailIdentity.operator ==(Cntryl.Portia.Communications.Aws.AwsMailIdentity? left, Cntryl.Portia.Communications.Aws.AwsMailIdentity? right) -> bool
+static Cntryl.Portia.Communications.Aws.AwsMailServiceCollectionExtensions.AddAwsMail(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Cntryl.Portia.Communications.Aws.AwsMailBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

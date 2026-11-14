@@ -1,0 +1,24 @@
+#nullable enable
+Cntryl.Portia.Communications.Azure.AzureMailBuilder
+Cntryl.Portia.Communications.Azure.AzureMailBuilder.AzureMailBuilder() -> void
+Cntryl.Portia.Communications.Azure.AzureMailBuilder.UseConnectionString(string! connectionString) -> Cntryl.Portia.Communications.Azure.AzureMailBuilder!
+Cntryl.Portia.Communications.Azure.AzureMailBuilder.UseEndpoint(System.Uri! endpoint, Azure.Core.TokenCredential! credential) -> Cntryl.Portia.Communications.Azure.AzureMailBuilder!
+Cntryl.Portia.Communications.Azure.AzureMailIdentity
+Cntryl.Portia.Communications.Azure.AzureMailIdentity.<Clone>$() -> Cntryl.Portia.Communications.Azure.AzureMailIdentity!
+Cntryl.Portia.Communications.Azure.AzureMailIdentity.AzureMailIdentity(string! FromAddress) -> void
+Cntryl.Portia.Communications.Azure.AzureMailIdentity.Deconstruct(out string! FromAddress) -> void
+Cntryl.Portia.Communications.Azure.AzureMailIdentity.Equals(Cntryl.Portia.Communications.Azure.AzureMailIdentity? other) -> bool
+Cntryl.Portia.Communications.Azure.AzureMailIdentity.FromAddress.get -> string!
+Cntryl.Portia.Communications.Azure.AzureMailIdentity.FromAddress.init -> void
+Cntryl.Portia.Communications.Azure.AzureMailSender
+Cntryl.Portia.Communications.Azure.AzureMailSender.AzureMailSender(Azure.Communication.Email.EmailClient! client, Cntryl.Portia.Communications.Azure.IAzureMailTenantResolver! tenantResolver) -> void
+Cntryl.Portia.Communications.Azure.AzureMailSender.SendAsync(Cntryl.Portia.TenantId tenant, Cntryl.Portia.Communications.SendId id, Cntryl.Portia.Communications.MailMessage! message, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Communications.SendOutcome!>
+Cntryl.Portia.Communications.Azure.AzureMailServiceCollectionExtensions
+Cntryl.Portia.Communications.Azure.IAzureMailTenantResolver
+Cntryl.Portia.Communications.Azure.IAzureMailTenantResolver.ResolveAsync(Cntryl.Portia.TenantId tenantId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Communications.Azure.AzureMailIdentity!>
+override Cntryl.Portia.Communications.Azure.AzureMailIdentity.Equals(object? obj) -> bool
+override Cntryl.Portia.Communications.Azure.AzureMailIdentity.GetHashCode() -> int
+override Cntryl.Portia.Communications.Azure.AzureMailIdentity.ToString() -> string!
+static Cntryl.Portia.Communications.Azure.AzureMailIdentity.operator !=(Cntryl.Portia.Communications.Azure.AzureMailIdentity? left, Cntryl.Portia.Communications.Azure.AzureMailIdentity? right) -> bool
+static Cntryl.Portia.Communications.Azure.AzureMailIdentity.operator ==(Cntryl.Portia.Communications.Azure.AzureMailIdentity? left, Cntryl.Portia.Communications.Azure.AzureMailIdentity? right) -> bool
+static Cntryl.Portia.Communications.Azure.AzureMailServiceCollectionExtensions.AddAzureMail(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Cntryl.Portia.Communications.Azure.AzureMailBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

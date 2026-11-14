@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Vendor-neutral outbound mail and SMS contracts for Portia: senders, honest submission outcomes, and delivery events.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Portia.Communications.Aws"/>
+    <InternalsVisibleTo Include="Portia.Communications.Azure"/>
+    <InternalsVisibleTo Include="Portia.Communications.Twilio"/>
+    <InternalsVisibleTo Include="Portia.Tests"/>
+  </ItemGroup>
+</Project>

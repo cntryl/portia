@@ -7,6 +7,10 @@
     <PackageVersion Include="JsonSchema.Net" Version="9.7.0" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="AWSSDK.S3" Version="4.1.0" />
+    <PackageVersion Include="AWSSDK.SimpleEmailV2" Version="4.1.0" />
+    <PackageVersion Include="Azure.Storage.Blobs" Version="12.30.1" />
+    <PackageVersion Include="Azure.Communication.Email" Version="1.1.0" />
+    <PackageVersion Include="Google.Cloud.Storage.V1" Version="5.0.0" />
     <PackageVersion Include="Cntryl.Conventions.Testing.Analyzers" Version="1.0.1" />
     <PackageVersion Include="Cntryl.Conventions.Testing.CodeFixes" Version="1.0.1" />
     <PackageVersion Include="Cntryl.Fitz.Core" Version="4.2.0" />

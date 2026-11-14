@@ -1,0 +1,99 @@
+#nullable enable
+Cntryl.Portia.Communications.CommunicationChannel
+Cntryl.Portia.Communications.CommunicationChannel.Mail = 1 -> Cntryl.Portia.Communications.CommunicationChannel
+Cntryl.Portia.Communications.CommunicationChannel.Sms = 2 -> Cntryl.Portia.Communications.CommunicationChannel
+Cntryl.Portia.Communications.DeliveryEvent
+Cntryl.Portia.Communications.DeliveryEvent.<Clone>$() -> Cntryl.Portia.Communications.DeliveryEvent!
+Cntryl.Portia.Communications.DeliveryEvent.Channel.get -> Cntryl.Portia.Communications.CommunicationChannel
+Cntryl.Portia.Communications.DeliveryEvent.Channel.init -> void
+Cntryl.Portia.Communications.DeliveryEvent.Deconstruct(out Cntryl.Portia.TenantId Tenant, out Cntryl.Portia.Communications.CommunicationChannel Channel, out Cntryl.Portia.Communications.SendId Id, out Cntryl.Portia.Communications.DeliveryEventKind Kind, out System.DateTimeOffset OccurredAt) -> void
+Cntryl.Portia.Communications.DeliveryEvent.DeliveryEvent(Cntryl.Portia.TenantId Tenant, Cntryl.Portia.Communications.CommunicationChannel Channel, Cntryl.Portia.Communications.SendId Id, Cntryl.Portia.Communications.DeliveryEventKind Kind, System.DateTimeOffset OccurredAt) -> void
+Cntryl.Portia.Communications.DeliveryEvent.Equals(Cntryl.Portia.Communications.DeliveryEvent? other) -> bool
+Cntryl.Portia.Communications.DeliveryEvent.Id.get -> Cntryl.Portia.Communications.SendId
+Cntryl.Portia.Communications.DeliveryEvent.Id.init -> void
+Cntryl.Portia.Communications.DeliveryEvent.Kind.get -> Cntryl.Portia.Communications.DeliveryEventKind
+Cntryl.Portia.Communications.DeliveryEvent.Kind.init -> void
+Cntryl.Portia.Communications.DeliveryEvent.OccurredAt.get -> System.DateTimeOffset
+Cntryl.Portia.Communications.DeliveryEvent.OccurredAt.init -> void
+Cntryl.Portia.Communications.DeliveryEvent.Tenant.get -> Cntryl.Portia.TenantId
+Cntryl.Portia.Communications.DeliveryEvent.Tenant.init -> void
+Cntryl.Portia.Communications.DeliveryEventKind
+Cntryl.Portia.Communications.DeliveryEventKind.Bounced = 4 -> Cntryl.Portia.Communications.DeliveryEventKind
+Cntryl.Portia.Communications.DeliveryEventKind.Complained = 5 -> Cntryl.Portia.Communications.DeliveryEventKind
+Cntryl.Portia.Communications.DeliveryEventKind.Delayed = 2 -> Cntryl.Portia.Communications.DeliveryEventKind
+Cntryl.Portia.Communications.DeliveryEventKind.Delivered = 3 -> Cntryl.Portia.Communications.DeliveryEventKind
+Cntryl.Portia.Communications.DeliveryEventKind.Failed = 8 -> Cntryl.Portia.Communications.DeliveryEventKind
+Cntryl.Portia.Communications.DeliveryEventKind.Rejected = 6 -> Cntryl.Portia.Communications.DeliveryEventKind
+Cntryl.Portia.Communications.DeliveryEventKind.Sent = 1 -> Cntryl.Portia.Communications.DeliveryEventKind
+Cntryl.Portia.Communications.DeliveryEventKind.Undelivered = 7 -> Cntryl.Portia.Communications.DeliveryEventKind
+Cntryl.Portia.Communications.IDeliveryEventReceiver
+Cntryl.Portia.Communications.IDeliveryEventReceiver.ReceiveAsync(Cntryl.Portia.Communications.DeliveryEvent! deliveryEvent, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.Communications.IMailSender
+Cntryl.Portia.Communications.IMailSender.SendAsync(Cntryl.Portia.TenantId tenant, Cntryl.Portia.Communications.SendId id, Cntryl.Portia.Communications.MailMessage! message, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Communications.SendOutcome!>
+Cntryl.Portia.Communications.ISmsSender
+Cntryl.Portia.Communications.ISmsSender.SendAsync(Cntryl.Portia.TenantId tenant, Cntryl.Portia.Communications.SendId id, Cntryl.Portia.Communications.SmsMessage! message, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Communications.SendOutcome!>
+Cntryl.Portia.Communications.MailMessage
+Cntryl.Portia.Communications.MailMessage.Html.get -> string?
+Cntryl.Portia.Communications.MailMessage.Html.init -> void
+Cntryl.Portia.Communications.MailMessage.MailMessage(System.Collections.Generic.IEnumerable<string!>! to, string! subject, string! text) -> void
+Cntryl.Portia.Communications.MailMessage.ReplyTo.get -> string?
+Cntryl.Portia.Communications.MailMessage.ReplyTo.init -> void
+Cntryl.Portia.Communications.MailMessage.Subject.get -> string!
+Cntryl.Portia.Communications.MailMessage.Text.get -> string!
+Cntryl.Portia.Communications.MailMessage.To.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Cntryl.Portia.Communications.SendId
+Cntryl.Portia.Communications.SendId.Equals(Cntryl.Portia.Communications.SendId other) -> bool
+Cntryl.Portia.Communications.SendId.SendId() -> void
+Cntryl.Portia.Communications.SendId.SendId(string! value) -> void
+Cntryl.Portia.Communications.SendId.Value.get -> string!
+Cntryl.Portia.Communications.SendOutcome
+Cntryl.Portia.Communications.SendOutcome.<Clone>$() -> Cntryl.Portia.Communications.SendOutcome!
+Cntryl.Portia.Communications.SendOutcome.Equals(Cntryl.Portia.Communications.SendOutcome? other) -> bool
+Cntryl.Portia.Communications.SendOutcome.ProviderReference.get -> string?
+Cntryl.Portia.Communications.SendOutcome.RejectionReason.get -> Cntryl.Portia.Communications.SendRejectionReason?
+Cntryl.Portia.Communications.SendOutcome.Status.get -> Cntryl.Portia.Communications.SendStatus
+Cntryl.Portia.Communications.SendRejectionReason
+Cntryl.Portia.Communications.SendRejectionReason.ContentRejected = 5 -> Cntryl.Portia.Communications.SendRejectionReason
+Cntryl.Portia.Communications.SendRejectionReason.InvalidRecipient = 2 -> Cntryl.Portia.Communications.SendRejectionReason
+Cntryl.Portia.Communications.SendRejectionReason.OptedOut = 3 -> Cntryl.Portia.Communications.SendRejectionReason
+Cntryl.Portia.Communications.SendRejectionReason.Other = 1 -> Cntryl.Portia.Communications.SendRejectionReason
+Cntryl.Portia.Communications.SendRejectionReason.SenderNotAuthorized = 6 -> Cntryl.Portia.Communications.SendRejectionReason
+Cntryl.Portia.Communications.SendRejectionReason.Suppressed = 4 -> Cntryl.Portia.Communications.SendRejectionReason
+Cntryl.Portia.Communications.SendStatus
+Cntryl.Portia.Communications.SendStatus.Accepted = 1 -> Cntryl.Portia.Communications.SendStatus
+Cntryl.Portia.Communications.SendStatus.Rejected = 2 -> Cntryl.Portia.Communications.SendStatus
+Cntryl.Portia.Communications.SendStatus.Unknown = 3 -> Cntryl.Portia.Communications.SendStatus
+Cntryl.Portia.Communications.SendThrottledException
+Cntryl.Portia.Communications.SendThrottledException.RetryAfter.get -> System.TimeSpan?
+Cntryl.Portia.Communications.SendThrottledException.SendThrottledException() -> void
+Cntryl.Portia.Communications.SendThrottledException.SendThrottledException(System.TimeSpan? retryAfter) -> void
+Cntryl.Portia.Communications.SendThrottledException.SendThrottledException(string! message) -> void
+Cntryl.Portia.Communications.SendThrottledException.SendThrottledException(string! message, System.Exception! innerException) -> void
+Cntryl.Portia.Communications.SmsMessage
+Cntryl.Portia.Communications.SmsMessage.Body.get -> string!
+Cntryl.Portia.Communications.SmsMessage.SmsMessage(string! to, string! body) -> void
+Cntryl.Portia.Communications.SmsMessage.To.get -> string!
+const Cntryl.Portia.Communications.MailMessage.MaximumRecipients = 50 -> int
+const Cntryl.Portia.Communications.SendId.MaximumLength = 128 -> int
+const Cntryl.Portia.Communications.SmsMessage.MaximumBodyLength = 1600 -> int
+override Cntryl.Portia.Communications.DeliveryEvent.Equals(object? obj) -> bool
+override Cntryl.Portia.Communications.DeliveryEvent.GetHashCode() -> int
+override Cntryl.Portia.Communications.DeliveryEvent.ToString() -> string!
+override Cntryl.Portia.Communications.MailMessage.ToString() -> string!
+override Cntryl.Portia.Communications.SendId.GetHashCode() -> int
+override Cntryl.Portia.Communications.SendId.ToString() -> string!
+override Cntryl.Portia.Communications.SendOutcome.Equals(object? obj) -> bool
+override Cntryl.Portia.Communications.SendOutcome.GetHashCode() -> int
+override Cntryl.Portia.Communications.SendOutcome.ToString() -> string!
+override Cntryl.Portia.Communications.SmsMessage.ToString() -> string!
+static Cntryl.Portia.Communications.DeliveryEvent.operator !=(Cntryl.Portia.Communications.DeliveryEvent? left, Cntryl.Portia.Communications.DeliveryEvent? right) -> bool
+static Cntryl.Portia.Communications.DeliveryEvent.operator ==(Cntryl.Portia.Communications.DeliveryEvent? left, Cntryl.Portia.Communications.DeliveryEvent? right) -> bool
+static Cntryl.Portia.Communications.SendId.IsValid(string? value) -> bool
+static Cntryl.Portia.Communications.SendId.operator !=(Cntryl.Portia.Communications.SendId left, Cntryl.Portia.Communications.SendId right) -> bool
+static Cntryl.Portia.Communications.SendId.operator ==(Cntryl.Portia.Communications.SendId left, Cntryl.Portia.Communications.SendId right) -> bool
+static Cntryl.Portia.Communications.SendOutcome.Accepted(string? providerReference) -> Cntryl.Portia.Communications.SendOutcome!
+static Cntryl.Portia.Communications.SendOutcome.Rejected(Cntryl.Portia.Communications.SendRejectionReason reason) -> Cntryl.Portia.Communications.SendOutcome!
+static Cntryl.Portia.Communications.SendOutcome.Unknown.get -> Cntryl.Portia.Communications.SendOutcome!
+static Cntryl.Portia.Communications.SendOutcome.operator !=(Cntryl.Portia.Communications.SendOutcome? left, Cntryl.Portia.Communications.SendOutcome? right) -> bool
+static Cntryl.Portia.Communications.SendOutcome.operator ==(Cntryl.Portia.Communications.SendOutcome? left, Cntryl.Portia.Communications.SendOutcome? right) -> bool
+~override Cntryl.Portia.Communications.SendId.Equals(object obj) -> bool

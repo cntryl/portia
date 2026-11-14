@@ -1,0 +1,23 @@
+#nullable enable
+Cntryl.Portia.Communications.Twilio.ITwilioTenantResolver
+Cntryl.Portia.Communications.Twilio.ITwilioTenantResolver.ResolveAsync(Cntryl.Portia.TenantId tenantId, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Communications.Twilio.TwilioTenant!>
+Cntryl.Portia.Communications.Twilio.TwilioSmsBuilder
+Cntryl.Portia.Communications.Twilio.TwilioSmsBuilder.TwilioSmsBuilder() -> void
+Cntryl.Portia.Communications.Twilio.TwilioSmsBuilder.UseHttpClient(System.Net.Http.HttpClient! client) -> Cntryl.Portia.Communications.Twilio.TwilioSmsBuilder!
+Cntryl.Portia.Communications.Twilio.TwilioSmsBuilder.UseStatusCallbacks(System.Uri! publicAddress) -> Cntryl.Portia.Communications.Twilio.TwilioSmsBuilder!
+Cntryl.Portia.Communications.Twilio.TwilioSmsSender
+Cntryl.Portia.Communications.Twilio.TwilioSmsSender.SendAsync(Cntryl.Portia.TenantId tenant, Cntryl.Portia.Communications.SendId id, Cntryl.Portia.Communications.SmsMessage! message, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Communications.SendOutcome!>
+Cntryl.Portia.Communications.Twilio.TwilioSmsSender.TwilioSmsSender(System.Net.Http.HttpClient! client, Cntryl.Portia.Communications.Twilio.ITwilioTenantResolver! tenantResolver, System.Uri? statusCallbackAddress) -> void
+Cntryl.Portia.Communications.Twilio.TwilioSmsServiceCollectionExtensions
+Cntryl.Portia.Communications.Twilio.TwilioStatusCallbackEndpointRouteBuilderExtensions
+Cntryl.Portia.Communications.Twilio.TwilioTenant
+Cntryl.Portia.Communications.Twilio.TwilioTenant.AccountSid.get -> string!
+Cntryl.Portia.Communications.Twilio.TwilioTenant.ApiKeySecret.get -> string!
+Cntryl.Portia.Communications.Twilio.TwilioTenant.ApiKeySid.get -> string!
+Cntryl.Portia.Communications.Twilio.TwilioTenant.AuthToken.get -> string?
+Cntryl.Portia.Communications.Twilio.TwilioTenant.AuthToken.init -> void
+Cntryl.Portia.Communications.Twilio.TwilioTenant.Sender.get -> string!
+Cntryl.Portia.Communications.Twilio.TwilioTenant.TwilioTenant(string! accountSid, string! apiKeySid, string! apiKeySecret, string! sender) -> void
+override Cntryl.Portia.Communications.Twilio.TwilioTenant.ToString() -> string!
+static Cntryl.Portia.Communications.Twilio.TwilioSmsServiceCollectionExtensions.AddTwilioSms(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Cntryl.Portia.Communications.Twilio.TwilioSmsBuilder!>? configure = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Cntryl.Portia.Communications.Twilio.TwilioStatusCallbackEndpointRouteBuilderExtensions.MapTwilioStatusCallbacks(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! endpoints, string! pattern) -> Microsoft.AspNetCore.Builder.IEndpointConventionBuilder!

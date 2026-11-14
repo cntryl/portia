@@ -1,0 +1,13 @@
+global using System;
+global using System.Collections.Generic;
+global using System.Linq;
+global using System.Net;
+global using System.Text.Json;
+global using System.Threading;
+global using System.Threading.Tasks;
+global using Amazon.Runtime;
+global using Amazon.SimpleEmailV2;
+global using Amazon.SimpleEmailV2.Model;
+global using Cntryl.Portia;
+global using Cntryl.Portia.Communications;
+global using Microsoft.Extensions.DependencyInjection;

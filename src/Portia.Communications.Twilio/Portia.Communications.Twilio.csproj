@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Twilio SMS provider for Portia: one provider call per send, honest outcomes, and signature-verified status callbacks.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Portia.Communications.Abstractions/Portia.Communications.Abstractions.csproj"/>
+  </ItemGroup>
+</Project>

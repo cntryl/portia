@@ -6,4 +6,5 @@ global using System.Net.Http;
 global using System.Security.Cryptography;
 global using System.Threading;
 global using System.Threading.Tasks;
+global using Cntryl.Portia.Communications;
 global using Cntryl.Portia.Storage;
