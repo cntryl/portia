@@ -27,6 +27,8 @@ Cntryl.Portia.Testing.FakeSubmission<TMessage>.Message.get -> TMessage
 Cntryl.Portia.Testing.FakeSubmission<TMessage>.Message.init -> void
 Cntryl.Portia.Testing.FakeSubmission<TMessage>.Tenant.get -> Cntryl.Portia.TenantId
 Cntryl.Portia.Testing.FakeSubmission<TMessage>.Tenant.init -> void
+Cntryl.Portia.Testing.ProjectorScenario.Given(string! resource, params Cntryl.Portia.DomainEvent![]! events) -> Cntryl.Portia.Testing.ProjectorScenario!
+Cntryl.Portia.Testing.ReactorScenario.Given(string! resource, params Cntryl.Portia.DomainEvent![]! events) -> Cntryl.Portia.Testing.ReactorScenario!
 override Cntryl.Portia.Testing.FakeSubmission<TMessage>.Equals(object? obj) -> bool
 override Cntryl.Portia.Testing.FakeSubmission<TMessage>.GetHashCode() -> int
 override Cntryl.Portia.Testing.FakeSubmission<TMessage>.ToString() -> string!

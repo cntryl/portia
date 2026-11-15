@@ -123,6 +123,20 @@ Both component scenarios run a tenant-scoped component (`EventStreamPattern.ForT
 specific tenant, as hosting would bind it per tenant. For a tenant-scoped component, given events are
 placed on that tenant's streams.
 
+Given events are delivered from streams in the component's own realm and area, one stream per aggregate ID.
+When a component reads the resource of the stream an event came from, such as a composite
+`{ownerId}.{recordId}`, name the resource and the events arrive from that stream:
+
+```csharp
+var scenario = new ReactorScenario()
+    .Given($"{ownerId}.{recordId}", new RecordFiled(recordId))
+    .RespondTo<NotifyOwner>(Result.Success);
+```
+
+The call is the same for a single-realm component and a tenant-scoped one, because the realm still comes
+from the component's pattern. Bare events on a named resource form that stream's own aggregate. A resource
+the component's pattern excludes fails the run rather than silently delivering nothing.
+
 
 Event payload assertions compare public instance fields and publicly readable, non-indexed
 properties recursively. They exclude Portia metadata, static members, and private getters; ordered

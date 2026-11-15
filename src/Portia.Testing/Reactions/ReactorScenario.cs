@@ -35,6 +35,22 @@ public sealed class ReactorScenario
         return this;
     }
 
+    /// <summary>
+    ///     Adds events for the reactor to receive on a chosen stream resource, for a reactor that reads the
+    ///     resource of the stream an event came from. The realm and area still come from the reactor's pattern, so
+    ///     the same call serves a single-realm and a tenant-scoped reactor. Events without metadata are attached to
+    ///     one scenario aggregate per resource and numbered in order.
+    /// </summary>
+    /// <param name="resource">The resource segment of the stream the events are delivered from.</param>
+    /// <param name="events">The events, in delivery order.</param>
+    /// <returns>This scenario.</returns>
+    /// <exception cref="ArgumentException"><paramref name="resource" /> is not a valid stream segment.</exception>
+    public ReactorScenario Given(string resource, params DomainEvent[] events)
+    {
+        _history.Add(resource, events);
+        return this;
+    }
+
     /// <summary>Scripts the result every later <typeparamref name="TRequest" /> the reactor sends receives.</summary>
     /// <typeparam name="TRequest">The request type.</typeparam>
     /// <param name="result">The result to return.</param>
@@ -60,6 +76,9 @@ public sealed class ReactorScenario
     /// </summary>
     /// <param name="reactor">A reactor constructed with <see cref="Requests" />.</param>
     /// <param name="ct">A token that can cancel the run.</param>
+    /// <exception cref="InvalidOperationException">
+    ///     Events were given on a stream resource the reactor's pattern excludes.
+    /// </exception>
     /// <returns>A task that completes once every event has been reacted to.</returns>
     public async Task RunAsync(Reactor reactor, CancellationToken ct = default)
     {
