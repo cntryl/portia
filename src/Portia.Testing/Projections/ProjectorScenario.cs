@@ -33,11 +33,30 @@ public sealed class ProjectorScenario
     }
 
     /// <summary>
+    ///     Adds events for the projector to receive on a chosen stream resource, for a projector that reads the
+    ///     resource of the stream an event came from. The realm and area still come from the projector's pattern, so
+    ///     the same call serves a single-realm and a tenant-scoped projector. Events without metadata are attached to
+    ///     one scenario aggregate per resource and numbered in order.
+    /// </summary>
+    /// <param name="resource">The resource segment of the stream the events are delivered from.</param>
+    /// <param name="events">The events, in delivery order.</param>
+    /// <returns>This scenario.</returns>
+    /// <exception cref="ArgumentException"><paramref name="resource" /> is not a valid stream segment.</exception>
+    public ProjectorScenario Given(string resource, params DomainEvent[] events)
+    {
+        _history.Add(resource, events);
+        return this;
+    }
+
+    /// <summary>
     ///     Projects every given event not yet committed, resuming from <see cref="Store" />'s checkpoint as a hosted
     ///     projector does. A tenant-scoped projector runs bound to a test tenant.
     /// </summary>
     /// <param name="projector">A projector constructed with <see cref="Store" />.</param>
     /// <param name="ct">A token that can cancel the run.</param>
+    /// <exception cref="InvalidOperationException">
+    ///     Events were given on a stream resource the projector's pattern excludes.
+    /// </exception>
     /// <returns>A task that completes once every event has been projected and committed.</returns>
     public async Task RunAsync(Projector projector, CancellationToken ct = default)
     {

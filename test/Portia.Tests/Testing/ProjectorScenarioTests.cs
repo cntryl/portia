@@ -100,6 +100,86 @@ public sealed class ProjectorScenarioTests
         Assert.Equal(tenant.Value, projector.Pattern.Realm);
     }
 
+    /// <summary>A chosen stream resource reaches the projector, so resource-dependent behavior is covered.</summary>
+    [Fact]
+    public async Task ShouldDeliverChosenResourceGivenStreamResource()
+    {
+        // Arrange
+        var first = Uuid.CreateVersion4();
+        var second = Uuid.CreateVersion4();
+        var third = Uuid.CreateVersion4();
+        var users = new List<Uuid>();
+        var scenario = new ProjectorScenario()
+            .Given("owner-a.record-1", new UserCreated(first))
+            .Given("owner-b.record-2", new UserCreated(second))
+            .Given("owner-a.record-1", new UserCreated(third));
+        var projector = new WelcomeProjector(users, scenario.Store);
+
+        // Act
+        await scenario.RunAsync(projector);
+
+        // Assert
+        Assert.Equal([first, second, third], users);
+        Assert.Equal(["owner-a.record-1", "owner-b.record-2", "owner-a.record-1"], projector.StreamResources);
+    }
+
+    /// <summary>Bare events on a chosen resource form that stream's own aggregate, numbered from one.</summary>
+    [Fact]
+    public async Task ShouldNumberEventsPerStreamGivenStreamResources()
+    {
+        // Arrange
+        var a1 = new UserCreated(Uuid.CreateVersion4());
+        var b1 = new UserCreated(Uuid.CreateVersion4());
+        var a2 = new UserCreated(Uuid.CreateVersion4());
+        var bare = new UserCreated(Uuid.CreateVersion4());
+        var scenario = new ProjectorScenario().Given("a", a1).Given("b", b1).Given("a", a2).Given(bare);
+
+        // Act
+        await scenario.RunAsync(new WelcomeProjector([], scenario.Store));
+
+        // Assert
+        Assert.Equal([1UL, 1UL, 2UL, 1UL],
+            new[] { a1, b1, a2, bare }.Select(ev => ev.Metadata.AggregateVersion));
+        Assert.Equal(a1.Metadata.AggregateId, a2.Metadata.AggregateId);
+        Assert.Equal(3, new[] { a1, b1, bare }.Select(ev => ev.Metadata.AggregateId).Distinct().Count());
+    }
+
+    /// <summary>
+    ///     A chosen resource the projector's pattern excludes is rejected, because the projector would silently
+    ///     never receive those events.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRejectRunGivenResourceOutsidePattern()
+    {
+        // Arrange
+        var scenario = new ProjectorScenario().Given("other", new UserCreated(Uuid.CreateVersion4()));
+        var projector = new WelcomeProjector([], scenario.Store, EventStreamPattern.ForPattern("test", "users", "one"));
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => scenario.RunAsync(projector));
+
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("'other'", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>A chosen resource must be a valid stream segment.</summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("a/b")]
+    [InlineData("*")]
+    public void ShouldRejectGivenGivenInvalidResource(string resource)
+    {
+        // Arrange
+        var scenario = new ProjectorScenario();
+
+        // Act
+        var exception = Record.Exception(() => scenario.Given(resource, new UserCreated(Uuid.CreateVersion4())));
+
+        // Assert
+        _ = Assert.IsAssignableFrom<ArgumentException>(exception);
+    }
+
     /// <summary>The optional tenant cannot be the uninitialized value of the tenant struct.</summary>
     [Fact]
     public void ShouldRejectScenarioGivenUninitializedTenant() =>

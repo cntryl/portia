@@ -167,6 +167,48 @@ public sealed class ReactorScenarioTests
         _ = Assert.IsAssignableFrom<ArgumentException>(exception);
     }
 
+    /// <summary>A chosen stream resource reaches the reactor alongside scripted command responses.</summary>
+    [Fact]
+    public async Task ShouldDeliverChosenResourceGivenStreamResource()
+    {
+        // Arrange
+        var first = Uuid.CreateVersion4();
+        var second = Uuid.CreateVersion4();
+        var scenario = new ReactorScenario()
+            .Given("owner-a.record-1", new UserCreated(first))
+            .Given("owner-b.record-2", new UserCreated(second))
+            .RespondTo<SendWelcomeEmail>(Result.Success);
+        var reactor = new WelcomeReactor(scenario.Requests);
+
+        // Act
+        await scenario.RunAsync(reactor);
+
+        // Assert
+        Assert.Equal(["owner-a.record-1", "owner-b.record-2"], reactor.StreamResources);
+        Assert.Equal<IRequestBase>([new SendWelcomeEmail(first), new SendWelcomeEmail(second)],
+            scenario.SentRequests);
+    }
+
+    /// <summary>
+    ///     A chosen resource the reactor's pattern excludes is rejected, because the reactor would silently never
+    ///     receive those events.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRejectRunGivenResourceOutsidePattern()
+    {
+        // Arrange
+        var scenario = new ReactorScenario().Given("other", new UserCreated(Uuid.CreateVersion4()));
+        var reactor = new WelcomeReactor(scenario.Requests, EventStreamPattern.ForPattern("test", "users", "one"));
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => scenario.RunAsync(reactor));
+
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("'other'", error.Message, StringComparison.Ordinal);
+        Assert.Empty(scenario.SentRequests);
+    }
+
     /// <summary>Seeded events reach the reactor with the metadata the test attached.</summary>
     [Fact]
     public async Task ShouldDeliverEventsUnchangedGivenSeededEvents()
