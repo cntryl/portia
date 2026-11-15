@@ -129,7 +129,7 @@ See [application setup](docs/application-setup.md) and [Fitz upgrade notes](docs
 - [Request context](docs/request-context.md): actor, correlation, and causation
 - [Request identities](docs/request-identities.md): typed logical request IDs with `IIdentifiedRequest`
 - [Validation authority](docs/validation-authority.md): local invariants, advisory reads, and authoritative outcome choreography.
-- [Request guards](docs/request-guards.md): authorization, reusable asynchronous preflight, and authoritative invariants
+- [The request pipeline](docs/request-pipeline.md): which gate to use, the order they run in, authorization, guards, and authoritative invariants
 - [Testing applications](docs/testing.md): aggregate, request, projector, and reactor scenarios
 - [Object storage](docs/object-storage.md): vendor-neutral contracts and tenant-scoped AWS, Azure and Google Cloud adapters
 - [Outbound mail and SMS](docs/communications.md): provider-neutral senders with SES, Azure and Twilio providers

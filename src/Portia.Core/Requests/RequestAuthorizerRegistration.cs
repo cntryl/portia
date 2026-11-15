@@ -9,7 +9,7 @@ namespace Cntryl.Portia;
 public abstract class RequestAuthorizerRegistration(
     Type requestType,
     Type authorizerType,
-    AuthorizationStage stage = AuthorizationStage.ResourceAccess)
+    AuthorizationStage stage = AuthorizationStage.ResourceAccess) : IRequestCheck
 {
     /// <summary>Gets the authorized request type.</summary>
     public Type RequestType { get; } = requestType;
@@ -26,7 +26,7 @@ public abstract class RequestAuthorizerRegistration(
     // The application's own authorizer type, not this generic registration wrapper — every
     // registration shares one wrapper type name, so reporting that would tag every authorization
     // measurement identically and name the wrong type in an uninitialized-result error.
-    internal string ComponentName { get; } = authorizerType.Name;
+    internal virtual string ComponentName { get; } = authorizerType.Name;
 
     // Fixed for the life of the process, so it is rendered once rather than on every dispatch.
     internal string StageName { get; } = PortiaTelemetry.StageName(stage);
@@ -35,4 +35,14 @@ public abstract class RequestAuthorizerRegistration(
         IRequestContext context, CancellationToken ct);
 
     internal abstract void Register(IServiceCollection services);
+
+    Type IRequestCheck.Owner => AuthorizerType;
+
+    string IRequestCheck.Role => "request authorizer";
+
+    ValueTask<Result> IRequestCheck.CheckAsync(IServiceProvider services, IRequestBase request,
+        IRequestContext context, CancellationToken ct) => AuthorizeAsync(services, request, context, ct);
+
+    void IRequestCheck.Finished(long started, string outcome) =>
+        PortiaTelemetry.AuthorizationFinished(started, ComponentName, StageName, outcome);
 }

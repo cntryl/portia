@@ -103,7 +103,7 @@ succeeds unless scripted with `RespondTo<TRequest>`.
 ```csharp
 var scenario = new ReactorScenario()
     .Given(new UserCreated(userId))
-    .RespondTo<SendWelcomeEmail>(Result.Failure(new RequestError(RequestErrorKind.Conflict, "bounced")));
+    .RespondTo<SendWelcomeEmail>(RequestError.Conflict("bounced"));
 
 await Assert.ThrowsAsync<ProcessorFailureException>(() =>
     scenario.RunAsync(new WelcomeReactor(scenario.Requests)));

@@ -129,10 +129,11 @@ Applications may keep feature-specific `IServiceCollection` extensions as ordina
 helpers, but Portia no longer requires assembly wrappers around generated method names.
 
 A scoped `IRequestBus` resolves the selected handler, authorizers, and guards from the current
-scope. A handler may inject that bus to dispatch a different request. Principal policies run
-first; declarative permission checks begin resource access, followed by resource and step-up
-authorizers, pipeline behaviors, guards, then the handler. No application bus or runtime assembly
-scan is required.
+scope. A handler may inject that bus to dispatch a different request. Authorization runs first, by
+stage: principal authorizers, the declared permission, resource-access authorizers, then step-up
+authorizers. Pipeline behaviors, guards, and the handler follow. [The request pipeline](request-pipeline.md)
+shows the whole order and which gate fits which check. No application bus or runtime assembly scan is
+required.
 
 Authorization is independently composable. An `IRequestAuthorizer<TScope>` may target one
 concrete request, a request-family interface, or `IRequestBase`; every selected authorizer whose
@@ -183,8 +184,7 @@ public sealed class AvailableTenantSlugGuard(ITenantSlugDirectory directory)
         CancellationToken ct) =>
         await directory.IsAvailableAsync(context.Request.TenantSlug, ct)
             ? Result.Success
-            : Result.Failure(new RequestError(RequestErrorKind.Conflict,
-                "That tenant slug appears to be occupied."));
+            : RequestError.Conflict("That tenant slug appears to be occupied.");
 }
 
 services.AddPortia()
@@ -198,7 +198,7 @@ redelivery. Cancellation and exceptions propagate. An uninitialized guard result
 naming the guard. Streamed requests run guards before their first item. `AuthorizeAsync` does not
 run guards. A behavior that
 short-circuits without invoking its continuation skips guards because no handler executes. See
-[request guards](request-guards.md) for complete compilable recipes covering actor authorization,
+[the request pipeline](request-pipeline.md) for complete compilable recipes covering actor authorization,
 permissions stored outside JWTs, reusable permission families, and stale read-model checks versus
 authoritative aggregate invariants.
 

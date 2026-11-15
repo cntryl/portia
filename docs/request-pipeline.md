@@ -1,17 +1,72 @@
-# Request guards
+# The request pipeline
 
-Portia's unary request path is:
+Every request needs a handler. Everything else is optional, and you add it only when the request
+needs it:
+
+| When | Add | It answers |
+| --- | --- | --- |
+| Always | A handler | What does this request do? |
+| Access depends on what the actor may do | `[RequiresPermission("orders:read")]` | Does the actor hold this permission? |
+| Access depends on the request's own data | An authorizer, `IRequestAuthorizer<T>` | May this actor attempt this request? |
+| Other application state suggests it will fail | A guard, `IRequestGuard<T>` | Is it worth running the handler? |
+| Something must wrap the handler | A pipeline behavior | What happens around the handler? |
+
+A guard is a preflight, not an access check. Put "may this actor do this" in a permission or an
+authorizer, and "does surrounding state allow this right now" in a guard.
+
+## The order things run in
 
 ```text
-authorization → pipeline behaviors → guards → handler
+dispatch
+   │
+   ▼
+authorization ──── first denial ───────────────▶ failed Result
+   1. Principal authorizers
+   2. the declared permission, then Permission authorizers
+   3. ResourceAccess authorizers
+   4. StepUp authorizers
+   │
+   ▼
+pipeline behaviors ── returns without continuing ▶ the behavior's own Result
+   │
+   ▼
+guards ──────────── first failure ──────────────▶ failed Result
+   │
+   ▼
+handler ─────────── aggregate rejects ──────────▶ failed Result
+   │
+   ▼
+Result, back out through the behaviors
 ```
 
-Authorization answers whether an actor may attempt an operation. A guard performs an asynchronous
-preflight against surrounding application state immediately before the handler. The handler and
-aggregate remain authoritative because anything a guard reads can become stale.
+Three rules cover every stage:
+
+- **Authorizers and guards run in the order you register them.** Authorizers are first grouped by
+  `AuthorizationStage`, which defaults to `ResourceAccess`; most applications never pass a stage.
+  Behaviors run by the `order` you give them, lowest outermost.
+- **The first failure wins** and nothing after it runs.
+- **Only the aggregate is authoritative.** Whatever an authorizer or guard reads can be stale by the
+  time the handler runs, so the aggregate and the repository save still decide.
+
+Return a failure with the short form, which converts to `Result` and `Result<T>`:
+
+```csharp
+return RequestError.Forbidden("The actor may not open accounts.");
+```
 
 Pure formatting, normalization, reserved-value checks, and other synchronous domain policies stay
 in application value objects and aggregates. Portia adds no guard DSL or domain-policy API.
+
+## What will surprise you
+
+- **Behaviors never see an authorization denial.** Authorization runs outside the behavior chain, so
+  a logging or metrics behavior does not observe denied requests. The
+  `portia.authorization.duration` metric records them.
+- **`context.Actor` is a fresh copy on every read.** Read it once into a local. A claim an authorizer
+  adds to its copy is not visible to the guard or the handler.
+- **Nothing carries state from one stage to the next.** The context is read-only. When an authorizer
+  and a handler need the same loaded data, inject one scoped service into both; they resolve from the
+  same dependency-injection scope.
 
 ## One request, authorizer, guard, and handler
 
@@ -37,8 +92,7 @@ public sealed class OpenAccountAuthorizer(IAccountAccess access)
         CancellationToken ct) =>
         await access.CanOpenAsync(context.Actor, ct)
             ? Result.Success
-            : Result.Failure(new RequestError(RequestErrorKind.Forbidden,
-                "The actor may not open accounts."));
+            : RequestError.Forbidden("The actor may not open accounts.");
 }
 
 public interface IAccountOperations
@@ -54,8 +108,7 @@ public sealed class AccountOperationsGuard(IAccountOperations operations)
         CancellationToken ct) =>
         await operations.AreOpenAsync(ct)
             ? Result.Success
-            : Result.Failure(new RequestError(RequestErrorKind.Conflict,
-                "Account operations are temporarily closed.", isTransient: true));
+            : RequestError.Conflict("Account operations are temporarily closed.", isTransient: true);
 }
 
 [Discriminator("banking.account-opened")]
@@ -74,11 +127,9 @@ public sealed class Account : Aggregate
     public Result Open(int initialBalance)
     {
         if (IsOpen)
-            return Result.Failure(new RequestError(RequestErrorKind.Conflict,
-                "The account is already open."));
+            return RequestError.Conflict("The account is already open.");
         if (initialBalance < 0)
-            return Result.Failure(new RequestError(RequestErrorKind.Validation,
-                "The initial balance cannot be negative."));
+            return RequestError.Validation("The initial balance cannot be negative.");
 
         RaiseEvent(new AccountOpened(initialBalance));
         return Result.Success;
@@ -146,8 +197,7 @@ public sealed class AvailableTenantSlugGuard(ITenantSlugDirectory directory)
         CancellationToken ct) =>
         await directory.IsAvailableAsync(context.Request.TenantSlug, ct)
             ? Result.Success
-            : Result.Failure(new RequestError(RequestErrorKind.Conflict,
-                "That tenant slug appears to be occupied."));
+            : RequestError.Conflict("That tenant slug appears to be occupied.");
 }
 
 public static class TenantSlugFeature
@@ -188,8 +238,7 @@ public sealed class UserIdentity : Aggregate
         if (Verify(secret))
             return Result<AuthenticatedIdentity>.Success(new AuthenticatedIdentity(Id));
         AuditEvent(new SignInFailed("bad-secret"));
-        return Result<AuthenticatedIdentity>.Failure(
-            new RequestError(RequestErrorKind.Unauthorized, "Those credentials did not match."));
+        return RequestError.Unauthorized("Those credentials did not match.");
     }
 
     bool Verify(string secret) => secret.Length > 0;
@@ -232,8 +281,7 @@ public sealed class SignInWindowGuard(ISignInAttempts attempts, TimeProvider tim
         await attempts.FailuresSinceAsync(
             context.Request.UserId, time.GetUtcNow().AddMinutes(-15), ct) < 5
             ? Result.Success
-            : Result.Failure(new RequestError(RequestErrorKind.Forbidden,
-                "Too many recent sign-in attempts. Try again later."));
+            : RequestError.Forbidden("Too many recent sign-in attempts. Try again later.");
 }
 ```
 
@@ -276,8 +324,7 @@ public sealed class ReadTenantBillingAuthorizer(IApplicationAuthorizationStore a
         await authorization.AllowsAsync(context.Actor, context.Request.TenantId,
             "tenant.billing.read", ct)
             ? Result.Success
-            : Result.Failure(new RequestError(RequestErrorKind.Forbidden,
-                "Billing access was denied."));
+            : RequestError.Forbidden("Billing access was denied.");
 }
 
 public static class BillingAuthorization
@@ -345,8 +392,7 @@ public sealed class TenantPermissionAuthorizer(ITenantAuthorizationStore authori
         await authorization.AllowsAsync(context.Actor, context.Request.TenantId,
             context.Request.RequiredPermission, ct)
             ? Result.Success
-            : Result.Failure(new RequestError(RequestErrorKind.Forbidden,
-                "The required tenant permission was denied."));
+            : RequestError.Forbidden("The required tenant permission was denied.");
 }
 
 public static class TenantPermissionFeature
@@ -395,8 +441,7 @@ public sealed class TenantSlugReadGuard(ITenantSlugRepository slugs)
         IRequestContext<ClaimTenantSlug> context,
         CancellationToken ct) =>
         await slugs.AppearsOccupiedAsync(context.Request.Slug, ct)
-            ? Result.Failure(new RequestError(RequestErrorKind.Conflict,
-                "That slug appears to be occupied."))
+            ? RequestError.Conflict("That slug appears to be occupied.")
             : Result.Success;
 }
 
@@ -416,8 +461,7 @@ public sealed class TenantSlug : Aggregate
     public Result Claim(Uuid tenantId, string slug)
     {
         if (Owner is { } owner && owner != tenantId)
-            return Result.Failure(new RequestError(RequestErrorKind.Conflict,
-                "That slug is owned by another tenant."));
+            return RequestError.Conflict("That slug is owned by another tenant.");
         if (Owner == tenantId)
             return Result.Success;
 
@@ -450,6 +494,16 @@ decision: the later handler observes existing ownership, or its save loses the c
 throws `EventStreamConcurrencyException`. A guard is never a replacement for either check.
 
 ## Registration and execution
+
+Authorization stages are a fixed vocabulary, so independent features order their policies without
+agreeing on numbers:
+
+| Stage | Runs | Use it for |
+| --- | --- | --- |
+| `Principal` | First | Facts about the actor alone, such as "the account is active" |
+| `Permission` | Second | The declared `[RequiresPermission]`, then authorizers registered here |
+| `ResourceAccess` | Third, the default | Access to the request's target |
+| `StepUp` | Last | Elevated or recently confirmed authentication |
 
 A complete composition keeps the stages visible:
 

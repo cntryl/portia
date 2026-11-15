@@ -102,8 +102,7 @@ public sealed class RequestRegistry
             }
         }
 
-        // RequestBus relies on this ordering to split principal-stage policies from the rest
-        // around the declarative permission check; do not remove the sort without changing it.
+        // Dispatch runs this list as given, so the stage order is established here once.
         _authorizers =
         [
             .. policies
@@ -171,16 +170,7 @@ public sealed class RequestRegistry
     internal RequestPolicies Policies(Type requestType) => _policies.GetOrAdd(requestType, static (type, registry) =>
             new RequestPolicies(
                 registry._names.TryGetValue(type, out var name) ? name : type.Name,
-                [
-                    .. registry._authorizers.Where(registration => registration.ScopeType.IsAssignableFrom(type)
-                                                                   && registration.Stage <
-                                                                   AuthorizationStage.ResourceAccess)
-                ],
-                [
-                    .. registry._authorizers.Where(registration => registration.ScopeType.IsAssignableFrom(type)
-                                                                   && registration.Stage >=
-                                                                   AuthorizationStage.ResourceAccess)
-                ],
+                registry.Authorizers(type),
                 [
                     .. registry._behaviors.Where(registration => registration.ScopeType.IsAssignableFrom(type))
                         .Reverse()
@@ -190,4 +180,18 @@ public sealed class RequestRegistry
                 ],
                 registry.UnprotectedRequestTypes.Contains(type)),
         this);
+
+    // A declared permission joins the list at its own stage. The sort is stable, so the declared check
+    // precedes authorizers registered at that stage and registration order holds within every stage.
+    RequestAuthorizerRegistration[] Authorizers(Type requestType)
+    {
+        var applicable = _authorizers.Where(registration => registration.ScopeType.IsAssignableFrom(requestType));
+        return _handlers.TryGetValue(requestType, out var handler) && handler.Permission is { } permission
+            ?
+            [
+                .. applicable.Prepend(new PermissionAuthorizerRegistration(requestType, permission))
+                    .OrderBy(registration => registration.Stage)
+            ]
+            : [.. applicable];
+    }
 }

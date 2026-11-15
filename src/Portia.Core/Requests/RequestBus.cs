@@ -29,8 +29,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         var policies = registry.Policies(registration.RequestType);
         if (policies.IsUnprotected)
             ThrowUnprotectedRequest(registration.RequestType);
-        return policies.HasAuthorizers || registration.Permission is not null
-            ? AuthorizeAsync(registration, policies, request, registration.CreateContext(request, context), ct)
+        return policies.HasAuthorizers
+            ? AuthorizeAsync(policies, request, registration.CreateContext(request, context), ct)
             : ValueTask.FromResult(Result.Success);
     }
 
@@ -258,7 +258,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         {
             if (policies.IsUnprotected)
                 ThrowUnprotectedRequest(registration.RequestType);
-            return await AuthorizeAsync(registration, policies, request, requestContext, ct).ConfigureAwait(false);
+            return await AuthorizeAsync(policies, request, requestContext, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -402,9 +402,9 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     {
         if (policies.IsUnprotected)
             ThrowUnprotectedRequest(registration.RequestType);
-        if (!policies.HasAuthorizers && registration.Permission is null && policies.Unary.IsEmpty)
+        if (!policies.HasAuthorizers && policies.Unary.IsEmpty)
             return InvokeHandlerAsync(registration, request, dispatchContext, ct);
-        if (!policies.HasAuthorizers && registration.Permission is null)
+        if (!policies.HasAuthorizers)
             return InvokeAsync(registration, policies, request, registration.CreateContext(request, dispatchContext),
                 ct);
         return AuthorizeAndInvokeAsync(registration, policies, request, dispatchContext, ct);
@@ -414,7 +414,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         RequestPolicies policies, IRequest request, RequestDispatchContext dispatchContext, CancellationToken ct)
     {
         var requestContext = registration.CreateContext(request, dispatchContext);
-        var authorization = await AuthorizeAsync(registration, policies, request, requestContext, ct)
+        var authorization = await AuthorizeAsync(policies, request, requestContext, ct)
             .ConfigureAwait(false);
         return authorization.IsSuccess
             ? await InvokeAsync(registration, policies, request, requestContext, ct).ConfigureAwait(false)
@@ -426,9 +426,9 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     {
         if (policies.IsUnprotected)
             ThrowUnprotectedRequest(registration.RequestType);
-        if (!policies.HasAuthorizers && registration.Permission is null && policies.Result<TOut>().IsEmpty)
+        if (!policies.HasAuthorizers && policies.Result<TOut>().IsEmpty)
             return InvokeHandlerAsync(registration, request, dispatchContext, ct);
-        if (!policies.HasAuthorizers && registration.Permission is null)
+        if (!policies.HasAuthorizers)
         {
             return InvokeAsync(registration, policies, request, registration.CreateContext(request, dispatchContext),
                 ct);
@@ -442,7 +442,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         CancellationToken ct)
     {
         var requestContext = registration.CreateContext(request, dispatchContext);
-        var authorization = await AuthorizeAsync(registration, policies, request, requestContext, ct)
+        var authorization = await AuthorizeAsync(policies, request, requestContext, ct)
             .ConfigureAwait(false);
         return authorization.IsSuccess
             ? await InvokeAsync(registration, policies, request, requestContext, ct).ConfigureAwait(false)
@@ -462,7 +462,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     {
         var result = await ((IRequestInvocation)registration).InvokeAsync(services, request, context, ct)
             .ConfigureAwait(false);
-        ValidateResult(result, registration.HandlerType, "request handler");
+        RequestResults.Validate(result, registration.HandlerType, "request handler");
         return result;
     }
 
@@ -471,7 +471,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     {
         var result = await ((IRequestInvocation)registration).InvokeUnsharedAsync(services, request, context, ct)
             .ConfigureAwait(false);
-        ValidateResult(result, registration.HandlerType, "request handler");
+        RequestResults.Validate(result, registration.HandlerType, "request handler");
         return result;
     }
 
@@ -490,7 +490,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     {
         var result = await ((IRequestInvocation<TOut>)registration).InvokeAsync(services, request, context, ct)
             .ConfigureAwait(false);
-        ValidateResult(result, registration.HandlerType, "request handler");
+        RequestResults.Validate(result, registration.HandlerType, "request handler");
         return result;
     }
 
@@ -499,7 +499,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     {
         var result = await ((IRequestInvocation<TOut>)registration)
             .InvokeUnsharedAsync(services, request, context, ct).ConfigureAwait(false);
-        ValidateResult(result, registration.HandlerType, "request handler");
+        RequestResults.Validate(result, registration.HandlerType, "request handler");
         return result;
     }
 
@@ -507,105 +507,9 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         IStreamRequest<TOut> request, IRequestContext context, CancellationToken ct) =>
         policies.Stream<TOut>().Invoke(services, registration, request, context, ct);
 
-    static void ValidateResult(Result result, Type ownerType, string role)
-    {
-        try
-        {
-            _ = result.IsSuccess;
-        }
-        catch (InvalidOperationException ex)
-        {
-            throw new InvalidOperationException(
-                $"Portia {role} '{ownerType.FullName}' returned an uninitialized Result.", ex);
-        }
-    }
-
-    static void ValidateResult<TOut>(Result<TOut> result, Type ownerType, string role)
-    {
-        try
-        {
-            _ = result.IsSuccess;
-        }
-        catch (InvalidOperationException ex)
-        {
-            throw new InvalidOperationException(
-                $"Portia {role} '{ownerType.FullName}' returned an uninitialized Result<{typeof(TOut).FullName}>.", ex);
-        }
-    }
-
-    async ValueTask<Result> AuthorizeAsync(RequestHandlerRegistration registration, RequestPolicies policies,
-        IRequestBase request, IRequestContext context, CancellationToken ct)
-    {
-        var principal = await RunAuthorizersAsync(policies.PrincipalAuthorizers, request, context, ct)
-            .ConfigureAwait(false);
-        if (!principal.IsSuccess)
-        {
-            return principal;
-        }
-
-        if (registration.Permission is not null)
-        {
-            var started = PortiaTelemetry.StartTimestamp();
-            var outcome = "fault";
-            Result permission;
-            try
-            {
-                permission = await services.GetRequiredService<IPermissionEvaluator>()
-                    .EvaluateAsync(context.Actor, registration.Permission(request), ct).ConfigureAwait(false);
-                outcome = PortiaTelemetry.Outcome(permission.IsSuccess, permission.Error);
-            }
-            catch (Exception exception)
-            {
-                outcome = PortiaTelemetry.ExceptionOutcome(exception, ct);
-                throw;
-            }
-            finally
-            {
-                PortiaTelemetry.AuthorizationFinished(started, "permission", "permission", outcome);
-            }
-
-            if (!permission.IsSuccess)
-            {
-                return permission;
-            }
-        }
-
-        return await RunAuthorizersAsync(policies.ResourceAuthorizers, request, context, ct).ConfigureAwait(false);
-    }
-
-    async ValueTask<Result> RunAuthorizersAsync(RequestAuthorizerRegistration[] authorizers,
-        IRequestBase request, IRequestContext context, CancellationToken ct)
-    {
-        foreach (var authorizer in authorizers)
-        {
-            var started = PortiaTelemetry.StartTimestamp();
-            var outcome = "fault";
-            Result result;
-            try
-            {
-                result = await authorizer.AuthorizeAsync(services, request, context, ct).ConfigureAwait(false);
-                ValidateResult(result, authorizer.AuthorizerType, "request authorizer");
-                outcome = PortiaTelemetry.Outcome(result.IsSuccess, result.Error);
-            }
-            catch (Exception exception)
-            {
-                outcome = PortiaTelemetry.ExceptionOutcome(exception, ct);
-                throw;
-            }
-            finally
-            {
-                PortiaTelemetry.AuthorizationFinished(started, authorizer.ComponentName, authorizer.StageName,
-                    outcome);
-            }
-
-            if (!result.IsSuccess)
-            {
-                return result;
-            }
-        }
-
-        return Result.Success;
-    }
+    ValueTask<Result> AuthorizeAsync(RequestPolicies policies, IRequestBase request, IRequestContext context,
+        CancellationToken ct) =>
+        RequestCheckRunner.RunAsync(services, policies.Authorizers, request, context, ct);
 
     // An unprotected request under RequireAuthorization() is a composition mistake, not an access
     // decision: throwing names the fix, where a Forbidden result would pass for a real denial.

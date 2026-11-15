@@ -505,6 +505,7 @@ public static partial class PortiaTelemetry
     internal static string StageName(AuthorizationStage stage) => stage switch
     {
         AuthorizationStage.Principal => "principal",
+        AuthorizationStage.Permission => "permission",
         AuthorizationStage.ResourceAccess => "resourceaccess",
         AuthorizationStage.StepUp => "stepup",
         _ => stage.ToString().ToLowerInvariant()

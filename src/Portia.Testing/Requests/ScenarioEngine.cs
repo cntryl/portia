@@ -39,7 +39,8 @@ static class ScenarioEngine
             .Dispatch(bus, bus.CreateContext(definition.Actor, definition.Metadata))
             .ConfigureAwait(false);
 
-        var authorizers = policies.PrincipalAuthorizers.Concat(policies.ResourceAuthorizers)
+        // The declared permission is reported as its own phase, so it is not counted as an authorizer.
+        var authorizers = policies.Authorizers.Where(registration => registration is not PermissionAuthorizerRegistration)
             .Select(registration => registration.AuthorizerType).ToHashSet();
         var guards = policies.Guards.Select(registration => registration.GuardType).ToArray();
         var behaviors = policies.Behaviors.Select(registration => registration.BehaviorType).ToHashSet();
