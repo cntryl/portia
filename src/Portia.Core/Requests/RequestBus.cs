@@ -43,7 +43,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             return Result.Failure(binding.Error);
         context = binding.Value;
         var registration = registry.Handler(request.GetType());
-        EnsureHandledAs<IRequestInvocation>(registration, "IRequest");
+        if (registration is not IRequestInvocation)
+            ThrowNotHandledAs(registration, "IRequest");
         var policies = registry.Policies(registration.RequestType);
         var transport = context.Invocation.TransportName;
         using var activity = PortiaTelemetry.StartExecute(policies.Name, transport);
@@ -95,7 +96,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             return Result<TOut>.Failure(binding.Error);
         context = binding.Value;
         var registration = registry.Handler(request.GetType());
-        EnsureHandledAs<IRequestInvocation<TOut>>(registration, $"IRequest<{typeof(TOut)}>");
+        if (registration is not IRequestInvocation<TOut>)
+            ThrowNotHandledAs(registration, $"IRequest<{typeof(TOut)}>");
         var policies = registry.Policies(registration.RequestType);
         var transport = context.Invocation.TransportName;
         using var activity = PortiaTelemetry.StartExecute(policies.Name, transport);
@@ -157,7 +159,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             throw new RequestGuardException(binding.Error);
         context = binding.Value;
         var registration = registry.Handler(request.GetType());
-        EnsureHandledAs<IStreamRequestInvocation<TOut>>(registration, $"IStreamRequest<{typeof(TOut)}>");
+        if (registration is not IStreamRequestInvocation<TOut>)
+            ThrowNotHandledAs(registration, $"IStreamRequest<{typeof(TOut)}>");
         var policies = registry.Policies(registration.RequestType);
         var requestContext = registration.CreateContext(request, context);
         var transport = context.Invocation.TransportName;
@@ -501,15 +504,12 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
 
     // A request type can implement more than one request contract, but one registration serves it.
     // Dispatching through a contract it is not handled as is a composition mistake, named here
-    // rather than surfacing as a cast failure inside the pipeline.
-    static void EnsureHandledAs<TInvocation>(RequestHandlerRegistration registration, string dispatchedAs)
-    {
-        if (registration is not TInvocation)
-        {
-            throw new InvalidOperationException(
-                $"Request type '{registration.RequestType.FullName}' is handled as {registration.Shape}, so it cannot be dispatched as {dispatchedAs}.");
-        }
-    }
+    // rather than surfacing as a cast failure inside the pipeline. Callers test the shape themselves
+    // so the contract name is only rendered on the failure path, never per dispatch.
+    [DoesNotReturn]
+    static void ThrowNotHandledAs(RequestHandlerRegistration registration, string dispatchedAs) =>
+        throw new InvalidOperationException(
+            $"Request type '{registration.RequestType.FullName}' is handled as {registration.Shape}, so it cannot be dispatched as {dispatchedAs}.");
 
     static void ObserveStarted(RequestHandlerRegistration registration, RequestDispatchContext context)
     {
