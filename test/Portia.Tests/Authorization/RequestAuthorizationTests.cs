@@ -286,6 +286,65 @@ public sealed class RequestAuthorizationTests
         Assert.True(result.IsSuccess);
         Assert.Equal(["principal", "permission", "account-role", "mfa", "handler"], calls);
     }
+
+    /// <summary>
+    ///     The declared permission is the <see cref="AuthorizationStage.Permission" /> stage: an authorizer
+    ///     registered there runs after the declared check and before resource access.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRunAfterDeclaredPermissionGivenAuthorizerAtPermissionStage()
+    {
+        // Arrange
+        var calls = new List<string>();
+        var services = new ServiceCollection();
+        _ = services.AddSingleton(calls);
+        _ = services.AddSingleton<TieredHandler>();
+        _ = services.AddSingleton<PrincipalAuthorizer>();
+        _ = services.AddSingleton<PermissionStageAuthorizer>();
+        _ = services.AddSingleton<AccountRoleAuthorizer>();
+        _ = services.AddSingleton<IPermissionEvaluator>(new RecordingPermissionEvaluator(calls));
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<TieredRequest, TieredHandler>(static _ => "accounts:close"));
+        _ = services.AddSingleton<RequestAuthorizerRegistration>(
+            new RequestAuthorizerRegistration<IAccountRequest, AccountRoleAuthorizer>());
+        _ = services.AddSingleton<RequestAuthorizerRegistration>(
+            new RequestAuthorizerRegistration<IAccountRequest, PermissionStageAuthorizer>(
+                AuthorizationStage.Permission));
+        _ = services.AddSingleton<RequestAuthorizerRegistration>(
+            new RequestAuthorizerRegistration<IRequestBase, PrincipalAuthorizer>(AuthorizationStage.Principal));
+        _ = services.AddScoped<IRequestBus, RequestBus>();
+        _ = services.AddSingleton<RequestRegistry>();
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        // Act
+        var result = await scope.ServiceProvider.GetRequiredService<IRequestBus>()
+            .SendAsync(new TieredRequest(Uuid.CreateVersion4()), RequestActor.System);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal(["principal", "permission", "permission-stage", "account-role", "handler"], calls);
+    }
+
+    /// <summary>An uninitialized permission result fails loudly and names the application's evaluator.</summary>
+    [Fact]
+    public async Task ShouldNameEvaluatorGivenEvaluatorReturningUninitializedResult()
+    {
+        // Arrange
+        var handler = new GuardedActionHandler();
+        using var busHost = TestRequestBus.Create(guardedActionHandler: handler,
+            permissionEvaluator: new UninitializedPermissionEvaluator());
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+            await busHost.Bus.SendAsync(new GuardedAction(), RequestActor.System));
+
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains(typeof(UninitializedPermissionEvaluator).FullName!, error.Message, StringComparison.Ordinal);
+        Assert.Contains("permission evaluator", error.Message, StringComparison.Ordinal);
+        Assert.False(handler.WasInvoked);
+    }
 }
 
 // Owns 7; denies anyone else — exercises both grant and deny from the same authorizer using

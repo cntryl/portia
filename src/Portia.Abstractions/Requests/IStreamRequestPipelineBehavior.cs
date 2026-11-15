@@ -1,7 +1,7 @@
 namespace Cntryl.Portia;
 
 /// <summary>Wraps enumeration of a matching streaming request handler.</summary>
-/// <typeparam name="TRequest">The concrete request type this behavior wraps.</typeparam>
+/// <typeparam name="TRequest">The concrete request or request-family interface this behavior wraps.</typeparam>
 /// <typeparam name="TOut">The type of the values produced.</typeparam>
 public interface IStreamRequestPipelineBehavior<in TRequest, TOut> where TRequest : IStreamRequest<TOut>
 {

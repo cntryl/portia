@@ -14,7 +14,7 @@ namespace Cntryl.Portia;
 public delegate ValueTask<Result<TOut>> RequestPipelineNext<TOut>(CancellationToken ct);
 
 /// <summary>Wraps execution of a matching no-result request handler.</summary>
-/// <typeparam name="TRequest">The concrete request type this behavior wraps.</typeparam>
+/// <typeparam name="TRequest">The concrete request or request-family interface this behavior wraps.</typeparam>
 public interface IRequestPipelineBehavior<in TRequest> where TRequest : IRequest
 {
     /// <summary>Executes this behavior and, when appropriate, the remainder of the pipeline.</summary>
@@ -29,7 +29,7 @@ public interface IRequestPipelineBehavior<in TRequest> where TRequest : IRequest
 }
 
 /// <summary>Wraps execution of a matching result-bearing request handler.</summary>
-/// <typeparam name="TRequest">The concrete request type this behavior wraps.</typeparam>
+/// <typeparam name="TRequest">The concrete request or request-family interface this behavior wraps.</typeparam>
 /// <typeparam name="TOut">The type of the value produced on success.</typeparam>
 public interface IRequestPipelineBehavior<in TRequest, TOut> where TRequest : IRequest<TOut>
 {

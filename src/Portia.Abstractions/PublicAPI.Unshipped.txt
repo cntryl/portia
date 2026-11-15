@@ -1,1 +1,2 @@
 #nullable enable
+Cntryl.Portia.AuthorizationStage.Permission = 150 -> Cntryl.Portia.AuthorizationStage

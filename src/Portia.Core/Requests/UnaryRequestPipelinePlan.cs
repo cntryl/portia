@@ -88,7 +88,7 @@ sealed class UnaryRequestPipelinePlan
 
     async ValueTask<Result> InvokeGuardedHandlerAsync(RequestPipelineFrame<IRequest> frame, CancellationToken ct)
     {
-        var guarded = await RequestGuardRunner.RunAsync(frame.Services, _guards, frame.Request, frame.Context, ct)
+        var guarded = await RequestCheckRunner.RunAsync(frame.Services, _guards, frame.Request, frame.Context, ct)
             .ConfigureAwait(false);
         if (!guarded.IsSuccess)
             return guarded;
@@ -108,7 +108,7 @@ sealed class UnaryRequestPipelinePlan
             if (pending.IsCompletedSuccessfully)
             {
                 var result = pending.Result;
-                Validate(result, behavior.Owner, "pipeline behavior");
+                RequestResults.Validate(result, behavior.Owner, "pipeline behavior");
                 frame.Close(position);
                 return ValueTask.FromResult(result);
             }
@@ -128,7 +128,7 @@ sealed class UnaryRequestPipelinePlan
         try
         {
             var result = await pending.ConfigureAwait(false);
-            Validate(result, owner, "pipeline behavior");
+            RequestResults.Validate(result, owner, "pipeline behavior");
             return result;
         }
         finally
@@ -142,27 +142,14 @@ sealed class UnaryRequestPipelinePlan
         if (!pending.IsCompletedSuccessfully)
             return AwaitValidationAsync(pending, owner, role);
         var result = pending.Result;
-        Validate(result, owner, role);
+        RequestResults.Validate(result, owner, role);
         return ValueTask.FromResult(result);
     }
 
     static async ValueTask<Result> AwaitValidationAsync(ValueTask<Result> pending, Type owner, string role)
     {
         var result = await pending.ConfigureAwait(false);
-        Validate(result, owner, role);
+        RequestResults.Validate(result, owner, role);
         return result;
-    }
-
-    static void Validate(Result result, Type owner, string role)
-    {
-        try
-        {
-            _ = result.IsSuccess;
-        }
-        catch (InvalidOperationException ex)
-        {
-            throw new InvalidOperationException(
-                $"Portia {role} '{owner.FullName}' returned an uninitialized Result.", ex);
-        }
     }
 }

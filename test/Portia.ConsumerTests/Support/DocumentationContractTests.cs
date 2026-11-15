@@ -26,6 +26,7 @@ public sealed partial class DocumentationContractTests
         "docs/cassie-projections.md",
         "docs/validation-authority.md",
         "docs/request-context.md",
+        "docs/request-pipeline.md",
         "docs/observability.md",
         "docs/native-aot.md",
         "docs/scope.md",

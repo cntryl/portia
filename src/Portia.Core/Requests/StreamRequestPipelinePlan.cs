@@ -46,7 +46,7 @@ sealed class StreamRequestPipelinePlan<TOut>
     async IAsyncEnumerable<TOut> EnumerateGuardedHandler(RequestPipelineFrame<IStreamRequest<TOut>> frame,
         [EnumeratorCancellation] CancellationToken ct)
     {
-        var guarded = await RequestGuardRunner.RunAsync(frame.Services, _guards, frame.Request, frame.Context, ct)
+        var guarded = await RequestCheckRunner.RunAsync(frame.Services, _guards, frame.Request, frame.Context, ct)
             .ConfigureAwait(false);
         if (!guarded.IsSuccess)
             throw new RequestGuardException(guarded.Error);
