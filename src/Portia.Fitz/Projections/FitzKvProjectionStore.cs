@@ -209,6 +209,8 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
 
         public async ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
         {
+            if (_done || Volatile.Read(ref _disposed) != 0)
+                throw new InvalidOperationException("This projection batch has already finished.");
             var tx = transaction;
             try
             {

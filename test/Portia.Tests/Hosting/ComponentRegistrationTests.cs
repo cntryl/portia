@@ -119,7 +119,7 @@ public sealed class ComponentRegistrationTests
         // Assert
         var registration = Assert.Single(provider.GetServices<ProjectorRegistration>(),
             r => r.ProjectorType == typeof(TestProjector));
-        _ = await registration.Run(runner, provider, ProjectionCheckpoint.Start, null, default);
+        _ = await runner.RunAsync(registration.Resolve(provider), ProjectionCheckpoint.Start);
 
         Assert.Equal(42, target.Projection.Value);
     }

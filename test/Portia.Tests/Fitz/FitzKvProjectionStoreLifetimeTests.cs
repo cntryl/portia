@@ -51,6 +51,47 @@ public sealed class FitzKvProjectionStoreLifetimeTests
         _ = Assert.IsType<InvalidOperationException>(exception);
     }
 
+    /// <summary>
+    ///     Verifies a batch that has committed refuses a second commit instead of handing a finished
+    ///     transaction another checkpoint write.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRefuseCommitGivenBatchAlreadyCommitted()
+    {
+        // Arrange
+        var store = new StrayWriteRepository(new FakeKvClient(), "kv://portia/state/orders");
+        await using var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
+        await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("2"))).AsTask());
+
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("already finished", error.Message, StringComparison.Ordinal);
+        Assert.Equal("1", (await store.LoadCheckpointAsync(Identity)).Cursor.ToString());
+    }
+
+    /// <summary>Verifies a disposed batch refuses to commit.</summary>
+    [Fact]
+    public async Task ShouldRefuseCommitGivenBatchAlreadyDisposed()
+    {
+        // Arrange
+        var store = new StrayWriteRepository(new FakeKvClient(), "kv://portia/state/orders");
+        var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
+        await batch.DisposeAsync();
+
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1"))).AsTask());
+
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("already finished", error.Message, StringComparison.Ordinal);
+        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadCheckpointAsync(Identity));
+    }
+
     sealed class StrayWriteRepository(IKvClient client, string route)
         : FitzKvProjectionStore(client, route, "orders")
     {

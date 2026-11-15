@@ -46,7 +46,6 @@ public sealed class ProcessorFailureException : Exception
         LastSource = lastSource;
         Error = error ?? innerException switch
         {
-            ReactionCommandFailedException reaction => reaction.Error,
             RequestGuardException guard => guard.Error,
             RequestAuthorizationException authorization => authorization.Error,
             _ => null
@@ -76,6 +75,7 @@ public sealed class ProcessorFailureException : Exception
     public bool IsTransient => Error?.IsTransient ?? (InnerException switch
     {
         DbException database => database.IsTransient,
+        InvalidOperationException uninitialized when UninitializedResult.Is(uninitialized) => false,
         ArgumentException or NotSupportedException or ObjectDisposedException => false,
         _ => true
     });

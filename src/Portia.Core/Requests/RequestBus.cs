@@ -19,7 +19,6 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     public ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
         CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(context);
         Validate(request, context, ct);
         var binding = context.BindRequest(request);
         if (!binding.IsSuccess)
@@ -38,28 +37,19 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     public async ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context,
         CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(context);
         Validate(request, context, ct);
         var binding = context.BindRequest(request);
         if (!binding.IsSuccess)
             return Result.Failure(binding.Error);
         context = binding.Value;
         var registration = registry.Handler(request.GetType());
+        EnsureHandledAs<IRequestInvocation>(registration, "IRequest");
         var policies = registry.Policies(registration.RequestType);
         var transport = context.Invocation.TransportName;
         using var activity = PortiaTelemetry.StartExecute(policies.Name, transport);
         var started = PortiaTelemetry.StartTimestamp();
         PortiaTelemetry.RequestStarted(policies.Name, transport);
-        if (ProcessingObservation.IsEnabled)
-            ProcessingObservation.Record("request", registration.RequestType.FullName ?? registration.RequestType.Name,
-                context.Metadata.RequestId.ToString(), context.ExecutionId.ToString(), "started");
-        if (ProcessingObservation.IsEnabled)
-        {
-            ProcessingObservation.Record("correlation", registration.RequestType.FullName ?? registration.RequestType.Name,
-                context.CorrelationId.ToString(), context.ExecutionId.ToString(), "inherited");
-            ProcessingObservation.Record("causation", registration.RequestType.FullName ?? registration.RequestType.Name,
-                context.CausationId?.ToString(), context.ExecutionId.ToString(), "inherited");
-        }
+        ObserveStarted(registration, context);
         var outcome = "fault";
         try
         {
@@ -99,28 +89,19 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     public async ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context,
         CancellationToken ct = default)
     {
-        ArgumentNullException.ThrowIfNull(context);
         Validate(request, context, ct);
         var binding = context.BindRequest(request);
         if (!binding.IsSuccess)
             return Result<TOut>.Failure(binding.Error);
         context = binding.Value;
         var registration = registry.Handler(request.GetType());
+        EnsureHandledAs<IRequestInvocation<TOut>>(registration, $"IRequest<{typeof(TOut)}>");
         var policies = registry.Policies(registration.RequestType);
         var transport = context.Invocation.TransportName;
         using var activity = PortiaTelemetry.StartExecute(policies.Name, transport);
         var started = PortiaTelemetry.StartTimestamp();
         PortiaTelemetry.RequestStarted(policies.Name, transport);
-        if (ProcessingObservation.IsEnabled)
-            ProcessingObservation.Record("request", registration.RequestType.FullName ?? registration.RequestType.Name,
-                context.Metadata.RequestId.ToString(), context.ExecutionId.ToString(), "started");
-        if (ProcessingObservation.IsEnabled)
-        {
-            ProcessingObservation.Record("correlation", registration.RequestType.FullName ?? registration.RequestType.Name,
-                context.CorrelationId.ToString(), context.ExecutionId.ToString(), "inherited");
-            ProcessingObservation.Record("causation", registration.RequestType.FullName ?? registration.RequestType.Name,
-                context.CausationId?.ToString(), context.ExecutionId.ToString(), "inherited");
-        }
+        ObserveStarted(registration, context);
         var outcome = "fault";
         try
         {
@@ -157,33 +138,33 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request,
-        RequestDispatchContext context,
-        [EnumeratorCancellation] CancellationToken ct = default)
+    public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request,
+        RequestDispatchContext context, CancellationToken ct = default)
     {
+        // An iterator runs nothing until it is enumerated, so a missing argument is rejected here,
+        // where the caller that passed it is still on the stack.
+        ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(context);
-        Validate(request, context, ct);
+        return EnumerateDispatchAsync(request, context, ct);
+    }
+
+    async IAsyncEnumerable<TOut> EnumerateDispatchAsync<TOut>(IStreamRequest<TOut> request,
+        RequestDispatchContext context, [EnumeratorCancellation] CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
         var binding = context.BindRequest(request);
         if (!binding.IsSuccess)
             throw new RequestGuardException(binding.Error);
         context = binding.Value;
         var registration = registry.Handler(request.GetType());
+        EnsureHandledAs<IStreamRequestInvocation<TOut>>(registration, $"IStreamRequest<{typeof(TOut)}>");
         var policies = registry.Policies(registration.RequestType);
         var requestContext = registration.CreateContext(request, context);
         var transport = context.Invocation.TransportName;
         using var activity = PortiaTelemetry.StartExecute(policies.Name, transport);
         var started = PortiaTelemetry.StartTimestamp();
         PortiaTelemetry.RequestStarted(policies.Name, transport);
-        if (ProcessingObservation.IsEnabled)
-            ProcessingObservation.Record("request", registration.RequestType.FullName ?? registration.RequestType.Name,
-                context.Metadata.RequestId.ToString(), context.ExecutionId.ToString(), "started");
-        if (ProcessingObservation.IsEnabled)
-        {
-            ProcessingObservation.Record("correlation", registration.RequestType.FullName ?? registration.RequestType.Name,
-                context.CorrelationId.ToString(), context.ExecutionId.ToString(), "inherited");
-            ProcessingObservation.Record("causation", registration.RequestType.FullName ?? registration.RequestType.Name,
-                context.CausationId?.ToString(), context.ExecutionId.ToString(), "inherited");
-        }
+        ObserveStarted(registration, context);
         var outcome = "fault";
         var completed = false;
         var observed = new StreamObservation();
@@ -517,6 +498,29 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     static void ThrowUnprotectedRequest(Type requestType) =>
         throw new InvalidOperationException(
             $"Request type '{requestType.FullName}' has no applicable request authorizer or [RequiresPermission], and RequireAuthorization() is enabled. Register an authorizer, declare a permission, or call RequireAuthorization(options => options.AllowAnonymous<{requestType.Name}>()).");
+
+    // A request type can implement more than one request contract, but one registration serves it.
+    // Dispatching through a contract it is not handled as is a composition mistake, named here
+    // rather than surfacing as a cast failure inside the pipeline.
+    static void EnsureHandledAs<TInvocation>(RequestHandlerRegistration registration, string dispatchedAs)
+    {
+        if (registration is not TInvocation)
+        {
+            throw new InvalidOperationException(
+                $"Request type '{registration.RequestType.FullName}' is handled as {registration.Shape}, so it cannot be dispatched as {dispatchedAs}.");
+        }
+    }
+
+    static void ObserveStarted(RequestHandlerRegistration registration, RequestDispatchContext context)
+    {
+        if (!ProcessingObservation.IsEnabled)
+            return;
+        var name = registration.RequestType.FullName ?? registration.RequestType.Name;
+        var execution = context.ExecutionId.ToString();
+        ProcessingObservation.Record("request", name, context.Metadata.RequestId.ToString(), execution, "started");
+        ProcessingObservation.Record("correlation", name, context.CorrelationId.ToString(), execution, "inherited");
+        ProcessingObservation.Record("causation", name, context.CausationId?.ToString(), execution, "inherited");
+    }
 
     // The context's constructor already rejected a null actor, so there is nothing left to check
     // about it here.

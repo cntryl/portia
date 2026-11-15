@@ -104,7 +104,8 @@ public sealed class FitzKvDirectoryProjectionTests(FitzBrokerFixture broker)
         await using var scope = services.CreateAsyncScope();
         scope.ServiceProvider.GetRequiredService<WorkloadContext>()
             .Initialize(new WorkloadIdentity(TeamRepository.Projector, tenant), TeamRepository.Projector);
-        await services.GetRequiredService<ProjectorRegistration>().RunPass(scope.ServiceProvider, null, default);
+        _ = await ((IWorkloadDescriptor)services.GetRequiredService<ProjectorRegistration>())
+            .RunPass(scope.ServiceProvider, ProjectionRunOptions.Default, default);
     }
 
     static FitzEventStore EventStore(FitzClient client) => new(client.Stream, TestJson.DomainSerializer(

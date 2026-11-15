@@ -301,7 +301,6 @@ sealed class PortiaWorkloadService(
                     PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Workload, ex,
                         _logger);
                     if (ex is ProcessorFailureException { IsTransient: false }
-                        || ex is ReactionCommandFailedException { Error.IsTransient: false }
                         || consecutiveFailures >= registration.FailureAttemptLimit
                         || operationalSession is { State.Block: { } block } terminal
                             && terminal.State.Attempts[^1].Id == block.AttemptId)

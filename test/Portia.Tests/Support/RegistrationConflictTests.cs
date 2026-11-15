@@ -36,6 +36,29 @@ public sealed class RegistrationConflictTests
     }
 
     /// <summary>
+    ///     Verifies that one handler registered for both unary shapes of one request is refused: only one
+    ///     registration can serve a request type, so the other shape would silently stop dispatching.
+    /// </summary>
+    [Fact]
+    public void ShouldRejectRegistryCompositionGivenOneRequestRegisteredWithTwoShapes()
+    {
+        // Arrange
+        RequestHandlerRegistration[] handlers =
+        [
+            new RequestRegistration<TwoShapeRequest, TwoShapeRequestHandler>(),
+            new RequestRegistration<TwoShapeRequest, TwoShapeRequestHandler, int>()
+        ];
+
+        // Act
+        var error = Record.Exception(() => new RequestRegistry(handlers, [], [], []));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(error);
+        Assert.Contains(typeof(TwoShapeRequest).FullName!, error.Message, StringComparison.Ordinal);
+        Assert.Contains("IRequest<System.Int32>", error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     ///     Verifies that one type cannot be both a request authorizer and a request guard: authorization
     ///     and preflight are separate responsibilities that run at different lifecycle phases.
     /// </summary>

@@ -128,7 +128,8 @@ public sealed class ReactorRunner(
             var stage = ProcessorFailureStage.Handling;
             try
             {
-                if (Operations is not null && reactor.Checkpoints is not IOperationalReactionCheckpointStore)
+                var journal = reactor.Checkpoints as IOperationalReactionCheckpointStore;
+                if (Operations is not null && journal is null)
                     throw new InvalidOperationException("Operations requires the registered operational reactor checkpoint store.");
                 if (Operations is { } operations)
                     _ = await operations.BeginAsync(contexts.Select(c => c.Source).ToArray(), checkpoint, ct).ConfigureAwait(false);
@@ -146,11 +147,7 @@ public sealed class ReactorRunner(
                 stage = ProcessorFailureStage.Committing;
                 var next = new ProjectionCheckpoint(contexts[^1].Source.NextCursor);
                 if (Operations is { } operational)
-                {
-                    if (reactor.Checkpoints is not IOperationalReactionCheckpointStore journal)
-                        throw new InvalidOperationException("Operations requires the registered operational reactor checkpoint store.");
-                    await operational.CommitReactionAsync(journal, checkpoint, next, ct).ConfigureAwait(false);
-                }
+                    await operational.CommitReactionAsync(journal!, checkpoint, next, ct).ConfigureAwait(false);
                 else if (reactor.Checkpoints is IConditionalProjectionCheckpointStore conditional)
                     await conditional.SaveAsync(identity, checkpoint, next, ct).ConfigureAwait(false);
                 else
@@ -165,7 +162,9 @@ public sealed class ReactorRunner(
                     throw;
                 var failure = exception as ProcessorFailureException
                     ?? new ProcessorFailureException(identity, checkpoint, stage,
-                        contexts[0].Source, contexts[^1].Source, exception);
+                        contexts[0].Source, contexts[^1].Source, UninitializedResult.Is(exception)
+                            ? UninitializedResult.ReturnedBy("reactor", reactor.GetType(), exception)
+                            : exception);
                 if (Operations is { } operations)
                     await operations.RecordFailureAsync(failure, null, ct).ConfigureAwait(false);
                 throw failure;

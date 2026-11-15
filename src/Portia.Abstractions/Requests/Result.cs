@@ -42,7 +42,7 @@ public readonly struct Result
     {
         ResultState.Succeeded => true,
         ResultState.Failed => false,
-        ResultState.Uninitialized or _ => throw new InvalidOperationException("The result is uninitialized.")
+        ResultState.Uninitialized or _ => throw UninitializedResult.Exception()
     };
 
     /// <summary>
@@ -52,7 +52,7 @@ public readonly struct Result
     {
         ResultState.Succeeded => null,
         ResultState.Failed => StoredError,
-        ResultState.Uninitialized or _ => throw new InvalidOperationException("The result is uninitialized.")
+        ResultState.Uninitialized or _ => throw UninitializedResult.Exception()
     };
 
     /// <summary>
@@ -110,7 +110,7 @@ public readonly struct Result<T>
     {
         ResultState.Succeeded => true,
         ResultState.Failed => false,
-        ResultState.Uninitialized or _ => throw new InvalidOperationException("The result is uninitialized.")
+        ResultState.Uninitialized or _ => throw UninitializedResult.Exception()
     };
 
     /// <summary>
@@ -120,7 +120,7 @@ public readonly struct Result<T>
     {
         ResultState.Succeeded => StoredValue!,
         ResultState.Failed => throw new InvalidOperationException("A failed result has no value."),
-        ResultState.Uninitialized or _ => throw new InvalidOperationException("The result is uninitialized.")
+        ResultState.Uninitialized or _ => throw UninitializedResult.Exception()
     };
 
     /// <summary>
@@ -130,7 +130,7 @@ public readonly struct Result<T>
     {
         ResultState.Succeeded => null,
         ResultState.Failed => StoredError,
-        ResultState.Uninitialized or _ => throw new InvalidOperationException("The result is uninitialized.")
+        ResultState.Uninitialized or _ => throw UninitializedResult.Exception()
     };
 
     // CA1000 (no static members on generic types) is the wrong call for a Result<T> factory —

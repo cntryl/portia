@@ -1,7 +1,7 @@
 # Cassie projection repositories
 
 `Cntryl.Portia.Cassie` connects Portia projectors to Cassie's native SQL transactions through
-`Cntryl.Cassie` 0.1.0. A repository owns persistence and queries. A read model is the simple data
+`Cntryl.Cassie` 0.2.0. A repository owns persistence and queries. A read model is the simple data
 contract returned by those queries. A projector applies committed events through the repository.
 
 ## Composition

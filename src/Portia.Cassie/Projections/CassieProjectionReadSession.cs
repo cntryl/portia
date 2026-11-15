@@ -26,7 +26,7 @@ public sealed class CassieProjectionReadSession : IAsyncDisposable
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sql);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _lease) is null, this);
-        var command = (CassieCommand)_connection.CreateCommand();
+        var command = _connection.CreateCommand();
         command.CommandText = sql;
         return command;
     }
