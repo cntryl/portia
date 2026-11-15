@@ -71,6 +71,31 @@ public sealed partial class OperationalProjectionTests
         Assert.Equal("indeterminate", Assert.Single(resumed.State.Attempts).Outcome);
     }
 
+    /// <summary>
+    ///     A confirmation that fails after the native commit is reported at the commit stage with the
+    ///     checkpoint the repository already holds, not as a failure to read events from the old one.
+    /// </summary>
+    [Fact]
+    public async Task ShouldReportCommittedCheckpointGivenOwnershipLostBeforeConfirmation()
+    {
+        // Arrange
+        var journal = new MemoryOperationalStore();
+        var native = new NativeStore();
+        native.AfterCommit = () => _ = SessionAsync(journal, native.Checkpoint).GetAwaiter().GetResult();
+        var session = await SessionAsync(journal, ProjectionCheckpoint.Start);
+        var events = await OperationalExecutionTests.EventsAsync();
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => new ProjectorRunner(events) { Operations = session }
+            .RunAsync(new ProbeProjector(native), ProjectionCheckpoint.Start).AsTask());
+
+        // Assert
+        var failure = Assert.IsType<ProcessorFailureException>(exception);
+        Assert.Equal(ProcessorFailureStage.Committing, failure.Stage);
+        Assert.Equal(native.Checkpoint, failure.Checkpoint);
+        Assert.Equal("2", native.Checkpoint.Cursor.Value);
+    }
+
     static async Task<OperationalSession> SessionAsync(MemoryOperationalStore store, ProjectionCheckpoint checkpoint)
     {
         var session = new OperationalSession(store, new OperationalOptions { JournalRetryDelay = TimeSpan.FromMilliseconds(1) },

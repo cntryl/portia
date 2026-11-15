@@ -153,7 +153,7 @@ public sealed partial class DocumentationContractTests
         // Arrange
         (string Project, string[] Members)[] expected =
         [
-            ("Portia.Abstractions", ["T:Cntryl.Portia.ReactionCommandFailedException"]),
+            ("Portia.Abstractions", ["T:Cntryl.Portia.ProjectionConcurrencyException"]),
             ("Portia.Fitz",
             [
                 "T:Cntryl.Portia.FleetPartitionTerminationTimeoutException",

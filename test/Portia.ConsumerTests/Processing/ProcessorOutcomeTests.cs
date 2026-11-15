@@ -92,6 +92,24 @@ public sealed partial class ProcessorOutcomeTests
         Assert.Equal([1, 2], state.Seen);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ShouldStopWithoutRetryAndNameProcessorGivenUninitializedResult(bool projection)
+    {
+        // Arrange
+        var state = new State { ReturnDefault = true };
+
+        // Act
+        var error = await Record.ExceptionAsync(async () => await RunAsync(await SeedAsync(), state, projection, 1));
+
+        // Assert
+        var failure = Assert.IsType<ProcessorFailureException>(error);
+        Assert.False(failure.IsTransient);
+        Assert.Contains("uninitialized Result", failure.InnerException!.Message, StringComparison.Ordinal);
+        Assert.Contains(projection ? "Projection" : "Reaction", failure.InnerException.Message, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task ShouldKeepHandlerFailureGivenCleanupFailure()
     {

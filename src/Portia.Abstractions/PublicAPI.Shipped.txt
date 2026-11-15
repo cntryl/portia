@@ -365,9 +365,6 @@ Cntryl.Portia.QueuedRequestTerminalReason.DeserializationFailure = 4 -> Cntryl.P
 Cntryl.Portia.QueuedRequestTerminalReason.InvalidTransport = 3 -> Cntryl.Portia.QueuedRequestTerminalReason
 Cntryl.Portia.QueuedRequestTerminalReason.PermanentFailure = 1 -> Cntryl.Portia.QueuedRequestTerminalReason
 Cntryl.Portia.QueuedRequestTerminalReason.RetryLimitReached = 0 -> Cntryl.Portia.QueuedRequestTerminalReason
-Cntryl.Portia.ReactionCommandFailedException
-Cntryl.Portia.ReactionCommandFailedException.Error.get -> Cntryl.Portia.RequestError!
-Cntryl.Portia.ReactionCommandFailedException.ReactionCommandFailedException(Cntryl.Portia.RequestError! error) -> void
 Cntryl.Portia.ReactionExecutionContext
 Cntryl.Portia.ReactionExecutionContext.Actor.get -> System.Security.Claims.ClaimsPrincipal!
 Cntryl.Portia.ReactionExecutionContext.CauseId.get -> Cntryl.Portia.Uuid

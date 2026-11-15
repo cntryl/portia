@@ -84,6 +84,14 @@ public sealed class RequestRegistry
                     $"Request '{registration.RequestType}' has conflicting handlers '{existing.HandlerType}' and '{registration.HandlerType}'.");
             }
 
+            // One registration serves a request type, so a second shape would replace the first and the
+            // replaced shape would stop dispatching.
+            if (existing is not null && existing.Shape != registration.Shape)
+            {
+                throw new InvalidOperationException(
+                    $"Request '{registration.RequestType}' is handled as both {existing.Shape} and {registration.Shape}. Handle a request through one contract.");
+            }
+
             _handlers[registration.RequestType] = registration;
         }
 

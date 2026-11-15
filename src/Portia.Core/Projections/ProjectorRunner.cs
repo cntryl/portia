@@ -149,7 +149,10 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         {
             outcome = "fault";
             var diagnostic = ex as ProcessorFailureException
-                ?? new ProcessorFailureException(identity, checkpoint, stage, first, last, ex);
+                ?? new ProcessorFailureException(identity, checkpoint, stage, first, last,
+                    UninitializedResult.Is(ex)
+                        ? UninitializedResult.ReturnedBy("projector", projector.GetType(), ex)
+                        : ex);
             failure = diagnostic;
         }
         try
@@ -180,7 +183,20 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
             ExceptionDispatchInfo.Capture(failure).Throw();
         }
         if (Operations is { } confirmation)
-            await confirmation.ConfirmProjectionAsync(confirmed, ct).ConfigureAwait(false);
+        {
+            // The repository has already committed, so a confirmation failure belongs to the commit
+            // stage and to the checkpoint the repository now holds.
+            try
+            {
+                await confirmation.ConfirmProjectionAsync(confirmed, ct).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+            {
+                throw new ProcessorFailureException(identity, confirmed, ProcessorFailureStage.Committing, first,
+                    last, ex);
+            }
+        }
+
         return confirmed;
     }
 }

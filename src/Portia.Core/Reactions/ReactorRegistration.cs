@@ -6,14 +6,11 @@ namespace Cntryl.Portia;
 public sealed class ReactorRegistration : IWorkloadDescriptor
 {
     readonly Func<IServiceProvider, Reactor> _resolve;
-    readonly Func<IServiceProvider, ProjectionRunOptions, CancellationToken, ValueTask> _runPass;
 
-    ReactorRegistration(Type reactorType, Func<IServiceProvider, Reactor> resolve,
-        Func<IServiceProvider, ProjectionRunOptions, CancellationToken, ValueTask> runPass)
+    ReactorRegistration(Type reactorType, Func<IServiceProvider, Reactor> resolve)
     {
         ReactorType = reactorType;
         _resolve = resolve;
-        _runPass = runPass;
     }
 
     /// <summary>Gets the concrete reactor type.</summary>
@@ -74,15 +71,5 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
     /// <typeparam name="TReactor">The concrete component.</typeparam>
     /// <returns>The component descriptor.</returns>
     public static ReactorRegistration Create<TReactor>() where TReactor : Reactor => new(
-        typeof(TReactor), static services => services.GetRequiredService<TReactor>(),
-        static async (services, options, ct) =>
-        {
-            options.Validate();
-            var reactor = services.GetRequiredService<TReactor>();
-            WorkloadBinding.Apply(services, reactor.BindWorkload);
-            var checkpoint = await ProcessorCheckpoints.LoadAsync(reactor.Checkpoints,
-                new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
-            _ = await services.GetRequiredService<ReactorRunner>().RunPassAsync(
-                reactor, checkpoint, options, ct).ConfigureAwait(false);
-        });
+        typeof(TReactor), static services => services.GetRequiredService<TReactor>());
 }

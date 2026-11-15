@@ -186,7 +186,7 @@ for this catch-up loop; no public pass-result API is needed.
 ## Fitz Portia and Cassie integration
 
 Run the `CassieIntegration` category with both Compose services available, following
-[the integration setup](../CONTRIBUTING.md). The tests use the published `Cntryl.Cassie` 0.1.0 client
+[the integration setup](../CONTRIBUTING.md). The tests use the published `Cntryl.Cassie` 0.2.0 client
 against the pinned server image. An application-owned `AccountRepository` derives from the library's
 `CassieProjectionRepository`, implements the public `IProjectionStore` contract, and returns simple
 `AccountReadModel` data. Hosted cases use `AddCassie` and `AddCassieProjection`.

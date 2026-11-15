@@ -23,6 +23,8 @@ THandler, TOut>(
         => services.GetRequiredService<THandler>()
             .HandleAsync((IRequestContext<TRequest>)context, ct);
 
+    internal override string Shape => $"IStreamRequest<{typeof(TOut)}>";
+
     internal override IRequestContext CreateContext(IRequestBase request, RequestDispatchContext context) =>
         new RequestContext<TRequest>((TRequest)request, context);
 

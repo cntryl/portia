@@ -1,11 +1,10 @@
 using System.Data;
-using System.Data.Common;
 using System.Globalization;
-using System.IO;
 using System.Runtime.ExceptionServices;
 using Cntryl.Cassie;
 using Cntryl.Cassie.Commands;
 using Cntryl.Cassie.Connection;
+using Cntryl.Cassie.Data;
 
 namespace Cntryl.Portia;
 
@@ -48,7 +47,7 @@ public abstract class CassieProjectionRepository : IProjectionStore, IProjectorB
     protected CassieCommand CreateCommand(string sql)
     {
         var session = Active;
-        var command = (CassieCommand)session.Connection.CreateCommand();
+        var command = session.Connection.CreateCommand();
         command.CommandText = sql;
         command.Transaction = session.Transaction;
         return command;
@@ -110,7 +109,7 @@ public abstract class CassieProjectionRepository : IProjectionStore, IProjectorB
         var key = GetProjectionKey(context.Identity);
         await _activity.EnterBatchAsync(ct).ConfigureAwait(false);
         CassieConnection? connection = null;
-        DbTransaction? transaction = null;
+        CassieTransaction? transaction = null;
         try
         {
             await _database.InitializeAsync(ct).ConfigureAwait(false);
@@ -176,10 +175,10 @@ public abstract class CassieProjectionRepository : IProjectionStore, IProjectorB
             throw new ArgumentException("Use this repository's registered projector name and a bound stream pattern.", nameof(identity));
     }
 
-    static CassieCommand Command(CassieConnection connection, DbTransaction? transaction, string sql,
+    static CassieCommand Command(CassieConnection connection, CassieTransaction? transaction, string sql,
         params (string Name, object Value)[] parameters)
     {
-        var command = (CassieCommand)connection.CreateCommand();
+        var command = connection.CreateCommand();
         command.CommandText = sql;
         command.Transaction = transaction;
         foreach (var parameter in parameters)
@@ -187,7 +186,7 @@ public abstract class CassieProjectionRepository : IProjectionStore, IProjectorB
         return command;
     }
 
-    static async ValueTask ReleaseAsync(CassieConnection? connection, DbTransaction? transaction, bool committed)
+    static async ValueTask ReleaseAsync(CassieConnection? connection, CassieTransaction? transaction, bool committed)
     {
         Exception? failure = null;
         if (transaction is not null)
@@ -212,13 +211,13 @@ public abstract class CassieProjectionRepository : IProjectionStore, IProjectorB
             ExceptionDispatchInfo.Capture(failure).Throw();
     }
 
-    sealed class Session(CassieProjectionRepository owner, CassieConnection connection, DbTransaction transaction,
+    sealed class Session(CassieProjectionRepository owner, CassieConnection connection, CassieTransaction transaction,
         CheckpointIdentity identity, string key, long revision) : IProjectionBatch
     {
         int _disposed;
         bool _committed;
         public CassieConnection Connection { get; } = connection;
-        public DbTransaction Transaction { get; } = transaction;
+        public CassieTransaction Transaction { get; } = transaction;
         public CheckpointIdentity Identity { get; } = identity;
         public bool Finished { get; private set; }
         public async ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)

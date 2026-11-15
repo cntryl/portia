@@ -47,7 +47,7 @@ public sealed class CheckpointIdentityTests
             _ = services.AddSingleton(new Projection(target, pattern));
             _ = services.AddSingleton(new ProjectorRunner(events));
             await using var provider = services.BuildServiceProvider();
-            await ProjectorRegistration.Create<Projection>()
+            _ = await ((IWorkloadDescriptor)ProjectorRegistration.Create<Projection>())
                 .RunPass(provider, new ProjectionRunOptions { RebuildId = rebuildId }, default);
         }
 
@@ -110,7 +110,7 @@ public sealed class CheckpointIdentityTests
             _ = services.AddSingleton(new Projection(target, pattern));
             _ = services.AddSingleton(new ProjectorRunner(events));
             await using var provider = services.BuildServiceProvider();
-            await ProjectorRegistration.Create<Projection>().RunPass(provider,
+            _ = await ((IWorkloadDescriptor)ProjectorRegistration.Create<Projection>()).RunPass(provider,
                 new ProjectionRunOptions { RebuildId = "interrupted", MaxBatchSize = 1 }, default);
         }
 

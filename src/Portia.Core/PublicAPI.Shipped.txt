@@ -36,8 +36,6 @@ Cntryl.Portia.ProjectionRunOptions.Validate() -> void
 Cntryl.Portia.ProjectorRegistration
 Cntryl.Portia.ProjectorRegistration.ProjectorType.get -> System.Type!
 Cntryl.Portia.ProjectorRegistration.Resolve(System.IServiceProvider! services) -> Cntryl.Portia.Projector!
-Cntryl.Portia.ProjectorRegistration.Run.get -> System.Func<Cntryl.Portia.ProjectorRunner!, System.IServiceProvider!, Cntryl.Portia.ProjectionCheckpoint, Cntryl.Portia.ProjectionRunOptions?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<Cntryl.Portia.ProjectionCheckpoint>>!
-Cntryl.Portia.ProjectorRegistration.RunPass.get -> System.Func<System.IServiceProvider!, Cntryl.Portia.ProjectionRunOptions?, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>!
 Cntryl.Portia.ProjectorRunner
 Cntryl.Portia.ProjectorRunner.ProjectorRunner(Cntryl.Portia.IDomainEventReader! reader) -> void
 Cntryl.Portia.ProjectorRunner.RunAsync(Cntryl.Portia.Projector! projector, Cntryl.Portia.ProjectionCheckpoint checkpoint, Cntryl.Portia.ProjectionRunOptions? options = null, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.ProjectionCheckpoint>

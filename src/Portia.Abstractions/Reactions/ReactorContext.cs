@@ -26,7 +26,11 @@ public sealed class ReactorContext<TEvent> : IReactorContext<TEvent>
             throw new ArgumentException("Reaction context must refer to its actual triggering event.", nameof(source));
         }
 
-        if (!RequestActor.IsSystem(execution.Actor))
+        // Portia's own execution already holds a private snapshot; reading it avoids copying the
+        // principal once per event only to inspect it.
+        if (!RequestActor.IsSystem(execution is ReactionExecutionContext reaction
+                ? reaction.ActorSnapshot
+                : execution.Actor))
         {
             throw new ArgumentException("Reaction execution requires a system principal.", nameof(execution));
         }

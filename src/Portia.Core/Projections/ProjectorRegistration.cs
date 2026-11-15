@@ -10,29 +10,14 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
 {
     readonly Func<IServiceProvider, Projector> _resolve;
 
-    ProjectorRegistration(
-        Type projectorType,
-        Func<IServiceProvider, Projector> resolve,
-        Func<ProjectorRunner, IServiceProvider, ProjectionCheckpoint, ProjectionRunOptions?, CancellationToken,
-            ValueTask<ProjectionCheckpoint>> run,
-        Func<IServiceProvider, ProjectionRunOptions?, CancellationToken, ValueTask> runPass)
+    ProjectorRegistration(Type projectorType, Func<IServiceProvider, Projector> resolve)
     {
         ProjectorType = projectorType;
         _resolve = resolve;
-        Run = run;
-        RunPass = runPass;
     }
 
     /// <summary>Gets the concrete projector type.</summary>
     public Type ProjectorType { get; }
-
-    /// <summary>Gets the delegate that resolves and runs the projector from an explicit checkpoint.</summary>
-    public Func<ProjectorRunner, IServiceProvider, ProjectionCheckpoint, ProjectionRunOptions?, CancellationToken,
-        ValueTask<ProjectionCheckpoint>> Run
-    { get; }
-
-    /// <summary>Gets the delegate that loads authoritative progress and runs one pass in the supplied scope.</summary>
-    public Func<IServiceProvider, ProjectionRunOptions?, CancellationToken, ValueTask> RunPass { get; }
 
     Type IWorkloadDescriptor.ComponentType => ProjectorType;
 
@@ -87,18 +72,5 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
     /// <returns>The component descriptor.</returns>
     public static ProjectorRegistration Create<TProjector>()
         where TProjector : Projector => new(
-        typeof(TProjector),
-        static services => services.GetRequiredService<TProjector>(),
-        static (runner, services, checkpoint, options, ct) =>
-            runner.RunAsync(services.GetRequiredService<TProjector>(), checkpoint, options, ct),
-        static async (services, options, ct) =>
-        {
-            (options ?? ProjectionRunOptions.Default).Validate();
-            var projector = services.GetRequiredService<TProjector>();
-            WorkloadBinding.Apply(services, projector.BindWorkload);
-            var checkpoint = await ProcessorCheckpoints.LoadAsync(projector.Store, new CheckpointIdentity(projector.Name, projector.Pattern, options?.RebuildId), ct)
-                .ConfigureAwait(false);
-            _ = await services.GetRequiredService<ProjectorRunner>()
-                .RunAsync(projector, checkpoint, options, ct).ConfigureAwait(false);
-        });
+        typeof(TProjector), static services => services.GetRequiredService<TProjector>());
 }

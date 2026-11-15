@@ -128,9 +128,6 @@ public abstract class Reactor
     internal ValueTask<Result> ReactAsync(DomainEventRecord record, CancellationToken ct)
         => ReactToEventAsync(record, new ReactionExecutionContext(record, RequestActor.System), ct);
 
-    internal ValueTask<Result> ReactAsync(DomainEventRecord record, IExecutionContext context, CancellationToken ct)
-        => ReactToEventAsync(record, context, ct);
-
     internal ValueTask<Result> ReactAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct) =>
         ReactBatchAsync(contexts, ct);
 
