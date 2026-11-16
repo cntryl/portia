@@ -119,27 +119,6 @@ public sealed class QueueRunnerTests
         Assert.Equal(lost ? 0 : 1, queued.CompletionCount);
     }
 
-    /// <summary>An adapter cannot silently ignore an explicitly configured redelivery delay.</summary>
-    [Fact]
-    public async Task ShouldRejectConfiguredRetryDelayGivenAdapterDoesNotSupportIt()
-    {
-        // Arrange
-        using var busHost = TestRequestBus.Create();
-        var original = new FakeQueuedRequest(new InvalidChangeValue(1, true));
-
-        // Act
-        var runner = new QueueRunner(new FakeQueueConsumer([new LegacyQueuedRequest(original)]),
-            RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator(),
-                options: new QueueRunnerOptions { RetryDelay = TimeSpan.FromSeconds(7) }));
-
-        // Assert
-        _ = await Assert.ThrowsAsync<NotSupportedException>(() => runner.RunAsync());
-
-        Assert.Equal(0, original.Retries);
-        Assert.Equal(0, original.AbandonmentCount);
-        Assert.Equal(0, original.CompletionCount);
-    }
-
     /// <summary>Redelivery preserves the typed logical key while each worker execution is new.</summary>
     [Fact]
     public async Task ShouldPreserveTypedIdentityAcrossAttemptsGivenQueuedRedelivery()
@@ -1451,18 +1430,6 @@ public sealed class QueueRunnerTests
                 ? ValueTask.FromException(new InvalidOperationException("terminal failed"))
                 : ValueTask.CompletedTask;
         }
-    }
-
-    sealed class LegacyQueuedRequest(IQueuedRequest inner) : IQueuedRequest
-    {
-        public IRequest Request => inner.Request;
-        public RequestMetadata Metadata => inner.Metadata;
-        public RequestInvocation Invocation => inner.Invocation;
-        public uint Attempt => inner.Attempt;
-        public string? ActorToken => inner.ActorToken;
-        public CancellationToken ReservationCancellation => inner.ReservationCancellation;
-        public ValueTask CompleteAsync(CancellationToken ct = default) => inner.CompleteAsync(ct);
-        public ValueTask AbandonAsync(CancellationToken ct = default) => inner.AbandonAsync(ct);
     }
 
     sealed record ThrowingChangeValue(int Value) : IRequest;

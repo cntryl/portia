@@ -281,6 +281,12 @@ public sealed class PortiaBuilder
     ///     defaults.
     /// </param>
     /// <returns>This builder, for chaining.</returns>
+    /// <remarks>
+    ///     Registering a workload also registers Portia's status query for it: a callable
+    ///     <c>portia.processor_status</c> request, its handler, and a principal-stage authorizer that denies
+    ///     everyone except the configured system-administrator role. It is served only once a transport
+    ///     activates worker endpoints. See "Operator inspection of a projector or reactor" in the projectors and reactors guide.
+    /// </remarks>
     public PortiaBuilder AddReactor<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     TReactor>(string name, WorkloadScope scope,
@@ -301,6 +307,12 @@ public sealed class PortiaBuilder
     ///     defaults.
     /// </param>
     /// <returns>This builder, for chaining.</returns>
+    /// <remarks>
+    ///     Registering a workload also registers Portia's status query for it: a callable
+    ///     <c>portia.processor_status</c> request, its handler, and a principal-stage authorizer that denies
+    ///     everyone except the configured system-administrator role. It is served only once a transport
+    ///     activates worker endpoints. See "Operator inspection of a projector or reactor" in the projectors and reactors guide.
+    /// </remarks>
     public PortiaBuilder AddProjector<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     TProjector>(string name, WorkloadScope scope,
@@ -453,6 +465,11 @@ public sealed class PortiaBuilder
 
     /// <summary>Activates the shared application's worker registrations once in this host.</summary>
     /// <returns>This builder, for chaining.</returns>
+    /// <remarks>
+    ///     Worker declarations are applied to a copy of the service collection and the copy then replaces the
+    ///     collection's contents, so a declaration that throws leaves the application's registrations as they
+    ///     were. Descriptors already registered keep their order; nothing the application registered is dropped.
+    /// </remarks>
     public PortiaBuilder AddWorkers()
     {
         if (_catalog.WorkersActivated)

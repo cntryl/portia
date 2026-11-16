@@ -15,8 +15,6 @@ public sealed class ReactorRunner(
     IReactorPrincipalProvider? principals = null,
     TimeProvider? timeProvider = null)
 {
-    internal OperationalSession? Operations { get; set; }
-
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly IReactorPrincipalProvider _principals = principals ?? new SystemReactorPrincipalProvider();
     readonly IDomainEventReader _reader = reader ?? throw new ArgumentNullException(nameof(reader));
@@ -42,10 +40,24 @@ public sealed class ReactorRunner(
     /// <summary>Processes a bounded pass using the supplied batch and pass limits.</summary>
     public async ValueTask<ProjectionCheckpoint> RunPassAsync(Reactor reactor, ProjectionCheckpoint checkpoint,
         ProjectionRunOptions options, CancellationToken ct = default)
-        => (await ExecutePassAsync(reactor, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
+        => (await ExecutePassAsync(null, reactor, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
 
-    internal async ValueTask<ProjectionPassResult> ExecutePassAsync(Reactor reactor, ProjectionCheckpoint checkpoint,
-        ProjectionRunOptions options, CancellationToken ct = default)
+    // The journaled forms of a pass. Hosting supplies the workload's operational session here, so whether
+    // a pass is journaled is decided by its caller's arguments and never by state set on the runner.
+    internal async ValueTask<ProjectionCheckpoint> RunAsync(OperationalSession session, Reactor reactor,
+        ProjectionCheckpoint checkpoint, int maxBatchSize = 512, CancellationToken ct = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBatchSize);
+        return (await ExecutePassAsync(session, reactor, checkpoint,
+            ProjectionRunOptions.Default with { MaxBatchSize = maxBatchSize }, ct).ConfigureAwait(false)).Checkpoint;
+    }
+
+    internal async ValueTask<ProjectionCheckpoint> RunPassAsync(OperationalSession session, Reactor reactor,
+        ProjectionCheckpoint checkpoint, ProjectionRunOptions options, CancellationToken ct = default)
+        => (await ExecutePassAsync(session, reactor, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
+
+    internal async ValueTask<ProjectionPassResult> ExecutePassAsync(OperationalSession? session, Reactor reactor,
+        ProjectionCheckpoint checkpoint, ProjectionRunOptions options, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(reactor);
         if (reactor.Pattern.IsTenantTemplate)
@@ -97,7 +109,7 @@ public sealed class ReactorRunner(
             }
 
             source.Checkpoint = checkpoint;
-            Operations?.EnsureRecoveryCompleted(checkpoint);
+            session?.EnsureRecoveryCompleted(checkpoint);
             return new ProjectionPassResult(checkpoint, budgetExhausted && checkpoint != startingCheckpoint);
         }
         catch (OperationCanceledException ex) when (ct.IsCancellationRequested)
@@ -129,13 +141,13 @@ public sealed class ReactorRunner(
             try
             {
                 var journal = reactor.Checkpoints as IOperationalReactionCheckpointStore;
-                if (Operations is not null && journal is null)
+                if (session is not null && journal is null)
                     throw new InvalidOperationException("Operations requires the registered operational reactor checkpoint store.");
-                if (Operations is { } operations)
+                if (session is { } operations)
                     _ = await operations.BeginAsync(contexts.Select(c => c.Source).ToArray(), checkpoint, ct).ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
-                using var observation = Operations?.Observe();
-                if (Operations is not null)
+                using var observation = session?.Observe();
+                if (session is not null)
                     foreach (var context in contexts)
                         ProcessingObservation.Record("execution", reactor.Name, context.Source.Event.Metadata.EventId.ToString(),
                         context.ExecutionId.ToString(), "started");
@@ -146,7 +158,7 @@ public sealed class ReactorRunner(
                         contexts[0].Source, contexts[^1].Source, error: result.Error);
                 stage = ProcessorFailureStage.Committing;
                 var next = new ProjectionCheckpoint(contexts[^1].Source.NextCursor);
-                if (Operations is { } operational)
+                if (session is { } operational)
                     await operational.CommitReactionAsync(journal!, checkpoint, next, ct).ConfigureAwait(false);
                 else if (reactor.Checkpoints is IConditionalProjectionCheckpointStore conditional)
                     await conditional.SaveAsync(identity, checkpoint, next, ct).ConfigureAwait(false);
@@ -165,7 +177,7 @@ public sealed class ReactorRunner(
                         contexts[0].Source, contexts[^1].Source, UninitializedResult.Is(exception)
                             ? UninitializedResult.ReturnedBy("reactor", reactor.GetType(), exception)
                             : exception);
-                if (Operations is { } operations)
+                if (session is { } operations)
                     await operations.RecordFailureAsync(failure, null, ct).ConfigureAwait(false);
                 throw failure;
             }

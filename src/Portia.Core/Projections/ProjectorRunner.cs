@@ -8,8 +8,6 @@ namespace Cntryl.Portia;
 /// <param name="reader">The domain-event reader.</param>
 public sealed class ProjectorRunner(IDomainEventReader reader)
 {
-    internal OperationalSession? Operations { get; set; }
-
     readonly IDomainEventReader _reader = reader ?? throw new ArgumentNullException(nameof(reader));
 
     /// <summary>
@@ -25,9 +23,20 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         ProjectionCheckpoint checkpoint,
         ProjectionRunOptions? options = null,
         CancellationToken ct = default)
-        => (await RunPassAsync(projector, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
+        => (await RunPassAsync(null, projector, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
+
+    // The journaled form of a pass. Hosting supplies the workload's operational session here, so whether
+    // a pass is journaled is decided by its caller's arguments and never by state set on the runner.
+    internal async ValueTask<ProjectionCheckpoint> RunAsync(
+        OperationalSession session,
+        Projector projector,
+        ProjectionCheckpoint checkpoint,
+        ProjectionRunOptions? options = null,
+        CancellationToken ct = default)
+        => (await RunPassAsync(session, projector, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
 
     internal async ValueTask<ProjectionPassResult> RunPassAsync(
+        OperationalSession? session,
         Projector projector,
         ProjectionCheckpoint checkpoint,
         ProjectionRunOptions? options = null,
@@ -60,7 +69,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
 
                 if (records.Count == batchSize)
                 {
-                    checkpoint = await CommitAsync(projector, records, checkpoint, identity, ct)
+                    checkpoint = await CommitAsync(session, projector, records, checkpoint, identity, ct)
                         .ConfigureAwait(false);
                     source.Checkpoint = checkpoint;
                 }
@@ -74,12 +83,12 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
 
             if (records.Count != 0)
             {
-                checkpoint = await CommitAsync(projector, records, checkpoint, identity, ct)
+                checkpoint = await CommitAsync(session, projector, records, checkpoint, identity, ct)
                     .ConfigureAwait(false);
             }
 
             source.Checkpoint = checkpoint;
-            Operations?.EnsureRecoveryCompleted(checkpoint);
+            session?.EnsureRecoveryCompleted(checkpoint);
             return new ProjectionPassResult(checkpoint, budgetExhausted && checkpoint != startingCheckpoint);
         }
         catch (OperationCanceledException ex) when (ct.IsCancellationRequested)
@@ -102,7 +111,8 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
 
     }
 
-    async ValueTask<ProjectionCheckpoint> CommitAsync(
+    static async ValueTask<ProjectionCheckpoint> CommitAsync(
+        OperationalSession? session,
         Projector projector,
         List<DomainEventRecord> records,
         ProjectionCheckpoint checkpoint,
@@ -121,13 +131,13 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         Exception? failure = null;
         try
         {
-            if (Operations is { } operations)
+            if (session is { } operations)
                 _ = await operations.BeginAsync(records, checkpoint, ct).ConfigureAwait(false);
             var context = new ProjectionBatchContext(identity, checkpoint);
             batch = await projector.Store.BeginAsync(context, ct).ConfigureAwait(false);
             stage = ProcessorFailureStage.Handling;
             ct.ThrowIfCancellationRequested();
-            using var observation = Operations?.Observe();
+            using var observation = session?.Observe();
             var result = await projector.ProjectAsync(records, new ProjectorContext(identity), ct).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
             if (!result.IsSuccess)
@@ -178,11 +188,11 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
 
         if (failure is not null)
         {
-            if (Operations is { } operations && !(failure is OperationCanceledException && ct.IsCancellationRequested))
+            if (session is { } operations && !(failure is OperationCanceledException && ct.IsCancellationRequested))
                 await operations.RecordFailureAsync(failure, committed ? confirmed : null, ct).ConfigureAwait(false);
             ExceptionDispatchInfo.Capture(failure).Throw();
         }
-        if (Operations is { } confirmation)
+        if (session is { } confirmation)
         {
             // The repository has already committed, so a confirmation failure belongs to the commit
             // stage and to the checkpoint the repository now holds.

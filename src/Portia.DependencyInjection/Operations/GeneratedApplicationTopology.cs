@@ -11,7 +11,7 @@ sealed class GeneratedApplicationTopology(IEnumerable<RequestHandlerRegistration
         {
             var generated = w.ComponentType.GetCustomAttribute<ProcessorTopologyAttribute>();
             return new ProcessorTopology(w.Name, w.ComponentType.FullName ?? w.ComponentType.Name,
-                w.Descriptor.SupportsRebuild ? "projector" : "reactor", w.Scope.ToString(),
+                w.Descriptor.Kind, w.Scope.ToString(),
                 generated?.Subscriptions.ToArray() ?? [], generated is null
                     ? "unknown: manual dispatch" : "generated dispatch; overrides and opaque dependencies unknown");
         }).OrderBy(w => w.Name, StringComparer.Ordinal).ToArray(),

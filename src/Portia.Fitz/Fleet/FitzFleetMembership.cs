@@ -13,7 +13,10 @@ public sealed class FitzFleetMembership(ILeaseClient client) : IFleetMembership
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(callback);
         options.Validate([]);
-        var workerId = options.WorkerId ?? Guid.NewGuid().ToString("D");
+        // The callback finds itself in the inventory by this ID, so one generated here would be unknowable.
+        var workerId = options.WorkerId ?? throw new ArgumentException(
+            $"Fleet membership requires {nameof(FleetRunOptions)}.{nameof(FleetRunOptions.WorkerId)}; "
+            + $"{nameof(FleetPartitionRunner)} supplies one when it is not configured.", nameof(options));
         return _client.WithLeaseAsync(options.MembershipSelector[..^1] + workerId,
             TimeSpan.FromSeconds(options.TtlSeconds),
             async (_, membershipCt) =>

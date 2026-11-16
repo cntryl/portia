@@ -258,7 +258,7 @@ sealed class PortiaWorkloadService(
                             var target = new OperationalTarget(registration.Name, passPattern.ToString(),
                                 new OperationalScope(identity.Tenant?.Value), processing.RebuildId);
                             await operationalSession.AcquireAsync(target,
-                                registration.Descriptor.SupportsRebuild ? "projector" : "reactor",
+                                registration.Descriptor.Kind,
                                 new OperationalProcessingSettings(processing.MaxBatchSize, processing.MaxEventsPerPass,
                                     registration.FailureAttemptLimit, registration.PollInterval.Ticks,
                                     registration.MaximumFailureDelay.Ticks), null, ct).ConfigureAwait(false);
@@ -300,10 +300,7 @@ sealed class PortiaWorkloadService(
                         consecutiveFailures++;
                     PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Workload, ex,
                         _logger);
-                    if (ex is ProcessorFailureException { IsTransient: false }
-                        || consecutiveFailures >= registration.FailureAttemptLimit
-                        || operationalSession is { State.Block: { } block } terminal
-                            && terminal.State.Attempts[^1].Id == block.AttemptId)
+                    if (IsTerminal(ex, consecutiveFailures, registration, operationalSession))
                     {
                         terminalFailure = new WorkloadFailureException(identity, consecutiveFailures, ex);
                     }
@@ -496,14 +493,14 @@ sealed class PortiaWorkloadService(
         }
     }
 
-    static TimeSpan GetFailureDelay(WorkloadRegistration registration, int consecutiveFailures)
-    {
-        var maximumTicks = registration.MaximumFailureDelay.Ticks;
-        var initialTicks = Math.Min(registration.PollInterval.Ticks, maximumTicks);
-        var exponent = Math.Min(consecutiveFailures - 1, 30);
-        var ticks = initialTicks > maximumTicks >> exponent
-            ? maximumTicks
-            : initialTicks << exponent;
-        return TimeSpan.FromTicks(Math.Min(ticks, maximumTicks));
-    }
+    // Retrying ends when the failure is permanent, when the attempt budget is spent, or when the journal has
+    // blocked the processor on the attempt that just failed.
+    static bool IsTerminal(Exception failure, int consecutiveFailures, WorkloadRegistration registration,
+        OperationalSession? session) =>
+        failure is ProcessorFailureException { IsTransient: false }
+        || consecutiveFailures >= registration.FailureAttemptLimit
+        || session is { State.Block: { } block } && session.State.Attempts[^1].Id == block.AttemptId;
+
+    static TimeSpan GetFailureDelay(WorkloadRegistration registration, int consecutiveFailures) =>
+        WorkloadFailureBackoff.Delay(registration.PollInterval, registration.MaximumFailureDelay, consecutiveFailures);
 }

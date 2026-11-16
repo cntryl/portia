@@ -21,6 +21,8 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
     // Reaction effects are not transactional with progress, so a reactor has no separate
     // generation to build into; a rebuild would re-fire every effect.
     bool IWorkloadDescriptor.SupportsRebuild => false;
+
+    string IWorkloadDescriptor.Kind => ProcessorKinds.Reactor;
     void IWorkloadDescriptor.Register(IServiceCollection services) => _ = services.AddSingleton(this);
 
     void IWorkloadDescriptor.Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName)
@@ -52,9 +54,9 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
         WorkloadBinding.Apply(services, reactor.BindWorkload);
         var checkpoint = await ProcessorCheckpoints.LoadAsync(reactor.Checkpoints,
             new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
-        var runner = services.GetRequiredService<ReactorRunner>();
-        runner.Operations = services.GetService<OperationalExecution>()?.Session;
-        return await runner.ExecutePassAsync(reactor, checkpoint, options, ct).ConfigureAwait(false);
+        return await services.GetRequiredService<ReactorRunner>().ExecutePassAsync(
+            services.GetService<OperationalExecution>()?.Session, reactor, checkpoint, options, ct)
+            .ConfigureAwait(false);
     }
 
     /// <summary>Resolves the reactor in the supplied application scope.</summary>

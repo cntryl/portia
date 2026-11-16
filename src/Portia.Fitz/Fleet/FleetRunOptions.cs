@@ -21,6 +21,8 @@ public sealed record FleetRunOptions
     /// </summary>
     public TimeSpan PartitionStopTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
+    static readonly TimeSpan MaximumTimerInterval = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
+
     internal ulong TtlSeconds => checked((ulong)Math.Ceiling(LeaseTtl.TotalSeconds));
 
     internal void Validate(IReadOnlyCollection<string> partitions)
@@ -29,6 +31,9 @@ public sealed record FleetRunOptions
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(LeaseTtl, TimeSpan.Zero);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(ReconciliationInterval, TimeSpan.Zero);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(PartitionStopTimeout, TimeSpan.Zero);
+        // Both are waited on with timers, which cannot represent a longer interval.
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(ReconciliationInterval, MaximumTimerInterval);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(PartitionStopTimeout, MaximumTimerInterval);
         var segments = MembershipSelector?.StartsWith("lease://", StringComparison.Ordinal) == true
             ? MembershipSelector[8..].Split('/')
             : [];

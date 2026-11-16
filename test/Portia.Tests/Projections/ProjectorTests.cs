@@ -139,7 +139,7 @@ public sealed class ProjectorTests
         var projector = new TestProjector(new RecordingProjectionTarget());
 
         // Act
-        var result = await runner.RunPassAsync(projector, new ProjectionCheckpoint(new EventCursor("1")),
+        var result = await runner.RunPassAsync(null, projector, new ProjectionCheckpoint(new EventCursor("1")),
             new ProjectionRunOptions { MaxEventsPerPass = 1 });
 
         // Assert

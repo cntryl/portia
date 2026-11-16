@@ -17,8 +17,8 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        var objectKey = ResolveObjectKey(tenantId, expected);
-        var key = ResolveUploadKey(tenantId, objectKey);
+        var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
+        var key = ObjectStorageRules.UploadKey(_tenantResolver, tenantId, objectKey);
         var response = await _client.InitiateMultipartUploadAsync(new InitiateMultipartUploadRequest
         {
             BucketName = location.BucketReference,
@@ -48,9 +48,9 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
             throw new ArgumentOutOfRangeException(nameof(partNumber));
         }
 
-        var duration = BoundLifetime(lifetime);
+        var duration = ObjectStorageRules.BoundLifetime(lifetime);
         var payload = SessionPayload.Decode(session.Token, _sessionProtector);
-        EnsureSessionActive(payload);
+        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt);
         var expiresAt = DateTimeOffset.UtcNow.Add(duration);
         if (expiresAt > payload.ExpiresAt)
         {
@@ -75,7 +75,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(parts);
         var payload = SessionPayload.Decode(session.Token, _sessionProtector);
-        EnsureSessionActive(payload);
+        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt);
         // A canceled call can be a retry after S3 committed completion but lost its response.
         // Only an explicit abort can safely discard its potentially completed staging object.
         ct.ThrowIfCancellationRequested();
@@ -172,7 +172,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        var objectKey = ResolveObjectKey(tenantId, expected);
+        var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
         return await HeadAndVerifyAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct)
             .ConfigureAwait(false);
     }
@@ -181,9 +181,9 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
     public async ValueTask<ObjectDownload> CreateDownloadAsync(TenantId tenantId, ObjectDigest expected, TimeSpan lifetime, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(expected);
-        var duration = BoundLifetime(lifetime);
+        var duration = ObjectStorageRules.BoundLifetime(lifetime);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        var objectKey = ResolveObjectKey(tenantId, expected);
+        var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
         if (!await HeadAndVerifyAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct).ConfigureAwait(false))
         {
             throw new FileNotFoundException("The verified object was not found.");
@@ -206,7 +206,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        var objectKey = ResolveObjectKey(tenantId, expected);
+        var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
         if (!await HeadAndVerifyAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct)
             .ConfigureAwait(false))
         {
@@ -229,7 +229,7 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        var objectKey = ResolveObjectKey(tenantId, expected);
+        var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
         await _client.DeleteObjectAsync(location.BucketReference, objectKey, ct).ConfigureAwait(false);
     }
 
@@ -381,16 +381,6 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
         }
     }
 
-    static TimeSpan BoundLifetime(TimeSpan lifetime)
-    {
-        if (lifetime <= TimeSpan.Zero || lifetime > ObjectStorageLimits.MaximumDownloadLifetime)
-        {
-            throw new ArgumentOutOfRangeException(nameof(lifetime), $"Lifetime must be positive and no longer than {ObjectStorageLimits.MaximumDownloadLifetime}.");
-        }
-
-        return lifetime;
-    }
-
     Protocol PresignedProtocol
     {
         get
@@ -403,30 +393,6 @@ public sealed class AwsObjectStorage(IAmazonS3 client, IObjectStorageTenantResol
 
             return config.UseHttp ? Protocol.HTTP : Protocol.HTTPS;
         }
-    }
-
-    static void EnsureSessionActive(SessionPayload payload)
-    {
-        if (payload.ExpiresAt <= DateTimeOffset.UtcNow)
-        {
-            throw new InvalidOperationException("The upload session has expired.");
-        }
-    }
-
-    string ResolveObjectKey(TenantId tenantId, ObjectDigest expected)
-    {
-        var key = _tenantResolver.GetObjectKey(tenantId, expected);
-        return !string.IsNullOrWhiteSpace(key) ? key
-            : throw new InvalidOperationException("The application must resolve a nonblank object key.");
-    }
-
-    string ResolveUploadKey(TenantId tenantId, string objectKey)
-    {
-        var key = _tenantResolver.GetUploadKey(tenantId, Uuid.CreateVersion4());
-        if (string.IsNullOrWhiteSpace(key) || string.Equals(key, objectKey, StringComparison.Ordinal) ||
-            objectKey.StartsWith(key.TrimEnd('/') + "/", StringComparison.Ordinal))
-            throw new InvalidOperationException("The application must resolve a unique upload key disjoint from the object key.");
-        return key;
     }
 
     internal sealed record SessionPayload(

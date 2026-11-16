@@ -74,10 +74,12 @@ public sealed partial class FleetPartitionRunner(
         var attempt = 0;
         while (!ct.IsCancellationRequested)
         {
+            var session = new MembershipSession();
             try
             {
                 await _membership.RunAsync(options, (observer, membershipCt) =>
-                    ReconcileAsync(partitions, callback, options, observer, membershipCt), ct).ConfigureAwait(false);
+                    ReconcileAsync(partitions, callback, options, observer, session, membershipCt), ct)
+                    .ConfigureAwait(false);
                 if (!ct.IsCancellationRequested)
                 {
                     Fault(RunnerFaultStage.Acquisition);
@@ -100,7 +102,9 @@ public sealed partial class FleetPartitionRunner(
                 Fault(RunnerFaultStage.Acquisition, ex);
             }
 
-            attempt = NextAttempt(attempt);
+            // A session that saw this worker in a ready inventory made progress, so the next retry
+            // starts short again rather than inheriting the backoff an earlier outage had grown.
+            attempt = session.WasReady ? 1 : NextAttempt(attempt);
             if (!await BackoffAsync(attempt, ct).ConfigureAwait(false))
             {
                 break;
@@ -110,12 +114,13 @@ public sealed partial class FleetPartitionRunner(
 
     async Task ReconcileAsync(Func<IReadOnlyCollection<string>> partitions,
         Func<string, CancellationToken, Task> callback,
-        FleetRunOptions options, ILeaseInventoryObserver observer, CancellationToken ct)
+        FleetRunOptions options, ILeaseInventoryObserver observer, MembershipSession session, CancellationToken ct)
     {
         var active = new Dictionary<string, PartitionRun>(StringComparer.Ordinal);
         var assignments = new FleetAssignmentCache();
         var prefix = options.MembershipSelector[..^1];
         var unavailable = false;
+        WorkloadFailureException? terminal = null;
         try
         {
             while (!ct.IsCancellationRequested)
@@ -131,6 +136,7 @@ public sealed partial class FleetPartitionRunner(
                 }
 
                 unavailable = !ready;
+                session.WasReady |= ready;
                 var current = partitions();
                 options.Validate(current);
                 var assigned = ready
@@ -169,12 +175,26 @@ public sealed partial class FleetPartitionRunner(
                 await Task.Delay(options.ReconciliationInterval, _clock, ct).ConfigureAwait(false);
             }
         }
+        catch (WorkloadFailureException ex)
+        {
+            terminal = ex;
+            throw;
+        }
         finally
         {
             foreach (var (partition, run) in active)
                 Cancel(run.Cancellation);
-            await ObserveAsync([.. active.Select(pair => (pair.Key, pair.Value))],
-                options.PartitionStopTimeout).ConfigureAwait(false);
+            try
+            {
+                await ObserveAsync([.. active.Select(pair => (pair.Key, pair.Value))],
+                    options.PartitionStopTimeout).ConfigureAwait(false);
+            }
+            catch (FleetPartitionTerminationTimeoutException timeout) when (terminal is not null)
+            {
+                // Both end the runner. The workload failure is the cause, so it stays the reported
+                // exception and carries the termination timeout that followed it.
+                terminal.Data["Portia.CleanupException"] = timeout;
+            }
         }
     }
 
@@ -341,6 +361,12 @@ public sealed partial class FleetPartitionRunner(
     [LoggerMessage(EventId = 1101, Level = LogLevel.Error,
         Message = "Portia FleetPartitionRunner partition termination timed out")]
     static partial void LogPartitionTerminationTimeout(ILogger logger, Exception exception);
+
+    // What one membership session achieved, for the retry policy that follows it.
+    sealed class MembershipSession
+    {
+        public bool WasReady { get; set; }
+    }
 
     sealed class PartitionRun(
         CancellationTokenSource cancellation,

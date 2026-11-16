@@ -2,9 +2,13 @@ namespace Cntryl.Portia.Testing;
 
 /// <summary>
 ///     Runs a reactor over given events through Portia's real runner and records the requests it sends. Construct
-///     the reactor with <see cref="Requests" /> as its <see cref="IRequestBus" />; every request succeeds unless
-///     scripted with <see cref="RespondTo{TRequest}" />.
+///     the reactor with <see cref="Requests" /> as its <see cref="IRequestBus" />; every no-result request succeeds
+///     unless scripted with <see cref="RespondTo{TRequest}" />.
 /// </summary>
+/// <remarks>
+///     The bus records and answers from the script; it dispatches nothing, so no handler, authorizer, guard, or
+///     behavior runs. Test a request's own authorization and handling with <see cref="RequestScenario" />.
+/// </remarks>
 public sealed class ReactorScenario
 {
     readonly ScenarioHistory _history;
@@ -58,16 +62,39 @@ public sealed class ReactorScenario
     /// <exception cref="ArgumentException"><typeparamref name="TRequest" /> is not a concrete request type.</exception>
     public ReactorScenario RespondTo<TRequest>(Result result) where TRequest : IRequest
     {
-        if (typeof(TRequest).IsAbstract || typeof(TRequest).IsInterface)
-        {
-            throw new ArgumentException(
-                $"Responses match the request's exact type; '{typeof(TRequest).Name}' is not a concrete request type.",
-                nameof(TRequest));
-        }
-
-        _requests.Script(typeof(TRequest), result);
+        _requests.Script(Concrete<TRequest>(), result);
         return this;
     }
+
+    /// <summary>Scripts the result returned whenever the reactor sends a result-bearing request of this type.</summary>
+    /// <typeparam name="TRequest">The concrete request type the response answers.</typeparam>
+    /// <typeparam name="TOut">The result the request produces.</typeparam>
+    /// <param name="result">The result to return, successful or failed.</param>
+    /// <returns>This scenario, for chaining.</returns>
+    /// <remarks>A result-bearing request has no default answer; sending one that was not scripted fails the run.</remarks>
+    public ReactorScenario RespondTo<TRequest, TOut>(Result<TOut> result) where TRequest : IRequest<TOut>
+    {
+        _requests.Script(Concrete<TRequest>(), result);
+        return this;
+    }
+
+    /// <summary>Scripts the items yielded whenever the reactor sends a stream request of this type.</summary>
+    /// <typeparam name="TRequest">The concrete request type the response answers.</typeparam>
+    /// <typeparam name="TOut">The item the stream yields.</typeparam>
+    /// <param name="items">The items to yield, in order.</param>
+    /// <returns>This scenario, for chaining.</returns>
+    public ReactorScenario RespondToStream<TRequest, TOut>(params TOut[] items) where TRequest : IStreamRequest<TOut>
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        _requests.Script(Concrete<TRequest>(), items.ToArray());
+        return this;
+    }
+
+    static Type Concrete<TRequest>() => typeof(TRequest).IsAbstract || typeof(TRequest).IsInterface
+        ? throw new ArgumentException(
+            $"Responses match the request's exact type; '{typeof(TRequest).Name}' is not a concrete request type.",
+            nameof(TRequest))
+        : typeof(TRequest);
 
     /// <summary>
     ///     Delivers every given event to <paramref name="reactor" /> from the start of its streams. Running again
@@ -91,7 +118,7 @@ public sealed class ReactorScenario
         while (true)
         {
             ct.ThrowIfCancellationRequested();
-            var pass = await runner.ExecutePassAsync(reactor, checkpoint, ProjectionRunOptions.Default, ct)
+            var pass = await runner.ExecutePassAsync(null, reactor, checkpoint, ProjectionRunOptions.Default, ct)
                 .ConfigureAwait(false);
             checkpoint = pass.Checkpoint;
             if (!pass.ContinueImmediately)

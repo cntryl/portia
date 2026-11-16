@@ -87,13 +87,13 @@ sealed class ProcessorStatusHandler(
             {
                 var attempt = state.Block is { } block
                     ? state.Attempts.LastOrDefault(item => item.Id == block.AttemptId)
-                    : state.Attempts.LastOrDefault(item => item.Outcome == "failed");
+                    : state.Attempts.LastOrDefault(item => item.Outcome == OperationalAttemptOutcomes.Failed);
                 failure = new ProcessorStatusFailure(attempt?.FailureStage, attempt?.FailureKind,
                     attempt?.IsTransient, state.ConsecutiveFailures, state.Block is not null, attempt?.CompletedAt);
             }
         }
 
-        return new ProcessorStatus(registration.Name, registration.Descriptor.SupportsRebuild ? "projector" : "reactor",
+        return new ProcessorStatus(registration.Name, registration.Descriptor.Kind,
             request.Tenant, pattern.ToString(), registration.Processing.RebuildId, progress, failure, sourceError,
             failureError);
     }

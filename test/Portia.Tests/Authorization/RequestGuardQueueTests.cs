@@ -135,5 +135,7 @@ public sealed class RequestGuardQueueTests
             Abandoned = true;
             return ValueTask.CompletedTask;
         }
+
+        public ValueTask RetryAsync(TimeSpan delay, CancellationToken ct = default) => AbandonAsync(ct);
     }
 }

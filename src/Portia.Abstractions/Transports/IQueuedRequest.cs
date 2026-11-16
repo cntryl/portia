@@ -75,10 +75,12 @@ public interface IQueuedRequest
     ValueTask AbandonAsync(CancellationToken ct = default);
 
     /// <summary>Releases the reservation with an explicitly requested delay before redelivery.</summary>
-    /// <remarks>Adapters without delayed retry support reject the request rather than ignore its delay.</remarks>
+    /// <remarks>
+    ///     Every adapter implements this, because <see cref="QueueRunnerOptions.RetryDelay" /> is honored through
+    ///     it. An adapter whose transport cannot delay redelivery waits out the delay itself before releasing.
+    /// </remarks>
     /// <param name="delay">A nonnegative delay in whole seconds; zero requests immediate redelivery.</param>
     /// <param name="ct">Cancels releasing the reservation.</param>
     /// <returns>A task completing when the transport accepts the retry.</returns>
-    ValueTask RetryAsync(TimeSpan delay, CancellationToken ct = default) =>
-        ValueTask.FromException(new NotSupportedException("The queue adapter does not support an explicit retry delay."));
+    ValueTask RetryAsync(TimeSpan delay, CancellationToken ct = default);
 }

@@ -65,6 +65,75 @@ public sealed class ReactorScenarioTests
             scenario.SentRequests);
     }
 
+    /// <summary>A request that expects a result returns the value scripted for it and is recorded.</summary>
+    [Fact]
+    public async Task ShouldReturnScriptedValueGivenResultRequest()
+    {
+        // Arrange
+        var scenario = new ReactorScenario().RespondTo<GetValue, int>(Result<int>.Success(5));
+
+        // Act
+        var result = await scenario.Requests.SendAsync(new GetValue(), RequestActor.System);
+
+        // Assert
+        Assert.Equal(5, result.Value);
+        Assert.Equal<IRequestBase>([new GetValue()], scenario.SentRequests);
+    }
+
+    /// <summary>
+    ///     A result request with nothing scripted names the missing script, because no value can be invented
+    ///     for it.
+    /// </summary>
+    [Fact]
+    public async Task ShouldNameMissingScriptGivenUnscriptedResultRequest()
+    {
+        // Arrange
+        var scenario = new ReactorScenario();
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+            await scenario.Requests.SendAsync(new GetValue(), RequestActor.System));
+
+        // Assert
+        var error = Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains(nameof(ReactorScenario.RespondTo), error.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(GetValue), error.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>A stream request yields the items scripted for it.</summary>
+    [Fact]
+    public async Task ShouldYieldScriptedItemsGivenStreamRequest()
+    {
+        // Arrange
+        var scenario = new ReactorScenario().RespondToStream<GuardedSequence, int>(1, 2, 3);
+
+        // Act
+        var items = await scenario.Requests.StreamAsync(new GuardedSequence(), RequestActor.System).ToListAsync();
+
+        // Assert
+        Assert.Equal([1, 2, 3], items);
+    }
+
+    /// <summary>
+    ///     Asking the scenario bus to authorize reports a scripted denial rather than approving a request
+    ///     whose authorization it never ran.
+    /// </summary>
+    [Fact]
+    public async Task ShouldReportScriptedDenialGivenAuthorizationAsked()
+    {
+        // Arrange
+        var scenario = new ReactorScenario().RespondTo<SendWelcomeEmail>(RequestError.Forbidden("not allowed"));
+        var request = new SendWelcomeEmail(Uuid.CreateVersion4());
+
+        // Act
+        var result = await scenario.Requests.AuthorizeAsync(request,
+            scenario.Requests.CreateContext(RequestActor.System));
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Equal(RequestErrorKind.Forbidden, result.Error.Kind);
+    }
+
     /// <summary>A scripted failure surfaces as the reaction failure the runner would retry.</summary>
     [Fact]
     public async Task ShouldFailReactionGivenScriptedRequestFailure()

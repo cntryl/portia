@@ -26,8 +26,8 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        var objectKey = ResolveObjectKey(tenantId, expected);
-        var uploadKey = ResolveUploadKey(tenantId, objectKey);
+        var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
+        var uploadKey = ObjectStorageRules.UploadKey(_tenantResolver, tenantId, objectKey);
 
         // A block blob needs no server-side initiation: blocks stay uncommitted under the unique staging
         // name until completion commits them, so the session is only this protected token.
@@ -51,9 +51,9 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
             throw new ArgumentOutOfRangeException(nameof(partNumber));
         }
 
-        var duration = BoundLifetime(lifetime);
+        var duration = ObjectStorageRules.BoundLifetime(lifetime);
         var payload = SessionPayload.Decode(session.Token, _sessionProtector);
-        EnsureSessionActive(payload);
+        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt);
         var expiresAt = DateTimeOffset.UtcNow.Add(duration);
         if (expiresAt > payload.ExpiresAt)
         {
@@ -75,7 +75,7 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(parts);
         var payload = SessionPayload.Decode(session.Token, _sessionProtector);
-        EnsureSessionActive(payload);
+        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt);
         // A canceled call can be a retry after Azure committed completion but lost its response.
         // Only an explicit abort can safely discard its potentially committed staging blob.
         ct.ThrowIfCancellationRequested();
@@ -180,7 +180,7 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        var objectKey = ResolveObjectKey(tenantId, expected);
+        var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
         return await HeadAndVerifyAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct).ConfigureAwait(false);
     }
 
@@ -188,9 +188,9 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
     public async ValueTask<ObjectDownload> CreateDownloadAsync(TenantId tenantId, ObjectDigest expected, TimeSpan lifetime, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(expected);
-        var duration = BoundLifetime(lifetime);
+        var duration = ObjectStorageRules.BoundLifetime(lifetime);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        var objectKey = ResolveObjectKey(tenantId, expected);
+        var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
         if (!await HeadAndVerifyAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct).ConfigureAwait(false))
         {
             throw new FileNotFoundException("The verified object was not found.");
@@ -207,7 +207,7 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        var objectKey = ResolveObjectKey(tenantId, expected);
+        var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
         var verified = await GetVerifiedAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct).ConfigureAwait(false);
         if (verified is null)
         {
@@ -235,7 +235,7 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        var objectKey = ResolveObjectKey(tenantId, expected);
+        var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
         await _client.GetBlobContainerClient(location.BucketReference).GetBlobClient(objectKey)
             .DeleteIfExistsAsync(DeleteSnapshotsOption.IncludeSnapshots, cancellationToken: ct).ConfigureAwait(false);
     }
@@ -492,40 +492,6 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
     /// <summary>Gets the fixed-length base64 block name for a part; every block name in one blob must have the same length.</summary>
     static string BlockId(int partNumber) =>
         Convert.ToBase64String(Encoding.ASCII.GetBytes(partNumber.ToString("D5", CultureInfo.InvariantCulture)));
-
-    static TimeSpan BoundLifetime(TimeSpan lifetime)
-    {
-        if (lifetime <= TimeSpan.Zero || lifetime > ObjectStorageLimits.MaximumDownloadLifetime)
-        {
-            throw new ArgumentOutOfRangeException(nameof(lifetime), $"Lifetime must be positive and no longer than {ObjectStorageLimits.MaximumDownloadLifetime}.");
-        }
-
-        return lifetime;
-    }
-
-    static void EnsureSessionActive(SessionPayload payload)
-    {
-        if (payload.ExpiresAt <= DateTimeOffset.UtcNow)
-        {
-            throw new InvalidOperationException("The upload session has expired.");
-        }
-    }
-
-    string ResolveObjectKey(TenantId tenantId, ObjectDigest expected)
-    {
-        var key = _tenantResolver.GetObjectKey(tenantId, expected);
-        return !string.IsNullOrWhiteSpace(key) ? key
-            : throw new InvalidOperationException("The application must resolve a nonblank object key.");
-    }
-
-    string ResolveUploadKey(TenantId tenantId, string objectKey)
-    {
-        var key = _tenantResolver.GetUploadKey(tenantId, Uuid.CreateVersion4());
-        if (string.IsNullOrWhiteSpace(key) || string.Equals(key, objectKey, StringComparison.Ordinal) ||
-            objectKey.StartsWith(key.TrimEnd('/') + "/", StringComparison.Ordinal))
-            throw new InvalidOperationException("The application must resolve a unique upload key disjoint from the object key.");
-        return key;
-    }
 
     internal sealed record SessionPayload(
         string Container,

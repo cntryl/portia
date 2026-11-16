@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Builder;
@@ -136,6 +137,8 @@ public static class PortiaAdminMcpExtensions
             : Results.StatusCode(StatusCodes.Status403Forbidden);
     }
 
+    // Deliberately stricter than the application's MCP endpoint, which honors its CORS policy: the
+    // administrative surface accepts browser requests from its own origin only.
     static bool RejectOrigin(HttpContext context) => context.Request.Headers.Origin is { Count: > 0 } origins
         && (origins.Count != 1 || !Uri.TryCreate(origins[0], UriKind.Absolute, out var origin)
             || !string.Equals(origin.Scheme, context.Request.Scheme, StringComparison.OrdinalIgnoreCase)
@@ -156,15 +159,15 @@ public static class PortiaAdminMcpExtensions
         {
             ListToolsHandler = (call, ct) => ValueTask.FromResult(new ListToolsResult
             {
-                Tools = ToolNames.Select(name => new Tool
+                Tools = Tools.Select(tool => new Tool
                 {
-                    Name = name,
-                    Description = Description(name),
+                    Name = tool.Name,
+                    Description = tool.Description,
                     InputSchema = InputSchema,
                     Annotations = new ToolAnnotations
                     {
-                        ReadOnlyHint = name is not ("preview_repair" or "execute_repair"),
-                        IdempotentHint = name != "preview_repair",
+                        ReadOnlyHint = tool.ReadOnly,
+                        IdempotentHint = tool.Idempotent,
                         OpenWorldHint = false
                     }
                 }).ToList()
@@ -174,20 +177,49 @@ public static class PortiaAdminMcpExtensions
         server.Capabilities = new ServerCapabilities { Tools = new ToolsCapability { ListChanged = false } };
     }
 
-    static readonly string[] ToolNames = ["describe_application", "get_system_health", "list_issues", "inspect_processor",
-        "trace_causality", "preview_repair", "execute_repair", "verify_repair"];
+    // The whole administrative surface: each tool's name, description, hints, and handler live together,
+    // so listing and calling cannot disagree and an unknown name has nothing to fall through to.
+    static readonly AdminTool[] Tools =
+    [
+        new("describe_application", "Describe selected generated registrations; opaque dependencies are unknown.",
+            true, true, async (operations, actor, input, ct) => JsonSerializer.Serialize(
+                await operations.DescribeApplicationAsync(actor, input.Scope, ct).ConfigureAwait(false),
+                AdminJsonContext.Default.ApplicationTopology)),
+        new("get_system_health", "Read processing health for an exact tenant or global scope.",
+            true, true, async (operations, actor, input, ct) => JsonSerializer.Serialize(
+                await operations.GetSystemHealthAsync(actor, input.Scope, ct).ConfigureAwait(false),
+                AdminJsonContext.Default.OperationalHealth)),
+        new("list_issues", "List durable processor blocks for an exact tenant or global scope.",
+            true, true, async (operations, actor, input, ct) => JsonSerializer.Serialize(
+                await operations.ListIssuesAsync(actor, input.Scope, ct).ConfigureAwait(false),
+                AdminJsonContext.Default.IReadOnlyListOperationalProcessorState)),
+        new("inspect_processor", "Inspect a processor's retained execution and recovery evidence.",
+            true, true, async (operations, actor, input, ct) => JsonSerializer.Serialize(
+                await operations.InspectProcessorAsync(actor, Required(input.Target), ct).ConfigureAwait(false),
+                AdminJsonContext.Default.OperationalProcessorState)),
+        new("trace_causality", "Trace one recorded attempt with explicit local coverage limits.",
+            true, true, async (operations, actor, input, ct) => JsonSerializer.Serialize(
+                await operations.TraceCausalityAsync(actor, Required(input.Target),
+                    input.AttemptId ?? throw new ArgumentException("Attempt required."), ct).ConfigureAwait(false),
+                AdminJsonContext.Default.OperationalAttempt)),
+        new("preview_repair", "Preview an immutable recovery plan without invoking application handlers.",
+            false, false, async (operations, actor, input, ct) => JsonSerializer.Serialize(
+                await operations.PreviewRepairAsync(actor, Required(input.Target), ct).ConfigureAwait(false),
+                AdminJsonContext.Default.RepairPlan)),
+        new("execute_repair", "Queue an operator-approved repair for its owning worker; never approves a plan.",
+            false, true, async (operations, actor, input, ct) => JsonSerializer.Serialize(
+                await operations.ExecuteRepairAsync(actor, Required(input.Target),
+                    input.PlanId ?? throw new ArgumentException("Plan required."), ct).ConfigureAwait(false),
+                AdminJsonContext.Default.OperationalRepair)),
+        new("verify_repair", "Verify processing of the approved unit without asserting business success.",
+            true, true, async (operations, actor, input, ct) => JsonSerializer.Serialize(
+                await operations.VerifyRepairAsync(actor, Required(input.Target),
+                    input.PlanId ?? throw new ArgumentException("Plan required."), ct).ConfigureAwait(false),
+                AdminJsonContext.Default.OperationalRepair))
+    ];
 
-    static string Description(string name) => name switch
-    {
-        "describe_application" => "Describe selected generated registrations; opaque dependencies are unknown.",
-        "get_system_health" => "Read processing health for an exact tenant or global scope.",
-        "list_issues" => "List durable processor blocks for an exact tenant or global scope.",
-        "inspect_processor" => "Inspect a processor's retained execution and recovery evidence.",
-        "trace_causality" => "Trace one recorded attempt with explicit local coverage limits.",
-        "preview_repair" => "Preview an immutable recovery plan without invoking application handlers.",
-        "execute_repair" => "Queue an operator-approved repair for its owning worker; never approves a plan.",
-        _ => "Verify processing of the approved unit without asserting business success."
-    };
+    static OperationalTarget Required(OperationalTarget? target) =>
+        target ?? throw new ArgumentException("Target required.");
 
     static readonly JsonElement InputSchema = JsonElement.Parse("""
         {"type":"object","properties":{
@@ -200,8 +232,8 @@ public static class PortiaAdminMcpExtensions
 
     static async ValueTask<CallToolResult> CallAsync(ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call, CancellationToken ct)
     {
-        if (!ToolNames.Contains(call.Params.Name, StringComparer.Ordinal))
-            throw new McpException("Administrative tool unavailable.");
+        var tool = Array.Find(Tools, candidate => string.Equals(candidate.Name, call.Params.Name, StringComparison.Ordinal))
+            ?? throw new McpException("Administrative tool unavailable.");
         var services = call.Services ?? throw new McpException("Request services unavailable.");
         var context = services.GetRequiredService<IHttpContextAccessor>().HttpContext
             ?? throw new McpException("Authenticated HTTP request required.");
@@ -218,17 +250,7 @@ public static class PortiaAdminMcpExtensions
                 throw new ArgumentException("The target and requested scope differ.");
             var operations = services.GetRequiredService<IPortiaOperations>();
             var actor = context.User;
-            var json = call.Params.Name switch
-            {
-                "describe_application" => JsonSerializer.Serialize(await operations.DescribeApplicationAsync(actor, input.Scope, ct).ConfigureAwait(false), AdminJsonContext.Default.ApplicationTopology),
-                "get_system_health" => JsonSerializer.Serialize(await operations.GetSystemHealthAsync(actor, input.Scope, ct).ConfigureAwait(false), AdminJsonContext.Default.OperationalHealth),
-                "list_issues" => JsonSerializer.Serialize(await operations.ListIssuesAsync(actor, input.Scope, ct).ConfigureAwait(false), AdminJsonContext.Default.IReadOnlyListOperationalProcessorState),
-                "inspect_processor" => JsonSerializer.Serialize(await operations.InspectProcessorAsync(actor, Required(input.Target), ct).ConfigureAwait(false), AdminJsonContext.Default.OperationalProcessorState),
-                "trace_causality" => JsonSerializer.Serialize(await operations.TraceCausalityAsync(actor, Required(input.Target), input.AttemptId ?? throw new ArgumentException("Attempt required."), ct).ConfigureAwait(false), AdminJsonContext.Default.OperationalAttempt),
-                "preview_repair" => JsonSerializer.Serialize(await operations.PreviewRepairAsync(actor, Required(input.Target), ct).ConfigureAwait(false), AdminJsonContext.Default.RepairPlan),
-                "execute_repair" => JsonSerializer.Serialize(await operations.ExecuteRepairAsync(actor, Required(input.Target), input.PlanId ?? throw new ArgumentException("Plan required."), ct).ConfigureAwait(false), AdminJsonContext.Default.OperationalRepair),
-                _ => JsonSerializer.Serialize(await operations.VerifyRepairAsync(actor, Required(input.Target), input.PlanId ?? throw new ArgumentException("Plan required."), ct).ConfigureAwait(false), AdminJsonContext.Default.OperationalRepair)
-            };
+            var json = await tool.Invoke(operations, actor, input, ct).ConfigureAwait(false);
             return new CallToolResult { IsError = false, Content = [new TextContentBlock { Text = json }] };
         }
         catch (Exception ex) when (ex is ArgumentException or JsonException or UnauthorizedAccessException
@@ -251,9 +273,10 @@ public static class PortiaAdminMcpExtensions
                 { Text = "Operational evidence is temporarily unavailable." }]
             };
         }
-
-        static OperationalTarget Required(OperationalTarget? target) => target ?? throw new ArgumentException("Target required.");
     }
+
+    sealed record AdminTool(string Name, string Description, bool ReadOnly, bool Idempotent,
+        Func<IPortiaOperations, ClaimsPrincipal, AdminArguments, CancellationToken, Task<string>> Invoke);
 
     sealed class AdminSurface;
     sealed class AdminBodyLimit : IRequestSizeLimitMetadata

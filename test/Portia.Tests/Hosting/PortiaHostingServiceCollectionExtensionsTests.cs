@@ -634,6 +634,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         public ValueTask CompleteAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
 
         public ValueTask AbandonAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
+        public ValueTask RetryAsync(TimeSpan delay, CancellationToken ct = default) => AbandonAsync(ct);
     }
 
     interface IWorkerDefaultProbe;

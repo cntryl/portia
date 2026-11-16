@@ -103,6 +103,7 @@ public sealed class AllTransportsSharedHandlerTests
         public ValueTask CompleteAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
 
         public ValueTask AbandonAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
+        public ValueTask RetryAsync(TimeSpan delay, CancellationToken ct = default) => AbandonAsync(ct);
     }
 
     sealed class FakeRequestNotificationConsumer(IReadOnlyList<RequestNotification> items)

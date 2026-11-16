@@ -14,6 +14,9 @@ interface IWorkloadDescriptor
     /// <summary>Gets whether this kind of component can run a separate rebuild generation.</summary>
     bool SupportsRebuild { get; }
 
+    /// <summary>Gets the component's <see cref="ProcessorKinds" /> value, as operators and the journal name it.</summary>
+    string Kind { get; }
+
     void Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName);
     EventStreamPattern Pattern(IServiceProvider services);
 

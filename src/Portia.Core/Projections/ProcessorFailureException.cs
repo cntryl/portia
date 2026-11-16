@@ -72,6 +72,13 @@ public sealed class ProcessorFailureException : Exception
     public RequestError? Error { get; }
 
     /// <summary>Gets whether the hosted worker may retry this failure within its configured attempt budget.</summary>
+    /// <remarks>
+    ///     A handler declares this itself by returning a failed <see cref="Result" /> whose
+    ///     <see cref="RequestError.IsTransient" /> says so. For a thrown exception the rule is fixed: a
+    ///     database exception uses its provider's own classification; an <see cref="ArgumentException" />,
+    ///     <see cref="NotSupportedException" />, <see cref="ObjectDisposedException" />, or an uninitialized
+    ///     result is permanent; anything else is retried.
+    /// </remarks>
     public bool IsTransient => Error?.IsTransient ?? (InnerException switch
     {
         DbException database => database.IsTransient,

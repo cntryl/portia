@@ -14,8 +14,7 @@ public sealed partial class OperationalExecutionTests
         var events = await EventsAsync();
 
         // Assert
-        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ReactorRunner(events)
-        { Operations = session }.RunAsync(Reactor(journal, new Effects { Fail = true }), ProjectionCheckpoint.Start).AsTask());
+        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ReactorRunner(events).RunAsync(session, Reactor(journal, new Effects { Fail = true }), ProjectionCheckpoint.Start).AsTask());
         var api = Api(journal);
         var administrator = TestOperationalAuthorizer.AdministratorActor(true);
         var queued = await QueueRepairAsync(api, administrator);
@@ -58,8 +57,7 @@ public sealed partial class OperationalExecutionTests
         var effects = new Effects { Fail = true, Before = () => { if (unavailable) throw new IOException("offline"); } };
 
         // Assert
-        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ReactorRunner(events)
-        { Operations = session }.RunAsync(Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
+        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ReactorRunner(events).RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
         var originalBlock = session.State.Block;
         var api = Api(journal);
         var administrator = TestOperationalAuthorizer.AdministratorActor(true);
@@ -69,8 +67,7 @@ public sealed partial class OperationalExecutionTests
         effects.Fail = false;
         unavailable = true;
 
-        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ReactorRunner(events)
-        { Operations = session }.RunPassAsync(Reactor(journal, effects), ProjectionCheckpoint.Start,
+        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ReactorRunner(events).RunPassAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start,
             session.BoundOptions(ProjectionRunOptions.Default)).AsTask());
 
         Assert.Equal(originalBlock, session.State.Block);
@@ -79,7 +76,7 @@ public sealed partial class OperationalExecutionTests
         Assert.Equal(ProjectionCheckpoint.Start, await journal.LoadAsync(Target.Identity));
         Assert.True(await session.PrepareAsync(ProjectionCheckpoint.Start, default));
         unavailable = false;
-        _ = await new ReactorRunner(events) { Operations = session }.RunPassAsync(Reactor(journal, effects),
+        _ = await new ReactorRunner(events).RunPassAsync(session, Reactor(journal, effects),
             ProjectionCheckpoint.Start, session.BoundOptions(ProjectionRunOptions.Default));
         Assert.Equal("committed", (await api.VerifyRepairAsync(administrator, Target, first.Id)).Status);
         Assert.Equal("invalidated", (await api.VerifyRepairAsync(administrator, Target, second.Id)).Status);
@@ -99,8 +96,7 @@ public sealed partial class OperationalExecutionTests
         var effects = new Effects { Fail = true };
 
         // Assert
-        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ReactorRunner(events)
-        { Operations = session }.RunAsync(Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
+        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ReactorRunner(events).RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
         var originalBlock = session.State.Block;
         var api = Api(journal);
         var administrator = TestOperationalAuthorizer.AdministratorActor(true);
@@ -108,8 +104,7 @@ public sealed partial class OperationalExecutionTests
         var second = await QueueRepairAsync(api, administrator);
         Assert.True(await session.PrepareAsync(ProjectionCheckpoint.Start, default));
 
-        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ReactorRunner(events)
-        { Operations = session }.RunPassAsync(Reactor(journal, effects), ProjectionCheckpoint.Start,
+        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ReactorRunner(events).RunPassAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start,
             session.BoundOptions(ProjectionRunOptions.Default)).AsTask());
 
         Assert.NotNull(session.State.Block);
