@@ -38,11 +38,14 @@ public sealed class JsonRootMarkerGenerator : IIncrementalGenerator
         if (JsonContextShape.UnsupportedReason(type) is { } reason)
             return new ContextModel(name, location, reason, []);
         var factory = FactoryName(type);
+        var descriptions = JsonDescriptionEmission.Body(type.GetAttributes().Where(attribute =>
+                attribute.AttributeClass?.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializableAttribute")
+            .Select(attribute => attribute.ConstructorArguments.FirstOrDefault().Value).OfType<ITypeSymbol>());
         var roots = type.GetAttributes().Where(attribute =>
                 attribute.AttributeClass?.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializableAttribute")
             .Select(attribute => attribute.ConstructorArguments.FirstOrDefault().Value)
             .OfType<ITypeSymbol>()
-            .Select(root => new RootModel(root.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), name, factory))
+            .Select(root => new RootModel(root.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), name, factory, descriptions))
             .ToArray();
         return new ContextModel(name, location, null, roots);
     }
@@ -70,7 +73,8 @@ public sealed class JsonRootMarkerGenerator : IIncrementalGenerator
                 .Append(first.FactoryName)
                 .Append(
                     " { public static global::System.Text.Json.Serialization.JsonSerializerContext Create(global::System.Text.Json.JsonSerializerOptions options) => new ")
-                .Append(first.ContextType).AppendLine("(options); } }");
+                .Append(first.ContextType).Append("(options); public static string? Describe(global::System.Type type, string? member, global::System.Text.Json.JsonNamingPolicy? policy) { ")
+                .Append(first.Descriptions).AppendLine(" } } }");
         }
 
         context.AddSource("PortiaJsonRoots.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
@@ -104,7 +108,7 @@ public sealed class JsonRootMarkerGenerator : IIncrementalGenerator
         }
     }
 
-    sealed record RootModel(string RootType, string ContextType, string FactoryName);
+    sealed record RootModel(string RootType, string ContextType, string FactoryName, string Descriptions);
 
     sealed record RootSet(RootModel[] Roots)
     {

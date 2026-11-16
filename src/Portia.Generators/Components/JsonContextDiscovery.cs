@@ -27,7 +27,10 @@ static class JsonContextDiscovery
             .WithTrackingName("PortiaReferencedJsonContexts");
 
     static DiscoveredJsonContext? JsonContextModel(INamedTypeSymbol symbol) =>
-        JsonContextShape.UnsupportedReason(symbol) is null ? new(symbol.ToDisplayString(), Type(symbol)) : null;
+        JsonContextShape.UnsupportedReason(symbol) is null ? new(symbol.ToDisplayString(), Type(symbol),
+            "static (type, member, policy) => { " + JsonDescriptionEmission.Body(symbol.GetAttributes()
+                .Where(attribute => attribute.AttributeClass?.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializableAttribute")
+                .Select(attribute => attribute.ConstructorArguments.FirstOrDefault().Value).OfType<ITypeSymbol>()).Replace("\r", string.Empty).Replace("\n", " ") + " }") : null;
 
     static ImmutableArray<DiscoveredJsonContext> ReferencedJsonContexts(Compilation compilation)
     {
@@ -49,7 +52,8 @@ static class JsonContextDiscovery
                 && attribute.ConstructorArguments[2].Value is INamedTypeSymbol factory
                 && factories.Add(factory))
             {
-                contexts.Add(new DiscoveredJsonContext(factory.ToDisplayString(), Type(factory) + ".Create"));
+                contexts.Add(new DiscoveredJsonContext(factory.ToDisplayString(), Type(factory) + ".Create",
+                    factory.GetMembers("Describe").Length > 0 ? Type(factory) + ".Describe" : "null"));
             }
         }
 
@@ -78,4 +82,4 @@ static class JsonContextDiscovery
     }
 }
 
-sealed record DiscoveredJsonContext(string DisplayName, string TypeName);
+sealed record DiscoveredJsonContext(string DisplayName, string TypeName, string Descriptions);

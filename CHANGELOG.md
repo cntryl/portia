@@ -11,6 +11,8 @@ for configuration and coverage rules.
 
 ### Added
 
+- Standard model `[Description]` and literal property `[Display(Description = ...)]` metadata shared
+  by OpenAPI and MCP, carried by generated JSON contract/context metadata for NativeAOT.
 - Typed endpoint `Describe` selectors for route/query parameters and body properties, and
   `DescribeResponse` for success or status-specific response descriptions.
 - `PortiaHttpOptions.OpenApi` with `DescribeSchema<T>`, typed property descriptions,

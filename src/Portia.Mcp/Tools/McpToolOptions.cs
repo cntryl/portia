@@ -9,7 +9,7 @@ public sealed class McpToolOptions
     /// <summary>Overrides the request discriminator used as the tool name.</summary>
     internal string? Name { get; private set; }
 
-    /// <summary>Overrides the request XML summary used as the tool description.</summary>
+    /// <summary>Overrides the request attribute or XML summary used as the tool description.</summary>
     internal string? Description { get; private set; }
 
     /// <summary>Gets or sets the optional human-readable title.</summary>
@@ -37,7 +37,7 @@ public sealed class McpToolOptions
         return this;
     }
 
-    /// <summary>Overrides the request XML summary used as the model-facing description.</summary>
+    /// <summary>Overrides the request attribute or XML summary used as the model-facing description.</summary>
     public McpToolOptions DescribedAs(string description)
     {
         Description = string.IsNullOrWhiteSpace(description)

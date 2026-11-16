@@ -2,10 +2,17 @@
 
 ## Contract
 
-Descriptions are explicit C# configuration, inspected without compiling expressions or scanning
-assemblies. They change documentation only. Portia's JSON metadata remains authoritative for
+Descriptions are standard model attributes with optional C# configuration overrides. Attributes
+are read at compile time from the Portia JSON contract graph; runtime export compiles no
+expressions and scans no assemblies or members. They change documentation only. Portia's JSON metadata remains authoritative for
 wire names, converter representations, nullability, defaults, and requiredness.
 
+- Standard `[Description]` on a type or property is the default shared contract text for both
+  OpenAPI and MCP. Literal `[Display(Description = ...)]` is a property fallback. A request type's
+  attribute also describes its OpenAPI operation and MCP tool, unless explicitly overridden.
+- Generated description resolvers travel with each application's JSON resolver, including cloned
+  serializer options and public factories for referenced contexts. No global metadata registry or
+  OpenAPI dependency is introduced into MCP.
 - `options.OpenApi.DescribeSchema<T>(text, d => d.Property(x => x.Member, text))` registers one
   schema description and direct CLR member descriptions. Registrations are exact closed types;
   nullable value types fall back to their underlying type. Repeat registrations are errors.
@@ -17,7 +24,7 @@ wire names, converter representations, nullability, defaults, and requiredness.
 - Endpoint `DescribeResponse(text)` describes the single success response, inferred from the final
   contract. Multiple success statuses require `DescribeResponse(statusCode, text)`. The status
   overload covers any emitted response; referring to a missing response is an error.
-- Precedence at member occurrences is endpoint, registered containing-type property, shared wire
+- Precedence at member occurrences is endpoint, registered containing-type property, model description attribute, shared wire
   member, then existing serializer annotations. A member description is distinct from the schema
   description of its value type. Endpoint annotations are applied to local schemas or reference
   siblings, never by mutating a referenced component.
@@ -75,3 +82,26 @@ fallback, recursive/polymorphic/dictionary traversal, route/query/body/form/cust
 shared-component isolation, renamed JSON member identity, ignored-property rejection, response
 selection errors, and strict coverage success/failure. Package consumers exercise the public
 surface; CI also publishes and runs the packed HTTP consumer as a Linux NativeAOT executable.
+
+
+## Ergonomics refinement
+
+The user preferred the register-once example and then requested commonly used model attributes
+shared with MCP. A focused Jev review rated the registry-first approach at 2.36/4 (most probability
+on avoidable setup), and the attribute-first approach at 3.86/4 (0.88 probability on little
+avoidable ceremony). These are subjective model judgments, not usability measurements. Jev rated
+property attribute scope clear at 0.92 and retaining fluent support for external types at 0.94.
+It was uncertain about precedence (0.45); the explicit order above resolves that ambiguity.
+Requests/results are in `artifacts/reviews/245/jev-ergonomics-*.json`.
+
+Standard Description attributes take precedence over literal Display.Description. Per-endpoint
+and explicit typed fluent configuration override attribute text. Shared name defaults fill gaps.
+MCP-specific fluent options override the shared attributes for that tool. Runtime validators and
+business invariants remain authoritative for behavior; these additions carry descriptive text.
+
+The refined usage example was reviewed again with the same Jev rubric: ergonomics 3.82/4
+(0.85 probability on little avoidable ceremony), idiomatic C# 0.86, explicit precedence 0.84,
+and clarity of shared-attribute versus transport-specific override scope 0.96. The follow-up
+request/result are retained as `jev-ergonomics-refined-*.json`. A regression caught and corrected
+attribute-versus-shared precedence in retained ASP.NET components; source and tests determine
+that behavior independently of these model judgments.

@@ -170,3 +170,12 @@ jobs:
             --configuration Release --runtime linux-x64 -p:PortiaSmokePackageVersion="$portia_version" \
             --output artifacts/native-http
           ./artifacts/native-http/Portia.AspNetCore.NativeAotConsumer
+
+      - name: Publish and test packed NativeAOT MCP consumer
+        shell: bash
+        run: |
+          portia_version="$(dotnet msbuild src/Portia.AspNetCore/Portia.AspNetCore.csproj -getProperty:PackageVersion -nologo)"
+          dotnet publish smoke/Portia.Mcp.AspNetCore.NativeAotConsumer/Portia.Mcp.AspNetCore.NativeAotConsumer.csproj \
+            --configuration Release --runtime linux-x64 -p:PortiaSmokePackageVersion="$portia_version" \
+            --output artifacts/native-mcp
+          ./artifacts/native-mcp/Portia.Mcp.AspNetCore.NativeAotConsumer

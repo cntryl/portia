@@ -345,7 +345,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 "the request needs a valid Discriminator attribute", diagnosticLocation);
         }
 
-        var description = DocumentationSummary(type) ?? $"Invokes the {type.Name} request.";
+        var description = JsonDescriptionEmission.Description(type) ?? DocumentationSummary(type) ?? $"Invokes the {type.Name} request.";
 
         var propertyDescriptions = RequestProperties(type)
             .Where(property => !property.IsStatic && !property.IsIndexer
@@ -354,7 +354,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             .Select(property => (Property: property,
                 Description: DocumentationSummary(property)
                               ?? ParameterDescription(property.ContainingType, property.Name)))
-            .Where(item => item.Description is not null)
+            .Where(item => item.Description is not null && JsonDescriptionEmission.Description(item.Property) is null)
             .ToArray();
         var configure = propertyDescriptions.Length == 0 ? "configure"
             : "options => { " + string.Join(" ", propertyDescriptions.Select(item =>
@@ -542,9 +542,9 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         {
             _ = contexts.Append("_ = builder.AddGeneratedJsonContext(static options => ");
             if (context.TypeName.EndsWith(".Create", StringComparison.Ordinal))
-                _ = contexts.Append(context.TypeName).AppendLine("(options));");
+                _ = contexts.Append(context.TypeName).Append("(options), ").Append(context.Descriptions).AppendLine(");");
             else
-                _ = contexts.Append("new ").Append(context.TypeName).AppendLine("(options));");
+                _ = contexts.Append("new ").Append(context.TypeName).Append("(options), ").Append(context.Descriptions).AppendLine(");");
         }
 
         var events = new StringBuilder();

@@ -88,7 +88,7 @@ public abstract class McpToolRegistration
                 + "Use an object request without a root converter.");
         var input = binding.GetJsonSchemaAsNode(new JsonSchemaExporterOptions
         {
-            TransformSchemaNode = static (context, node) =>
+            TransformSchemaNode = (context, node) =>
             {
                 // The BCL exporter requires every non-optional constructor parameter. Binding only
                 // requires effective IsRequired members, including configured constructor policy.
@@ -105,7 +105,7 @@ public abstract class McpToolRegistration
                     if (required.Count == 0)
                         schema.Remove("required");
                 }
-                return node;
+                return PortiaJsonDescriptions.Apply(context, node, json);
             }
         });
         if (input is not JsonObject inputObject)
@@ -127,7 +127,10 @@ public abstract class McpToolRegistration
                     propertySchema["description"] = propertyDescription.Description;
             }
         }
-        var result = ResultType is null ? null : json.GetTypeInfo(ResultType).GetJsonSchemaAsNode();
+        var result = ResultType is null ? null : json.GetTypeInfo(ResultType).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
+        {
+            TransformSchemaNode = (context, node) => PortiaJsonDescriptions.Apply(context, node, json)
+        });
         if (result is not null)
             RewriteResultReferences(result);
         JsonNode? output = result is null

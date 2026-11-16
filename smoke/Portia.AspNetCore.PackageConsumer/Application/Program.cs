@@ -8,8 +8,6 @@ _ = builder.Services.AddPortia()
     .ConfigureJson(options => options.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower).AddHttp(options =>
     {
         options.OpenApi.RequireDescriptions = true;
-        options.OpenApi.DescribeSchema<SmokePayload>("Smoke payload.", d => d
-            .Property(x => x.DisplayName, "Display name.").Property(x => x.NextNode, "Next payload."));
     })
     .AddRequestHandler<SmokeRequestHandler>();
 
@@ -64,7 +62,10 @@ sealed class SmokeRequestHandler : IRequestHandler<SmokeRequest, SmokePayload>
         ValueTask.FromResult(Result<SmokePayload>.Success(new SmokePayload(context.Request.Name)));
 }
 
-sealed record SmokePayload(string DisplayName, SmokePayload? NextNode = null);
+[System.ComponentModel.Description("Smoke payload.")]
+sealed record SmokePayload(
+    [property: System.ComponentModel.Description("Display name.")] string DisplayName,
+    [property: System.ComponentModel.Description("Next payload.")] SmokePayload? NextNode = null);
 
 [PortiaJsonContext]
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]

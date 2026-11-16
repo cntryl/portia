@@ -5,6 +5,8 @@ namespace Cntryl.Portia;
 
 [JsonSerializable(typeof(RequestIdentityTests.IdentifiedQuery))]
 [JsonSerializable(typeof(RequestIdentityTests.IdentifiedCommand))]
+[JsonSerializable(typeof(OpenApiAnnotatedRequest))]
+[JsonSerializable(typeof(OpenApiAnnotatedNode))]
 [JsonSerializable(typeof(OpenApiDescribedRequest))]
 [JsonSerializable(typeof(OpenApiOtherDescribedRequest))]
 [JsonSerializable(typeof(OpenApiDescribedNode))]

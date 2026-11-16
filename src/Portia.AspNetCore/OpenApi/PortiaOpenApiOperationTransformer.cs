@@ -61,12 +61,14 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         var httpOptions = context.ApplicationServices.GetRequiredService<IOptions<PortiaHttpOptions>>().Value;
         var descriptions = httpOptions.OpenApi;
         var endpointDescriptions = endpointMetadata.OfType<PortiaOpenApiDescriptions>().SingleOrDefault();
+        var jsonOptions = context.ApplicationServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
+        if (metadata.RequestType is { } operationRequest)
+            operation.Description ??= PortiaJsonDescriptions.Type(jsonOptions, operationRequest);
         string? MemberDescription(PortiaOpenApiParameter parameter, string wireName) =>
             endpointDescriptions?.Members.GetValueOrDefault(parameter.ClrName) ?? parameter.Description ??
-            descriptions.Member(metadata.RequestType, parameter.ClrName, wireName);
+            descriptions.Member(metadata.RequestType, parameter.ClrName, wireName, jsonOptions);
         var schemaType = httpOptions.OpenApiSchemaType;
         var schemaCollectionElementIsNullable = httpOptions.OpenApiSchemaCollectionElementIsNullable;
-        var jsonOptions = context.ApplicationServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
         foreach (var responseMetadata in explicitResponses)
         {
             var status = responseMetadata.StatusCode.ToString(CultureInfo.InvariantCulture);
@@ -206,7 +208,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             var schema = new OpenApiSchema
             {
                 Type = JsonSchemaType.Object,
-                Description = metadata.RequestType is { } describedRequest ? descriptions.Schema(describedRequest) : null,
+                Description = metadata.RequestType is { } describedRequest ? descriptions.Schema(describedRequest, jsonOptions) : null,
                 Properties = properties,
                 Required = jsonRequired.Count == 0 ? null : jsonRequired
             };

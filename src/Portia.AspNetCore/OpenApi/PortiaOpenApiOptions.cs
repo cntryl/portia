@@ -35,21 +35,23 @@ public sealed class PortiaOpenApiOptions
         return this;
     }
 
-    internal string? Schema(Type type) => Registration(type)?.Description;
+    internal string? Schema(Type type, JsonSerializerOptions options) =>
+        Registration(type)?.Description ?? PortiaJsonDescriptions.Type(options, type);
 
-    internal string? Member(Type? type, string clrName, string wireName) =>
+    internal string? Member(Type? type, string clrName, string wireName, JsonSerializerOptions options) =>
         (type is not null && Registration(type)?.Properties.TryGetValue(clrName, out var text) == true ? text : null)
-        ?? SharedMember(wireName);
+        ?? PortiaJsonDescriptions.Member(options, type, clrName) ?? SharedMember(wireName);
 
     internal string? SharedMember(string wireName) => _members.GetValueOrDefault(wireName);
 
-    internal string? Property(JsonPropertyInfo property, JsonSerializerOptions options)
+    internal string? Property(JsonPropertyInfo property, JsonSerializerOptions options,
+        JsonSerializerOptions? descriptionOptions = null)
     {
         var name = DeclaredName(property);
         if (name is null && property.DeclaringType is { } declaringType && Registration(declaringType) is { } schema)
             name = schema.Properties.Keys.SingleOrDefault(candidate =>
                 (options.PropertyNamingPolicy?.ConvertName(candidate) ?? candidate) == property.Name);
-        return Member(property.DeclaringType, name ?? property.Name, property.Name);
+        return Member(property.DeclaringType, name ?? property.Name, property.Name, descriptionOptions ?? options);
     }
 
     internal void ValidateProperties(JsonTypeInfo typeInfo, IEnumerable<string> serializedNames)

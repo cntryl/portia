@@ -112,8 +112,8 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
     {
         if (schema is not JsonObject obj)
             return;
-        var description = (property is not null ? descriptions?.Property(property, options) : null)
-                          ?? descriptions?.Schema(contractType);
+        var description = (property is not null ? descriptions?.Property(property, options) ?? PortiaJsonDescriptions.Property(options, property) : null)
+                          ?? descriptions?.Schema(contractType, options) ?? PortiaJsonDescriptions.Type(options, contractType);
         if (description is not null)
             obj["description"] = description;
     }

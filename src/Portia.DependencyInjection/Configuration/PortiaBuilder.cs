@@ -39,12 +39,14 @@ public sealed class PortiaBuilder
 
     /// <summary>Adds a generated JSON context factory to the application resolver chain.</summary>
     /// <param name="factory">Creates the context from the composed Portia JSON options.</param>
+    /// <param name="descriptions">Optional compile-time description metadata for the context contracts.</param>
     /// <returns>This builder, for chaining.</returns>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public PortiaBuilder AddGeneratedJsonContext(Func<JsonSerializerOptions, JsonSerializerContext> factory)
+    public PortiaBuilder AddGeneratedJsonContext(Func<JsonSerializerOptions, JsonSerializerContext> factory,
+        Func<Type, string?, JsonNamingPolicy?, string?>? descriptions = null)
     {
         ArgumentNullException.ThrowIfNull(factory);
-        _json.AddContext(factory);
+        _json.AddContext(factory, descriptions);
         return this;
     }
 

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -14,9 +15,10 @@ sealed class PortiaOpenApiSchemaTransformer : IOpenApiSchemaTransformer
     {
         cancellationToken.ThrowIfCancellationRequested();
         var descriptions = context.ApplicationServices.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.OpenApi;
+        var json = context.ApplicationServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
         var text = (context.JsonPropertyInfo is { } property
-            ? descriptions.Property(property, context.JsonTypeInfo.Options) : null)
-            ?? descriptions.Schema(context.JsonTypeInfo.Type);
+            ? descriptions.Property(property, context.JsonTypeInfo.Options, json) : null)
+            ?? descriptions.Schema(context.JsonTypeInfo.Type, json);
         if (text is not null)
             schema.Description = text;
         foreach (var (name, child) in schema.Properties?.ToArray() ?? [])

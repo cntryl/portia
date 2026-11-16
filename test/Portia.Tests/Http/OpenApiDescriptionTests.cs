@@ -276,6 +276,92 @@ public sealed class OpenApiDescriptionTests
         Assert.Equal("Include archived widgets.", Assert.Single(parameters, p => p.Name == "include_archived").Description);
     }
 
+    /// <summary>Standard model attributes describe parameters, schemas and recursive properties without registrations.</summary>
+    [Theory]
+    [InlineData("json")]
+    [InlineData("yml")]
+    public async Task ShouldUseStandardAttributesGivenNoDescriptionRegistry(string format)
+    {
+        // Arrange
+        var builder = CreateBuilder();
+        _ = builder.Services.AddPortia().AddHttp(options => options.OpenApi.RequireDescriptions = true).AddRequestHandler<OpenApiAnnotatedHandler>();
+        await using var app = builder.Build();
+        _ = app.MapPortiaOpenApi();
+        _ = app.MapPortiaPost<OpenApiAnnotatedRequest, OpenApiAnnotatedNode>("/attributes", c => c.FromQuery(x => x.Limit));
+        await app.StartAsync();
+
+        // Act
+        var document = await ReadAsync(app, format);
+
+        // Assert
+        var operation = document.Paths["/attributes"].Operations![HttpMethod.Post];
+        Assert.Equal("Attributed request.", operation.Description);
+        Assert.Equal("Attributed limit.", Assert.Single(operation.Parameters!).Description);
+        Assert.Equal("Attributed request.", operation.RequestBody!.Content!["application/json"].Schema!.Description);
+        var node = operation.Responses!["200"].Content!["application/json"].Schema!;
+        Assert.Equal("Attributed node.", node.Description);
+        Assert.Equal("Attributed name.", node.Properties!["wire-name"].Description);
+        Assert.Equal("Attributed next.", node.Properties["next"].Description);
+    }
+
+    /// <summary>Endpoint and application descriptions override attributes; shared defaults remain fallbacks.</summary>
+    [Theory]
+    [InlineData("shared", "Attributed limit.")]
+    [InlineData("type", "Application limit.")]
+    [InlineData("endpoint", "Endpoint limit.")]
+    public async Task ShouldResolveDescriptionPrecedenceGivenStandardAttributes(string scope, string expected)
+    {
+        // Arrange
+        var builder = CreateBuilder();
+        _ = builder.Services.AddPortia().AddHttp(options =>
+        {
+            options.OpenApi.DescribeMember("limit", "Shared limit.");
+            if (scope is "type" or "endpoint")
+                options.OpenApi.DescribeSchema<OpenApiAnnotatedRequest>("Application request.", d => d.Property(x => x.Limit, "Application limit."));
+        }).AddRequestHandler<OpenApiAnnotatedHandler>();
+        await using var app = builder.Build();
+        _ = app.MapPortiaOpenApi();
+        _ = app.MapPortiaPost<OpenApiAnnotatedRequest, OpenApiAnnotatedNode>("/attribute-precedence", c =>
+        {
+            _ = c.FromQuery(x => x.Limit);
+            if (scope == "endpoint")
+                _ = c.Describe(x => x.Limit, "Endpoint limit.");
+        });
+        await app.StartAsync();
+
+        // Act
+        var document = await ReadAsync(app, "json");
+
+        // Assert
+        var operation = document.Paths["/attribute-precedence"].Operations![HttpMethod.Post];
+        Assert.Equal(expected, Assert.Single(operation.Parameters!).Description);
+    }
+
+    /// <summary>Retained ASP.NET components use the same attribute precedence as Portia-generated schemas.</summary>
+    [Fact]
+    public async Task ShouldPreferAttributeOverSharedTextGivenRetainedAspNetSchema()
+    {
+        // Arrange
+        var builder = CreateBuilder();
+        _ = builder.Services.AddPortia().AddHttp(options => options.OpenApi.DescribeMember("limit", "Shared limit."))
+            .AddRequestHandler<OpenApiAnnotatedHandler>();
+        await using var app = builder.Build();
+        _ = app.MapPortiaOpenApi();
+        _ = app.MapPortiaPost<OpenApiAnnotatedRequest, OpenApiAnnotatedNode>("/custom-attributes", c => c
+            .Accepts<OpenApiAnnotatedRequest>("application/json")
+            .OnBind(_ => new OpenApiAnnotatedRequest(1, new OpenApiAnnotatedNode("node"))));
+        await app.StartAsync();
+
+        // Act
+        var document = await ReadAsync(app, "json");
+
+        // Assert
+        var schemas = document.Components!.Schemas!;
+        var retained = Assert.Single(schemas, schema => !schema.Key.StartsWith("Portia_", StringComparison.Ordinal) &&
+            schema.Value.Properties?.ContainsKey("limit") == true).Value;
+        Assert.Equal("Attributed limit.", retained.Properties!["limit"].Description);
+    }
+
     static WebApplicationBuilder CreateBuilder()
     {
         var builder = WebApplication.CreateBuilder();
