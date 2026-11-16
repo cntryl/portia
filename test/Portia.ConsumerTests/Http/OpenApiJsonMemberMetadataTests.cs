@@ -51,6 +51,108 @@ public sealed class OpenApiJsonMemberMetadataTests
     }
 
     [Fact]
+    public async Task ShouldKeepDescriptionsLocalGivenDifferentJsonAndFormWireNames()
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            "public sealed record Binding(int Value) : IRequest<string>, ICallable;",
+            "request.Value.ToString(CultureInfo.InvariantCulture)",
+            """
+            app.MapPortiaPost<Binding, string>("/binding").DisableAntiforgery();
+            app.MapPortiaOpenApi();
+            """,
+            """
+            builder.Services.AddPortia().ConfigureJson(options => options.TypeInfoResolver =
+                new DefaultJsonTypeInfoResolver
+                {
+                    Modifiers = { info => { if (info.Type == typeof(Binding)) info.Properties[0].Name = "custom"; } }
+                }).AddHttp(options =>
+                {
+                    options.OpenApi.DescribeMember("custom", "JSON value.");
+                    options.OpenApi.DescribeMember("value", "Form value.");
+                });
+            """);
+
+        // Act
+        var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/openapi/v1.json");
+
+        // Assert
+        Assert.Equal(200, status);
+        using var document = JsonDocument.Parse(body);
+        var content = document.RootElement.GetProperty("paths").GetProperty("/binding").GetProperty("post")
+            .GetProperty("requestBody").GetProperty("content");
+        Assert.Equal("JSON value.", content.GetProperty("application/json").GetProperty("schema")
+            .GetProperty("properties").GetProperty("custom").GetProperty("description").GetString());
+        Assert.Equal("Form value.", content.GetProperty("application/x-www-form-urlencoded").GetProperty("schema")
+            .GetProperty("properties").GetProperty("value").GetProperty("description").GetString());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldResolveDescriptionIdentityGivenApplicationMetadataRename(bool parameterless)
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            parameterless
+                ? "public sealed record Binding : IRequest<string>, ICallable { public int Value { get; init; } }"
+                : "public sealed record Binding(int Value) : IRequest<string>, ICallable;",
+            "request.Value.ToString(CultureInfo.InvariantCulture)",
+            """
+            app.MapPortiaPost<Binding, string>("/binding", c => c
+                .Accepts<Binding>("application/json").OnBind(_ => new Binding {{VALUE}})).WithSummary("Bind input.");
+            app.MapPortiaOpenApi();
+            """.Replace("{{VALUE}}", parameterless ? "{ Value = 1 }" : "(1)"),
+            """
+            builder.Services.AddPortia().ConfigureJson(options => options.TypeInfoResolver =
+                new DefaultJsonTypeInfoResolver
+                {
+                    Modifiers = { info => { if (info.Type == typeof(Binding)) info.Properties[0].Name = "custom"; } }
+                }).AddHttp(options =>
+                {
+                    options.OpenApi.RequireDescriptions = true;
+                    options.OpenApi.DescribeSchema<Binding>("Input.", d => d.Property(x => x.Value, "Declared value."));
+                });
+            """);
+
+        // Act
+        var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/openapi/v1.json");
+
+        // Assert
+        Assert.Equal(200, status);
+        using var document = JsonDocument.Parse(body);
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        var schema = Assert.Single(schemas.EnumerateObject(), item => item.Name.StartsWith("Portia_", StringComparison.Ordinal)).Value;
+        Assert.Equal("Input.", schema.GetProperty("description").GetString());
+        Assert.Equal("Declared value.", schema.GetProperty("properties").GetProperty("custom").GetProperty("description").GetString());
+    }
+
+    [Fact]
+    public async Task ShouldRejectPropertyDescriptionGivenIgnoredJsonMember()
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            "public sealed record Binding([property: JsonIgnore] int Value) : IRequest<string>, ICallable;",
+            "request.Value.ToString(CultureInfo.InvariantCulture)",
+            """
+            app.MapPortiaPost<Binding, string>("/binding", c => c
+                .Accepts<Binding>("application/json").OnBind(_ => new Binding(1)));
+            app.MapPortiaOpenApi();
+            """,
+            """
+            builder.Services.AddPortia().AddHttp(options => options.OpenApi
+                .DescribeSchema<Binding>("Input.", d => d.Property(x => x.Value, "Ignored value.")));
+            """);
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => HttpConsumerScenario.RunAsync(assembly, "/openapi/v1.json"));
+
+        // Assert
+        var failure = Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("not present in its JSON contract", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ShouldDocumentMemberNumberHandlingGivenDifferentScalarContracts()
     {
         // Arrange

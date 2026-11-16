@@ -24,10 +24,14 @@ _ = builder.Services.AddPortia().ConfigureJson(options =>
                     property.Name = "wire_" + property.Name;
         });
     })
-    .AddHttp(options => options.OpenApiSchemaType = type => type == typeof(SmokeNames)
-        ? typeof(string[])
-        : type == typeof(SmokeCount) ? typeof(int) : null)
+    .AddHttp(options =>
+    {
+        options.OpenApiSchemaType = type => type == typeof(SmokeNames)
+            ? typeof(string[])
+            : type == typeof(SmokeCount) ? typeof(int) : null;
+    })
     .AddRequestHandler<SmokeRequestHandler>()
+    .AddRequestHandler<SmokeExternalHandler>()
     .AddRequestHandler<SmokeUploadHandler>()
     .AddRequestHandler<SmokeBindingHandler>()
     .AddRequestPipelineBehavior<SmokeRequestBehavior>()
@@ -36,8 +40,10 @@ _ = builder.Services.AddCors(options => options.AddPolicy("smoke", policy => pol
 var app = builder.Build();
 _ = app.UseCors("smoke");
 _ = app.MapPortiaOpenApi();
-_ = app.MapPortiaGet<SmokeRequest, SmokePayload>("/smoke");
-_ = app.MapPortiaPost<SmokeBinding, string>("/smoke-binding");
+_ = app.MapPortiaGet<SmokeExternalRequest, App_A.FirstPayload>("/external-contract");
+_ = app.MapPortiaGet<SmokeRequest, SmokePayload>("/smoke", endpoint => endpoint
+    .Describe(x => x.Name, "Requested name.").DescribeResponse("Native response."));
+_ = app.MapPortiaPost<SmokeBinding, string>("/smoke-binding", endpoint => endpoint.Describe(x => x.A, "First value."));
 _ = app.MapPortiaPost<SmokeUpload, int>("/smoke-upload", endpoint => endpoint
     .Accepts<Stream>("application/octet-stream")
     .OnBind(async (http, ct) =>
@@ -93,11 +99,20 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     if (!bindingProperties.TryGetProperty("wire_a", out _) || !bindingProperties.TryGetProperty("wire_b", out _))
         throw new InvalidOperationException($"Native OpenAPI lost the resolved JSON member names: {document}");
     var components = openApi.RootElement.GetProperty("components").GetProperty("schemas");
+    var externalSchema = ResolveSchema(openApi.RootElement.GetProperty("paths").GetProperty("/external-contract").GetProperty("get")
+        .GetProperty("responses").GetProperty("200").GetProperty("content").GetProperty("application/json").GetProperty("schema"), components);
+    if (externalSchema.GetProperty("description").GetString() != "Referenced payload." ||
+        externalSchema.GetProperty("properties").GetProperty("value").GetProperty("description").GetString() != "Referenced value.")
+        throw new InvalidOperationException("Native OpenAPI lost descriptions exported by a referenced context factory.");
     var schema = openApi.RootElement.GetProperty("paths").GetProperty("/smoke").GetProperty("get")
         .GetProperty("responses").GetProperty("200").GetProperty("content").GetProperty("application/json")
         .GetProperty("schema");
     var schemaId = schema.GetProperty("$ref").GetString()!.Split('/')[^1];
     var properties = components.GetProperty(schemaId).GetProperty("properties");
+    if (components.GetProperty(schemaId).GetProperty("description").GetString() != "Native payload." ||
+        properties.GetProperty("display_name").GetProperty("description").GetString() != "Display name." ||
+        bindingProperties.GetProperty("wire_a").GetProperty("description").GetString() != "First value.")
+        throw new InvalidOperationException("Native descriptions lost CLR member identity.");
     if (!properties.TryGetProperty("display_name", out _) || properties.TryGetProperty("displayName", out _))
         throw new InvalidOperationException($"Portia schema does not match its JSON contract: {document}");
     var aliases = properties.GetProperty("aliases");
@@ -249,7 +264,8 @@ sealed class SmokeRequestBehavior(SmokeContinuationProbe probe) : IRequestPipeli
     }
 }
 
-sealed record SmokePayload(string DisplayName, SmokePayload? NextNode = null, SmokeNames? Aliases = null,
+[System.ComponentModel.Description("Native payload.")]
+sealed record SmokePayload([property: System.ComponentModel.Description("Display name.")] string DisplayName, SmokePayload? NextNode = null, SmokeNames? Aliases = null,
     Dictionary<string, SmokeNames>? Groups = null, SmokeCount? Count = null, SmokeCount? EmptyCount = null,
     SmokeVariant? Variant = null);
 
@@ -268,6 +284,7 @@ sealed class SmokeNamesConverter : JsonConverter<SmokeNames>
 }
 
 [JsonConverter(typeof(SmokeCountConverter))]
+[System.ComponentModel.Description("Converted count.")]
 readonly record struct SmokeCount(int Value);
 
 sealed class SmokeCountConverter : JsonConverter<SmokeCount>
@@ -320,6 +337,7 @@ sealed class SmokeGuardProbe
 
 [PortiaJsonContext]
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
+[JsonSerializable(typeof(SmokeExternalRequest))]
 [JsonSerializable(typeof(SmokeRequest))]
 [JsonSerializable(typeof(string))]
 [JsonSerializable(typeof(int))]
@@ -349,4 +367,14 @@ sealed class SmokeBindingHandler : IRequestHandler<SmokeBinding, string>
 {
     public ValueTask<Result<string>> HandleAsync(IRequestContext<SmokeBinding> context, CancellationToken ct) =>
         ValueTask.FromResult(Result<string>.Success($"{context.Request.A},{context.Request.B}"));
+}
+
+[Discriminator("portia.smoke.external")]
+[RequestRoute("portia-smoke", "requests", "external", "get")]
+sealed record SmokeExternalRequest : IRequest<App_A.FirstPayload>, ICallable;
+
+sealed class SmokeExternalHandler : IRequestHandler<SmokeExternalRequest, App_A.FirstPayload>
+{
+    public ValueTask<Result<App_A.FirstPayload>> HandleAsync(IRequestContext<SmokeExternalRequest> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result<App_A.FirstPayload>.Success(new App_A.FirstPayload("external")));
 }

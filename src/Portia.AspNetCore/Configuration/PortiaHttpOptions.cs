@@ -3,6 +3,9 @@ namespace Cntryl.Portia;
 /// <summary>Controls Portia's generated HTTP boundary.</summary>
 public sealed class PortiaHttpOptions
 {
+    /// <summary>Gets explicit OpenAPI descriptions and optional coverage enforcement.</summary>
+    public PortiaOpenApiOptions OpenApi { get; } = new();
+
     /// <summary>Gets the default maximum JSON request-body size (10 MiB).</summary>
     public const long DefaultMaxJsonBodyBytes = 10 * 1024 * 1024;
 

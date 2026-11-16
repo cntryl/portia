@@ -11,6 +11,9 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     readonly List<PortiaHttpContractParameter> _parameters = [];
     readonly List<string> _queryMembers = [];
     readonly List<object> _responses = [];
+    readonly Dictionary<string, string> _descriptions = [with(StringComparer.OrdinalIgnoreCase)];
+    readonly Dictionary<int, string> _responseDescriptions = [];
+    string? _successDescription;
     bool _frozen;
     bool _hasResultHandler;
     bool _noInput;
@@ -51,7 +54,7 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         BodyContentTypes = types;
     }
 
-    public void Parameter<T>(string name, PortiaHttpParameterLocation location, bool required)
+    public void Parameter<T>(string name, PortiaHttpParameterLocation location, bool required, string? description)
     {
         EnsureMutable();
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -60,7 +63,36 @@ sealed class PortiaEndpointConfigurationState<TRequest>
                 item.Location == location && StringComparer.OrdinalIgnoreCase.Equals(item.Name, name)))
             throw new InvalidOperationException(
                 $"The custom {location} parameter '{name}' is declared more than once.");
-        _parameters.Add(new PortiaHttpContractParameter(name, typeof(T), location, required));
+        if (description is not null)
+            ArgumentException.ThrowIfNullOrWhiteSpace(description);
+        _parameters.Add(new PortiaHttpContractParameter(name, typeof(T), location, required, description));
+    }
+
+    public void Describe(string member, string description)
+    {
+        EnsureMutable();
+        ArgumentException.ThrowIfNullOrWhiteSpace(description);
+        if (!_descriptions.TryAdd(member, description))
+            throw new InvalidOperationException($"OpenAPI member '{member}' is described more than once.");
+    }
+
+    public void DescribeResponse(int? status, string description)
+    {
+        EnsureMutable();
+        ArgumentException.ThrowIfNullOrWhiteSpace(description);
+        if (status is { } code)
+        {
+            if (code is < 100 or > 599)
+                throw new ArgumentOutOfRangeException(nameof(status));
+            if (!_responseDescriptions.TryAdd(code, description))
+                throw new InvalidOperationException($"OpenAPI response '{code}' is described more than once.");
+        }
+        else
+        {
+            if (_successDescription is not null)
+                throw new InvalidOperationException("OpenAPI success response is described more than once.");
+            _successDescription = description;
+        }
     }
 
     public void FromQuery(string member)
@@ -115,6 +147,13 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         if (_queryMembers.Count != 0 && Binder is not null)
             throw new InvalidOperationException(
                 "FromQuery applies to default binding; declare OnBind inputs with Parameter.");
+        if (_descriptions.Count > 0 && Binder is not null)
+            throw new InvalidOperationException("Describe applies to default binding; describe OnBind inputs with Parameter.");
+        foreach (var name in _descriptions.Keys)
+        {
+            if (!members.Any(member => string.Equals(member.Name, name, StringComparison.OrdinalIgnoreCase)))
+                throw new InvalidOperationException($"Describe member '{name}' is not a constructor-bound request member.");
+        }
         var flags = new bool[members.Length];
         foreach (var name in _queryMembers)
         {
@@ -175,6 +214,9 @@ sealed class PortiaEndpointConfigurationState<TRequest>
             }
         }
 
+        builder.Add(endpoint => endpoint.Metadata.Add(new PortiaOpenApiDescriptions(
+            new Dictionary<string, string>(_descriptions, StringComparer.OrdinalIgnoreCase),
+            new Dictionary<int, string>(_responseDescriptions), _successDescription)));
         foreach (var response in _responses)
             builder.Add(endpoint => endpoint.Metadata.Add(response));
         if (_queryMembers.Count != 0)

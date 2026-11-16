@@ -229,3 +229,10 @@ without changing the active limits.
 
 Portia does not map sampling, elicitation, `IStreamRequest<T>`, queues, notices, schedules,
 or durable MCP tasks. Those concepts require distinct ownership and lifecycle contracts.
+
+## Shared model descriptions
+
+Standard `[Description]` on request types supplies the default tool description. Property
+`[Description]` and literal `[Display(Description = ...)]` text flows into input and output schemas,
+including nested contracts. The same attributes feed OpenAPI. `DescribedAs` and `DescribeProperty`
+provide tool-specific overrides. See [contract descriptions](openapi-descriptions.md).

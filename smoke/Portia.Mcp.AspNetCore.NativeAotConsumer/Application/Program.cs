@@ -42,6 +42,10 @@ await using var client = await McpClient.CreateAsync(transport);
 var tools = await client.ListToolsAsync();
 if (!tools.Any(tool => tool.Name == "greetings.read"))
     throw new InvalidOperationException("The packed native MCP server did not expose greetings.read.");
+var describedTool = tools.Single(tool => tool.Name == "greetings.read").ProtocolTool;
+if (describedTool.Description != "Reads an attributed greeting." ||
+    describedTool.InputSchema.GetProperty("properties").GetProperty("name").GetProperty("description").GetString() != "Greeting recipient.")
+    throw new InvalidOperationException("The packed native MCP tool lost standard Description attributes.");
 var result = await client.CallToolAsync("greetings.read", new Dictionary<string, object?>
 {
     ["name"] = "native-aot"
@@ -73,9 +77,10 @@ if (issues.IsError == true)
 await app.StopAsync();
 
 /// <summary>Reads a greeting without changing application state.</summary>
+[System.ComponentModel.Description("Reads an attributed greeting.")]
 [Discriminator("greetings.read")]
 [RequestRoute("public", "greetings", "message", "read")]
-sealed record ReadGreeting(string Name) : IRequest<string>, ICallable;
+sealed record ReadGreeting([property: System.ComponentModel.Description("Greeting recipient.")] string Name) : IRequest<string>, ICallable;
 
 sealed class ReadGreetingHandler : IRequestHandler<ReadGreeting, string>
 {

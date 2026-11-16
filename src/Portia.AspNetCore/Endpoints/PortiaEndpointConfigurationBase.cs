@@ -49,9 +49,10 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
     }
 
     /// <summary>Declares a custom-bound non-body request value.</summary>
-    public TConfiguration Parameter<T>(string name, PortiaHttpParameterLocation location, bool required = true)
+    public TConfiguration Parameter<T>(string name, PortiaHttpParameterLocation location, bool required = true,
+        string? description = null)
     {
-        _state.Parameter<T>(name, location, required);
+        _state.Parameter<T>(name, location, required, description);
         return (TConfiguration)this;
     }
 
@@ -65,6 +66,27 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
     public TConfiguration FromQuery<TMember>(Expression<Func<TRequest, TMember>> member)
     {
         _state.FromQuery(MemberName(member));
+        return (TConfiguration)this;
+    }
+
+    /// <summary>Describes a constructor-bound request member at this endpoint.</summary>
+    public TConfiguration Describe<TMember>(Expression<Func<TRequest, TMember>> member, string description)
+    {
+        _state.Describe(PortiaOpenApiMemberSelector.Name(member), description);
+        return (TConfiguration)this;
+    }
+
+    /// <summary>Describes the single success response; use a status code when multiple success responses exist.</summary>
+    public TConfiguration DescribeResponse(string description)
+    {
+        _state.DescribeResponse(null, description);
+        return (TConfiguration)this;
+    }
+
+    /// <summary>Describes an emitted response with the specified HTTP status code.</summary>
+    public TConfiguration DescribeResponse(int statusCode, string description)
+    {
+        _state.DescribeResponse(statusCode, description);
         return (TConfiguration)this;
     }
 

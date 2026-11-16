@@ -11,9 +11,16 @@ sealed class PortiaJsonComposer
         [static options => new PortiaCoreJsonContext(options)];
 
     readonly HashSet<Type> _roots = [];
+    readonly List<Func<Type, string?, JsonNamingPolicy?, string?>> _descriptions = [];
 
     internal void Configure(Action<JsonSerializerOptions> configure) => _configuration.Add(configure);
-    internal void AddContext(Func<JsonSerializerOptions, JsonSerializerContext> factory) => _contexts.Add(factory);
+    internal void AddContext(Func<JsonSerializerOptions, JsonSerializerContext> factory,
+        Func<Type, string?, JsonNamingPolicy?, string?>? descriptions)
+    {
+        _contexts.Add(factory);
+        if (descriptions is not null)
+            _descriptions.Add(descriptions);
+    }
     internal void AddRoot(Type type) => _ = _roots.Add(type);
 
     internal JsonSerializerOptions Build()
@@ -27,6 +34,7 @@ sealed class PortiaJsonComposer
         foreach (var factory in _contexts)
             options.TypeInfoResolverChain.Add(factory(new JsonSerializerOptions(options)));
 
+        options.TypeInfoResolver = new PortiaJsonDescriptionResolver(options.TypeInfoResolver!, _descriptions.ToArray());
         options.MakeReadOnly();
 
         var missing = _roots.Where(type => !options.TryGetTypeInfo(type, out _))

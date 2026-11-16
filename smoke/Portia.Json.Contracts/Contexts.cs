@@ -5,7 +5,8 @@ using System.Text.Json.Serialization;
 namespace App_A
 {
     /// <summary>A contract covered by the underscore namespace context.</summary>
-    public sealed record FirstPayload(string Value);
+    [System.ComponentModel.Description("Referenced payload.")]
+    public sealed record FirstPayload([property: System.ComponentModel.Description("Referenced value.")] string Value);
 
     [PortiaJsonContext, JsonSerializable(typeof(FirstPayload))]
     sealed partial class Context : JsonSerializerContext;

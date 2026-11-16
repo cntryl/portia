@@ -138,6 +138,7 @@ public sealed class JsonMetadataGeneratorTests
                                                        using System.Text.Json.Serialization.Metadata;
                                                        using Cntryl.Portia;
                                                        namespace Contracts;
+                                                       [System.ComponentModel.Description("Referenced query.")]
                                                        public sealed record Query : IRequest;
                                                        [PortiaJsonContext]
                                                        [JsonSerializable(typeof(Query))]
@@ -164,6 +165,7 @@ public sealed class JsonMetadataGeneratorTests
         Assert.Contains("global::Cntryl.Portia.Generated.PortiaJsonContextFactory_", generated,
             StringComparison.Ordinal);
         Assert.Contains(".Create(options)", generated, StringComparison.Ordinal);
+        Assert.Contains(".Describe", generated, StringComparison.Ordinal);
     }
 
     [Fact]
