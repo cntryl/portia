@@ -9,7 +9,7 @@ namespace Cntryl.Portia;
 // branches. Its callback omits some properties with null defaults; their containing object still
 // supplies the exact property metadata needed to complete those locations.
 sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func<Type, Type?>? schemaType,
-    Func<Type, Type, bool?>? schemaCollectionElementIsNullable)
+    Func<Type, Type, bool?>? schemaCollectionElementIsNullable, PortiaOpenApiOptions? descriptions)
 {
     readonly Dictionary<Type, string> _activeMappings = [];
     readonly HashSet<JsonNode> _processed = [with(ReferenceEqualityComparer.Instance)];
@@ -39,6 +39,7 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
                 if (mapped is null)
                     CompleteChildren(result, context.TypeInfo, path,
                         context.Path.IsEmpty ? rootCollectionElementIsNullable : null);
+                Describe(result, contractType, context.PropertyInfo);
                 _ = _processed.Add(result);
                 return result;
             }
@@ -73,14 +74,18 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
                 elementType == typeof(Uuid) || elementType == typeof(Uuid?) ||
                 elementType == typeof(TenantId) || elementType == typeof(TenantId?))
             {
+                Describe(completed, elementType, null);
                 obj[keyword] = completed;
                 _ = _processed.Add(completed);
             }
             return;
         }
-        if (typeInfo.Kind != JsonTypeInfoKind.Object || obj["properties"] is not JsonObject properties)
+        if (typeInfo.Kind != JsonTypeInfoKind.Object)
             return;
-
+        descriptions?.ValidateProperties(typeInfo,
+            (obj["properties"] as JsonObject)?.Select(property => property.Key) ?? []);
+        if (obj["properties"] is not JsonObject properties)
+            return;
         foreach (var property in typeInfo.Properties)
         {
             if (properties[property.Name] is not { } original || _processed.Contains(original))
@@ -90,9 +95,27 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
             var result = Map(normalized, property.PropertyType, childPath, property,
                     IsNullable(property.PropertyType, property, childPath))
                          ?? normalized;
+            Describe(result, property.PropertyType, property);
             properties[property.Name] = result;
             _ = _processed.Add(result);
         }
+        // Discriminators are synthesized by the serializer and have no JsonPropertyInfo.
+        foreach (var (name, child) in properties)
+        {
+            if (child is JsonObject propertySchema && propertySchema["description"] is null &&
+                descriptions?.SharedMember(name) is { } text)
+                propertySchema["description"] = text;
+        }
+    }
+
+    void Describe(JsonNode schema, Type contractType, JsonPropertyInfo? property)
+    {
+        if (schema is not JsonObject obj)
+            return;
+        var description = (property is not null ? descriptions?.Property(property, options) : null)
+                          ?? descriptions?.Schema(contractType);
+        if (description is not null)
+            obj["description"] = description;
     }
 
     JsonNode? Map(JsonNode original, Type contractType, string[] path, JsonPropertyInfo? property, bool nullable)

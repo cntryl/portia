@@ -24,9 +24,14 @@ _ = builder.Services.AddPortia().ConfigureJson(options =>
                     property.Name = "wire_" + property.Name;
         });
     })
-    .AddHttp(options => options.OpenApiSchemaType = type => type == typeof(SmokeNames)
-        ? typeof(string[])
-        : type == typeof(SmokeCount) ? typeof(int) : null)
+    .AddHttp(options =>
+    {
+        options.OpenApiSchemaType = type => type == typeof(SmokeNames)
+            ? typeof(string[])
+            : type == typeof(SmokeCount) ? typeof(int) : null;
+        options.OpenApi.DescribeSchema<SmokePayload>("Native payload.", d => d.Property(x => x.DisplayName, "Display name."));
+        options.OpenApi.DescribeSchema<SmokeCount>("Converted count.");
+    })
     .AddRequestHandler<SmokeRequestHandler>()
     .AddRequestHandler<SmokeUploadHandler>()
     .AddRequestHandler<SmokeBindingHandler>()
@@ -36,8 +41,9 @@ _ = builder.Services.AddCors(options => options.AddPolicy("smoke", policy => pol
 var app = builder.Build();
 _ = app.UseCors("smoke");
 _ = app.MapPortiaOpenApi();
-_ = app.MapPortiaGet<SmokeRequest, SmokePayload>("/smoke");
-_ = app.MapPortiaPost<SmokeBinding, string>("/smoke-binding");
+_ = app.MapPortiaGet<SmokeRequest, SmokePayload>("/smoke", endpoint => endpoint
+    .Describe(x => x.Name, "Requested name.").DescribeResponse("Native response."));
+_ = app.MapPortiaPost<SmokeBinding, string>("/smoke-binding", endpoint => endpoint.Describe(x => x.A, "First value."));
 _ = app.MapPortiaPost<SmokeUpload, int>("/smoke-upload", endpoint => endpoint
     .Accepts<Stream>("application/octet-stream")
     .OnBind(async (http, ct) =>
@@ -98,6 +104,10 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
         .GetProperty("schema");
     var schemaId = schema.GetProperty("$ref").GetString()!.Split('/')[^1];
     var properties = components.GetProperty(schemaId).GetProperty("properties");
+    if (components.GetProperty(schemaId).GetProperty("description").GetString() != "Native payload." ||
+        properties.GetProperty("display_name").GetProperty("description").GetString() != "Display name." ||
+        bindingProperties.GetProperty("wire_a").GetProperty("description").GetString() != "First value.")
+        throw new InvalidOperationException("Native descriptions lost CLR member identity.");
     if (!properties.TryGetProperty("display_name", out _) || properties.TryGetProperty("displayName", out _))
         throw new InvalidOperationException($"Portia schema does not match its JSON contract: {document}");
     var aliases = properties.GetProperty("aliases");

@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
 
 namespace Cntryl.Portia;
@@ -37,6 +38,7 @@ public static class PortiaHttpExtensions
         _ = services.AddOpenApi(DocumentName, options =>
         {
             options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_1;
+            _ = options.AddSchemaTransformer<PortiaOpenApiSchemaTransformer>();
             _ = options.AddOperationTransformer<PortiaOpenApiOperationTransformer>();
             _ = options.AddDocumentTransformer((document, context, cancellationToken) =>
             {
@@ -54,6 +56,8 @@ public static class PortiaHttpExtensions
                     ? true
                     : throw new InvalidOperationException(
                         $"OpenAPI operationId '{duplicate.Key}' is duplicated; the document cannot be served.");
+                if (context.ApplicationServices.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.OpenApi.RequireDescriptions)
+                    PortiaOpenApiDescriptionCoverage.Validate(document);
                 return Task.CompletedTask;
             });
         });

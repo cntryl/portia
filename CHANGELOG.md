@@ -4,6 +4,25 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.14.0
+
+Read the [0.14.0 migration notes](docs/migration-0.14.0.md). See [OpenAPI descriptions](docs/openapi-descriptions.md)
+for configuration and coverage rules.
+
+### Added
+
+- Typed endpoint `Describe` selectors for route/query parameters and body properties, and
+  `DescribeResponse` for success or status-specific response descriptions.
+- `PortiaHttpOptions.OpenApi` with `DescribeSchema<T>`, typed property descriptions,
+  shared wire-name `DescribeMember` defaults, and opt-in `RequireDescriptions` validation.
+- Description propagation through JSON names, recursive schemas, polymorphic branches, and converter
+  representations, with endpoint overrides isolated from shared schemas and responses.
+
+### Changed
+
+- Custom endpoint `Parameter<T>` declarations accept an optional `description` argument.
+  Recompile consumers; the previous three-argument CLR signature is removed.
+
 ## 0.13.0
 
 Read the [0.13.0 migration notes](docs/migration-0.13.0.md) before upgrading. This release removes

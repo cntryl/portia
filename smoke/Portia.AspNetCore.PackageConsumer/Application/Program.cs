@@ -5,12 +5,18 @@ using Cntryl.Portia;
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls("http://127.0.0.1:0");
 _ = builder.Services.AddPortia()
-    .ConfigureJson(options => options.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower).AddHttp()
+    .ConfigureJson(options => options.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower).AddHttp(options =>
+    {
+        options.OpenApi.RequireDescriptions = true;
+        options.OpenApi.DescribeSchema<SmokePayload>("Smoke payload.", d => d
+            .Property(x => x.DisplayName, "Display name.").Property(x => x.NextNode, "Next payload."));
+    })
     .AddRequestHandler<SmokeRequestHandler>();
 
 var app = builder.Build();
 _ = app.MapPortiaOpenApi();
-_ = app.MapPortiaGet<SmokeRequest, SmokePayload>("/smoke");
+_ = app.MapPortiaGet<SmokeRequest, SmokePayload>("/smoke", endpoint => endpoint
+    .Describe(x => x.Name, "Requested name.").DescribeResponse("Smoke response.")).WithSummary("Get smoke payload.");
 
 await app.StartAsync();
 using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
@@ -33,6 +39,12 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
         .GetProperty("schema");
     var schemaId = schema.GetProperty("$ref").GetString()!.Split('/')[^1];
     var properties = components.GetProperty(schemaId).GetProperty("properties");
+    var operation = openApi.RootElement.GetProperty("paths").GetProperty("/smoke").GetProperty("get");
+    if (operation.GetProperty("parameters")[0].GetProperty("description").GetString() != "Requested name." ||
+        operation.GetProperty("responses").GetProperty("200").GetProperty("description").GetString() != "Smoke response." ||
+        components.GetProperty(schemaId).GetProperty("description").GetString() != "Smoke payload." ||
+        properties.GetProperty("display_name").GetProperty("description").GetString() != "Display name.")
+        throw new InvalidOperationException("Packed descriptions do not match their declarations.");
     if (!properties.TryGetProperty("display_name", out _) || properties.TryGetProperty("displayName", out _))
         throw new InvalidOperationException($"Portia schema does not match its JSON contract: {document}");
     var recursiveId = properties.GetProperty("next_node").GetProperty("properties").GetProperty("next_node").GetProperty("$ref").GetString()!.Split('/')[^1];

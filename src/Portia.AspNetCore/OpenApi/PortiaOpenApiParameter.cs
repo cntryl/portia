@@ -23,6 +23,9 @@ public sealed record PortiaOpenApiParameter(
     object? DefaultValue,
     string? WireName)
 {
+    /// <summary>Gets an explicit description of this binding.</summary>
+    public string? Description { get; init; }
+
     /// <summary>Gets whether the declared parameter value can be null.</summary>
     public bool IsNullable { get; init; }
 }

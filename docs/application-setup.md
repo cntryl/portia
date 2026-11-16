@@ -375,3 +375,6 @@ application-owned and cannot be inferred or deduplicated by the shared builder.
 
 See [projectors and reactors](projectors-and-reactors.md) for the four bases,
 constructor contracts, and EF Core, ADO.NET, and DynamoDB implementation considerations.
+
+See [OpenAPI descriptions](openapi-descriptions.md) for typed member/schema text, response
+descriptions, and optional document coverage validation.

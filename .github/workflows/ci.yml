@@ -151,3 +151,22 @@ jobs:
           --configuration Release
           --no-build
           --filter "Category=CassieIntegration"
+
+      - name: Pack release packages for HTTP qualification
+        run: dotnet pack Portia.slnx --configuration Release --no-build --output artifacts/packages
+
+      - name: Test packed HTTP descriptions and strict coverage
+        shell: bash
+        run: |
+          portia_version="$(dotnet msbuild src/Portia.AspNetCore/Portia.AspNetCore.csproj -getProperty:PackageVersion -nologo)"
+          dotnet run --project smoke/Portia.AspNetCore.PackageConsumer/Portia.AspNetCore.PackageConsumer.csproj \
+            --configuration Release -p:PortiaSmokePackageVersion="$portia_version"
+
+      - name: Publish and test packed NativeAOT HTTP consumer
+        shell: bash
+        run: |
+          portia_version="$(dotnet msbuild src/Portia.AspNetCore/Portia.AspNetCore.csproj -getProperty:PackageVersion -nologo)"
+          dotnet publish smoke/Portia.AspNetCore.NativeAotConsumer/Portia.AspNetCore.NativeAotConsumer.csproj \
+            --configuration Release --runtime linux-x64 -p:PortiaSmokePackageVersion="$portia_version" \
+            --output artifacts/native-http
+          ./artifacts/native-http/Portia.AspNetCore.NativeAotConsumer

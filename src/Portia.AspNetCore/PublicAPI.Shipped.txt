@@ -117,7 +117,6 @@ Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.HasBody.
 Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.NoInput() -> TConfiguration!
 Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.OnBind(System.Func<Microsoft.AspNetCore.Http.HttpContext!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<TRequest>>! binder) -> TConfiguration!
 Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.OnBind(System.Func<Microsoft.AspNetCore.Http.HttpContext!, TRequest>! binder) -> TConfiguration!
-Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.Parameter<T>(string! name, Cntryl.Portia.PortiaHttpParameterLocation location, bool required = true) -> TConfiguration!
 Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.Produces(int statusCode) -> TConfiguration!
 Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.Produces<TBody>(int statusCode, string! contentType = "application/json") -> TConfiguration!
 Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.Validate(bool binderRequired = false, Cntryl.Portia.PortiaHttpMember![]? members = null) -> void

@@ -1,1 +1,16 @@
 #nullable enable
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.Describe<TMember>(System.Linq.Expressions.Expression<System.Func<TRequest, TMember>!>! member, string! description) -> TConfiguration!
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.DescribeResponse(int statusCode, string! description) -> TConfiguration!
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.DescribeResponse(string! description) -> TConfiguration!
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.Parameter<T>(string! name, Cntryl.Portia.PortiaHttpParameterLocation location, bool required = true, string? description = null) -> TConfiguration!
+Cntryl.Portia.PortiaHttpOptions.OpenApi.get -> Cntryl.Portia.PortiaOpenApiOptions!
+Cntryl.Portia.PortiaOpenApiOptions
+Cntryl.Portia.PortiaOpenApiOptions.DescribeMember(string! name, string! description) -> Cntryl.Portia.PortiaOpenApiOptions!
+Cntryl.Portia.PortiaOpenApiOptions.DescribeSchema<T>(string! description, System.Action<Cntryl.Portia.PortiaOpenApiSchemaDescription<T>!>? configure = null) -> Cntryl.Portia.PortiaOpenApiOptions!
+Cntryl.Portia.PortiaOpenApiOptions.PortiaOpenApiOptions() -> void
+Cntryl.Portia.PortiaOpenApiOptions.RequireDescriptions.get -> bool
+Cntryl.Portia.PortiaOpenApiOptions.RequireDescriptions.set -> void
+Cntryl.Portia.PortiaOpenApiParameter.Description.get -> string?
+Cntryl.Portia.PortiaOpenApiParameter.Description.init -> void
+Cntryl.Portia.PortiaOpenApiSchemaDescription<T>
+Cntryl.Portia.PortiaOpenApiSchemaDescription<T>.Property<TMember>(System.Linq.Expressions.Expression<System.Func<T, TMember>!>! member, string! description) -> Cntryl.Portia.PortiaOpenApiSchemaDescription<T>!
