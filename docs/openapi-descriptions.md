@@ -1,22 +1,25 @@
 # OpenAPI descriptions
 
-Configure reusable text with HTTP options and endpoint-specific text beside the mapping:
+Describe each thing once. Shared wire-name text covers recurring parameters; type registrations
+cover reusable schemas and their properties:
 
 ```csharp
 builder.Services.AddPortia().AddHttp(options =>
 {
+    options.OpenApi.DescribeMember("limit", "Maximum results to return.");
     options.OpenApi.DescribeMember("cursor", "Continue after this cursor.");
     options.OpenApi.DescribeSchema<ThingView>("A thing.", d => d
         .Property(x => x.Name, "Display name."));
-    options.OpenApi.DescribeSchema<ListThings>("Listing filters.", d => d
-        .Property(x => x.Limit, "Maximum number of things to return."));
 });
 
-app.MapPortiaGet<ListThings, ThingView[]>("/v1/things", c => c
-    .Describe(x => x.Limit, "Maximum number of things for this listing.")
-    .DescribeResponse("The matching things."))
+app.MapPortiaGet<ListThings, ThingView[]>("/v1/things")
     .WithSummary("List things.");
 ```
+
+Endpoint `Describe` is an optional override for a member whose meaning differs at one endpoint;
+`DescribeResponse` optionally replaces the standard response text such as `OK` or `No Content`.
+Neither is needed in the example above. For a parameter unique to one endpoint, describe it in
+that endpoint's configuration instead of registering a shared default.
 
 `Describe` and `Property` take a direct CLR member selector. Renaming the member breaks compilation;
 JSON naming policies, `[JsonPropertyName]`, and resolver renames still determine serialized names.
