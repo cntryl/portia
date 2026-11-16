@@ -118,6 +118,10 @@ public static partial class PortiaHttpBinding
         string fallbackName, bool nullable, bool hasDefault, TValue defaultValue)
     {
         var binding = ResolveBodyMember(options, typeof(TRequest), typeof(TValue), memberIndex, memberName, fallbackName);
+        if (binding.Required && !TryGetBodyProperty(body, binding.Options, binding.Name, out _))
+            throw new BadHttpRequestException($"Missing required property '{binding.Name}'.");
+        if (!binding.Input)
+            return defaultValue;
         return ReadBody(body, binding.Options, binding.Name, nullable, hasDefault, defaultValue);
     }
 
@@ -153,7 +157,7 @@ public static partial class PortiaHttpBinding
             throw new BadHttpRequestException($"Property '{name}' cannot be null.");
         }
 
-        var typeInfo = options.GetTypeInfo<T>();
+        var typeInfo = PortiaJsonRequestOptions.Strict(options).GetTypeInfo<T>();
         var result = value.Deserialize(typeInfo);
         return result is null && !nullable
             ? throw new BadHttpRequestException($"Property '{name}' cannot be null.")
@@ -179,7 +183,10 @@ public static partial class PortiaHttpBinding
         if (body.ValueKind != JsonValueKind.Object)
             throw new BadHttpRequestException("Expected a JSON object.");
         var binding = ResolveBodyMember(options, typeof(TRequest), typeof(TValue), memberIndex, memberName, fallbackName);
-        return TryGetBodyProperty(body, binding.Options, binding.Name, out _);
+        var present = TryGetBodyProperty(body, binding.Options, binding.Name, out _);
+        if (binding.Required && !present)
+            throw new BadHttpRequestException($"Missing required property '{binding.Name}'.");
+        return binding.Input && present;
     }
 
     /// <summary>Rejects a supplied JSON member that disagrees with its authoritative routed value.</summary>
@@ -242,7 +249,7 @@ public static partial class PortiaHttpBinding
     readonly record struct BindingKey(Type RequestType, Type ValueType, int MemberIndex, string MemberName,
         string FallbackName);
 
-    internal sealed record BindingMetadata(string Name, JsonSerializerOptions Options);
+    internal sealed record BindingMetadata(string Name, JsonSerializerOptions Options, bool Required = false, bool Input = true);
 
     sealed class OptionsBindingCache(JsonSerializerOptions options)
     {
@@ -287,14 +294,16 @@ public static partial class PortiaHttpBinding
             };
 
             if (property?.CustomConverter is null && property?.NumberHandling is null)
-                return new BindingMetadata(property?.Name ?? key.FallbackName, options);
+                return new BindingMetadata(property?.Name ?? key.FallbackName, options, property?.IsRequired == true,
+                    PortiaJsonDescriptions.MemberMetadata(options, key.RequestType, key.MemberName)?.Input != false);
 
             var derived = new JsonSerializerOptions(options);
             if (property.CustomConverter is not null)
                 derived.Converters.Insert(0, property.CustomConverter);
             if (property.NumberHandling is { } numberHandling)
                 derived.NumberHandling = numberHandling;
-            return new BindingMetadata(property.Name, derived);
+            return new BindingMetadata(property.Name, derived, property.IsRequired,
+                PortiaJsonDescriptions.MemberMetadata(options, key.RequestType, key.MemberName)?.Input != false);
         }
 
         static string? DeclaredName(JsonPropertyInfo property) =>

@@ -362,6 +362,29 @@ public sealed class OpenApiDescriptionTests
         Assert.Equal("Attributed limit.", retained.Properties!["limit"].Description);
     }
 
+    /// <summary>Standard titles and deprecation metadata flow into the generated schema.</summary>
+    [Fact]
+    public async Task ShouldDescribeTitlesAndDeprecationGivenStandardAttributes()
+    {
+        // Arrange
+        var builder = CreateBuilder();
+        _ = builder.Services.AddPortia().AddHttp().AddRequestHandler<OpenApiTitleHandler>();
+        await using var app = builder.Build();
+        _ = app.MapPortiaOpenApi();
+        _ = app.MapPortiaGet<OpenApiTitleRequest, OpenApiTitleView>("/titles");
+        await app.StartAsync();
+
+        // Act
+        var document = await ReadAsync(app, "json");
+
+        // Assert
+        var schema = document.Paths["/titles"].Operations![HttpMethod.Get].Responses!["200"].Content!["application/json"].Schema!;
+        Assert.Equal("A titled view", schema.Title);
+        Assert.Equal("Display label", schema.Properties!["label"].Title);
+        Assert.True(schema.Properties["legacy_label"].Deprecated);
+        Assert.Contains("Use Label.", schema.Properties["legacy_label"].Description, StringComparison.Ordinal);
+    }
+
     static WebApplicationBuilder CreateBuilder()
     {
         var builder = WebApplication.CreateBuilder();

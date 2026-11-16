@@ -14,7 +14,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
     static readonly HashSet<string> CandidateMethods =
     [
         with(StringComparer.Ordinal),
-        "AddEvent", "RegisterDynamicRequest", "AddRequestHandler", "AddMcpTool", "AddMcpResource", "AddMcpPrompt", "SendAsync",
+        "AddEvent", "RegisterDynamicRequest", "AddMcpTool", "AddMcpResource", "AddMcpPrompt", "SendAsync",
         "SendWithOutcomeAsync", "StreamAsync",
         "DispatchAsync",
         "DispatchStreamAsync", "EnqueueAsync", "EnqueueWithOptionsAsync", "PublishAsync", "ScheduleAsync", "EnsureAsync", "AddRequestSchedule",
@@ -118,16 +118,10 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
         {
             foreach (var argument in method.TypeArguments)
                 Add(argument);
-        }
-        else if (registration && name == "AddRequestHandler" &&
-                 method.TypeArguments.FirstOrDefault() is INamedTypeSymbol handler)
-        {
-            foreach (var iface in handler.AllInterfaces.Where(IsHandlerInterface))
-            {
-                Add(iface.TypeArguments[0]);
-                if (iface.TypeArguments.Length == 2)
-                    Add(iface.TypeArguments[1]);
-            }
+            if (registration && name == "RegisterDynamicRequest" && method.TypeArguments.FirstOrDefault() is INamedTypeSymbol dynamicRequest)
+                foreach (var contract in dynamicRequest.AllInterfaces.Where(contract => contract.OriginalDefinition.ToDisplayString() is
+                             "Cntryl.Portia.IRequest<TOut>" or "Cntryl.Portia.IStreamRequest<TOut>"))
+                    Add(contract.TypeArguments[0]);
         }
 
         if (name is ("AddMcpTool" or "AddMcpResource" or "AddMcpPrompt") && IsPortiaMcpRegistration(method)
@@ -278,9 +272,6 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
         return false;
     }
 
-    static bool IsHandlerInterface(INamedTypeSymbol type) => type.OriginalDefinition.ToDisplayString() is
-        "Cntryl.Portia.IRequestHandler<TRequest>" or "Cntryl.Portia.IRequestHandler<TRequest, TOut>"
-        or "Cntryl.Portia.IStreamRequestHandler<TRequest, TOut>";
 
     static bool HasDiscriminator(INamedTypeSymbol type) => type.GetAttributes()
         .Any(a => a.AttributeClass?.ToDisplayString() == "Cntryl.Portia.DiscriminatorAttribute");
@@ -294,8 +285,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
         }
 
         var owner = method.ReducedFrom?.ContainingType ?? method.ContainingType;
-        return owner.ToDisplayString() is "Cntryl.Portia.RequestBusExtensions" or "Cntryl.Portia.IRequestBus"
-            or "Cntryl.Portia.IRemoteRequestSender" or "Cntryl.Portia.IRequestQueuePublisher"
+        return owner.ToDisplayString() is "Cntryl.Portia.IRemoteRequestSender" or "Cntryl.Portia.IRequestQueuePublisher"
             or "Cntryl.Portia.INoticeRequestSender" or "Cntryl.Portia.IRequestScheduler"
             or "Cntryl.Portia.RequestSenderContextExtensions" or "Cntryl.Portia.PortiaBuilder";
     }

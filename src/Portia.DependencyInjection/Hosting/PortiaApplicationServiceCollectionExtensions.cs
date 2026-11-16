@@ -47,6 +47,7 @@ public static class PortiaApplicationServiceCollectionExtensions
             provider.GetRequiredService<IAggregateReader>(), provider.GetRequiredService<IAggregateWriter>()));
         services.TryAddScoped<WorkloadContext>();
         services.TryAddScoped<IRequestBus, RequestBus>();
+        services.TryAddSingleton(static provider => provider.GetRequiredService<PortiaBuilder>().Contracts);
         services.TryAddSingleton(static provider => new RequestRegistry(
             provider.GetServices<RequestHandlerRegistration>(), provider.GetServices<RequestAuthorizerRegistration>(),
             provider.GetServices<RequestPipelineBehaviorRegistration>(),

@@ -16,7 +16,6 @@ namespace Cntryl.Portia;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public abstract class McpToolRegistration
 {
-    static readonly ConditionalWeakTable<JsonSerializerOptions, JsonSerializerOptions> BindingOptions = [];
     readonly ConditionalWeakTable<JsonSerializerOptions, Tool> _protocolTools = [];
     readonly IReadOnlyDictionary<string, McpJsonPropertyDescription> _propertyDescriptions;
 
@@ -81,32 +80,14 @@ public abstract class McpToolRegistration
 
     Tool BuildProtocolTool(JsonSerializerOptions json)
     {
-        var binding = Strict(json).GetTypeInfo(RequestType);
+        var binding = PortiaJsonRequestOptions.Strict(json).GetTypeInfo(RequestType);
         if (binding.Kind != JsonTypeInfoKind.Object)
             throw new InvalidOperationException(
                 $"MCP tool '{Name}' requires object-shaped JSON input metadata for '{RequestType}'. "
                 + "Use an object request without a root converter.");
-        var input = binding.GetJsonSchemaAsNode(new JsonSchemaExporterOptions
+        var input = PortiaJsonSchemaProjection.For(json, json, true).GetTypeInfo(RequestType).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
         {
-            TransformSchemaNode = (context, node) =>
-            {
-                // The BCL exporter requires every non-optional constructor parameter. Binding only
-                // requires effective IsRequired members, including configured constructor policy.
-                if (context.TypeInfo.Kind == JsonTypeInfoKind.Object && node is JsonObject schema &&
-                    schema["required"] is JsonArray required)
-                {
-                    for (var index = required.Count - 1; index >= 0; index--)
-                    {
-                        var name = required[index]?.GetValue<string>();
-                        var property = context.TypeInfo.Properties.FirstOrDefault(member => member.Name == name);
-                        if (property is { IsRequired: false })
-                            required.RemoveAt(index);
-                    }
-                    if (required.Count == 0)
-                        schema.Remove("required");
-                }
-                return PortiaJsonDescriptions.Apply(context, node, json);
-            }
+            TransformSchemaNode = (context, node) => PortiaJsonDescriptions.Apply(context, node, json, input: true)
         });
         if (input is not JsonObject inputObject)
             throw new InvalidOperationException($"MCP tool '{Name}' did not produce an object input schema.");
@@ -127,7 +108,7 @@ public abstract class McpToolRegistration
                     propertySchema["description"] = propertyDescription.Description;
             }
         }
-        var result = ResultType is null ? null : json.GetTypeInfo(ResultType).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
+        var result = ResultType is null ? null : PortiaJsonSchemaProjection.For(json, json, false).GetTypeInfo(ResultType).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
         {
             TransformSchemaNode = (context, node) => PortiaJsonDescriptions.Apply(context, node, json)
         });
@@ -145,12 +126,12 @@ public abstract class McpToolRegistration
         {
             Name = Name,
             Description = Description,
-            Title = Title,
+            Title = Title ?? PortiaJsonDescriptions.Metadata(json, RequestType)?.Title,
             InputSchema = Element(input),
             OutputSchema = output is null ? null : Element(output),
             Annotations = new ToolAnnotations
             {
-                Title = Title,
+                Title = Title ?? PortiaJsonDescriptions.Metadata(json, RequestType)?.Title,
                 ReadOnlyHint = ReadOnly,
                 DestructiveHint = Destructive,
                 IdempotentHint = Idempotent,
@@ -201,39 +182,12 @@ public abstract class McpToolRegistration
                     arguments[argument.Key] = JsonNode.Parse(argument.Value.GetRawText());
             }
 
-            return (TRequest?)arguments.Deserialize(Strict(json).GetTypeInfo<TRequest>())
+            return (TRequest?)arguments.Deserialize(PortiaJsonRequestOptions.Strict(json).GetTypeInfo<TRequest>())
                    ?? throw new JsonException("The MCP tool input cannot be null.");
         }
         catch (JsonException exception)
         {
             throw new McpBindingException(exception);
-        }
-    }
-
-    // Mirrors generated HTTP binding: a constructor member that is neither nullable nor defaulted must
-    // be present and non-null.
-    static JsonSerializerOptions Strict(JsonSerializerOptions json) =>
-        BindingOptions.GetValue(json, static current =>
-        {
-            var options = new JsonSerializerOptions(current)
-            {
-                RespectNullableAnnotations = true,
-                TypeInfoResolver = current.TypeInfoResolver?.WithAddedModifier(RequireNonNullableMembers)
-            };
-            options.MakeReadOnly();
-            return options;
-        });
-
-    static void RequireNonNullableMembers(JsonTypeInfo typeInfo)
-    {
-        foreach (var property in typeInfo.Properties)
-        {
-            // This options copy only deserializes inputs. Schema nullability must follow the setter
-            // contract; the original output metadata keeps the independent getter contract.
-            if (property.IsGetNullable != property.IsSetNullable)
-                property.IsGetNullable = property.IsSetNullable;
-            if (property.AssociatedParameter is { HasDefaultValue: false, IsNullable: false })
-                property.IsRequired = true;
         }
     }
 

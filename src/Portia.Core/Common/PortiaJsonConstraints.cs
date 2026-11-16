@@ -1,0 +1,146 @@
+using System.ComponentModel.DataAnnotations;
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+
+namespace Cntryl.Portia;
+
+// JSON Schema carries portable constraints. Extensions retain .NET-specific rules without
+// pretending that a different regex engine or a format annotation enforces the runtime rule.
+static class PortiaJsonConstraints
+{
+    internal static void Apply(JsonObject schema, PortiaContractMemberMetadata member, JsonSerializerOptions options)
+    {
+        if (!member.Input && member.Output)
+            schema["readOnly"] = true;
+        if (member.Input && !member.Output)
+            schema["writeOnly"] = true;
+        if (member.HasBindingDefault || member.HasDefault)
+        {
+            var value = member.HasBindingDefault ? member.BindingDefaultValue : member.DefaultValue;
+            if (member.Rules.All(rule => PortiaContractValidation.IsValid(member, rule, value)))
+                schema["default"] = JsonSerializer.SerializeToNode(value, options.GetTypeInfo(member.Type));
+            else
+                _ = schema.Remove("default");
+        }
+        foreach (var rule in member.Rules)
+        {
+            switch (rule)
+            {
+                case RequiredAttribute required:
+                    ExcludeNull(schema);
+                    if (!required.AllowEmptyStrings && HasType(schema, "string"))
+                    {
+                        Lower(schema, "minLength", 1);
+                        schema["x-portia-reject-whitespace"] = true;
+                    }
+                    break;
+                case RangeAttribute range:
+                    schema["x-portia-range"] = new JsonObject
+                    {
+                        ["minimum"] = JsonValue.Create(Convert.ToString(range.Minimum, CultureInfo.InvariantCulture)),
+                        ["maximum"] = JsonValue.Create(Convert.ToString(range.Maximum, CultureInfo.InvariantCulture)),
+                        ["operandType"] = range.OperandType?.FullName,
+                        ["minimumIsExclusive"] = range.MinimumIsExclusive,
+                        ["maximumIsExclusive"] = range.MaximumIsExclusive
+                    };
+                    var valueType = Nullable.GetUnderlyingType(member.Type) ?? member.Type;
+                    var roundsFractional = range.Minimum is int && (valueType == typeof(double) || valueType == typeof(float) || valueType == typeof(decimal));
+                    if (!roundsFractional && (HasType(schema, "number") || HasType(schema, "integer")))
+                    {
+                        Bound(schema, range.MinimumIsExclusive ? "exclusiveMinimum" : "minimum", range.Minimum);
+                        Bound(schema, range.MaximumIsExclusive ? "exclusiveMaximum" : "maximum", range.Maximum);
+                    }
+                    break;
+                case StringLengthAttribute length when HasType(schema, "string"):
+                    StringMinimum(schema, length.MinimumLength);
+                    StringMaximum(schema, length.MaximumLength);
+                    break;
+                case MinLengthAttribute minimum:
+                    if (HasType(schema, "string"))
+                        StringMinimum(schema, minimum.Length);
+                    else if (LengthKeyword(schema, "min") is { } minimumKeyword)
+                        Lower(schema, minimumKeyword, minimum.Length);
+                    break;
+                case MaxLengthAttribute { Length: >= 0 } maximum:
+                    if (HasType(schema, "string"))
+                        StringMaximum(schema, maximum.Length);
+                    else if (LengthKeyword(schema, "max") is { } maximumKeyword)
+                        Upper(schema, maximumKeyword, maximum.Length);
+                    break;
+                case RegularExpressionAttribute expression when HasType(schema, "string"):
+                    schema["x-portia-dotnet-pattern"] = expression.Pattern;
+                    // Literal ASCII ranges, groups, alternations and quantifiers have matching
+                    // semantics. Character categories, options and dot/newline rules do not.
+                    if (PortablePattern(expression.Pattern))
+                        schema["pattern"] = "^(?:(?:" + expression.Pattern + ")|)(?![\\s\\S])";
+                    break;
+                case EmailAddressAttribute when HasType(schema, "string"):
+                    schema["format"] = "email";
+                    break;
+                case UrlAttribute when HasType(schema, "string"):
+                    schema["format"] = "uri";
+                    break;
+            }
+        }
+    }
+
+    internal static bool RequiresPresence(PortiaContractMemberMetadata? member) => member is not null &&
+        (member.HasBindingDefault || member.ConstructorBound) &&
+        member.Rules.Any(rule => !PortiaContractValidation.IsValid(member, rule, member.BindingDefaultValue));
+
+    static bool HasType(JsonObject schema, string name) => schema["type"] is JsonArray array
+        ? array.Any(value => value?.GetValue<string>() == name)
+        : schema["type"] is JsonValue value && value.TryGetValue<string>(out var type) && type == name;
+
+    static string? LengthKeyword(JsonObject schema, string prefix) => HasType(schema, "string") ? prefix + "Length"
+        : HasType(schema, "array") ? prefix + "Items" : HasType(schema, "object") ? prefix + "Properties" : null;
+
+    static void StringMinimum(JsonObject schema, int units)
+    {
+        // Each Unicode scalar consumes one or two UTF-16 units. This portable lower bound
+        // must never reject a value accepted by .NET; the extension retains the exact rule.
+        Lower(schema, "minLength", units / 2 + units % 2);
+        Lower(schema, "x-portia-utf16-minLength", units);
+    }
+
+    static void StringMaximum(JsonObject schema, int units)
+    {
+        Upper(schema, "maxLength", units);
+        Upper(schema, "x-portia-utf16-maxLength", units);
+    }
+
+    static void Lower(JsonObject schema, string name, int value) =>
+        schema[name] = Math.Max(schema[name]?.GetValue<int>() ?? 0, value);
+
+    static void Upper(JsonObject schema, string name, int value) =>
+        schema[name] = Math.Min(schema[name]?.GetValue<int>() ?? int.MaxValue, value);
+
+    static void Bound(JsonObject schema, string keyword, object bound)
+    {
+        var number = Convert.ToDouble(bound, CultureInfo.InvariantCulture);
+        if (double.IsFinite(number))
+            schema[keyword] = JsonValue.Create(number);
+    }
+
+    static bool PortablePattern(string pattern) => pattern.All(character => character <= 127 && character is not ('\\' or '.' or '$' or '^')) &&
+        !pattern.Contains("(?", StringComparison.Ordinal) && !pattern.Contains("-[", StringComparison.Ordinal);
+
+    static void ExcludeNull(JsonObject schema)
+    {
+        if (schema["type"] is JsonArray types)
+        {
+            for (var index = types.Count - 1; index >= 0; index--)
+                if (types[index]?.GetValue<string>() == "null")
+                    types.RemoveAt(index);
+            if (types.Count == 1)
+                schema["type"] = types[0]!.DeepClone();
+        }
+        else if (!schema.ContainsKey("type"))
+        {
+            var existing = schema["not"]?.DeepClone();
+            schema["not"] = existing is null ? new JsonObject { ["type"] = "null" }
+                : new JsonObject { ["anyOf"] = new JsonArray(existing, new JsonObject { ["type"] = "null" }) };
+        }
+    }
+}

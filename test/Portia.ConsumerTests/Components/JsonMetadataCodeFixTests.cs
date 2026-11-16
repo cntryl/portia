@@ -28,7 +28,7 @@ public sealed class JsonMetadataCodeFixTests
                                    }
                                    public static class Registration
                                    {
-                                       public static void Add(IServiceCollection services) => services.AddPortia().AddRequestHandler<Handler>();
+                                       public static void Add(IServiceCollection services) => services.AddPortia().RegisterDynamicRequest<Query>();
                                    }
                                    """;
 
@@ -66,7 +66,7 @@ public sealed class JsonMetadataCodeFixTests
                                                        }
                                                        public static class Registration
                                                        {
-                                                           public static void Add(IServiceCollection services) => services.AddPortia().AddRequestHandler<Handler>();
+                                                           public static void Add(IServiceCollection services) => services.AddPortia().RegisterDynamicRequest<Query>();
                                                        }
                                                    }
                                                    """;
@@ -168,7 +168,7 @@ public sealed class JsonMetadataCodeFixTests
                                   }
                                   public static class Registration
                                   {
-                                      public static void Add(IServiceCollection services) => services.AddPortia().AddRequestHandler<Handler>();
+                                      public static void Add(IServiceCollection services) => services.AddPortia().RegisterDynamicRequest<Query>();
                                   }
                               }
                               namespace App.Orders
@@ -537,7 +537,7 @@ public sealed class JsonMetadataCodeFixTests
                                          }
                                          public static class Registration
                                          {
-                                             public static void Add(IServiceCollection services) => services.AddPortia().AddRequestHandler<Handler>();
+                                             public static void Add(IServiceCollection services) => services.AddPortia().RegisterDynamicRequest<Query>();
                                          }
                                          [PortiaJsonContext]
                                          [System.Text.Json.Serialization.JsonSerializable(typeof(Query))]

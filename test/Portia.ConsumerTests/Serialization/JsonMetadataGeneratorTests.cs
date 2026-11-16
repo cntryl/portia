@@ -64,7 +64,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void ShouldRequireRequestAndResultRootsGivenRegisteredHandler()
+    public void ShouldAllowLocalHandlerGivenNoJsonWireUse()
     {
         // Arrange
         const string source = """
@@ -86,8 +86,7 @@ public sealed class JsonMetadataGeneratorTests
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
 
         // Assert
-        Assert.Equal(["Answer", "Query"], diagnostics.Where(d => d.Id == "PORTIA025")
-            .Select(d => d.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]).Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
 
     [Fact]
@@ -165,7 +164,7 @@ public sealed class JsonMetadataGeneratorTests
         Assert.Contains("global::Cntryl.Portia.Generated.PortiaJsonContextFactory_", generated,
             StringComparison.Ordinal);
         Assert.Contains(".Create(options)", generated, StringComparison.Ordinal);
-        Assert.Contains(".Describe", generated, StringComparison.Ordinal);
+        Assert.Contains(".GetMetadata", generated, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -462,7 +461,7 @@ public sealed class JsonMetadataGeneratorTests
     }
 
     [Fact]
-    public void ShouldReportRequestsGivenDispatchThroughNullConditionalCalls()
+    public void ShouldAllowLocalDispatchGivenNullConditionalCall()
     {
         // Arrange
         const string source = """
@@ -479,9 +478,7 @@ public sealed class JsonMetadataGeneratorTests
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
 
         // Assert
-        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA025" &&
-                                                   diagnostic.GetMessage(CultureInfo.InvariantCulture)
-                                                       .Contains("'Ping'"));
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
 
     [Fact]

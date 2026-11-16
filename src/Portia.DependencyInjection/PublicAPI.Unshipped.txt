@@ -1,2 +1,3 @@
 #nullable enable
-Cntryl.Portia.PortiaBuilder.AddGeneratedJsonContext(System.Func<System.Text.Json.JsonSerializerOptions!, System.Text.Json.Serialization.JsonSerializerContext!>! factory, System.Func<System.Type!, string?, System.Text.Json.JsonNamingPolicy?, string?>? descriptions = null) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddGeneratedContractMetadata(System.Func<System.Type!, Cntryl.Portia.PortiaContractMetadata?>! provider) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddGeneratedJsonContext(System.Func<System.Text.Json.JsonSerializerOptions!, System.Text.Json.Serialization.JsonSerializerContext!>! factory, System.Func<System.Type!, Cntryl.Portia.PortiaContractMetadata?>? metadata = null) -> Cntryl.Portia.PortiaBuilder!

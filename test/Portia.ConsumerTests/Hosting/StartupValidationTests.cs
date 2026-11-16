@@ -55,15 +55,18 @@ public sealed class StartupValidationTests
         // Arrange
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia()
-            .AddGeneratedHandler(new RequestRegistration<MissingJsonMetadataRequest, MissingJsonMetadataHandler>());
+            .AddGeneratedHandler(new RequestRegistration<MissingJsonMetadataRequest, MissingJsonMetadataHandler>())
+            .AddGeneratedRequest(new RequestTransportRegistration(typeof(MissingJsonMetadataRequest), [RequestTransportId.Queue],
+                new RequestRouteAttribute("test", "startup", "requests", "missing"), new DiscriminatorAttribute("startup.missing")));
 
-        // Act
         using var host = builder.Build();
 
-        // Assert
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+        // Act
+        var error = await Record.ExceptionAsync(() => host.StartAsync());
 
-        Assert.Contains(typeof(MissingJsonMetadataRequest).FullName!, error.Message, StringComparison.Ordinal);
+        // Assert
+        var failure = Assert.IsType<InvalidOperationException>(error);
+        Assert.Contains(typeof(MissingJsonMetadataRequest).FullName!, failure.Message, StringComparison.Ordinal);
     }
 
     [Theory]

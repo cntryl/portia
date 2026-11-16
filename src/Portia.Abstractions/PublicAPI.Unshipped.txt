@@ -1,2 +1,59 @@
 #nullable enable
 Cntryl.Portia.AuthorizationStage.Permission = 150 -> Cntryl.Portia.AuthorizationStage
+Cntryl.Portia.PortiaContractMemberMetadata
+Cntryl.Portia.PortiaContractMemberMetadata.BindingDefaultValue.get -> object?
+Cntryl.Portia.PortiaContractMemberMetadata.BindingDefaultValue.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.DefaultValue.get -> object?
+Cntryl.Portia.PortiaContractMemberMetadata.DefaultValue.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.Deprecated.get -> bool
+Cntryl.Portia.PortiaContractMemberMetadata.Deprecated.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.DeprecationMessage.get -> string?
+Cntryl.Portia.PortiaContractMemberMetadata.DeprecationMessage.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.Description.get -> string?
+Cntryl.Portia.PortiaContractMemberMetadata.Description.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.GetValue.get -> System.Func<object!, object?>?
+Cntryl.Portia.PortiaContractMemberMetadata.GetValue.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.HasBindingDefault.get -> bool
+Cntryl.Portia.PortiaContractMemberMetadata.HasBindingDefault.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.HasDefault.get -> bool
+Cntryl.Portia.PortiaContractMemberMetadata.HasDefault.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.Input.get -> bool
+Cntryl.Portia.PortiaContractMemberMetadata.Input.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.JsonName.get -> string?
+Cntryl.Portia.PortiaContractMemberMetadata.JsonName.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.Name.get -> string!
+Cntryl.Portia.PortiaContractMemberMetadata.Output.get -> bool
+Cntryl.Portia.PortiaContractMemberMetadata.Output.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.PortiaContractMemberMetadata(string! name, System.Type! type) -> void
+Cntryl.Portia.PortiaContractMemberMetadata.Rules.get -> System.Collections.Generic.IReadOnlyList<System.ComponentModel.DataAnnotations.ValidationAttribute!>!
+Cntryl.Portia.PortiaContractMemberMetadata.Rules.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.Title.get -> string?
+Cntryl.Portia.PortiaContractMemberMetadata.Title.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.Type.get -> System.Type!
+Cntryl.Portia.PortiaContractMetadata
+Cntryl.Portia.PortiaContractMetadata.Deprecated.get -> bool
+Cntryl.Portia.PortiaContractMetadata.Deprecated.init -> void
+Cntryl.Portia.PortiaContractMetadata.DeprecationMessage.get -> string?
+Cntryl.Portia.PortiaContractMetadata.DeprecationMessage.init -> void
+Cntryl.Portia.PortiaContractMetadata.Description.get -> string?
+Cntryl.Portia.PortiaContractMetadata.Description.init -> void
+Cntryl.Portia.PortiaContractMetadata.Elements.get -> System.Func<object!, System.Collections.Generic.IEnumerable<object?>!>?
+Cntryl.Portia.PortiaContractMetadata.Elements.init -> void
+Cntryl.Portia.PortiaContractMetadata.Members.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.PortiaContractMemberMetadata!>!
+Cntryl.Portia.PortiaContractMetadata.Members.init -> void
+Cntryl.Portia.PortiaContractMetadata.PortiaContractMetadata(System.Type! type) -> void
+Cntryl.Portia.PortiaContractMetadata.Title.get -> string?
+Cntryl.Portia.PortiaContractMetadata.Title.init -> void
+Cntryl.Portia.PortiaContractMetadata.Type.get -> System.Type!
+Cntryl.Portia.PortiaContractMemberMetadata.Count.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.Count.get -> System.Func<object!, int>?
+Cntryl.Portia.PortiaContractMetadata.HasValidation.get -> bool
+Cntryl.Portia.PortiaContractMetadata.HasValidation.init -> void
+Cntryl.Portia.PortiaContractMetadata.ElementType.init -> void
+Cntryl.Portia.PortiaContractMetadata.ElementType.get -> System.Type?
+Cntryl.Portia.PortiaContractMemberMetadata.HasValidation.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.HasValidation.get -> bool
+Cntryl.Portia.PortiaContractMetadata.IsSourceDefinition.init -> void
+Cntryl.Portia.PortiaContractMetadata.IsSourceDefinition.get -> bool
+Cntryl.Portia.PortiaContractMemberMetadata.ConstructorBound.init -> void
+Cntryl.Portia.PortiaContractMemberMetadata.ConstructorBound.get -> bool

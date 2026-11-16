@@ -16,7 +16,10 @@ static class GeneratedSource
     }
 
     public static void Add(GeneratedOutput output, string hintName, string source) =>
-        output.Files.Add(new GeneratedFile(hintName, source));
+        output.Files.Add(new GeneratedFile(hintName,
+            source.Contains("PortiaContractMetadata")
+                ? "#pragma warning disable CS0612, CS0618 // Generated metadata must describe deprecated contracts.\n" + source
+                : source));
 
     public static string Identity(string value)
     {

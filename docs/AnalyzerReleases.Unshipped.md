@@ -7,3 +7,9 @@
 ; Retired IDs, never to be reused: PORTIA001, PORTIA003, PORTIA004, PORTIA006, PORTIA007,
 ; PORTIA008, PORTIA009, PORTIA010, PORTIA014, PORTIA103. Reusing one would make an old suppression in a
 ; consumer's code silently apply to an unrelated rule.
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+PORTIA031 | Portia | Error | Reject invalid or reflection-dependent contract attribute declarations.

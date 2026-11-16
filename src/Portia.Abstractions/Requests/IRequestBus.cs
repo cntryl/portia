@@ -32,8 +32,8 @@ public interface IRequestBus
     RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null);
 
     /// <summary>
-    ///     Runs a request's declared authorization without invoking its handler, so a transport that
-    ///     accepts a request now and runs it later can refuse an unauthorized caller at the point of
+    ///     Runs a request's declared authorization, then standard value validation, without invoking its handler, so a transport that
+    ///     accepts a request now and runs it later can refuse unauthorized callers and invalid values at the point of
     ///     acceptance. Dispatch already performs this check; this exists for the accept-now-run-later
     ///     boundary, where the acceptance is durable and the refusal would otherwise arrive only as a
     ///     dead letter.
@@ -41,7 +41,7 @@ public interface IRequestBus
     /// <param name="request">The request whose authorization is evaluated.</param>
     /// <param name="context">Execution state from <see cref="CreateContext" />.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
-    /// <returns>Success when every authorizer and declared permission allows the actor.</returns>
+    /// <returns>Success when authorization permits the actor and standard value validation succeeds.</returns>
     ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
         CancellationToken ct = default);
 
