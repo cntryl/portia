@@ -92,7 +92,7 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
         {
             var actual = await ReadStateAsync(tx, replacement.Target, ct).ConfigureAwait(false);
             if (!Matches(actual, expectedRevision, ownerSession)
-                || actual!.Attempts.SingleOrDefault(a => a.Id == attemptId) is not { Outcome: "running" } attempt
+                || actual!.Attempts.SingleOrDefault(a => a.Id == attemptId) is not { Outcome: OperationalAttemptOutcomes.Running } attempt
                 || attempt.OwnerSession != ownerSession || attempt.ExpectedCheckpoint != expectedCheckpoint)
                 return false;
             var stored = await tx.GetAsync(FitzKvCheckpoints.Key(identity), ct).ConfigureAwait(false);
@@ -101,7 +101,7 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
                 throw new OperationalCheckpointConflictException();
             var receipt = replacement.Attempts.Single(a => a.Id == attemptId);
             if (replacement.OwnerSession != ownerSession || replacement.Checkpoint != nextCheckpoint
-                || receipt.Outcome != "committed" || receipt.NextCheckpoint != nextCheckpoint
+                || receipt.Outcome != OperationalAttemptOutcomes.Committed || receipt.NextCheckpoint != nextCheckpoint
                 || receipt.OwnerSession != ownerSession || receipt.StartedAt != attempt.StartedAt
                 || attempt.NextCheckpoint != nextCheckpoint
                 || receipt.ExpectedCheckpoint != expectedCheckpoint || !receipt.Sources.SequenceEqual(attempt.Sources)

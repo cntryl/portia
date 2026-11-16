@@ -17,10 +17,10 @@ public sealed partial class OperationalExecutionTests
         var first = await SessionAsync(journal);
 
         // Act
-        var runner = new ReactorRunner(events) { Operations = first };
+        var runner = new ReactorRunner(events);
 
         // Assert
-        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => runner.RunAsync(Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
+        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => runner.RunAsync(first, Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
         Assert.Single(effects.Ids);
         var failed = (await journal.ReadAsync(Target))!;
         Assert.NotNull(failed.Block);
@@ -39,7 +39,7 @@ public sealed partial class OperationalExecutionTests
         Assert.Equal(2, effects.Executions.Count);
         Assert.True(await restarted.PrepareAsync(ProjectionCheckpoint.Start, default));
         effects.Fail = false;
-        var committed = await new ReactorRunner(events) { Operations = restarted }.RunPassAsync(Reactor(journal, effects),
+        var committed = await new ReactorRunner(events).RunPassAsync(restarted, Reactor(journal, effects),
             ProjectionCheckpoint.Start, restarted.BoundOptions(ProjectionRunOptions.Default));
         Assert.Equal("2", committed.Cursor.Value);
         Assert.Equal(2, effects.Ids.Count);
@@ -66,8 +66,8 @@ public sealed partial class OperationalExecutionTests
         var effects = new Effects();
 
         // Act
-        _ = await new ReactorRunner(await EventsAsync()) { Operations = session }
-            .RunAsync(Reactor(checkpoints, effects), ProjectionCheckpoint.Start);
+        _ = await new ReactorRunner(await EventsAsync())
+            .RunAsync(session, Reactor(checkpoints, effects), ProjectionCheckpoint.Start);
 
         // Assert
         Assert.Equal(2, effects.Executions.Count);
@@ -86,8 +86,7 @@ public sealed partial class OperationalExecutionTests
         var first = await SessionAsync(journal);
 
         // Assert
-        _ = await Assert.ThrowsAsync<ProcessorFailureException>(async () => await new ReactorRunner(await EventsAsync())
-        { Operations = first }.RunAsync(Reactor(journal, new Effects { Fail = true }), ProjectionCheckpoint.Start).AsTask());
+        _ = await Assert.ThrowsAsync<ProcessorFailureException>(async () => await new ReactorRunner(await EventsAsync()).RunAsync(first, Reactor(journal, new Effects { Fail = true }), ProjectionCheckpoint.Start).AsTask());
         var session = await SessionAsync(journal);
         var api = Api(journal);
         var actor = TestOperationalAuthorizer.AdministratorActor(true);
@@ -96,8 +95,7 @@ public sealed partial class OperationalExecutionTests
         _ = await api.ExecuteRepairAsync(actor, Target, plan.Id);
         Assert.True(await session.PrepareAsync(ProjectionCheckpoint.Start, default));
         var effects = new Effects();
-        _ = await Assert.ThrowsAsync<ProcessorFailureException>(async () => await new ReactorRunner(await EventsAsync())
-        { Operations = session }.RunAsync(Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
+        _ = await Assert.ThrowsAsync<ProcessorFailureException>(async () => await new ReactorRunner(await EventsAsync()).RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
         Assert.Empty(effects.Executions);
         Assert.NotNull((await journal.ReadAsync(Target))!.Block);
     }
@@ -116,7 +114,7 @@ public sealed partial class OperationalExecutionTests
         var originalId = await interrupted.BeginAsync(records, ProjectionCheckpoint.Start, default);
         var resumed = await SessionAsync(journal);
         var effects = new Effects();
-        _ = await new ReactorRunner(events) { Operations = resumed }.RunAsync(Reactor(journal, effects), ProjectionCheckpoint.Start);
+        _ = await new ReactorRunner(events).RunAsync(resumed, Reactor(journal, effects), ProjectionCheckpoint.Start);
 
         // Act
         var state = (await journal.ReadAsync(Target))!;
@@ -149,8 +147,8 @@ public sealed partial class OperationalExecutionTests
                 .Contains("\"outcome\":\"running\"", StringComparison.Ordinal));
         }
         };
-        _ = await new ReactorRunner(await EventsAsync()) { Operations = session }
-            .RunAsync(Reactor(journal, effects), ProjectionCheckpoint.Start);
+        _ = await new ReactorRunner(await EventsAsync())
+            .RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start);
         Assert.Equal(2, effects.Ids.Count);
     }
 
@@ -165,8 +163,8 @@ public sealed partial class OperationalExecutionTests
         await session.AcquireAsync(Target, "reactor", Settings, ProjectionCheckpoint.Start, default);
         var effects = new Effects();
         journal.Unavailable = true;
-        var pending = new ReactorRunner(await EventsAsync()) { Operations = session }
-            .RunAsync(Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask();
+        var pending = new ReactorRunner(await EventsAsync())
+            .RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask();
 
         // Act
         var delay = await clock.WaitForDelayAsync();
@@ -210,7 +208,7 @@ public sealed partial class OperationalExecutionTests
         };
 
         // Act
-        _ = await new ReactorRunner(await EventsAsync()) { Operations = session }.RunPassAsync(Reactor(journal, effects),
+        _ = await new ReactorRunner(await EventsAsync()).RunPassAsync(session, Reactor(journal, effects),
             ProjectionCheckpoint.Start, new ProjectionRunOptions { MaxBatchSize = 1 });
 
         // Assert

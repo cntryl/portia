@@ -129,6 +129,7 @@ public sealed class DeliveryScopeTests
         public uint Attempt => 1;
         public ValueTask CompleteAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
         public ValueTask AbandonAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
+        public ValueTask RetryAsync(TimeSpan delay, CancellationToken ct = default) => AbandonAsync(ct);
     }
 
     sealed class Notifications(ScopeRequest[] requests) : IRequestNotificationConsumer

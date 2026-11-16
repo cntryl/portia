@@ -128,6 +128,74 @@ public sealed class FleetPartitionRunnerTests
             runner.RunAsync(["lease://portia/fleet/p"], (_, _) => Task.CompletedTask, options));
     }
 
+    /// <summary>
+    ///     An interval longer than a timer can represent is rejected before the runner starts, instead of
+    ///     failing inside the first reconciliation and tearing every partition down each cycle.
+    /// </summary>
+    /// <param name="reconciliation">Whether the oversized value is the reconciliation interval.</param>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ShouldRejectConfigurationGivenIntervalBeyondTimerRange(bool reconciliation)
+    {
+        // Arrange
+        var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership());
+        var oversized = TimeSpan.FromDays(60);
+        var options = SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with
+        {
+            ReconciliationInterval = reconciliation ? oversized : TimeSpan.FromSeconds(1),
+            PartitionStopTimeout = reconciliation ? TimeSpan.FromSeconds(30) : oversized
+        };
+
+        // Act
+        var exception = await Record.ExceptionAsync(() =>
+            runner.RunAsync(["lease://portia/fleet/p"], (_, _) => Task.CompletedTask, options)
+                .WaitAsync(TimeSpan.FromSeconds(2)));
+
+        // Assert
+        _ = Assert.IsType<ArgumentOutOfRangeException>(exception);
+    }
+
+    /// <summary>
+    ///     A terminal workload failure stays the reported cause when another partition then fails to stop
+    ///     in time; the termination timeout is attached to it rather than replacing it.
+    /// </summary>
+    [Fact]
+    public async Task ShouldKeepTerminalFailureGivenAnotherPartitionIgnoresCancellation()
+    {
+        // Arrange
+        var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership());
+        var terminal = new WorkloadFailureException(new WorkloadIdentity("poison"), 2,
+            new InvalidOperationException("bad event"));
+        var stuckStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var options = SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with
+        {
+            ReconciliationInterval = TimeSpan.FromMilliseconds(10),
+            PartitionStopTimeout = TimeSpan.FromMilliseconds(50)
+        };
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => runner.RunAsync(
+            ["lease://portia/fleet/poison", "lease://portia/fleet/stuck"], async (partition, _) =>
+            {
+                if (partition.EndsWith("stuck", StringComparison.Ordinal))
+                {
+                    stuckStarted.SetResult();
+                    await release.Task;
+                    return;
+                }
+
+                await stuckStarted.Task;
+                throw terminal;
+            }, options).WaitAsync(TimeSpan.FromSeconds(5)));
+        release.SetResult();
+
+        // Assert
+        Assert.Same(terminal, exception);
+        _ = Assert.IsType<FleetPartitionTerminationTimeoutException>(terminal.Data["Portia.CleanupException"]);
+    }
+
     /// <summary>Changing tenant partitions revoke only removed work and retain global ownership.</summary>
     [Fact]
     public async Task ShouldPreserveRetainedOwnershipGivenPartitionsChange()

@@ -120,6 +120,7 @@ public sealed class TransportExecutionContextTests
         public RequestInvocation Invocation => new QueueInvocation("queue://test/work/actual", attempt);
         public ValueTask CompleteAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
         public ValueTask AbandonAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
+        public ValueTask RetryAsync(TimeSpan delay, CancellationToken ct = default) => AbandonAsync(ct);
     }
 
     sealed class Consumer(params IQueuedRequest[] requests) : IRequestQueueConsumer

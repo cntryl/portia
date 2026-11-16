@@ -66,7 +66,7 @@ public sealed class PortiaOperations : IPortiaOperations
         await AuthorizeAsync(actor, scope, OperationalAccess.Read, ct).ConfigureAwait(false);
         var states = await _store.ListAsync(scope, ct).ConfigureAwait(false);
         return new OperationalHealth(states.Count, states.Count(s => s.Block is not null),
-            states.Count(s => s.Attempts.Any(a => a.Outcome == "running")),
+            states.Count(s => s.Attempts.Any(a => a.Outcome == OperationalAttemptOutcomes.Running)),
             states.Count == 0 ? null : states.Min(s => s.RetainedSince));
     }
 
@@ -109,10 +109,10 @@ public sealed class PortiaOperations : IPortiaOperations
         {
             var block = state.Block ?? throw new InvalidOperationException("The processor is not blocked.");
             var attempt = state.Attempts.Single(a => a.Id == block.AttemptId);
-            var action = attempt.Outcome == "committed_cleanup_failed" || state.Checkpoint != attempt.ExpectedCheckpoint
-                ? "resume" : "retry";
-            if (action == "retry" && attempt.Sources.Count == 0)
-                action = "resume";
+            var action = attempt.Outcome == OperationalAttemptOutcomes.CommittedCleanupFailed || state.Checkpoint != attempt.ExpectedCheckpoint
+                ? RepairActions.Resume : RepairActions.Retry;
+            if (action == RepairActions.Retry && attempt.Sources.Count == 0)
+                action = RepairActions.Resume;
             var plan = new RepairPlan(id, target, state.OwnerSession, block.AttemptId, block.FailureRevision,
                 action, state.Checkpoint, attempt.Sources.ToArray(), state.Settings, now + _options.RepairPlanLifetime);
             return state with { Plans = [.. state.Plans, plan] };
@@ -146,14 +146,14 @@ public sealed class PortiaOperations : IPortiaOperations
         await AuthorizeAsync(actor, target.Scope, OperationalAccess.Approve, ct).ConfigureAwait(false);
         _ = await ChangeAsync(target, state =>
         {
-            if (state.Repairs.Any(r => r.PlanId == planId && r.Status != "queued"))
+            if (state.Repairs.Any(r => r.PlanId == planId && r.Status != OperationalRepairStatuses.Queued))
                 throw new InvalidOperationException("The worker already claimed this repair.");
             if (!state.Approvals.Any(a => a.PlanId == planId))
                 throw new KeyNotFoundException("No approval exists for this plan.");
             return state with
             {
                 Approvals = state.Approvals.Select(a => a.PlanId == planId ? a with { Revoked = true } : a).ToArray(),
-                Repairs = state.Repairs.Select(r => r.PlanId == planId ? r with { Status = "invalidated" } : r).ToArray()
+                Repairs = state.Repairs.Select(r => r.PlanId == planId ? r with { Status = OperationalRepairStatuses.Invalidated } : r).ToArray()
             };
         }, ct).ConfigureAwait(false);
     }
@@ -176,7 +176,7 @@ public sealed class PortiaOperations : IPortiaOperations
             return state with
             {
                 Repairs = [.. state.Repairs, new OperationalRepair(id, planId, actorReference,
-                "queued", _clock.GetUtcNow())]
+                OperationalRepairStatuses.Queued, _clock.GetUtcNow())]
             };
         }, ct).ConfigureAwait(false);
         return saved.Repairs.Single(r => r.PlanId == planId);

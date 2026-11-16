@@ -16,8 +16,7 @@ public sealed partial class OperationalProjectionTests
         await session.AcquireAsync(Target, "projector", Settings with { FailureAttemptLimit = 3 }, ProjectionCheckpoint.Start, default);
 
         // Assert
-        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ProjectorRunner(events)
-        { Operations = session }.RunAsync(new PermanentlyFailingProjector(native), ProjectionCheckpoint.Start).AsTask());
+        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ProjectorRunner(events).RunAsync(session, new PermanentlyFailingProjector(native), ProjectionCheckpoint.Start).AsTask());
         Assert.Equal(ProjectionCheckpoint.Start, native.Checkpoint);
         var api = new PortiaOperations(TestOperationalAuthorizer.Configuration(), journal, new OperationalOptions(),
             new EmptyApplicationTopology(), new TestOperationalAuthorizer(), null);
@@ -27,8 +26,7 @@ public sealed partial class OperationalProjectionTests
         Assert.True(await session.PrepareAsync(ProjectionCheckpoint.Start, default));
         native.AfterCommit = () => throw new IOException("commit acknowledgement lost");
 
-        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ProjectorRunner(events)
-        { Operations = session }.RunAsync(new ProbeProjector(native), ProjectionCheckpoint.Start,
+        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ProjectorRunner(events).RunAsync(session, new ProbeProjector(native), ProjectionCheckpoint.Start,
             session.BoundOptions(ProjectionRunOptions.Default)).AsTask());
 
         Assert.Equal("2", native.Checkpoint.Cursor.Value);
@@ -47,8 +45,8 @@ public sealed partial class OperationalProjectionTests
         Assert.Equal("resume", resume.Action);
         Assert.True(await session.PrepareAsync(native.Checkpoint, default));
         Assert.Null(session.State.Block);
-        _ = await new ProjectorRunner(events) { Operations = session }
-            .RunAsync(new ProbeProjector(native), native.Checkpoint);
+        _ = await new ProjectorRunner(events)
+            .RunAsync(session, new ProbeProjector(native), native.Checkpoint);
         Assert.Equal(2, native.Changes);
         Assert.Equal("indeterminate", (await api.VerifyRepairAsync(administrator, Target, first.Id)).Status);
     }

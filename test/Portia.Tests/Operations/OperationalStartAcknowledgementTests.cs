@@ -65,8 +65,7 @@ public sealed class OperationalStartAcknowledgementTests
         reactor.BindWorkload(new WorkloadIdentity(Target.Processor), Target.Processor);
 
         // Act
-        var checkpoint = await new ReactorRunner(await OperationalExecutionTests.EventsAsync())
-        { Operations = session }.RunAsync(reactor, ProjectionCheckpoint.Start);
+        var checkpoint = await new ReactorRunner(await OperationalExecutionTests.EventsAsync()).RunAsync(session, reactor, ProjectionCheckpoint.Start);
 
         // Assert
         Assert.Equal("2", checkpoint.Cursor.Value);

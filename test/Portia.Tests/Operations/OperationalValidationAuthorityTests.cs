@@ -38,7 +38,7 @@ public sealed partial class OperationalValidationAuthorityTests
         await session.AcquireAsync(target, "reactor", new OperationalProcessingSettings(512, 4096, 3, 1, 1), ProjectionCheckpoint.Start, default);
         var reactor = new ReservationReactor(journal, repository);
         reactor.BindWorkload(new WorkloadIdentity(target.Processor), target.Processor);
-        var checkpoint = await new ReactorRunner(events) { Operations = session }.RunAsync(reactor, ProjectionCheckpoint.Start);
+        var checkpoint = await new ReactorRunner(events).RunAsync(session, reactor, ProjectionCheckpoint.Start);
         Assert.NotEqual(ProjectionCheckpoint.Start, checkpoint);
         Assert.Null(session.State.Block);
         Assert.All(session.State.Attempts, a => Assert.Equal("committed", a.Outcome));

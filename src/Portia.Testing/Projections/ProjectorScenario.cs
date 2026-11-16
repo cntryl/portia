@@ -70,7 +70,7 @@ public sealed class ProjectorScenario
         while (true)
         {
             ct.ThrowIfCancellationRequested();
-            var pass = await runner.RunPassAsync(projector, checkpoint, ct: ct).ConfigureAwait(false);
+            var pass = await runner.RunPassAsync(null, projector, checkpoint, ct: ct).ConfigureAwait(false);
             checkpoint = pass.Checkpoint;
             if (!pass.ContinueImmediately)
                 return;

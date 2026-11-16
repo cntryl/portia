@@ -90,6 +90,9 @@ public sealed class PortiaFitzBuilder
             provider.GetService<ILogger<FitzEventStore>>()));
         services.TryAddSingleton<IDomainEventReader>(provider => provider.GetRequiredService<IEventStore>());
         services.TryAddSingleton<IDomainEventWriter>(provider => provider.GetRequiredService<IEventStore>());
+        // Push wake-ups come from the event store when it can notify. An application that registers its
+        // own IEventStore without registering an IDomainEventNotifier resolves none here, and its workers
+        // poll on their configured interval instead.
         services.TryAddSingleton(provider =>
             (provider.GetRequiredService<IEventStore>() as IDomainEventNotifier)!);
         return this;

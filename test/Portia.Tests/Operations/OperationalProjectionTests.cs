@@ -19,8 +19,7 @@ public sealed partial class OperationalProjectionTests
         var events = await OperationalExecutionTests.EventsAsync();
 
         // Assert
-        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ProjectorRunner(events)
-        { Operations = session }.RunAsync(new ProbeProjector(native), ProjectionCheckpoint.Start).AsTask());
+        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ProjectorRunner(events).RunAsync(session, new ProbeProjector(native), ProjectionCheckpoint.Start).AsTask());
         Assert.Equal(ProcessorFailureStage.Disposing, failure.Stage);
         Assert.Equal("committed_cleanup_failed", Assert.Single(session.State.Attempts).Outcome);
         Assert.Equal(1, session.State.ConsecutiveFailures);
@@ -34,7 +33,7 @@ public sealed partial class OperationalProjectionTests
         _ = await api.ExecuteRepairAsync(actor, Target, plan.Id);
         Assert.True(await session.PrepareAsync(native.Checkpoint, default));
         Assert.Equal("committed", (await api.VerifyRepairAsync(actor, Target, plan.Id)).Status);
-        _ = await new ProjectorRunner(events) { Operations = session }.RunAsync(new ProbeProjector(native), native.Checkpoint);
+        _ = await new ProjectorRunner(events).RunAsync(session, new ProbeProjector(native), native.Checkpoint);
         Assert.Equal(2, native.Changes);
     }
 
@@ -50,8 +49,8 @@ public sealed partial class OperationalProjectionTests
         var session = await SessionAsync(journal, ProjectionCheckpoint.Start);
         var events = await OperationalExecutionTests.EventsAsync();
         using var interrupted = new CancellationTokenSource();
-        var pending = new ProjectorRunner(events) { Operations = session }
-            .RunAsync(new ProbeProjector(native), ProjectionCheckpoint.Start, ct: interrupted.Token).AsTask();
+        var pending = new ProjectorRunner(events)
+            .RunAsync(session, new ProbeProjector(native), ProjectionCheckpoint.Start, ct: interrupted.Token).AsTask();
 
         // Act
         await committed.Task.WaitAsync(TimeSpan.FromSeconds(5));
@@ -65,7 +64,7 @@ public sealed partial class OperationalProjectionTests
         native.AfterCommit = null;
         var resumed = await SessionAsync(journal, native.Checkpoint);
         Assert.True(await resumed.PrepareAsync(native.Checkpoint, default));
-        _ = await new ProjectorRunner(events) { Operations = resumed }.RunAsync(new ProbeProjector(native), native.Checkpoint);
+        _ = await new ProjectorRunner(events).RunAsync(resumed, new ProbeProjector(native), native.Checkpoint);
         Assert.Equal(2, native.Changes);
         Assert.Equal("2", native.Checkpoint.Cursor.Value);
         Assert.Equal("indeterminate", Assert.Single(resumed.State.Attempts).Outcome);
@@ -86,8 +85,8 @@ public sealed partial class OperationalProjectionTests
         var events = await OperationalExecutionTests.EventsAsync();
 
         // Act
-        var exception = await Record.ExceptionAsync(() => new ProjectorRunner(events) { Operations = session }
-            .RunAsync(new ProbeProjector(native), ProjectionCheckpoint.Start).AsTask());
+        var exception = await Record.ExceptionAsync(() => new ProjectorRunner(events)
+            .RunAsync(session, new ProbeProjector(native), ProjectionCheckpoint.Start).AsTask());
 
         // Assert
         var failure = Assert.IsType<ProcessorFailureException>(exception);

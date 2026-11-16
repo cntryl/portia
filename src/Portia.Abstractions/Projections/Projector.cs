@@ -62,20 +62,8 @@ public abstract class Projector
     /// </summary>
     internal void BindWorkload(WorkloadIdentity identity, string? componentName)
     {
-        if (componentName is not null)
-            _ = IdentityText.Require(componentName, nameof(componentName));
-        if (_boundIdentity is { } bound && bound != identity)
-        {
-            throw new InvalidOperationException(
-                $"Projector '{GetType().FullName}' is already bound to workload '{bound.Name}' and cannot be rebound to workload '{identity.Name}' or another tenant.");
-        }
-
-        if (_boundIdentity == identity)
-        {
+        if (!WorkloadComponentBinding.TryBind(ref _boundIdentity, identity, componentName, "Projector", GetType()))
             return;
-        }
-
-        _boundIdentity = identity;
         if (componentName is not null)
         {
             Name = componentName;

@@ -23,6 +23,8 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
 
     bool IWorkloadDescriptor.SupportsRebuild => true;
 
+    string IWorkloadDescriptor.Kind => ProcessorKinds.Projector;
+
     void IWorkloadDescriptor.Register(IServiceCollection services) => _ = services.AddSingleton(this);
 
     void IWorkloadDescriptor.Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName)
@@ -52,9 +54,9 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
         WorkloadBinding.Apply(services, projector.BindWorkload);
         var checkpoint = await ProcessorCheckpoints.LoadAsync(projector.Store,
             new CheckpointIdentity(projector.Name, projector.Pattern, options.RebuildId), ct).ConfigureAwait(false);
-        var runner = services.GetRequiredService<ProjectorRunner>();
-        runner.Operations = services.GetService<OperationalExecution>()?.Session;
-        return await runner.RunPassAsync(projector, checkpoint, options, ct).ConfigureAwait(false);
+        return await services.GetRequiredService<ProjectorRunner>().RunPassAsync(
+            services.GetService<OperationalExecution>()?.Session, projector, checkpoint, options, ct)
+            .ConfigureAwait(false);
     }
 
     /// <summary>Resolves the projector in the supplied application scope.</summary>

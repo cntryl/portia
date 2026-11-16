@@ -246,6 +246,61 @@ public sealed class FleetRedistributionTests
         Assert.Equal(0, active);
     }
 
+    [Fact]
+    public async Task ShouldRetryPromptlyGivenMembershipFailsAfterHealthySession()
+    {
+        // Arrange
+        var clock = new ManualClock();
+        var membership = new Membership { AutoSelf = true };
+        membership.Observer.FailView = true;
+        var options = Options with { PartitionStopTimeout = TimeSpan.FromSeconds(45) };
+        using var cancellation = new CancellationTokenSource();
+        var active = 0;
+        var run = new FleetPartitionRunner(new InMemoryLeaseClient(), membership, timeProvider: clock).RunAsync(
+            [Partitions[0]], async (partition, ct) =>
+            {
+                _ = Interlocked.Increment(ref active);
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                }
+                finally
+                {
+                    _ = Interlocked.Decrement(ref active);
+                }
+            }, options, cancellation.Token);
+        TimeSpan retry;
+        try
+        {
+            // Six failed sessions in a row grow the retry delay to its ceiling.
+            for (var failure = 1; failure <= 6; failure++)
+            {
+                var delay = await clock.WaitForDelayAsync();
+                membership.Observer.FailView = failure < 6;
+                clock.Advance(delay);
+            }
+
+            // The seventh session is healthy: membership is visible and the partition runs.
+            await Until(() => active == 1);
+
+            // Act
+            membership.Observer.FailView = true;
+            do
+            {
+                retry = await clock.WaitForDelayAsync();
+                clock.Advance(options.ReconciliationInterval);
+            } while (retry == options.ReconciliationInterval || retry == options.PartitionStopTimeout);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            await run;
+        }
+
+        // Assert
+        Assert.InRange(retry, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+    }
+
     // The retry delay belongs to the runner's backoff policy, so a test waiting on a retry drives
     // the clock past the policy's ceiling instead of restating whatever delay it happened to pick.
     internal static async Task UntilAdvanced(ManualClock clock, Func<bool> predicate)
