@@ -140,6 +140,7 @@ See [application setup](docs/application-setup.md) and [Fitz upgrade notes](docs
 - [Performance and scaling](docs/performance-and-scaling.md): measured hot paths and scaling model
 - [NativeAOT](docs/native-aot.md): trimming and source-generated JSON setup
 - [Model Context Protocol](docs/mcp.md): request-backed tools, resources, and prompts over stdio and Streamable HTTP
+- [Portia 0.13.0 migration notes](docs/migration-0.13.0.md): removed members, required queue retry, request contracts, and fleet options
 - [Portia 0.11.1 migration notes](docs/migration-0.11.1.md): stateless MCP HTTP, object storage completion outcomes, and Abstractions references
 - [Portia 0.11.0 migration notes](docs/migration-0.11.0.md): .NET 11, Fitz 4.1, JSON, and compiler updates
 - [Portia 0.10.0 migration notes](docs/migration-0.10.0.md): operator access, processor inspection, typed outcomes, and Fitz 4

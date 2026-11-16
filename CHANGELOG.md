@@ -4,7 +4,85 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
-## Unreleased
+## 0.13.0
+
+Read the [0.13.0 migration notes](docs/migration-0.13.0.md) before upgrading. This release removes
+public members, makes one transport member required, and turns several silent misconfigurations into
+startup or dispatch errors.
+
+### Changed
+
+- A declared `[RequiresPermission]` runs as an authorization stage, `AuthorizationStage.Permission`
+  (150), in the same ordered list as request authorizers. An authorizer registered at that stage runs
+  after the declared check. Authorization telemetry reports the check with component name
+  `permission` and stage `permission`.
+- A request dispatched through a contract it is not handled as (`IRequest` versus `IRequest<TOut>`
+  versus `IStreamRequest<TOut>`) throws `InvalidOperationException` naming the request and its
+  handled contract, instead of an `InvalidCastException`. Registering one request type with two
+  contracts is refused when the registry is composed.
+- `IRequestBus.DispatchStreamAsync` rejects a null request or context when it is called, not when
+  the returned sequence is first enumerated.
+- A declared permission that renders empty or whitespace throws `InvalidOperationException` and the
+  permission evaluator is not consulted.
+- A reactor or projector that returns an uninitialized `Result` fails with a
+  `ProcessorFailureException` that names the component and is not transient, so the hosted worker
+  stops instead of retrying to its attempt limit.
+- When the operational confirmation of a committed projection batch fails, the
+  `ProcessorFailureException` reports stage `Committing` and the committed checkpoint instead of
+  stage `Reading` and the earlier checkpoint.
+- A Fitz KV projection batch refuses a second commit, or a commit after disposal, with
+  `InvalidOperationException`.
+- `IQueuedRequest.RetryAsync` is a required member. Its default implementation, which threw
+  `NotSupportedException`, is removed.
+- `FitzFleetMembership.RunAsync` throws `ArgumentException` when `FleetRunOptions.WorkerId` is not
+  set. `FleetPartitionRunner` continues to supply one.
+- `FleetRunOptions.ReconciliationInterval` and `PartitionStopTimeout` longer than a timer can
+  represent (about 49.7 days) are rejected when the run starts.
+- `FleetPartitionRunner` restarts its membership retry backoff after a session in which the worker
+  appeared in a ready inventory; earlier failures no longer lengthen later retries.
+- When a partition fails terminally and another does not stop within `PartitionStopTimeout`, the
+  runner throws the `WorkloadFailureException` and attaches the
+  `FleetPartitionTerminationTimeoutException` to its `Data` under `Portia.CleanupException`.
+- `ReactorScenario` fails with `InvalidOperationException` when the reactor sends a result-bearing
+  or stream request that was not scripted; it previously threw `NotSupportedException`. Its bus
+  reports a scripted `Forbidden` or `Unauthorized` response from `AuthorizeAsync`.
+- Upgrade `Cntryl.Cassie` to 0.2.0.
+- `docs/request-guards.md` is now `docs/request-pipeline.md`.
+
+### Added
+
+- `ReactorScenario.RespondTo<TRequest, TOut>` and `RespondToStream<TRequest, TOut>` script
+  responses for result-bearing and stream requests.
+- `OperationalAttemptOutcomes`, `OperationalRepairStatuses`, `RepairActions`, and `ProcessorKinds`
+  name the string values the operational journal stores. The stored values are unchanged.
+
+### Removed
+
+- `ProjectorRegistration.Run` and `ProjectorRegistration.RunPass`. Run a projector through hosting
+  or `ProjectorRunner.RunAsync`.
+- `ReactionCommandFailedException`. Portia has not thrown it since 0.9.3.
+
+## 0.12.1
+
+### Added
+
+- `ProjectorScenario.Given(string resource, ...)` and `ReactorScenario.Given(string resource, ...)`
+  place events on a named stream resource. A resource the component's pattern excludes fails
+  `RunAsync` with `InvalidOperationException`.
+
+### Changed
+
+- Upgrade `Microsoft.CodeAnalysis.*` to 5.12.0 and `Microsoft.Build.Framework` to 18.12.2.
+
+## 0.12.0
+
+### Added
+
+- Provider-neutral mail and SMS senders with Amazon SES, Azure Communication Services, and Twilio
+  adapters. A send makes one submission without automatic retries.
+- Azure Blob and Google Cloud Storage object storage adapters alongside S3.
+  `IObjectStorageTenantResolver.GetObjectKey` and `GetUploadKey` let the application choose final
+  and temporary object keys; existing resolver implementations must implement them.
 
 ### Changed
 
