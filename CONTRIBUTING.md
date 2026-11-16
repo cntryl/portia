@@ -64,3 +64,8 @@ to `PublicAPI.Shipped.txt` only as part of release preparation.
 Application conventions and their opt-in compiler diagnostics are documented in
 [application project structure](docs/project-structure.md). Keep enforcement in analyzers and
 test their observable diagnostics and code fixes; do not add tests that inspect repository layout.
+## Explain your use case
+
+In your issue or pull request, explain how you use or plan to use this project, what problem you encountered, and how the proposed change helps.
+
+Follow this repository’s setup and validation instructions, and report relevant checks you ran.
