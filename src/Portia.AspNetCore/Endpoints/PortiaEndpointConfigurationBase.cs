@@ -111,6 +111,29 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
         return (TConfiguration)this;
     }
 
+    /// <summary>Adds a typed input example; generated binding projects route and query values out of the body.</summary>
+    public TConfiguration RequestExample<TBody>(string name, TBody value, string? summary = null,
+        string contentType = "application/json") where TBody : notnull
+    {
+        _state.Example(name, value, summary, contentType, null);
+        return (TConfiguration)this;
+    }
+
+    /// <summary>Adds a typed example to an existing response status and content type.</summary>
+    public TConfiguration ResponseExample<TBody>(int statusCode, string name, TBody value, string? summary = null,
+        string contentType = "application/json") where TBody : notnull
+    {
+        _state.Example(name, value, summary, contentType, statusCode);
+        return (TConfiguration)this;
+    }
+
+    /// <summary>Describes a typed header on an existing response status.</summary>
+    public TConfiguration ResponseHeader<T>(int statusCode, string name, string description, bool required = false)
+    {
+        _state.ResponseHeader<T>(statusCode, name, description, required);
+        return (TConfiguration)this;
+    }
+
     /// <summary>Validates state for generated endpoint code.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public void Validate(bool binderRequired = false, PortiaHttpMember[]? members = null) =>

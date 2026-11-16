@@ -100,6 +100,24 @@ public sealed class ContractAttributeDiagnosticTests
             Assert.Equal(default(DateTime), Assert.IsType<DateTime>(member.BindingDefaultValue));
     }
 
+    [Theory]
+    [InlineData("[Range(typeof(decimal), \"1\", \"10\")] public decimal Value { get; init; }")]
+    [InlineData("[DefaultValue(typeof(int), \"5\")] public int Value { get; init; }")]
+    public void ShouldRejectMetadataWithoutReflectionGivenReferencedTypeConverterAttribute(string member)
+    {
+        // Arrange
+        var reference = GeneratorCompilation.Reference("using System.ComponentModel; using System.ComponentModel.DataAnnotations; public sealed class Model { " + member + " }");
+        var source = ContextSource(string.Empty);
+
+        // Act
+        var generated = GeneratorCompilation.GeneratedSource(source, [reference], new JsonRootMarkerGenerator());
+
+        // Assert
+        Assert.Contains("throw new global::System.InvalidOperationException", generated, StringComparison.Ordinal);
+        Assert.Contains("Type-converter", generated, StringComparison.Ordinal);
+        Assert.DoesNotContain("RangeAttribute(typeof", generated, StringComparison.Ordinal);
+    }
+
     static string ContextSource(string model) => $$"""
         #nullable enable
         using System;

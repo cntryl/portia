@@ -1,5 +1,6 @@
 namespace Cntryl.Portia;
 
+[System.ComponentModel.DisplayName("Create example")]
 sealed record ContractExampleRequest(int Id, ContractMetadataModel Payload, int PageSize = 5) : IRequest<ContractMetadataModel>, ICallable;
 
 sealed class ContractExampleHandler : IRequestHandler<ContractExampleRequest, ContractMetadataModel>

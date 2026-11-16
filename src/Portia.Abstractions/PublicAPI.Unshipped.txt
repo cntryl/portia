@@ -57,3 +57,8 @@ Cntryl.Portia.PortiaContractMetadata.IsSourceDefinition.init -> void
 Cntryl.Portia.PortiaContractMetadata.IsSourceDefinition.get -> bool
 Cntryl.Portia.PortiaContractMemberMetadata.ConstructorBound.init -> void
 Cntryl.Portia.PortiaContractMemberMetadata.ConstructorBound.get -> bool
+Cntryl.Portia.PortiaContractUse
+Cntryl.Portia.PortiaContractUse.Input = 1 -> Cntryl.Portia.PortiaContractUse
+Cntryl.Portia.PortiaContractUse.Output = 2 -> Cntryl.Portia.PortiaContractUse
+Cntryl.Portia.PortiaContractUse.Both = Cntryl.Portia.PortiaContractUse.Input | Cntryl.Portia.PortiaContractUse.Output -> Cntryl.Portia.PortiaContractUse
+Cntryl.Portia.PortiaContractUse.None = 0 -> Cntryl.Portia.PortiaContractUse

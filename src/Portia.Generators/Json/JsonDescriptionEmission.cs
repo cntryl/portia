@@ -62,6 +62,16 @@ static class JsonDescriptionEmission
             var type = node.Type;
             if (type is not (INamedTypeSymbol or IArrayTypeSymbol))
                 continue;
+            var unsupported = node.Members.FirstOrDefault(member => Attributes(member).Any(attribute =>
+                attribute.AttributeClass?.ToDisplayString() is "System.ComponentModel.DataAnnotations.RangeAttribute" or "System.ComponentModel.DefaultValueAttribute" &&
+                attribute.ConstructorArguments.FirstOrDefault().Kind == TypedConstantKind.Type));
+            if (unsupported is not null)
+            {
+                var identity = Type(type);
+                blocks[identity] = "if (type == typeof(" + identity + ")) { throw new global::System.InvalidOperationException(" +
+                    Literal("Type-converter attribute on '" + type.ToDisplayString() + "." + unsupported.Name + "' is unsupported. Use numeric Range bounds or literal DefaultValue.") + "); }\n";
+                continue;
+            }
             var facts = new StringBuilder();
             AppendFacts(facts, type);
             if (validated.Contains(type))

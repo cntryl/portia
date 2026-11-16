@@ -114,6 +114,65 @@ public sealed class McpAttributeDescriptionTests
         Assert.True(schema.Evaluate(actual.RootElement).IsValid);
     }
 
+    [Fact]
+    public void ShouldPreserveReferenceDataGivenSharedOutputExample()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        _ = services.AddPortia().AddExample("reference", new ReferencePayload("#/data"), use: PortiaContractUse.Output)
+            .AddRequestHandler<ReferenceToolHandler>().AddMcpTool<ReferenceTool>();
+        using var provider = services.BuildServiceProvider();
+
+        // Act
+        var tool = Assert.Single(provider.GetServices<McpServerTool>()).ProtocolTool;
+
+        // Assert
+        var example = tool.OutputSchema!.Value.GetProperty("properties").GetProperty("result").GetProperty("examples")[0];
+        Assert.Equal("#/data", example.GetProperty("$ref").GetString());
+    }
+
+    [Fact]
+    public void ShouldSerializeDirectionalExamplesGivenWriteOnlyMember()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var value = new DirectionalTool("secret", "visible");
+        _ = services.AddPortia().AddExample("direction", value).AddRequestHandler<DirectionalToolHandler>()
+            .AddMcpTool<DirectionalTool>();
+        using var provider = services.BuildServiceProvider();
+
+        // Act
+        var tool = Assert.Single(provider.GetServices<McpServerTool>()).ProtocolTool;
+
+        // Assert
+        var input = tool.InputSchema.GetProperty("examples")[0];
+        var output = tool.OutputSchema!.Value.GetProperty("properties").GetProperty("result").GetProperty("examples")[0];
+        Assert.Equal("secret", input.GetProperty("secret").GetString());
+        Assert.False(output.TryGetProperty("secret", out _));
+        Assert.Equal("visible", output.GetProperty("public_value").GetString());
+    }
+
+    [Discriminator("contract.reference")]
+    public sealed record ReferenceTool : IRequest<ReferencePayload>, ICallable;
+
+    public sealed record ReferencePayload([property: JsonPropertyName("$ref")] string Reference);
+
+    public sealed class ReferenceToolHandler : IRequestHandler<ReferenceTool, ReferencePayload>
+    {
+        public ValueTask<Result<ReferencePayload>> HandleAsync(IRequestContext<ReferenceTool> context, CancellationToken ct) =>
+            ValueTask.FromResult(Result<ReferencePayload>.Success(new("#/data")));
+    }
+
+    [Discriminator("contract.direction")]
+    public sealed record DirectionalTool([property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWriting)] string Secret,
+        string PublicValue) : IRequest<DirectionalTool>, ICallable;
+
+    public sealed class DirectionalToolHandler : IRequestHandler<DirectionalTool, DirectionalTool>
+    {
+        public ValueTask<Result<DirectionalTool>> HandleAsync(IRequestContext<DirectionalTool> context, CancellationToken ct) =>
+            ValueTask.FromResult(Result<DirectionalTool>.Success(context.Request));
+    }
+
     [Discriminator("contract.populated")]
     public sealed record PopulatedTool(PopulatedPayload Payload) : IRequest<PopulatedPayload>, ICallable;
 
@@ -178,6 +237,9 @@ public sealed class McpAttributeDescriptionTests
 
 [PortiaJsonContext]
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
+[JsonSerializable(typeof(McpAttributeDescriptionTests.ReferenceTool))]
+[JsonSerializable(typeof(McpAttributeDescriptionTests.ReferencePayload))]
+[JsonSerializable(typeof(McpAttributeDescriptionTests.DirectionalTool))]
 [JsonSerializable(typeof(McpAttributeDescriptionTests.PopulatedTool))]
 [JsonSerializable(typeof(McpAttributeDescriptionTests.PopulatedPayload))]
 [JsonSerializable(typeof(McpAttributeDescriptionTests.ConditionalTool))]

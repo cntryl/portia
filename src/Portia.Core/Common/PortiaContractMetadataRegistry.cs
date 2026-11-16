@@ -4,8 +4,19 @@ using System.Text.RegularExpressions;
 namespace Cntryl.Portia;
 
 // One registry per composed application; descriptors and their generated accessors are cached.
-sealed class PortiaContractMetadataRegistry(IReadOnlyList<Func<Type, PortiaContractMetadata?>> providers)
+sealed class PortiaContractMetadataRegistry(IReadOnlyList<Func<Type, PortiaContractMetadata?>> providers,
+    IReadOnlyList<PortiaContractExample>? examples = null)
 {
+    PortiaContractExamples? _examples;
+    internal PortiaContractExamples Examples
+    {
+        get
+        {
+            lock (_gate)
+                return _examples ??= new(examples ?? [], this);
+        }
+    }
+
     readonly Lock _gate = new();
     readonly Dictionary<Type, PortiaContractMetadata?> _cache = [];
 

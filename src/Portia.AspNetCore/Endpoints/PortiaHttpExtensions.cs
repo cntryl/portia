@@ -46,6 +46,9 @@ public static class PortiaHttpExtensions
                 document.Info.Title =
                     context.ApplicationServices.GetRequiredService<IHostEnvironment>().ApplicationName;
                 document.Info.Version = DocumentName;
+                context.ApplicationServices.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.OpenApi
+                    .ConfigureDocument?.Invoke(document);
+                context.ApplicationServices.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.OpenApi.ApplySecuritySchemes(document);
                 var duplicate = document.Paths
                     .SelectMany(path => path.Value.Operations ?? [])
                     .Select(operation => operation.Value.OperationId)

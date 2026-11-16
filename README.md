@@ -122,6 +122,7 @@ See [application setup](docs/application-setup.md) and [Fitz upgrade notes](docs
 
 ## Start here
 
+- [Contract attributes](docs/contract-attributes.md): compiled validation, shared HTTP/MCP metadata, examples, and HTTP security
 - [OpenAPI descriptions](docs/openapi-descriptions.md): typed descriptions and optional coverage enforcement
 - [Getting started](docs/getting-started.md): packages, contracts, registration, HTTP, and transports
 - [Shared application setup](docs/application-setup.md): API and worker deployments from one composition

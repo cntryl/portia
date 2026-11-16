@@ -5,10 +5,13 @@ namespace Cntryl.Portia;
 static class PortiaContractValidation
 {
     internal static RequestError? Validate(PortiaContractMetadataRegistry? contracts, object request,
-        CancellationToken ct)
+        CancellationToken ct, Type? declaredType = null, PortiaContractUse use = PortiaContractUse.Both)
     {
         ct.ThrowIfCancellationRequested();
-        if (contracts?.Type(request.GetType()) is not { HasValidation: true } root)
+        if (contracts is null)
+            return null;
+        var root = contracts.Type(request.GetType()) ?? (declaredType is null ? null : contracts.Type(declaredType));
+        if (root?.HasValidation != true)
             return null;
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
         var errors = new List<string>();
@@ -34,7 +37,7 @@ static class PortiaContractValidation
             foreach (var member in metadata.Members)
             {
                 ct.ThrowIfCancellationRequested();
-                if (!member.HasValidation || member.GetValue is null)
+                if (!member.HasValidation || member.GetValue is null || use == PortiaContractUse.Output && !member.Output)
                     continue;
                 var memberValue = member.GetValue(value);
                 var memberPath = path.Length == 0 ? member.Name : path + "." + member.Name;

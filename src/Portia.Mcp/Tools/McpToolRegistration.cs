@@ -265,29 +265,28 @@ public abstract class McpToolRegistration
 
     static void RewriteResultReferences(JsonNode node)
     {
-        if (node is JsonObject objectNode)
+        if (node is not JsonObject schema)
+            return;
+        if (schema["$ref"] is JsonValue value && value.TryGetValue<string>(out var reference) &&
+            (reference == "#" || reference.StartsWith("#/", StringComparison.Ordinal)))
+            schema["$ref"] = reference == "#" ? "#/properties/result" :
+                string.Concat("#/properties/result", reference.AsSpan(1));
+        // Walk schema locations only. Property names and example/default data may themselves contain $ref.
+        foreach (var (name, child) in schema.ToArray())
         {
-            foreach (var property in objectNode.ToArray())
+            if (child is JsonObject map && name is "properties" or "patternProperties" or "$defs" or "dependentSchemas")
             {
-                if (property.Key == "$ref" && property.Value?.GetValue<string>() is { } reference
-                                           && (reference == "#" ||
-                                               reference.StartsWith("#/", StringComparison.Ordinal)))
-                {
-                    objectNode[property.Key] = reference == "#"
-                        ? "#/properties/result"
-                        : string.Concat("#/properties/result", reference.AsSpan(1));
-                }
-                else if (property.Value is not null)
-                {
-                    RewriteResultReferences(property.Value);
-                }
+                foreach (var (_, entry) in map)
+                    if (entry is not null)
+                        RewriteResultReferences(entry);
             }
-        }
-        else if (node is JsonArray array)
-        {
-            foreach (var item in array)
-                if (item is not null)
-                    RewriteResultReferences(item);
+            else if (child is JsonObject && name is "items" or "additionalProperties" or "unevaluatedProperties" or
+                     "unevaluatedItems" or "contains" or "not" or "if" or "then" or "else" or "propertyNames" or "contentSchema")
+                RewriteResultReferences(child);
+            else if (child is JsonArray array && name is "allOf" or "anyOf" or "oneOf" or "prefixItems")
+                foreach (var entry in array)
+                    if (entry is not null)
+                        RewriteResultReferences(entry);
         }
     }
 

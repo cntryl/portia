@@ -4,6 +4,38 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.14.1
+
+Read the [0.14.1 migration notes](docs/migration-0.14.1.md) and [contract attributes](docs/contract-attributes.md).
+
+### Added
+
+- Compile-time metadata for standard .NET value annotations (`Required`, numeric `Range`, length,
+  regex, email, URL), friendly names, deprecation, defaults, and JSON input/output access. Model
+  projects require no ASP.NET Core, OpenAPI, or MCP SDK references.
+- Request value validation after authorization and before behaviors, guards, and handlers, including
+  local calls, queued workers, streams, and asynchronous acceptance. Generated typed accessors and
+  collection counts avoid runtime member scans. Invalid metadata reports `PORTIA031` or an actionable
+  configuration error.
+- Named typed shared examples with input/output projections for HTTP and MCP, plus endpoint request
+  and response examples and typed response-header descriptions.
+- HTTP document customization through standard OpenAPI information, servers, contact, license,
+  terms, and external-documentation objects.
+- Explicit HTTP security schemes, named policy and Portia authorizer mappings, and default/fallback
+  authentication-scheme documentation. Advanced mappings distinguish AND credentials, OR alternatives,
+  and explicitly anonymous alternatives. OAuth scopes are supplied explicitly.
+
+### Changed
+
+- HTTP nested JSON and MCP inputs share strict constructor/nullability enforcement. JSON-required
+  presence is checked before HTTP body-to-query fallback. Local dispatch no longer requires JSON roots.
+- Schema component names retain readable structural identities across description, title, default,
+  and example edits. Endpoint `WithName` controls operation IDs; duplicates fail generation.
+- Schemas follow actual serializer access, ignore and population rules. Conservative portable
+  constraints retain exact .NET details through `x-portia-*` annotations when JSON Schema semantics
+  differ. Rejected defaults are not advertised as accepted values.
+- Generated context metadata replaces the previous description-only callback. Recompile consumers.
+
 ## 0.14.0
 
 Read the [0.14.0 migration notes](docs/migration-0.14.0.md). See [OpenAPI descriptions](docs/openapi-descriptions.md)

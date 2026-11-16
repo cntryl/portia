@@ -14,6 +14,9 @@ sealed class PortiaJsonDescriptionResolver(IJsonTypeInfoResolver inner,
 {
     public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options) => inner.GetTypeInfo(type, options);
 
+    internal IReadOnlyList<PortiaResolvedExample> Examples(JsonSerializerOptions options, Type type, bool input) =>
+        contracts.Examples.Resolve(options, type, input);
+
     internal PortiaContractMetadata? Metadata(Type type) => contracts.Type(type);
 
     internal PortiaContractMemberMetadata? Member(Type type, string name, JsonNamingPolicy? policy) =>
@@ -30,6 +33,9 @@ sealed class PortiaJsonDescriptionResolver(IJsonTypeInfoResolver inner,
 
 static class PortiaJsonDescriptions
 {
+    internal static IReadOnlyList<PortiaResolvedExample> Examples(JsonSerializerOptions options, Type type, bool input) =>
+        (options.TypeInfoResolver as PortiaJsonDescriptionResolver)?.Examples(options, type, input) ?? [];
+
     internal static PortiaContractMetadata? Metadata(JsonSerializerOptions options, Type type) =>
         (options.TypeInfoResolver as PortiaJsonDescriptionResolver)?.Metadata(type);
 
@@ -83,6 +89,13 @@ static class PortiaJsonDescriptions
 
     static string? Find(JsonSerializerOptions options, Type type, string? member) =>
         (options.TypeInfoResolver as PortiaJsonDescriptionResolver)?.Find(type, member, options.PropertyNamingPolicy);
+
+    internal static void ApplyExamples(JsonObject schema, JsonSerializerOptions options, Type type, bool input)
+    {
+        var examples = Examples(options, type, input);
+        if (examples.Count > 0)
+            schema["examples"] = new JsonArray(examples.Select(example => example.Value?.DeepClone()).ToArray());
+    }
 
     internal static void CompleteRequired(JsonNode node, JsonTypeInfo info, JsonSerializerOptions options, bool input)
     {
@@ -139,6 +152,8 @@ static class PortiaJsonDescriptions
                     childSchema["description"] = childText;
             }
         }
+        if (node is JsonObject exampleSchema)
+            ApplyExamples(exampleSchema, options, context.TypeInfo.Type, input);
         CompleteRequired(node, context.TypeInfo, options, input);
         return node;
     }

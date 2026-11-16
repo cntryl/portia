@@ -155,6 +155,13 @@ jobs:
       - name: Pack release packages for HTTP qualification
         run: dotnet pack Portia.slnx --configuration Release --no-build --output artifacts/packages
 
+      - name: Compile packed annotated contracts without ASP.NET Core
+        shell: bash
+        run: |
+          portia_version="$(dotnet msbuild src/Portia.Abstractions/Portia.Abstractions.csproj -getProperty:PackageVersion -nologo)"
+          dotnet build smoke/Portia.Json.Contracts/Portia.Json.Contracts.csproj \
+            --configuration Release -p:PortiaSmokePackageVersion="$portia_version"
+
       - name: Test packed HTTP descriptions and strict coverage
         shell: bash
         run: |

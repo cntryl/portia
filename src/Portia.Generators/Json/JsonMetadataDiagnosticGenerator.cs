@@ -14,12 +14,12 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
     static readonly HashSet<string> CandidateMethods =
     [
         with(StringComparer.Ordinal),
-        "AddEvent", "RegisterDynamicRequest", "AddMcpTool", "AddMcpResource", "AddMcpPrompt", "SendAsync",
+        "AddEvent", "RegisterDynamicRequest", "AddExample", "AddMcpTool", "AddMcpResource", "AddMcpPrompt", "SendAsync",
         "SendWithOutcomeAsync", "StreamAsync",
         "DispatchAsync",
         "DispatchStreamAsync", "EnqueueAsync", "EnqueueWithOptionsAsync", "PublishAsync", "ScheduleAsync", "EnsureAsync", "AddRequestSchedule",
         "MapPortiaGet", "MapPortiaPost", "MapPortiaPut", "MapPortiaPatch", "MapPortiaDelete", "MapPortiaGetStream",
-        "MapPortiaGetSse", "Accepts", "Parameter", "Produces"
+        "MapPortiaGetSse", "Accepts", "Parameter", "Produces", "RequestExample", "ResponseExample", "ResponseHeader"
     ];
 
     static readonly DiagnosticDescriptor MissingMetadata = new(
@@ -114,7 +114,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
         var name = method.Name;
         var registration = IsPortiaRegistration(method);
         var endpointMapping = IsPortiaEndpointMapping(method);
-        if ((registration && name is "AddEvent" or "RegisterDynamicRequest") || endpointMapping)
+        if ((registration && name is "AddEvent" or "RegisterDynamicRequest" or "AddExample") || endpointMapping)
         {
             foreach (var argument in method.TypeArguments)
                 Add(argument);
@@ -178,7 +178,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
             }
         }
 
-        if (name is "Accepts" or "Parameter" or "Produces" &&
+        if (name is "Accepts" or "Parameter" or "Produces" or "RequestExample" or "ResponseExample" or "ResponseHeader" &&
             method.ContainingType.OriginalDefinition.ToDisplayString() ==
             "Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>")
         {

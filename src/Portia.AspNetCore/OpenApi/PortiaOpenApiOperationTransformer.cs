@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.OpenApi;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi;
@@ -13,13 +14,13 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 {
     static readonly ConditionalWeakTable<OpenApiDocument, DefaultErrorResponses> DefaultErrorResponsesByDocument = [];
 
-    public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context,
+    public async Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context,
         CancellationToken cancellationToken)
     {
         var metadata = context.Description.ActionDescriptor.EndpointMetadata?.OfType<PortiaOpenApiOperation>()
             .SingleOrDefault();
         if (metadata == null)
-            return Task.CompletedTask;
+            return;
 
         cancellationToken.ThrowIfCancellationRequested();
         operation.Responses ??= [];
@@ -56,14 +57,17 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 operation.Responses[status] = response;
         }
 
-        operation.OperationId = metadata.OperationId;
+        operation.OperationId = endpointMetadata.OfType<IEndpointNameMetadata>().LastOrDefault()?.EndpointName ?? metadata.OperationId;
         operation.Parameters = [];
         var httpOptions = context.ApplicationServices.GetRequiredService<IOptions<PortiaHttpOptions>>().Value;
         var descriptions = httpOptions.OpenApi;
         var endpointDescriptions = endpointMetadata.OfType<PortiaOpenApiDescriptions>().SingleOrDefault();
         var jsonOptions = context.ApplicationServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
         if (metadata.RequestType is { } operationRequest)
+        {
             operation.Description ??= PortiaJsonDescriptions.Type(jsonOptions, operationRequest);
+            operation.Deprecated |= PortiaJsonDescriptions.Metadata(jsonOptions, operationRequest)?.Deprecated == true;
+        }
         string? MemberDescription(PortiaOpenApiParameter parameter, string wireName) =>
             endpointDescriptions?.Members.GetValueOrDefault(parameter.ClrName) ?? parameter.Description ??
             descriptions.Member(metadata.RequestType, parameter.ClrName, wireName, jsonOptions);
@@ -213,6 +217,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             {
                 Type = JsonSchemaType.Object,
                 Description = metadata.RequestType is { } describedRequest ? descriptions.Schema(describedRequest, jsonOptions) : null,
+                Title = metadata.RequestType is { } titledRequest ? PortiaJsonDescriptions.Metadata(jsonOptions, titledRequest)?.Title : null,
+                Deprecated = metadata.RequestType is { } deprecatedRequest && PortiaJsonDescriptions.Metadata(jsonOptions, deprecatedRequest)?.Deprecated == true,
                 Properties = properties,
                 Required = jsonRequired.Count == 0 ? null : jsonRequired
             };
@@ -225,6 +231,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 {
                     Type = JsonSchemaType.Object,
                     Description = schema.Description,
+                    Title = schema.Title,
+                    Deprecated = schema.Deprecated,
                     Properties = formProperties,
                     Required = formRequired.Count == 0 ? null : formRequired
                 };
@@ -300,8 +308,12 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 status == "401" ? defaultErrorResponses.Unauthorized : defaultErrorResponses.Problem);
         }
 
+        await descriptions.ApplySecurityAsync(operation, metadata.RequestType, endpointMetadata, context.ApplicationServices,
+            context.Document!, cancellationToken).ConfigureAwait(false);
         endpointDescriptions?.ApplyResponses(operation);
-        return Task.CompletedTask;
+        (endpointMetadata.OfType<PortiaOpenApiEnrichment>().SingleOrDefault() ?? new([], [], []))
+            .Apply(operation, metadata, endpointMetadata, context.ApplicationServices, jsonOptions, context.Document!, httpOptions);
+        return;
     }
 
     static OpenApiResponse Response(string description, string mediaType, IOpenApiSchema schema) => new()
