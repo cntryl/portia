@@ -33,14 +33,23 @@ static class SdkCancellationProbe
         async Task WaitAsync(MessageContext call, CancellationToken ct)
         {
             _ = call.Services!.GetRequiredService<ProbeScope>();
-            await File.WriteAllTextAsync(Path.Combine(directory, "started"), "started", ct);
-            try
-            { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                await File.WriteAllTextAsync(Path.Combine(directory, "canceled"), "canceled", CancellationToken.None);
-                throw;
-            }
+            await WaitForCancellationAsync(directory,
+                token => File.WriteAllTextAsync(Path.Combine(directory, "started"), "started", token), ct);
+        }
+    }
+
+    internal static async Task WaitForCancellationAsync(string directory,
+        Func<CancellationToken, Task> publishStarted, CancellationToken ct)
+    {
+        try
+        {
+            await publishStarted(ct);
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            await File.WriteAllTextAsync(Path.Combine(directory, "canceled"), "canceled", CancellationToken.None);
+            throw;
         }
     }
 
