@@ -58,46 +58,36 @@ public sealed class ProcessorStatusHostingTests
         Assert.Equal(0, endpoints.Active);
     }
 
-    /// <summary>The host calls StartingAsync and then StartAsync; startup validation still runs once.</summary>
+    /// <summary>Startup validates once even when processing creates another scope before shutdown.</summary>
     [Fact]
     public async Task ShouldValidateOnceGivenHostLifecycleStart()
     {
         // Arrange
-        var source = new InMemoryEventStore();
-        var services = new ServiceCollection();
-        _ = services.AddSingleton<IEventStore>(source);
-        _ = services.AddSingleton<IDomainEventReader>(source);
-        _ = services.AddSingleton(new StatusHostingControl());
-        _ = services.AddSingleton<StatusHostingStore>();
-        _ = services.AddPortia().UseSingleProcessWorkloads()
-            .AddProjector<StatusHostingProjector>("projector", WorkloadScope.Global,
-                options => options.PollInterval = TimeSpan.FromMilliseconds(10))
-            .AddWorkers();
-        await using var provider = services.BuildServiceProvider();
-        var scopes = new CountingScopeFactory(provider.GetRequiredService<IServiceScopeFactory>());
-        using var worker = new PortiaWorkloadService(scopes, provider.GetServices<WorkloadRegistration>(),
-            provider.GetRequiredService<IServiceProviderIsService>(),
-            provider.GetServices<IWorkloadCoordinator>(), provider.GetService<ITenantDirectory>());
+        await using var provider = WorkloadLifecycleTestHost.Create();
+        var processingStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var validations = 0;
+        var descriptor = new WorkloadLifecycleDescriptor(async ct =>
+        {
+            processingStarted.TrySetResult();
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            return default;
+        }, validate: () => Interlocked.Increment(ref validations));
+        using var worker = WorkloadLifecycleTestHost.Worker(provider, descriptor);
 
         // Act
-        await worker.StartingAsync(default);
-        await worker.StartAsync(default);
-        await worker.StopAsync(default);
+        try
+        {
+            await worker.StartingAsync(default);
+            await worker.StartAsync(default);
+            await processingStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            await worker.StopAsync(default);
+        }
 
         // Assert
-        Assert.Equal(1, scopes.Created);
-    }
-
-    sealed class CountingScopeFactory(IServiceScopeFactory inner) : IServiceScopeFactory
-    {
-        int _created;
-        internal int Created => Volatile.Read(ref _created);
-
-        public IServiceScope CreateScope()
-        {
-            _ = Interlocked.Increment(ref _created);
-            return inner.CreateScope();
-        }
+        Assert.Equal(1, Volatile.Read(ref validations));
     }
 
     sealed class StatusHostingControl
