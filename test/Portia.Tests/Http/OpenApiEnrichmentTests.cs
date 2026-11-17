@@ -183,5 +183,42 @@ public sealed class OpenApiEnrichmentTests
         Assert.Equal(7, parameters.Single(parameter => parameter.Name == "count").Examples!["converted"].Value!.GetValue<int>());
     }
 
+    /// <summary>Enum parameter examples retain the representation advertised by their scalar schema.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldPublishEnumExampleGivenParameterRepresentation(bool strings)
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia().ConfigureJson(options =>
+        {
+            if (strings)
+                options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter<ExampleMode>(System.Text.Json.JsonNamingPolicy.CamelCase));
+        }).AddHttp().AddRequestHandler<EnumExampleHandler>();
+        await using var app = builder.Build();
+        _ = app.MapPortiaOpenApi();
+        _ = app.MapPortiaGet<EnumExampleRequest, string>("/enum-example", configuration => configuration
+            .RequestExample("first", new EnumExampleRequest(ExampleMode.First)));
+        await app.StartAsync();
+
+        // Act
+        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
+
+        // Assert
+        var parameter = Assert.Single(document.Paths["/enum-example"].Operations![HttpMethod.Get].Parameters!);
+        if (strings)
+        {
+            Assert.True(parameter.Schema!.Type is null or JsonSchemaType.String);
+            Assert.Equal("first", parameter.Examples!["first"].Value!.GetValue<string>());
+        }
+        else
+        {
+            Assert.Equal(JsonSchemaType.Integer, parameter.Schema!.Type);
+            Assert.Equal(1, parameter.Examples!["first"].Value!.GetValue<int>());
+        }
+    }
+
     static ContractMetadataModel Example(string name) => new(name, 5, ["one"], "AB", "hi@example.com", "https://example.com");
 }

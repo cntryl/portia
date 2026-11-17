@@ -124,7 +124,7 @@ sealed record PortiaOpenApiEnrichment(IReadOnlyList<PortiaHttpExample> Requests,
                             {
                                 Summary = example.Summary,
                                 Value = example.Members?.TryGetValue(member.Name, out var scalar) == true
-                                    ? Scalar(scalar, item) : item?.DeepClone()
+                                    ? Scalar(scalar, item, target.Schema) : item?.DeepClone()
                             };
                         }
                     }
@@ -139,7 +139,7 @@ sealed record PortiaOpenApiEnrichment(IReadOnlyList<PortiaHttpExample> Requests,
         }
     }
 
-    static JsonNode? Scalar(object? value, JsonNode? fallback) => value switch
+    static JsonNode? Scalar(object? value, JsonNode? fallback, IOpenApiSchema? schema) => value switch
     {
         null => null,
         string item => JsonValue.Create(item),
@@ -162,10 +162,28 @@ sealed record PortiaOpenApiEnrichment(IReadOnlyList<PortiaHttpExample> Requests,
         DateOnly item => JsonValue.Create(item.ToString("O", CultureInfo.InvariantCulture)),
         TimeOnly item => JsonValue.Create(item.ToString("O", CultureInfo.InvariantCulture)),
         TimeSpan item => JsonValue.Create(item.ToString("c", CultureInfo.InvariantCulture)),
-        Enum item => JsonValue.Create(item.ToString()),
+        Enum item => EnumScalar(item, fallback, schema),
         IFormattable item => JsonValue.Create(item.ToString(null, CultureInfo.InvariantCulture)),
         _ => fallback?.DeepClone()
     };
+
+    static JsonNode? EnumScalar(Enum value, JsonNode? fallback, IOpenApiSchema? schema)
+    {
+        if (schema?.Type is { } type && (type & (JsonSchemaType.Integer | JsonSchemaType.Number)) != 0)
+            return JsonNode.Parse(value.ToString("D"));
+        var name = value.ToString();
+        if (schema?.Enum is { Count: > 0 } names)
+        {
+            var match = names.OfType<JsonValue>().FirstOrDefault(item => item.TryGetValue<string>(out var text) &&
+                string.Equals(text, name, StringComparison.OrdinalIgnoreCase));
+            return match?.DeepClone() ?? throw new InvalidOperationException(
+                $"HTTP enum parameter example '{name}' has no schema name accepted by scalar binding. Configure a compatible HTTP schema or an explicit OnBind contract.");
+        }
+        if (fallback is JsonValue encoded && encoded.TryGetValue<string>(out var encodedName) &&
+            string.Equals(encodedName, name, StringComparison.OrdinalIgnoreCase))
+            return fallback.DeepClone();
+        return JsonValue.Create(name);
+    }
 
     static void Add(IOpenApiMediaType media, PortiaResolvedExample example)
     {

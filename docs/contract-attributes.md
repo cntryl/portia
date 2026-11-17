@@ -130,7 +130,9 @@ Choose `Input`, `Output`, or `Both` when serializer direction differs. Duplicate
 within the same type and direction. Values rejected by compiled annotations fail document/tool
 creation with the example's name and validation details. HTTP request examples project route and
 query values into parameter examples and include only body-bound members in the JSON body.
-Endpoint examples override a shared name locally. Response examples and headers must refer to an
+Enum parameter examples follow the advertised numeric or compatible string representation rather than
+forcing CLR names into numeric schemas. JSON aliases that the default scalar parser cannot read need
+an explicit HTTP binder/schema contract. Endpoint examples override a shared name locally. Response examples and headers must refer to an
 emitted status and content type; their declarations do not emit a header or change the response.
 Host code must implement that response behavior. Input examples use generated member binding or
 the explicitly declared `Accepts<T>` body of a custom binder.

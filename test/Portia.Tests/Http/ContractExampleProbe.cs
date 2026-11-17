@@ -18,3 +18,13 @@ sealed class ConvertedExampleHandler : IRequestHandler<ConvertedExampleRequest, 
     public ValueTask<Result<string>> HandleAsync(IRequestContext<ConvertedExampleRequest> context, CancellationToken ct) =>
         ValueTask.FromResult(Result<string>.Success($"{context.Request.Id},{context.Request.Count}"));
 }
+
+enum ExampleMode { First = 1, Second = 2 }
+
+sealed record EnumExampleRequest(ExampleMode Mode) : IRequest<string>, ICallable;
+
+sealed class EnumExampleHandler : IRequestHandler<EnumExampleRequest, string>
+{
+    public ValueTask<Result<string>> HandleAsync(IRequestContext<EnumExampleRequest> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result<string>.Success(context.Request.Mode.ToString()));
+}
