@@ -4,6 +4,20 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## Unreleased
+
+### Fixed
+
+- Fleet revocation retains terminal workload failures and secondary cleanup diagnostics, including
+  when another revoked callback reaches its stop timeout. Single-process coordination cancels all
+  revoked or terminating siblings before awaiting their cleanup.
+- Workload supervision awaits participant cleanup even when cancellation callbacks throw.
+  Notification cleanup failures preserve exhausted retry budgets, and stream patterns stay stable
+  across dependency-injection scopes in polling and notification modes.
+- Fleet configuration rejects lease durations beyond the Fitz SDK's schedulable maximum.
+- Broker fleet qualification publishes start counts before active assignments, preventing takeover
+  assertions from observing an earlier count while retaining their ownership checks.
+
 ## 0.14.1
 
 Read the [0.14.1 migration notes](docs/migration-0.14.1.md) and [contract attributes](docs/contract-attributes.md).

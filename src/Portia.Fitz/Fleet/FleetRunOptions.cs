@@ -9,7 +9,7 @@ public sealed record FleetRunOptions
     /// <summary>Gets the worker ID, or null to generate one UUIDv4 per run.</summary>
     public string? WorkerId { get; init; }
 
-    /// <summary>Gets the renewable membership and partition lease TTL; defaults to 30 seconds.</summary>
+    /// <summary>Gets the positive lease TTL, rounded up to seconds; at most 4,294,967 seconds. Defaults to 30 seconds.</summary>
     public TimeSpan LeaseTtl { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>Gets the authoritative snapshot reconciliation interval; defaults to one second.</summary>
@@ -22,6 +22,7 @@ public sealed record FleetRunOptions
     public TimeSpan PartitionStopTimeout { get; init; } = TimeSpan.FromSeconds(30);
 
     static readonly TimeSpan MaximumTimerInterval = TimeSpan.FromMilliseconds(uint.MaxValue - 1);
+    static readonly TimeSpan MaximumLeaseTtl = TimeSpan.FromSeconds(uint.MaxValue / 1000);
 
     internal ulong TtlSeconds => checked((ulong)Math.Ceiling(LeaseTtl.TotalSeconds));
 
@@ -29,6 +30,7 @@ public sealed record FleetRunOptions
     {
         ArgumentNullException.ThrowIfNull(partitions);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(LeaseTtl, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(LeaseTtl, MaximumLeaseTtl);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(ReconciliationInterval, TimeSpan.Zero);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(PartitionStopTimeout, TimeSpan.Zero);
         // Both are waited on with timers, which cannot represent a longer interval.

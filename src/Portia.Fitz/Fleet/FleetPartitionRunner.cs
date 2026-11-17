@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
@@ -189,11 +190,12 @@ public sealed partial class FleetPartitionRunner(
                 await ObserveAsync([.. active.Select(pair => (pair.Key, pair.Value))],
                     options.PartitionStopTimeout).ConfigureAwait(false);
             }
-            catch (FleetPartitionTerminationTimeoutException timeout) when (terminal is not null)
+            catch (Exception cleanup) when (terminal is not null)
             {
-                // Both end the runner. The workload failure is the cause, so it stays the reported
-                // exception and carries the termination timeout that followed it.
-                terminal.Data["Portia.CleanupException"] = timeout;
+                // Observing the same failed run again must not attach it to itself. Other
+                // terminal faults and termination timeouts remain secondary to the first failure.
+                if (!ReferenceEquals(terminal, cleanup))
+                    ProcessorFailureException.RecordCleanup(terminal, cleanup);
             }
         }
     }
@@ -283,39 +285,14 @@ public sealed partial class FleetPartitionRunner(
             return;
         }
 
+        (string Partition, PartitionRun Run)[] timedOut = [];
         try
         {
             await Task.WhenAll(runs.Select(item => item.Run.Task)).WaitAsync(timeout, _clock).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
-            (string Partition, PartitionRun Run)[] timedOut = [.. runs.Where(item => !item.Run.Task.IsCompleted)];
-            foreach (var (partition, run) in runs)
-            {
-                if (!run.TryClaimObservation())
-                {
-                    continue;
-                }
-
-                if (run.Task.IsCompleted)
-                {
-                    await ObserveCompletedAsync(run).ConfigureAwait(false);
-                }
-                else
-                {
-                    _ = ObserveLateAsync(run);
-                }
-            }
-
-            var exception = new FleetPartitionTerminationTimeoutException(
-                [.. timedOut.Select(item => item.Partition)], timeout);
-            PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), RunnerFaultStage.Cleanup, exception);
-            if (_logger is not null)
-            {
-                LogPartitionTerminationTimeout(_logger, exception);
-            }
-
-            throw exception;
+            timedOut = [.. runs.Where(item => !item.Run.Task.IsCompleted)];
         }
         catch (Exception)
         {
@@ -323,19 +300,47 @@ public sealed partial class FleetPartitionRunner(
             // cleanup remain isolated and reported through the existing runner-fault contract.
         }
 
-        foreach (var (partition, run) in runs)
+        WorkloadFailureException? terminal = null;
+        foreach (var (_, run) in runs)
         {
             if (run.TryClaimObservation())
             {
-                await ObserveCompletedAsync(run).ConfigureAwait(false);
+                if (!run.Task.IsCompleted)
+                {
+                    _ = ObserveLateAsync(run);
+                    continue;
+                }
+                var failure = await ObserveCompletedAsync(run).ConfigureAwait(false);
+                if (terminal is null)
+                    terminal = failure;
+                else if (failure is not null && !ReferenceEquals(terminal, failure))
+                    ProcessorFailureException.RecordCleanup(terminal, failure);
             }
         }
+
+        FleetPartitionTerminationTimeoutException? timeoutFailure = null;
+        if (timedOut.Length != 0)
+        {
+            timeoutFailure = new FleetPartitionTerminationTimeoutException(
+                [.. timedOut.Select(item => item.Partition)], timeout);
+            PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), RunnerFaultStage.Cleanup, timeoutFailure);
+            if (_logger is not null)
+                LogPartitionTerminationTimeout(_logger, timeoutFailure);
+        }
+        if (terminal is not null)
+        {
+            if (timeoutFailure is not null)
+                ProcessorFailureException.RecordCleanup(terminal, timeoutFailure);
+            ExceptionDispatchInfo.Capture(terminal).Throw();
+        }
+        if (timeoutFailure is not null)
+            throw timeoutFailure;
     }
 
     async Task ObserveLateAsync(PartitionRun run) =>
-        await ObserveCompletedAsync(run).ConfigureAwait(false);
+        _ = await ObserveCompletedAsync(run).ConfigureAwait(false);
 
-    async Task ObserveCompletedAsync(PartitionRun run)
+    async Task<WorkloadFailureException?> ObserveCompletedAsync(PartitionRun run)
     {
         try
         {
@@ -343,6 +348,11 @@ public sealed partial class FleetPartitionRunner(
         }
         catch (OperationCanceledException) when (run.Cancellation.IsCancellationRequested)
         {
+        }
+        catch (WorkloadFailureException failure)
+        {
+            Fault(RunnerFaultStage.Cleanup, failure);
+            return failure;
         }
         catch (Exception ex)
         {
@@ -353,6 +363,7 @@ public sealed partial class FleetPartitionRunner(
             run.Registration.Dispose();
             run.Cancellation.Dispose();
         }
+        return null;
     }
 
     void Fault(RunnerFaultStage stage, Exception? exception = null) =>

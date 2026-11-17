@@ -8,6 +8,42 @@ namespace Cntryl.Portia.Consumer;
 [Trait("Category", "BrokerIntegration")]
 public sealed class FleetBrokerTests
 {
+    [Fact]
+    public async Task ShouldPublishActivePartitionGivenStartCountRecorded()
+    {
+        // Arrange
+        const string route = "lease://test/parts/one";
+        using var comparer = new PausedStartCountComparer();
+        var active = new ConcurrentDictionary<string, bool>();
+        var starts = new ConcurrentDictionary<string, int>(comparer);
+        using var lifetime = new CancellationTokenSource();
+        var publishedBeforeStartRecorded = false;
+        Task? hold = null;
+        Exception? stopped = null;
+
+        // Act
+        try
+        {
+            hold = Task.Run(() => Hold(route, active, starts, lifetime.Token));
+            await comparer.RecordingStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            publishedBeforeStartRecorded = active.ContainsKey(route);
+        }
+        finally
+        {
+            comparer.Resume();
+            await lifetime.CancelAsync();
+            if (hold is not null)
+                stopped = await Record.ExceptionAsync(() => hold.WaitAsync(TimeSpan.FromSeconds(5)));
+        }
+
+        // Assert
+        Assert.False(publishedBeforeStartRecorded,
+            "An active partition must not be visible before its start count, or takeover assertions can read the previous count.");
+        Assert.Equal(1, starts[route]);
+        Assert.Empty(active);
+        Assert.IsAssignableFrom<OperationCanceledException>(stopped);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -164,8 +200,10 @@ public sealed class FleetBrokerTests
     static async Task Hold(string route, ConcurrentDictionary<string, bool> active,
         ConcurrentDictionary<string, int>? starts, CancellationToken ct)
     {
-        Assert.True(active.TryAdd(route, true));
         _ = starts?.AddOrUpdate(route, 1, (_, count) => count + 1);
+        // Active is the test's publication point: a reader observing it must also see the
+        // completed start count, including the second start after ownership returns.
+        Assert.True(active.TryAdd(route, true));
         try
         {
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
@@ -181,6 +219,25 @@ public sealed class FleetBrokerTests
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         while (!predicate())
             await Task.Delay(20, deadline.Token);
+    }
+
+    sealed class PausedStartCountComparer : IEqualityComparer<string>, IDisposable
+    {
+        readonly ManualResetEventSlim _resume = new();
+        internal TaskCompletionSource RecordingStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool Equals(string? x, string? y) => StringComparer.Ordinal.Equals(x, y);
+
+        public int GetHashCode(string obj)
+        {
+            RecordingStarted.TrySetResult();
+            if (!_resume.Wait(TimeSpan.FromSeconds(5)))
+                throw new TimeoutException("The start-count recording was not released.");
+            return StringComparer.Ordinal.GetHashCode(obj);
+        }
+
+        internal void Resume() => _resume.Set();
+        public void Dispose() => _resume.Dispose();
     }
 
     static string Owner(string route, params string[] workers) =>
