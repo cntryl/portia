@@ -23,10 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
-    # Image digests and settings match compose.yaml, which remains the local-run equivalent.
+    # Integration images and settings match compose.yaml, which remains the local-run equivalent.
     services:
       sqrzl:
-        image: ghcr.io/sqrzl/sqrzl-emulator@sha256:da1a2a731fe6de71ce8241e3d9fda9ae48dec6015f8b531f4f3129e4ca9969a8
+        image: ghcr.io/sqrzl/sqrzl-emulator:latest
         credentials:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -40,7 +40,7 @@ jobs:
         options: --init --security-opt no-new-privileges:true
 
       fitz:
-        image: ghcr.io/cntryl/fitz@sha256:5e7d844c52dc24de35f33fb024a3a19b0fa13af7d1fa64edfc8e953371051e1f
+        image: ghcr.io/cntryl/fitz:latest
         credentials:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -60,7 +60,7 @@ jobs:
           --security-opt no-new-privileges:true
 
       cassie:
-        image: ghcr.io/cntryl/cassie@sha256:c179afabb7051e19629cfd1ecc6b83fa88bfb4deb6a391060aa1f472f7a0d1de
+        image: ghcr.io/cntryl/cassie:latest
         credentials:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}

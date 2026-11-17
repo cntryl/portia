@@ -2,7 +2,7 @@ name: portia-integration
 
 services:
   cassie:
-    image: ${CASSIE_TEST_IMAGE:-ghcr.io/cntryl/cassie@sha256:c179afabb7051e19629cfd1ecc6b83fa88bfb4deb6a391060aa1f472f7a0d1de}
+    image: ${CASSIE_TEST_IMAGE:-ghcr.io/cntryl/cassie:latest}
     environment:
       CASSIE_STORAGE_MODE: memory
       CASSIE_ROOT_PASSWORD: portia-cassie-test
@@ -15,7 +15,7 @@ services:
       - no-new-privileges:true
 
   fitz:
-    image: ${FITZ_TEST_IMAGE:-ghcr.io/cntryl/fitz@sha256:5e7d844c52dc24de35f33fb024a3a19b0fa13af7d1fa64edfc8e953371051e1f}
+    image: ${FITZ_TEST_IMAGE:-ghcr.io/cntryl/fitz:latest}
     environment:
       FITZ_ADMIN_AUTH_MODE: open
       FITZ_AUTH_REQUIRED: "false"
@@ -33,7 +33,7 @@ services:
       - /tmp/fitz:rw,noexec,nosuid,size=64m,mode=1777
 
   sqrzl:
-    image: ghcr.io/sqrzl/sqrzl-emulator@sha256:da1a2a731fe6de71ce8241e3d9fda9ae48dec6015f8b531f4f3129e4ca9969a8
+    image: ghcr.io/sqrzl/sqrzl-emulator:latest
     environment:
       SQRZL_BLOBS_PATH: /app/blobs
       SQRZL_LOG_FORMAT: text
