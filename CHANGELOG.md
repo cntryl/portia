@@ -34,6 +34,12 @@ Read the [0.14.1 migration notes](docs/migration-0.14.1.md) and [contract attrib
 - Schemas follow actual serializer access, ignore and population rules. Conservative portable
   constraints retain exact .NET details through `x-portia-*` annotations when JSON Schema semantics
   differ. Rejected defaults are not advertised as accepted values.
+- Explicit response declarations use Portia's serializer contract. Query defaults respect compiled
+  validation, validated form booleans require presence when omission is rejected, and input/output
+  schema components keep directional examples isolated. Numeric bounds account for enum storage;
+  uncertain .NET character-class patterns retain their exact rule without a portable pattern.
+- Combined plain authenticated-user policies publish handler alternatives. Ambiguous combinations
+  of custom policy mappings require one explicitly mapped composite policy.
 - Generated context metadata replaces the previous description-only callback. Recompile consumers.
 
 ## 0.14.0

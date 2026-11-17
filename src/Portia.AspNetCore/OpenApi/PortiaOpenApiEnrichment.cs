@@ -139,7 +139,7 @@ sealed record PortiaOpenApiEnrichment(IReadOnlyList<PortiaHttpExample> Requests,
         }
     }
 
-    static JsonNode? Scalar(object? value, JsonNode? fallback, IOpenApiSchema? schema) => value switch
+    internal static JsonNode? Scalar(object? value, JsonNode? fallback, IOpenApiSchema? schema) => value switch
     {
         null => null,
         string item => JsonValue.Create(item),

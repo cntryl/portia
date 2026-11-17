@@ -79,19 +79,33 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             if (replacesDefaultSuccess && (status == "200" || status == "204") &&
                 !customStatuses.Contains(status))
                 continue;
-            if (!responseMetadata.ReplaceExisting && operation.Responses.ContainsKey(status))
-                continue;
-            var response = new OpenApiResponse { Description = "Response" };
-            if (responseMetadata.Type is not null && responseMetadata.ContentTypes.Count > 0)
+            _ = operation.Responses.TryGetValue(status, out var existing);
+            var response = new OpenApiResponse
             {
-                response.Content = responseMetadata.ContentTypes.Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToDictionary(contentType => contentType,
-                        _ => (IOpenApiMediaType)new OpenApiMediaType
-                        {
-                            Schema = PortiaOpenApiSchemaGenerator.Create(responseMetadata.Type, jsonOptions,
-                                context.Document!, schemaType,
-                                schemaCollectionElementIsNullable: schemaCollectionElementIsNullable, descriptions: descriptions)
-                        }, StringComparer.Ordinal);
+                Description = existing?.Description ?? "Response",
+                Headers = existing?.Headers,
+                Links = existing?.Links,
+                Extensions = existing?.Extensions,
+                Content = !responseMetadata.ReplaceExisting && existing?.Content is { } content
+                    ? new Dictionary<string, IOpenApiMediaType>(content, StringComparer.Ordinal) : null
+            };
+            if (responseMetadata.Type is not null && responseMetadata.Type != typeof(void) && responseMetadata.ContentTypes.Count > 0)
+            {
+                response.Content ??= new Dictionary<string, IOpenApiMediaType>(StringComparer.Ordinal);
+                foreach (var contentType in responseMetadata.ContentTypes.Distinct(StringComparer.OrdinalIgnoreCase))
+                {
+                    _ = response.Content.TryGetValue(contentType, out var media);
+                    response.Content[contentType] = new OpenApiMediaType
+                    {
+                        Schema = PortiaOpenApiSchemaGenerator.Create(responseMetadata.Type, jsonOptions,
+                            context.Document!, schemaType,
+                            schemaCollectionElementIsNullable: schemaCollectionElementIsNullable, descriptions: descriptions),
+                        Example = media?.Example,
+                        Examples = media?.Examples,
+                        Encoding = media?.Encoding,
+                        Extensions = media?.Extensions
+                    };
+                }
             }
 
             operation.Responses[status] = response;
@@ -130,13 +144,14 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 
         foreach (var parameter in custom is null ? metadata.Parameters.Where(parameter => !IsBody(parameter)) : [])
         {
+            var contractMember = PortiaJsonDescriptions.MemberMetadata(jsonOptions, metadata.RequestType, parameter.ClrName);
             var schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!, schemaType,
-                parameter.IsNullable, schemaCollectionElementIsNullable, descriptions,
-                PortiaJsonDescriptions.MemberMetadata(jsonOptions, metadata.RequestType, parameter.ClrName), input: true);
-            if (parameter.HasDefault && parameter.DefaultValue is not null && schema is OpenApiSchema concreteSchema)
+                parameter.IsNullable, schemaCollectionElementIsNullable, descriptions, contractMember, input: true);
+            if (parameter.HasDefault && schema is OpenApiSchema concreteSchema)
             {
-                concreteSchema.Default =
-                    JsonSerializer.SerializeToNode(parameter.DefaultValue, jsonOptions.GetTypeInfo(parameter.Type));
+                concreteSchema.Default = contractMember?.Rules.Any(rule =>
+                    !PortiaContractValidation.IsValid(contractMember, rule, parameter.DefaultValue)) == true ? null :
+                    PortiaOpenApiEnrichment.Scalar(parameter.DefaultValue, concreteSchema.Default, schema);
             }
 
             var wireName = parameter.WireName ?? jsonOptions.PropertyNamingPolicy?.ConvertName(parameter.ClrName) ??
@@ -208,8 +223,8 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 if (member.Input && (parameter.Required || member.Required || PortiaJsonConstraints.RequiresPresence(
                         PortiaJsonDescriptions.MemberMetadata(jsonOptions, metadata.RequestType, parameter.ClrName))))
                     _ = jsonRequired.Add(member.Name);
-                if ((parameter.Required || PortiaJsonConstraints.RequiresPresence(
-                        PortiaJsonDescriptions.MemberMetadata(jsonOptions, metadata.RequestType, parameter.ClrName))) && parameter.Type != typeof(bool))
+                if (parameter.Required && parameter.Type != typeof(bool) || PortiaJsonConstraints.RequiresPresence(
+                        PortiaJsonDescriptions.MemberMetadata(jsonOptions, metadata.RequestType, parameter.ClrName)))
                     _ = formRequired.Add(fallbackName);
             }
 

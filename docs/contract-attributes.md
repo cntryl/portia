@@ -166,7 +166,8 @@ app.MapPortiaGet<ListItems, Item[]>("/items")
 
 `ConfigureDocument` can also set contact, license, terms of service, and external documentation.
 `WithName` controls the operation ID; duplicates fail document generation. Component names retain
-readable type names and a structural identity independent of description/title/example edits.
+readable type names and a structural identity independent of description/title/example edits. Input
+and output contracts have distinct identities, so shared shapes retain their own directional examples.
 
 Security mappings document credentials; they never install authentication or change authorization.
 Named policies require explicit `SecurityPolicy` mappings. Standard default/fallback policies use
@@ -182,9 +183,15 @@ and belong to OAuth2 or OpenID Connect definitions. Resource checks and business
 runtime responsibilities.
 
 Advanced `SecurityPolicy` / `SecurityFor` overloads accept dictionaries: schemes within one
-dictionary are ANDed, while separate dictionaries are OR alternatives. Independent policy mappings
-are combined with AND. An explicitly empty dictionary represents an anonymous alternative. Use an
-accurate mapping for custom authorization logic; OpenAPI cannot infer arbitrary policy assertions.
+dictionary are ANDed, while separate dictionaries are OR alternatives. ASP.NET combines selected
+authentication handlers and evaluates policy requirements against the merged principal; selecting
+two handlers does not require both credentials. For combined plain authenticated-user policies,
+map each policy's selected handlers as scope-free alternatives and Portia documents the combined
+handler alternatives. For composed custom requirements or scoped mappings, consolidate authorization
+into one named composite policy and use `SecurityPolicy` to describe its complete credential contract.
+Ambiguous combinations fail document generation. An independently enforced `SecurityFor<TRequest>`
+mapping is combined with ASP.NET credentials using AND. An explicitly empty dictionary represents
+an anonymous alternative. OpenAPI cannot infer arbitrary policy assertions.
 
 Output requiredness is conservative when a custom `ShouldSerialize` predicate can omit a property.
 The serializer remains authoritative for conditional omission.

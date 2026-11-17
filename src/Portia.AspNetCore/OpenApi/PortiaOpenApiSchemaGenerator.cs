@@ -52,7 +52,8 @@ static class PortiaOpenApiSchemaGenerator
         }
         var shape = node.DeepClone();
         RemoveAnnotations(shape);
-        var identity = type.Assembly.GetName().Name + "\n" + type.FullName + "\n" + shape.ToJsonString();
+        // Direction is part of the contract: even identical shapes can have different nested examples.
+        var identity = type.Assembly.GetName().Name + "\n" + type.FullName + "\n" + (input ? "input" : "output") + "\n" + shape.ToJsonString();
         var name = string.Concat(FriendlyName(type).Select(character =>
             char.IsAsciiLetterOrDigit(character) || character == '_' ? character : '_'));
         var id = "Portia_" + name + "_" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)))[..16];
