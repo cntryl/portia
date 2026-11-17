@@ -99,21 +99,32 @@ static class PortiaJsonDescriptions
 
     internal static void CompleteRequired(JsonNode node, JsonTypeInfo info, JsonSerializerOptions options, bool input)
     {
-        if (node is not JsonObject schema || schema["required"] is not JsonArray required)
+        if (node is not JsonObject schema || schema["properties"] is not JsonObject properties)
             return;
+        var required = schema["required"] as JsonArray ?? [];
         for (var index = required.Count - 1; index >= 0; index--)
         {
             var name = required[index]?.GetValue<string>();
             var property = info.Properties.FirstOrDefault(candidate => candidate.Name == name);
             var omit = property is null || (input
-                ? !property.IsRequired && !(info.Options.RespectRequiredConstructorParameters && property.AssociatedParameter is { HasDefaultValue: false })
+                ? !property.IsRequired && !PortiaJsonConstraints.RequiresPresence(PropertyMetadata(options, property))
                 : property.ShouldSerialize is not null || options.DefaultIgnoreCondition == JsonIgnoreCondition.WhenWritingDefault ||
                     options.DefaultIgnoreCondition == JsonIgnoreCondition.WhenWritingNull && (!property.PropertyType.IsValueType || Nullable.GetUnderlyingType(property.PropertyType) is not null));
             if (omit)
                 required.RemoveAt(index);
         }
+        if (input)
+        {
+            foreach (var property in info.Properties)
+                if (properties.ContainsKey(property.Name) &&
+                    (property.IsRequired || PortiaJsonConstraints.RequiresPresence(PropertyMetadata(options, property))) &&
+                    !required.Any(value => value?.GetValue<string>() == property.Name))
+                    required.Add((JsonNode?)JsonValue.Create(property.Name));
+        }
         if (required.Count == 0)
             _ = schema.Remove("required");
+        else if (schema["required"] is null)
+            schema["required"] = required;
     }
 
     internal static JsonNode Apply(JsonSchemaExporterContext context, JsonNode node, JsonSerializerOptions options, bool input = false)

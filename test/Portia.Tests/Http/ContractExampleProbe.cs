@@ -8,3 +8,13 @@ sealed class ContractExampleHandler : IRequestHandler<ContractExampleRequest, Co
     public ValueTask<Result<ContractMetadataModel>> HandleAsync(IRequestContext<ContractExampleRequest> context, CancellationToken ct) =>
         ValueTask.FromResult(Result<ContractMetadataModel>.Success(context.Request.Payload));
 }
+
+sealed record ConvertedExampleRequest(
+    [property: System.Text.Json.Serialization.JsonConverter(typeof(HttpMemberHexConverter))] int Id,
+    [property: System.Text.Json.Serialization.JsonConverter(typeof(HttpMemberHexConverter))] int Count = 0) : IRequest<string>, ICallable;
+
+sealed class ConvertedExampleHandler : IRequestHandler<ConvertedExampleRequest, string>
+{
+    public ValueTask<Result<string>> HandleAsync(IRequestContext<ConvertedExampleRequest> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result<string>.Success($"{context.Request.Id},{context.Request.Count}"));
+}

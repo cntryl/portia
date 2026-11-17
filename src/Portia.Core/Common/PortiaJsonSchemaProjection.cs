@@ -48,7 +48,6 @@ static class PortiaJsonSchemaProjection
                     {
                         property.ShouldSerialize = null;
                         property.IsGetNullable = property.IsSetNullable;
-                        property.IsRequired |= PortiaJsonConstraints.RequiresPresence(member);
                     }
                 }
             })

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
 
@@ -9,6 +10,8 @@ public sealed partial class PortiaOpenApiOptions
 {
     readonly Dictionary<string, IReadOnlyDictionary<string, string[]>[]> _policySecurity = [with(StringComparer.Ordinal)];
     readonly Dictionary<Type, IReadOnlyDictionary<string, string[]>[]> _requestSecurity = [];
+    IReadOnlyDictionary<string, string[]>[]? _defaultSecurity;
+    IReadOnlyDictionary<string, string[]>[]? _fallbackSecurity;
 
     /// <summary>Gets HTTP security definitions, normally keyed by the actual authentication scheme name.</summary>
     public IDictionary<string, OpenApiSecurityScheme> SecuritySchemes { get; } = new Dictionary<string, OpenApiSecurityScheme>(StringComparer.Ordinal);
@@ -38,6 +41,24 @@ public sealed partial class PortiaOpenApiOptions
         return this;
     }
 
+    /// <summary>Maps a custom ASP.NET default authorization policy to explicit credential alternatives.</summary>
+    public PortiaOpenApiOptions SecurityDefault(params IReadOnlyDictionary<string, string[]>[] alternatives)
+    {
+        if (_defaultSecurity is not null)
+            throw new InvalidOperationException("SecurityDefault is mapped more than once.");
+        _defaultSecurity = Snapshot(alternatives);
+        return this;
+    }
+
+    /// <summary>Maps a custom ASP.NET fallback authorization policy to explicit credential alternatives.</summary>
+    public PortiaOpenApiOptions SecurityFallback(params IReadOnlyDictionary<string, string[]>[] alternatives)
+    {
+        if (_fallbackSecurity is not null)
+            throw new InvalidOperationException("SecurityFallback is mapped more than once.");
+        _fallbackSecurity = Snapshot(alternatives);
+        return this;
+    }
+
     internal async Task ApplySecurityAsync(OpenApiOperation operation, Type? requestType, IList<object> endpoint,
         IServiceProvider services, OpenApiDocument document, CancellationToken ct)
     {
@@ -61,7 +82,11 @@ public sealed partial class PortiaOpenApiOptions
                     requirements = Combine(requirements, mapping);
                 }
                 if (names.Length == 0)
-                    requirements = Combine(requirements, await FromPolicy(combined).ConfigureAwait(false));
+                {
+                    var explicitMapping = data.Length == 0 && policies.Length == 0 ? _fallbackSecurity :
+                        policies.Length == 0 && OnlyDefault(data) ? _defaultSecurity : null;
+                    requirements = Combine(requirements, explicitMapping ?? await FromPolicy(combined).ConfigureAwait(false));
+                }
                 else
                 {
                     // Independently supplied policies/default authorization must not disappear beside a named policy.
@@ -72,7 +97,8 @@ public sealed partial class PortiaOpenApiOptions
                     {
                         var additional = await AuthorizationPolicy.CombineAsync(provider!, unnamed).ConfigureAwait(false);
                         if (additional is not null)
-                            requirements = Combine(requirements, await FromPolicy(additional).ConfigureAwait(false));
+                            requirements = Combine(requirements, (OnlyDefault(unnamed) ? _defaultSecurity : null) ??
+                                await FromPolicy(additional).ConfigureAwait(false));
                     }
                 }
                 // A policy mapping must cover explicitly selected authentication handlers too. Do not silently
@@ -102,6 +128,8 @@ public sealed partial class PortiaOpenApiOptions
 
         async Task<IReadOnlyDictionary<string, string[]>[]> FromPolicy(AuthorizationPolicy policy)
         {
+            if (!policy.Requirements.OfType<DenyAnonymousAuthorizationRequirement>().Any())
+                throw new InvalidOperationException("OpenAPI needs explicit SecurityPolicy, SecurityDefault or SecurityFallback mappings for custom authorization requirements; an arbitrary assertion does not imply an authenticated caller.");
             var names = policy.AuthenticationSchemes.ToArray();
             if (names.Length == 0)
             {
@@ -129,6 +157,9 @@ public sealed partial class PortiaOpenApiOptions
                 throw new InvalidOperationException($"OpenAPI security scheme '{name}' is defined more than once.");
         }
     }
+
+    static bool OnlyDefault(IEnumerable<IAuthorizeData> data) => data.All(item =>
+        string.IsNullOrWhiteSpace(item.Policy) && string.IsNullOrWhiteSpace(item.Roles) && string.IsNullOrWhiteSpace(item.AuthenticationSchemes));
 
     static IReadOnlyDictionary<string, string[]>[] Snapshot(IReadOnlyDictionary<string, string[]>[] alternatives)
     {

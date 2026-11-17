@@ -5,7 +5,7 @@ using System.Text.Json.Nodes;
 namespace Cntryl.Portia;
 
 sealed record PortiaContractExample(Type Type, string Name, object Value, string? Summary, PortiaContractUse Use);
-sealed record PortiaResolvedExample(string Name, string? Summary, JsonNode? Value);
+sealed record PortiaResolvedExample(string Name, string? Summary, JsonNode? Value, IReadOnlyDictionary<string, object?>? Members = null);
 
 sealed class PortiaContractExamples(IReadOnlyList<PortiaContractExample> examples, PortiaContractMetadataRegistry contracts)
 {
@@ -26,8 +26,15 @@ sealed class PortiaContractExamples(IReadOnlyList<PortiaContractExample> example
             if (error is not null)
                 throw new InvalidOperationException(error.Message);
             var options = PortiaJsonSchemaProjection.For(json, json, input);
-            var value = JsonSerializer.SerializeToNode(example.Value, options.GetTypeInfo(example.Type));
-            return new PortiaResolvedExample(example.Name, example.Summary, value);
+            var info = options.GetTypeInfo(example.Type);
+            var value = JsonSerializer.SerializeToNode(example.Value, info);
+            // Snapshot input CLR values for adapters whose scalar binding intentionally bypasses
+            // JSON member converters. Keep the JSON illustration and parameter values in one cache.
+            var members = input && info.Kind == System.Text.Json.Serialization.Metadata.JsonTypeInfoKind.Object
+                ? info.Properties.Where(property => property.Get is not null).ToDictionary(property => property.Name,
+                    property => property.Get!(example.Value), StringComparer.Ordinal)
+                : null;
+            return new PortiaResolvedExample(example.Name, example.Summary, value, members);
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {

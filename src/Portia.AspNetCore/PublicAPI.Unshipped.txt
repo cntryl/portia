@@ -34,3 +34,7 @@ Cntryl.Portia.PortiaOpenApiOptions.SecurityPolicy(string! policy, params System.
 Cntryl.Portia.PortiaOpenApiOptions.SecurityPolicy(string! policy, string! scheme, params string![]! scopes) -> Cntryl.Portia.PortiaOpenApiOptions!
 
 Cntryl.Portia.PortiaOpenApiOptions.SecuritySchemes.get -> System.Collections.Generic.IDictionary<string!, Microsoft.OpenApi.OpenApiSecurityScheme!>!
+
+Cntryl.Portia.PortiaOpenApiOptions.SecurityDefault(params System.Collections.Generic.IReadOnlyDictionary<string!, string![]!>![]! alternatives) -> Cntryl.Portia.PortiaOpenApiOptions!
+
+Cntryl.Portia.PortiaOpenApiOptions.SecurityFallback(params System.Collections.Generic.IReadOnlyDictionary<string!, string![]!>![]! alternatives) -> Cntryl.Portia.PortiaOpenApiOptions!

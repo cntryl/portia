@@ -158,6 +158,36 @@ public sealed class ContractAttributeValidationTests
         Assert.InRange(consumed, 1, 100_001);
     }
 
+    /// <summary>Repeated references and null elements still consume the traversal work budget.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldStopTraversalGivenRepeatedOrNullElements(bool nullElements)
+    {
+        // Arrange
+        var consumed = 0;
+        var repeated = new ContractValidatedItem("valid");
+        IEnumerable<ContractValidatedItem> Items()
+        {
+            for (var index = 0; index < 100_010; index++)
+            {
+                consumed++;
+                yield return nullElements ? null! : repeated;
+            }
+        }
+        var services = new ServiceCollection();
+        _ = services.AddPortia().AddRequestHandler<ContractEnumerableValidatedHandler>();
+        await using var provider = services.BuildServiceProvider();
+
+        // Act
+        var result = await provider.GetRequiredService<IRequestBus>().SendAsync(new ContractEnumerableValidatedRequest(Items()), RequestActor.System);
+
+        // Assert
+        Assert.False(result.IsSuccess);
+        Assert.Equal(RequestErrorKind.Validation, result.Error!.Kind);
+        Assert.InRange(consumed, 1, 100_001);
+    }
+
     /// <summary>Interface-typed members are validated through their declared generated contract.</summary>
     [Fact]
     public async Task ShouldRejectNestedValuesGivenInterfaceTypedCollection()

@@ -185,4 +185,69 @@ public sealed class OpenApiSecurityTests
         Assert.Contains("omitted", failure.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>Custom assertions do not imply that an authentication credential is necessary.</summary>
+    [Fact]
+    public async Task ShouldRejectCredentialInferenceGivenCustomDefaultAssertion()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddAuthentication("session").AddCookie("session");
+        _ = builder.Services.AddAuthorization(options => options.DefaultPolicy =
+            new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build());
+        _ = builder.Services.AddPortia().AddHttp(options => options.OpenApi.SecuritySchemes.Add("session",
+            new OpenApiSecurityScheme { Type = SecuritySchemeType.ApiKey, In = ParameterLocation.Cookie, Name = "session" }))
+            .AddRequestHandler<ContractMetadataHandler>();
+        await using var app = builder.Build();
+        _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
+        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/custom-default").RequireAuthorization();
+        await app.StartAsync();
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json"));
+
+        // Assert
+        var failure = Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("explicit", failure.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Explicit mappings can describe custom default/fallback policies that permit anonymous callers.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldPublishAnonymousContractGivenExplicitCustomPolicyMapping(bool fallback)
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddAuthorization(options =>
+        {
+            var policy = new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build();
+            if (fallback)
+                options.FallbackPolicy = policy;
+            else
+                options.DefaultPolicy = policy;
+        });
+        _ = builder.Services.AddPortia().AddHttp(options =>
+        {
+            if (fallback)
+                _ = options.OpenApi.SecurityFallback(new Dictionary<string, string[]>());
+            else
+                _ = options.OpenApi.SecurityDefault(new Dictionary<string, string[]>());
+        }).AddRequestHandler<ContractMetadataHandler>();
+        await using var app = builder.Build();
+        _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
+        var endpoint = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/custom-policy");
+        if (!fallback)
+            _ = endpoint.RequireAuthorization();
+        await app.StartAsync();
+
+        // Act
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+
+        // Assert
+        var security = document["paths"]!["/custom-policy"]!["get"]!["security"] as JsonArray;
+        Assert.True(security is null || security.Count == 0);
+    }
+
 }

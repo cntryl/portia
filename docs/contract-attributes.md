@@ -165,7 +165,11 @@ readable type names and a structural identity independent of description/title/e
 
 Security mappings document credentials; they never install authentication or change authorization.
 Named policies require explicit `SecurityPolicy` mappings. Standard default/fallback policies use
-their actual authentication schemes or the application's default authenticate scheme. Scheme names
+their actual authentication schemes or the application's default authenticate scheme when they
+explicitly require an authenticated user. Custom assertions do not imply credentials: use
+`SecurityDefault` or `SecurityFallback` for custom default/fallback policies, or name the policy and
+use `SecurityPolicy`. These advanced methods take the same OR/AND dictionaries, including an
+explicitly empty dictionary when anonymous callers are permitted. Scheme names
 must have a security definition. `AllowAnonymous` suppresses ASP.NET policy documentation only;
 `SecurityFor<TRequest>` documents an independently enforced Portia authorizer and still applies.
 Portia permission names are never converted into OAuth scopes. Scopes must be supplied explicitly

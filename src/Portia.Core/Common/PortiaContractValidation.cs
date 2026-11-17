@@ -23,17 +23,21 @@ static class PortiaContractValidation
         void Visit(object? value, Type? declaredType, string path, int depth, PortiaContractMetadata? known = null)
         {
             ct.ThrowIfCancellationRequested();
-            if (value is null || exhausted)
+            if (exhausted)
                 return;
-            var metadata = known ?? contracts.Type(value.GetType()) ?? (declaredType is null ? null : contracts.Type(declaredType));
-            if (metadata?.HasValidation != true || !visited.Add(value))
-                return;
+            // Bound attempted work too: cycles are visited once, but repeated references and null
+            // elements must not allow an enumerable to run forever without consuming its budget.
             if (++visitedCount > 100_000 || depth > 64)
             {
                 exhausted = true;
                 errors.Add("The request exceeds the supported validation graph size or depth.");
                 return;
             }
+            if (value is null)
+                return;
+            var metadata = known ?? contracts.Type(value.GetType()) ?? (declaredType is null ? null : contracts.Type(declaredType));
+            if (metadata?.HasValidation != true || !visited.Add(value))
+                return;
             foreach (var member in metadata.Members)
             {
                 ct.ThrowIfCancellationRequested();

@@ -16,6 +16,7 @@ static class PortiaJsonRequestOptions
         var options = new JsonSerializerOptions(current)
         {
             RespectNullableAnnotations = true,
+            RespectRequiredConstructorParameters = true,
             TypeInfoResolver = current.TypeInfoResolver!.WithAddedModifier(info => RequireNonNullableMembers(info, current))
         };
         options.MakeReadOnly();
@@ -24,13 +25,29 @@ static class PortiaJsonRequestOptions
 
     static void RequireNonNullableMembers(JsonTypeInfo info, JsonSerializerOptions facts)
     {
+        JsonTypeInfo? original = null;
         foreach (var property in info.Properties)
         {
             if (PortiaJsonDescriptions.PropertyMetadata(facts, property)?.Input == false)
+            {
+                property.IsRequired = false;
                 continue;
+            }
             property.IsGetNullable = property.IsSetNullable;
-            if (property.AssociatedParameter is { HasDefaultValue: false, IsNullable: false })
-                property.IsRequired = true;
+            if (property.AssociatedParameter is { HasDefaultValue: false, IsMemberInitializer: false } parameter)
+            {
+                if (!parameter.IsNullable || facts.RespectRequiredConstructorParameters)
+                    property.IsRequired = true;
+                else
+                {
+                    // Constructor policy makes getter-only members legal required inputs. Retain the
+                    // application's nullable omission semantics and explicit JsonRequired/modifier facts.
+                    // Ask the resolver for raw metadata so an unconfigured getter-only JsonRequired
+                    // contract is not configured using the original, less strict constructor options.
+                    original ??= facts.TypeInfoResolver!.GetTypeInfo(info.Type, facts);
+                    property.IsRequired = original?.Properties.SingleOrDefault(candidate => candidate.Name == property.Name)?.IsRequired == true;
+                }
+            }
         }
     }
 }

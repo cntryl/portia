@@ -34,6 +34,7 @@ namespace Cntryl.Portia;
 [JsonSerializable(typeof(ContractSecondTitleRequest))]
 [JsonSerializable(typeof(ContractLiteralDefaultRequest))]
 [JsonSerializable(typeof(ContractExampleRequest))]
+[JsonSerializable(typeof(ConvertedExampleRequest))]
 [JsonSerializable(typeof(ContractMetadataInputRequest))]
 [JsonSerializable(typeof(RequiredPresenceRequest))]
 [JsonSerializable(typeof(ContractMetadataModel))]

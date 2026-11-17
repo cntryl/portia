@@ -120,7 +120,12 @@ sealed record PortiaOpenApiEnrichment(IReadOnlyList<PortiaHttpExample> Requests,
                         {
                             target.Examples ??= new Dictionary<string, IOpenApiExample>(StringComparer.Ordinal);
                             target.Example = null;
-                            target.Examples[example.Name] = new OpenApiExample { Summary = example.Summary, Value = item?.DeepClone() };
+                            target.Examples[example.Name] = new OpenApiExample
+                            {
+                                Summary = example.Summary,
+                                Value = example.Members?.TryGetValue(member.Name, out var scalar) == true
+                                    ? Scalar(scalar, item) : item?.DeepClone()
+                            };
                         }
                     }
                 }
@@ -133,6 +138,34 @@ sealed record PortiaOpenApiEnrichment(IReadOnlyList<PortiaHttpExample> Requests,
             Add(media, example with { Value = value });
         }
     }
+
+    static JsonNode? Scalar(object? value, JsonNode? fallback) => value switch
+    {
+        null => null,
+        string item => JsonValue.Create(item),
+        bool item => JsonValue.Create(item),
+        byte item => JsonValue.Create(item),
+        sbyte item => JsonValue.Create(item),
+        short item => JsonValue.Create(item),
+        ushort item => JsonValue.Create(item),
+        int item => JsonValue.Create(item),
+        uint item => JsonValue.Create(item),
+        long item => JsonValue.Create(item),
+        ulong item => JsonValue.Create(item),
+        float item => JsonValue.Create(item),
+        double item => JsonValue.Create(item),
+        decimal item => JsonValue.Create(item),
+        char item => JsonValue.Create(item.ToString()),
+        Guid item => JsonValue.Create(item.ToString("D", CultureInfo.InvariantCulture)),
+        DateTime item => JsonValue.Create(item.ToString("O", CultureInfo.InvariantCulture)),
+        DateTimeOffset item => JsonValue.Create(item.ToString("O", CultureInfo.InvariantCulture)),
+        DateOnly item => JsonValue.Create(item.ToString("O", CultureInfo.InvariantCulture)),
+        TimeOnly item => JsonValue.Create(item.ToString("O", CultureInfo.InvariantCulture)),
+        TimeSpan item => JsonValue.Create(item.ToString("c", CultureInfo.InvariantCulture)),
+        Enum item => JsonValue.Create(item.ToString()),
+        IFormattable item => JsonValue.Create(item.ToString(null, CultureInfo.InvariantCulture)),
+        _ => fallback?.DeepClone()
+    };
 
     static void Add(IOpenApiMediaType media, PortiaResolvedExample example)
     {

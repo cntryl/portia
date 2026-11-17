@@ -160,5 +160,28 @@ public sealed class OpenApiEnrichmentTests
         Assert.False(responses["409"].Headers!.ContainsKey("X-Reason"));
     }
 
+    /// <summary>Route and query examples follow scalar parsing rather than a JSON member converter.</summary>
+    [Fact]
+    public async Task ShouldPublishScalarParametersGivenJsonMemberConverters()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia().AddHttp().AddRequestHandler<ConvertedExampleHandler>();
+        await using var app = builder.Build();
+        _ = app.MapPortiaOpenApi();
+        _ = app.MapPortiaPost<ConvertedExampleRequest, string>("/converted/{id}", configuration => configuration
+            .FromQuery(request => request.Count).RequestExample("converted", new ConvertedExampleRequest(16, 7)));
+        await app.StartAsync();
+
+        // Act
+        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
+
+        // Assert
+        var parameters = document.Paths["/converted/{id}"].Operations![HttpMethod.Post].Parameters!;
+        Assert.Equal(16, parameters.Single(parameter => parameter.Name == "id").Examples!["converted"].Value!.GetValue<int>());
+        Assert.Equal(7, parameters.Single(parameter => parameter.Name == "count").Examples!["converted"].Value!.GetValue<int>());
+    }
+
     static ContractMetadataModel Example(string name) => new(name, 5, ["one"], "AB", "hi@example.com", "https://example.com");
 }
