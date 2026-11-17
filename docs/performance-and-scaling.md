@@ -195,7 +195,7 @@ a disposable scope before enumerating the transport, and each delivery scope is 
 must tolerate replay. The Fitz adapter retains delivery ownership when terminal callback execution faults;
 Portia does not claim a broker-independent durable dead-letter transaction.
 
-Fitz 0.4.0 exposes the broker-wide `FITZ_QUEUE_MAX_ATTEMPTS` setting as a positive `u32` value;
+Fitz exposes the broker-wide `FITZ_QUEUE_MAX_ATTEMPTS` setting as a positive `u32` value;
 leaving it unset keeps reservation retries unlimited. It controls the broker's best-effort
 dead-letter policy and does not supply the durable delivery-attempt count Portia would need for
 its own `TerminalAttempt` threshold. Configure broker policy directly. `QueueRunnerOptions.RetryDelay`

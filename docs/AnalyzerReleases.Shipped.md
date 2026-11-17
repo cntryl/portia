@@ -1,5 +1,13 @@
 ; Shipped analyzer releases
 
+## Release 0.14.1
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+PORTIA031 | Portia | Error | Reject invalid or reflection-dependent contract attribute declarations.
+
 ## Release 0.10.0
 
 ### New Rules

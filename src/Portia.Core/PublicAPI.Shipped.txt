@@ -601,3 +601,23 @@ Cntryl.Portia.ProcessorStatus.Deconstruct(out string! Processor, out string! Kin
 Cntryl.Portia.ProcessorStatus.FailureError.get -> string?
 Cntryl.Portia.ProcessorStatus.FailureError.init -> void
 Cntryl.Portia.ProcessorStatus.ProcessorStatus(string! Processor, string! Kind, string? Tenant, string! Pattern, string? RebuildId, Cntryl.Portia.EventStreamProgress! Progress, Cntryl.Portia.ProcessorStatusFailure? Failure, string? SourceError = null, string? FailureError = null) -> void
+Cntryl.Portia.OperationalAttemptOutcomes
+const Cntryl.Portia.OperationalAttemptOutcomes.Running = "running" -> string!
+const Cntryl.Portia.OperationalAttemptOutcomes.Failed = "failed" -> string!
+const Cntryl.Portia.OperationalAttemptOutcomes.Interrupted = "interrupted" -> string!
+const Cntryl.Portia.OperationalAttemptOutcomes.Indeterminate = "indeterminate" -> string!
+const Cntryl.Portia.OperationalAttemptOutcomes.Committed = "committed" -> string!
+const Cntryl.Portia.OperationalAttemptOutcomes.CommittedCleanupFailed = "committed_cleanup_failed" -> string!
+Cntryl.Portia.OperationalRepairStatuses
+const Cntryl.Portia.OperationalRepairStatuses.Queued = "queued" -> string!
+const Cntryl.Portia.OperationalRepairStatuses.Running = "running" -> string!
+const Cntryl.Portia.OperationalRepairStatuses.Invalidated = "invalidated" -> string!
+const Cntryl.Portia.OperationalRepairStatuses.Indeterminate = "indeterminate" -> string!
+const Cntryl.Portia.OperationalRepairStatuses.Committed = "committed" -> string!
+const Cntryl.Portia.OperationalRepairStatuses.Failed = "failed" -> string!
+Cntryl.Portia.RepairActions
+const Cntryl.Portia.RepairActions.Resume = "resume" -> string!
+const Cntryl.Portia.RepairActions.Retry = "retry" -> string!
+Cntryl.Portia.ProcessorKinds
+const Cntryl.Portia.ProcessorKinds.Projector = "projector" -> string!
+const Cntryl.Portia.ProcessorKinds.Reactor = "reactor" -> string!

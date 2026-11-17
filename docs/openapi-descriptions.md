@@ -1,7 +1,7 @@
 # Contract descriptions
 
 See [contract attributes](contract-attributes.md) for value validation, friendly names, defaults, typed
-examples, and HTTP document/security enrichment in 0.14.1.
+examples, and HTTP document/security enrichment.
 
 Put reusable descriptions beside the model using standard .NET attributes:
 

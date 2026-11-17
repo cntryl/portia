@@ -4,10 +4,16 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
-## Unreleased
+## 0.14.2
 
 ### Fixed
 
+- Explicit response declarations use Portia's serializer contract. Query defaults respect compiled
+  validation, validated form booleans require presence when omission is rejected, and input/output
+  schema components keep directional examples isolated. Numeric bounds account for enum storage;
+  uncertain .NET character-class patterns retain their exact rule without a portable pattern.
+- Combined plain authenticated-user policies publish handler alternatives. Ambiguous combinations
+  of custom policy mappings require one explicitly mapped composite policy.
 - Fleet revocation retains terminal workload failures and secondary cleanup diagnostics, including
   when another revoked callback reaches its stop timeout. Single-process coordination cancels all
   revoked or terminating siblings before awaiting their cleanup.
@@ -18,9 +24,18 @@ alerts are as breaking to change as an API.
 - Broker fleet qualification publishes start counts before active assignments, preventing takeover
   assertions from observing an earlier count while retaining their ownership checks.
 
+### Changed
+
+- CI, local Compose, benchmarks, examples, and crash-durability qualification use `:latest` Fitz,
+  Cassie, and Sqrzl images.
+- Documentation focuses on current usage. Superseded migration notes and design plans remain in
+  tagged source history; the Fitz integration guide replaces version-specific upgrade pages.
+- Startup-validation qualification counts validation calls directly while processing is active.
+  The SDK-only MCP cancellation probe records cancellation during startup-marker publication.
+
 ## 0.14.1
 
-Read the [0.14.1 migration notes](docs/migration-0.14.1.md) and [contract attributes](docs/contract-attributes.md).
+Read the [0.14.1 migration notes](https://github.com/cntryl/portia/blob/v0.14.1/docs/migration-0.14.1.md) and [contract attributes](docs/contract-attributes.md).
 
 ### Added
 
@@ -48,17 +63,11 @@ Read the [0.14.1 migration notes](docs/migration-0.14.1.md) and [contract attrib
 - Schemas follow actual serializer access, ignore and population rules. Conservative portable
   constraints retain exact .NET details through `x-portia-*` annotations when JSON Schema semantics
   differ. Rejected defaults are not advertised as accepted values.
-- Explicit response declarations use Portia's serializer contract. Query defaults respect compiled
-  validation, validated form booleans require presence when omission is rejected, and input/output
-  schema components keep directional examples isolated. Numeric bounds account for enum storage;
-  uncertain .NET character-class patterns retain their exact rule without a portable pattern.
-- Combined plain authenticated-user policies publish handler alternatives. Ambiguous combinations
-  of custom policy mappings require one explicitly mapped composite policy.
 - Generated context metadata replaces the previous description-only callback. Recompile consumers.
 
 ## 0.14.0
 
-Read the [0.14.0 migration notes](docs/migration-0.14.0.md). See [OpenAPI descriptions](docs/openapi-descriptions.md)
+Read the [0.14.0 migration notes](https://github.com/cntryl/portia/blob/v0.14.1/docs/migration-0.14.0.md). See [OpenAPI descriptions](docs/openapi-descriptions.md)
 for configuration and coverage rules.
 
 ### Added
@@ -79,7 +88,7 @@ for configuration and coverage rules.
 
 ## 0.13.0
 
-Read the [0.13.0 migration notes](docs/migration-0.13.0.md) before upgrading. This release removes
+Read the [0.13.0 migration notes](https://github.com/cntryl/portia/blob/v0.14.1/docs/migration-0.13.0.md) before upgrading. This release removes
 public members, makes one transport member required, and turns several silent misconfigurations into
 startup or dispatch errors.
 
@@ -176,7 +185,7 @@ startup or dispatch errors.
 
 ## 0.11.1
 
-Read the [0.11.1 migration notes](docs/migration-0.11.1.md) before upgrading MCP HTTP hosts or code
+Read the [0.11.1 migration notes](https://github.com/cntryl/portia/blob/v0.14.1/docs/migration-0.11.1.md) before upgrading MCP HTTP hosts or code
 that handles object storage completion failures. Package publication and deployment are separate
 release steps.
 
@@ -246,7 +255,7 @@ release steps.
 
 ## 0.11.0
 
-Read the [0.11.0 migration notes](docs/migration-0.11.0.md) before upgrading. Package publication
+Read the [0.11.0 migration notes](https://github.com/cntryl/portia/blob/v0.14.1/docs/migration-0.11.0.md) before upgrading. Package publication
 and deployment are separate release steps.
 
 ### Changed
@@ -271,10 +280,10 @@ Package publication and deployment are separate release steps.
 
 ### Migration
 
-- Read the [0.10.0 migration notes](docs/migration-0.10.0.md) before upgrading operator tooling
+- Read the [0.10.0 migration notes](https://github.com/cntryl/portia/blob/v0.14.1/docs/migration-0.10.0.md) before upgrading operator tooling
   and projector/reactor handlers. Configure the system-operator role, return processor `Result`
   outcomes, propagate failed reactions, and update tests for `ProcessorFailureException`.
-- Upgrade Fitz clients and broker together using the [Fitz 4 guide](docs/fitz-4-upgrade.md).
+- Upgrade Fitz clients and broker together using the [Fitz 4 guide](https://github.com/cntryl/portia/blob/v0.14.1/docs/fitz-4-upgrade.md).
 
 ### Added
 
@@ -433,7 +442,7 @@ Package publication and deployment are separate release steps.
 ### Changed
 
 - Upgrade to Fitz .NET 2.0.0 and the compatible 0.2.0 broker. Existing deployments require a
-  coordinated broker migration; see [the migration guide](docs/migration-0.8.md).
+  coordinated broker migration; see [the migration guide](https://github.com/cntryl/portia/blob/v0.14.1/docs/migration-0.8.md).
 - Terminal queue failures now use an optional observer and remain unacknowledged after observation.
   The transport controls redelivery and dead-letter policy, so observer effects must tolerate replay.
 - The `terminal` value of `portia.request.delivery.count` now describes an unacknowledged terminal
