@@ -46,7 +46,13 @@ static class PortiaJsonConstraints
                     };
                     var valueType = Nullable.GetUnderlyingType(member.Type) ?? member.Type;
                     var roundsFractional = range.Minimum is int && (valueType == typeof(double) || valueType == typeof(float) || valueType == typeof(decimal));
-                    if (!roundsFractional && (HasType(schema, "number") || HasType(schema, "integer")))
+                    // BCL comparison converts to double, while decimal/Int64 JSON values retain
+                    // their precision and Single JSON uses its shortest round-trip representation.
+                    var losesPrecision = range.Minimum is double lower && range.Maximum is double upper &&
+                        (valueType == typeof(decimal) || valueType == typeof(float) ||
+                         (valueType == typeof(long) || valueType == typeof(ulong)) &&
+                         (Math.Abs(lower) >= 9_007_199_254_740_992D || Math.Abs(upper) >= 9_007_199_254_740_992D));
+                    if (!roundsFractional && !losesPrecision && (HasType(schema, "number") || HasType(schema, "integer")))
                     {
                         Bound(schema, range.MinimumIsExclusive ? "exclusiveMinimum" : "minimum", range.Minimum);
                         Bound(schema, range.MaximumIsExclusive ? "exclusiveMaximum" : "maximum", range.Maximum);

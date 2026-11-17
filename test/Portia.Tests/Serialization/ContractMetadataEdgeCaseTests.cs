@@ -103,4 +103,37 @@ public sealed class ContractMetadataEdgeCaseTests
         Assert.Null(schema["default"]);
     }
 
+    /// <summary>Double conversion and floating JSON formatting cannot publish stronger literal bounds.</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void ShouldAvoidMisleadingBoundsGivenLossyNumericRangeConversion(int kind)
+    {
+        // Arrange
+        object value = kind switch
+        {
+            0 => 100.000000000000000001m,
+            1 => 0.1f,
+            _ => 9_007_199_254_740_993L
+        };
+        var range = kind switch
+        {
+            0 => new RangeAttribute(0D, 100D),
+            1 => new RangeAttribute(0.100000001D, 1D),
+            _ => new RangeAttribute(0D, 9_007_199_254_740_992D)
+        };
+        var member = new PortiaContractMemberMetadata("Value", value.GetType()) { Rules = [range] };
+        var schema = new JsonObject { ["type"] = kind == 2 ? "integer" : "number" };
+
+        // Act
+        PortiaJsonConstraints.Apply(schema, member, JsonSerializerOptions.Web);
+
+        // Assert
+        Assert.True(range.IsValid(value));
+        Assert.Null(schema["minimum"]);
+        Assert.Null(schema["maximum"]);
+        Assert.NotNull(schema["x-portia-range"]);
+    }
+
 }

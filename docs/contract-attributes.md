@@ -91,7 +91,10 @@ Some .NET rules have no exactly equivalent portable JSON Schema keyword:
   systems count it differently.
 - Integer `Range` bounds use BCL integer conversion. Prefer `[Range(1D, 10D)]` for fractional values.
   Conversion details are retained in `x-portia-range`; numeric bounds are emitted when they describe
-  the accepted values faithfully.
+  the accepted values faithfully. Double conversion can also lose decimal or large 64-bit integer
+  precision, and `float` uses a shorter JSON representation than its converted double value. These
+  cases retain the exact range extension without stronger literal bounds that could reject an
+  accepted value.
 - Portable regex patterns preserve whole-value matching and the BCL's optional empty value. Other
   .NET patterns remain in `x-portia-dotnet-pattern`, without a misleading ECMA-262 pattern.
 - `x-portia-reject-whitespace` retains the non-whitespace part of the default `Required` string rule.
