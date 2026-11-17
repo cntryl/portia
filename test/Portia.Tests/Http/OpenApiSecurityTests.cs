@@ -12,7 +12,7 @@ public sealed class OpenApiSecurityTests
 {
     /// <summary>Publishes the explicitly mapped credential contract.</summary>
     [Fact]
-    public async Task ShouldCombineAlternativesGivenIndependentPolicies()
+    public async Task ShouldCombineAlternativesGivenIndependentCoreAuthorization()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();
@@ -20,7 +20,6 @@ public sealed class OpenApiSecurityTests
         _ = builder.Services.AddAuthorization(options =>
         {
             options.AddPolicy("either", policy => policy.RequireAuthenticatedUser());
-            options.AddPolicy("extra", policy => policy.RequireAuthenticatedUser());
         });
         _ = builder.Services.AddPortia().AddHttp(options =>
         {
@@ -28,11 +27,11 @@ public sealed class OpenApiSecurityTests
                 options.OpenApi.SecuritySchemes.Add(name, new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
             _ = options.OpenApi.SecurityPolicy("either", new Dictionary<string, string[]> { ["a"] = [] },
                 new Dictionary<string, string[]> { ["b"] = [] });
-            _ = options.OpenApi.SecurityPolicy("extra", "c");
+            _ = options.OpenApi.SecurityFor<ContractMetadataRequest>("c");
         }).AddRequestHandler<ContractMetadataHandler>();
         await using var app = builder.Build();
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
-        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/secured").RequireAuthorization("either", "extra");
+        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/secured").RequireAuthorization("either");
         await app.StartAsync();
 
         // Act
@@ -46,6 +45,68 @@ public sealed class OpenApiSecurityTests
         Assert.Contains(security, item => item!["b"] is not null && item["c"] is not null);
         Assert.Empty(security[0]!["c"]!.AsArray());
         Assert.Equal(3, document["components"]!["securitySchemes"]!.AsObject().Count);
+    }
+
+    /// <summary>Arbitrary requirements on merged principals do not imply conjunctive credentials.</summary>
+    [Fact]
+    public async Task ShouldRejectCredentialCompositionGivenCustomPolicies()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddAuthorization(options =>
+        {
+            options.AddPolicy("a", policy => policy.RequireClaim("a"));
+            options.AddPolicy("b", policy => policy.RequireClaim("b"));
+        });
+        _ = builder.Services.AddPortia().AddHttp(options =>
+        {
+            _ = options.OpenApi.SecurityPolicy("a", "a");
+            _ = options.OpenApi.SecurityPolicy("b", "b");
+            foreach (var name in (string[])["a", "b"])
+                options.OpenApi.SecuritySchemes.Add(name, new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
+        }).AddRequestHandler<ContractMetadataHandler>();
+        await using var app = builder.Build();
+        _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
+        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/composed").RequireAuthorization("a", "b");
+        await app.StartAsync();
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json"));
+
+        // Assert
+        var failure = Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("composite policy", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("SecurityPolicy", failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>A single explicit composite policy can describe credentials that really are required together.</summary>
+    [Fact]
+    public async Task ShouldRetainConjunctiveCredentialsGivenCompositePolicyMapping()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddAuthorization(options => options.AddPolicy("composite", policy => policy.RequireClaim("a").RequireClaim("b")));
+        _ = builder.Services.AddPortia().AddHttp(options =>
+        {
+            _ = options.OpenApi.SecurityPolicy("composite", new Dictionary<string, string[]> { ["a"] = [], ["b"] = [] });
+            foreach (var name in (string[])["a", "b"])
+                options.OpenApi.SecuritySchemes.Add(name, new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
+        }).AddRequestHandler<ContractMetadataHandler>();
+        await using var app = builder.Build();
+        _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
+        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/composite").RequireAuthorization("composite");
+        await app.StartAsync();
+
+        // Act
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+
+        // Assert
+        var security = Assert.Single(document["paths"]!["/composite"]!["get"]!["security"]!.AsArray())!.AsObject();
+        Assert.Equal(2, security.Count);
+        Assert.True(security.ContainsKey("a"));
+        Assert.True(security.ContainsKey("b"));
     }
 
     /// <summary>Resolves the actual default authentication scheme.</summary>

@@ -45,6 +45,8 @@ static class PortiaJsonConstraints
                         ["maximumIsExclusive"] = range.MaximumIsExclusive
                     };
                     var valueType = Nullable.GetUnderlyingType(member.Type) ?? member.Type;
+                    if (valueType.IsEnum)
+                        valueType = Enum.GetUnderlyingType(valueType);
                     var roundsFractional = range.Minimum is int && (valueType == typeof(double) || valueType == typeof(float) || valueType == typeof(decimal));
                     // BCL comparison converts to double, while decimal/Int64 JSON values retain
                     // their precision and Single JSON uses its shortest round-trip representation.
@@ -129,8 +131,38 @@ static class PortiaJsonConstraints
             schema[keyword] = JsonValue.Create(number);
     }
 
-    static bool PortablePattern(string pattern) => pattern.All(character => character <= 127 && character is not ('\\' or '.' or '$' or '^')) &&
-        !pattern.Contains("(?", StringComparison.Ordinal) && !pattern.Contains("-[", StringComparison.Ordinal);
+    static bool PortablePattern(string pattern)
+    {
+        if (pattern.Contains("(?", StringComparison.Ordinal))
+            return false;
+        for (var index = 0; index < pattern.Length; index++)
+        {
+            var character = pattern[index];
+            if (character > 127 || character is '\\' or '.' or '$' or '^' or ']')
+                return false;
+            if (character != '[')
+                continue;
+            // Only unambiguous ASCII literals/ranges are portable inside classes. In .NET,
+            // a leading ']' is a literal and nested '[' can introduce class subtraction.
+            var count = 0;
+            while (++index < pattern.Length && pattern[index] != ']')
+            {
+                if (!char.IsAsciiLetterOrDigit(pattern[index]))
+                    return false;
+                count++;
+                if (index + 1 < pattern.Length && pattern[index + 1] == '-')
+                {
+                    if (index + 2 >= pattern.Length || !char.IsAsciiLetterOrDigit(pattern[index + 2]) ||
+                        pattern[index + 2] < pattern[index])
+                        return false;
+                    index += 2;
+                }
+            }
+            if (count == 0 || index == pattern.Length)
+                return false;
+        }
+        return true;
+    }
 
     static void ExcludeNull(JsonObject schema)
     {

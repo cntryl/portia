@@ -37,8 +37,12 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
                 var mapped = Map(normalized, contractType, path, context.PropertyInfo, declaredNullable);
                 var result = mapped ?? normalized;
                 if (mapped is null)
+                {
                     CompleteChildren(result, context.TypeInfo, path,
                         context.Path.IsEmpty ? rootCollectionElementIsNullable : null);
+                    if (context.Path.IsEmpty && prefix.Length == 0)
+                        result = ApplyAnnotations(result, normalized, declaredNullable);
+                }
                 Describe(result, contractType, context.PropertyInfo);
                 _ = _processed.Add(result);
                 return result;

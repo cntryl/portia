@@ -76,30 +76,40 @@ public sealed partial class PortiaOpenApiOptions
             {
                 var names = data.Select(item => item.Policy).Where(name => !string.IsNullOrWhiteSpace(name)).Distinct(StringComparer.Ordinal).ToArray();
                 foreach (var name in names)
-                {
-                    if (!_policySecurity.TryGetValue(name!, out var mapping))
+                    if (!_policySecurity.ContainsKey(name!))
                         throw new InvalidOperationException($"OpenAPI policy '{name}' needs an explicit SecurityPolicy mapping.");
-                    requirements = Combine(requirements, mapping);
-                }
+                var unnamed = data.Where(item => string.IsNullOrWhiteSpace(item.Policy)).ToArray();
                 if (names.Length == 0)
                 {
                     var explicitMapping = data.Length == 0 && policies.Length == 0 ? _fallbackSecurity :
                         policies.Length == 0 && OnlyDefault(data) ? _defaultSecurity : null;
-                    requirements = Combine(requirements, explicitMapping ?? await FromPolicy(combined).ConfigureAwait(false));
+                    requirements = explicitMapping ?? await FromPolicy(combined).ConfigureAwait(false);
+                }
+                else if (names.Length == 1 && policies.Length == 0 && unnamed.Length == 0)
+                {
+                    requirements = _policySecurity[names[0]!];
                 }
                 else
                 {
-                    // Independently supplied policies/default authorization must not disappear beside a named policy.
-                    foreach (var policy in policies)
-                        requirements = Combine(requirements, await FromPolicy(policy).ConfigureAwait(false));
-                    var unnamed = data.Where(item => string.IsNullOrWhiteSpace(item.Policy)).ToArray();
-                    if (unnamed.Length != 0)
+                    // ASP combines handler selections and checks requirements against their merged
+                    // principal. Separate policy credential maps cannot generally be ANDed or ORed.
+                    // Infer only the plain authenticated-user case with exact handler mappings.
+                    var simple = combined.Requirements.All(item => item is DenyAnonymousAuthorizationRequirement);
+                    foreach (var name in names)
                     {
-                        var additional = await AuthorizationPolicy.CombineAsync(provider!, unnamed).ConfigureAwait(false);
-                        if (additional is not null)
-                            requirements = Combine(requirements, (OnlyDefault(unnamed) ? _defaultSecurity : null) ??
-                                await FromPolicy(additional).ConfigureAwait(false));
+                        var policy = await provider!.GetPolicyAsync(name!).ConfigureAwait(false);
+                        ct.ThrowIfCancellationRequested();
+                        var selected = policy!.AuthenticationSchemes;
+                        var mapping = _policySecurity[name!];
+                        simple &= selected.Count > 0 && mapping.All(alternative => alternative.Count == 1 &&
+                            alternative.All(item => item.Value.Length == 0 && selected.Contains(item.Key, StringComparer.Ordinal))) &&
+                            selected.All(scheme => mapping.Any(alternative => alternative.ContainsKey(scheme)));
                     }
+                    if (unnamed.Length != 0 && OnlyDefault(unnamed) && _defaultSecurity is not null)
+                        simple = false;
+                    if (!simple)
+                        throw new InvalidOperationException("OpenAPI cannot compose credential mappings for these authorization policies. Combine them into one named composite policy and describe its complete credential alternatives with SecurityPolicy.");
+                    requirements = await FromPolicy(combined).ConfigureAwait(false);
                 }
                 // A policy mapping must cover explicitly selected authentication handlers too. Do not silently
                 // drop them or invent an AND relationship: the host must describe the actual alternatives.
