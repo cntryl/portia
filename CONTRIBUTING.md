@@ -19,7 +19,7 @@ The Compose broker listens on `127.0.0.1:4090` with authentication disabled. Set
 substitute, and the broker keeps state between runs, so bring it down with `--volumes` rather than
 reusing it across suites.
 
-Cassie integration tests use the pinned `cassie` image in `compose.yaml` and `Cntryl.Cassie` 0.2.0.
+Cassie integration tests use `cassie:latest` from `compose.yaml` and `Cntryl.Cassie` 0.2.0.
 Start both databases and run the complete Fitz event to Portia projector to Cassie query path:
 
 ```shell

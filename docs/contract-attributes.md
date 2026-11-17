@@ -148,7 +148,7 @@ builder.Services.AddPortia().AddHttp(options =>
     options.OpenApi.ConfigureDocument = document =>
     {
         document.Info.Title = "Items API";
-        document.Info.Version = "0.14.1";
+        document.Info.Version = "1.0.0";
         document.Info.Description = "Item operations.";
         document.Servers = [new() { Url = "https://api.example.com" }];
     };
@@ -164,7 +164,8 @@ app.MapPortiaGet<ListItems, Item[]>("/items")
     .RequireAuthorization("catalog-reader");
 ```
 
-`ConfigureDocument` can also set contact, license, terms of service, and external documentation.
+The document version identifies the application's API. `ConfigureDocument` can also set contact,
+license, terms of service, and external documentation.
 `WithName` controls the operation ID; duplicates fail document generation. Component names retain
 readable type names and a structural identity independent of description/title/example edits. Input
 and output contracts have distinct identities, so shared shapes retain their own directional examples.

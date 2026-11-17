@@ -118,38 +118,24 @@ is modeled honestly as an at-least-once reactor effect instead.
 | **Notices** | Fan out notifications to subscribers, such as waking interested workers. Each replica receives the notice; it is not competing queue work. |
 | **Schedules** | Trigger work by time or recurrence. Choose the provider's delivery policy deliberately; a received Fitz firing can be lost on process failure. |
 
-See [application setup](docs/application-setup.md) and [Fitz upgrade notes](docs/fitz-4-upgrade.md) for transport and durability details.
+See [application setup](docs/application-setup.md) and [Fitz integration](docs/fitz.md) for transport and durability details.
 
 ## Start here
 
-- [Contract attributes](docs/contract-attributes.md): compiled validation, shared HTTP/MCP metadata, examples, and HTTP security
-- [OpenAPI descriptions](docs/openapi-descriptions.md): typed descriptions and optional coverage enforcement
-- [Getting started](docs/getting-started.md): packages, contracts, registration, HTTP, and transports
-- [Shared application setup](docs/application-setup.md): API and worker deployments from one composition
-- [Projectors and reactors](docs/projectors-and-reactors.md): native repositories and durable processing
-- [Processor operations](docs/operations.md): durable diagnosis, operator approval, worker-owned recovery, and verification
-- [Request context](docs/request-context.md): actor, correlation, and causation
-- [Request identities](docs/request-identities.md): typed logical request IDs with `IIdentifiedRequest`
-- [Validation authority](docs/validation-authority.md): local invariants, advisory reads, and authoritative outcome choreography.
-- [The request pipeline](docs/request-pipeline.md): which gate to use, the order they run in, authorization, guards, and authoritative invariants
-- [Testing applications](docs/testing.md): aggregate, request, projector, and reactor scenarios
-- [Object storage](docs/object-storage.md): vendor-neutral contracts and tenant-scoped AWS, Azure and Google Cloud adapters
-- [Outbound mail and SMS](docs/communications.md): provider-neutral senders with SES, Azure and Twilio providers
-- [Cassie projections](docs/cassie-projections.md): native SQL repositories, typed projectors, and atomic checkpoints.
-- [Platform vision](docs/platform-vision.md): the fixed Fitz–Portia–Cassie boundary
-- [Scope](docs/scope.md) and [design decisions](docs/design-decisions.md): guarantees and deliberate limits
-- [Observability](docs/observability.md): traces, metrics, structured logs, and Prometheus dashboards
-- [Performance and scaling](docs/performance-and-scaling.md): measured hot paths and scaling model
-- [NativeAOT](docs/native-aot.md): trimming and source-generated JSON setup
-- [Model Context Protocol](docs/mcp.md): request-backed tools, resources, and prompts over stdio and Streamable HTTP
-- [Portia 0.13.0 migration notes](docs/migration-0.13.0.md): removed members, required queue retry, request contracts, and fleet options
-- [Portia 0.11.1 migration notes](docs/migration-0.11.1.md): stateless MCP HTTP, object storage completion outcomes, and Abstractions references
-- [Portia 0.11.0 migration notes](docs/migration-0.11.0.md): .NET 11, Fitz 4.1, JSON, and compiler updates
-- [Portia 0.10.0 migration notes](docs/migration-0.10.0.md): operator access, processor inspection, typed outcomes, and Fitz 4
-- [Portia 0.8 migration notes](docs/migration-0.8.md): Fitz 2.0 compatibility and queue persistence
-- [Portia 0.7 migration notes](docs/migration-0.7.md): request-scenario cancellation and bounded manual processor passes
-- [Migrating to Portia 0.4](docs/migration-0.4.md): JSON ownership, tenant templates, and MCP tests
-- [Fitz 4 upgrade](docs/fitz-4-upgrade.md): Portia 0.11.0's Wire 3 compatibility, retry policy, and persistence
+- **Build an application:** [getting started](docs/getting-started.md), [shared setup](docs/application-setup.md),
+  and [project structure](docs/project-structure.md).
+- **Define contracts:** [attributes and validation](docs/contract-attributes.md), [OpenAPI descriptions](docs/openapi-descriptions.md),
+  [request pipeline](docs/request-pipeline.md), [execution context](docs/request-context.md), and [request identities](docs/request-identities.md).
+- **Process events:** [projectors and reactors](docs/projectors-and-reactors.md), [processor operations](docs/operations.md),
+  [Fitz integration](docs/fitz.md), and [Cassie repositories](docs/cassie-projections.md).
+- **Connect services:** [object storage](docs/object-storage.md), [mail and SMS](docs/communications.md),
+  and [MCP tools, resources, and prompts](docs/mcp.md).
+- **Qualify and operate:** [testing](docs/testing.md), [observability](docs/observability.md),
+  [performance and scaling](docs/performance-and-scaling.md), and [NativeAOT](docs/native-aot.md).
+- **Understand the boundaries:** [scope](docs/scope.md), [design decisions](docs/design-decisions.md),
+  [validation authority](docs/validation-authority.md), and [platform boundaries](docs/platform-vision.md).
+
+Historical migration notes remain available in the [0.14.1 source tree](https://github.com/cntryl/portia/tree/v0.14.1/docs).
 
 ## Development
 

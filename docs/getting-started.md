@@ -9,9 +9,8 @@ and `Cntryl.Portia.Jwt` when inbound work carries JWT actor identities. `Cntryl.
 adds native SQL projection repositories through `AddCassie` and `AddCassieProjection`; see the
 [Cassie repository guide](cassie-projections.md). Packages use the
 cntryl GitHub Packages feed at `https://nuget.pkg.github.com/cntryl/index.json`.
-Portia 0.11.1 uses Fitz .NET 4.2.0 and requires a compatible Fitz 0.4.0 / Wire 3 broker.
-Upgrade the broker and clients together; follow the [Fitz 4 upgrade guide](fitz-4-upgrade.md)
-before reconnecting an existing deployment.
+Keep the `Cntryl.Portia.*` package family on one version and rebuild model and host projects
+together. See [Fitz integration](fitz.md) for broker compatibility, queue behavior, and persistence.
 Add the optional `Cntryl.Portia.Telemetry` package and call `AddOpenTelemetry().WithPortia()` when the
 application wants Portia's traces, metrics, and structured logs registered with OpenTelemetry.
 Portia does not select an exporter, resource, sampling policy, filter, endpoint, or credential.
@@ -611,7 +610,7 @@ await publisher.EnqueueWithOptionsAsync(command, routeValues, actorToken,
 
 Delay uses whole seconds and TTL uses positive hours. TTL starts at publication, including the
 initial delay, and is preserved across redelivery. Omitting options preserves `EnqueueAsync` behavior.
-See [queue publication options](fitz-4-upgrade.md#queue-publication-options) for identity propagation
+See [queue publication options](fitz.md#queue-publication-options) for identity propagation
 and provider support.
 
 Generated endpoints return the advertised RFC 9457 problem body for binding
@@ -657,9 +656,9 @@ changing it at the same route uses Fitz's native last-write-wins upsert. Removin
 not cancel it: explicitly call `IScheduleClient.CancelAsync` with the concrete route. The native
 client is available from DI for listing and administration over Portia's shared Fitz connection.
 A durable schedule definition produces live, non-backlogged Fitz firing deliveries. Fitz queues
-add reservations, acknowledgment and redelivery, with best-effort persistence in Fitz 0.4.0.
+add reservations, acknowledgment and redelivery, with best-effort persistence in Fitz.
 Applications that require crash-safe work admission need durable intent and recovery independent
-of queue acceptance; see [queue acceptance and crash recovery](fitz-4-upgrade.md#queue-acceptance-and-crash-recovery).
+of queue acceptance; see [queue acceptance and crash recovery](fitz.md#queue-acceptance-and-crash-recovery).
 
 Keep Fitz connections long-lived and register an `IRequestActorValidator` for inbound work.
 Fitz supplies the request serializers and creates a fresh dependency-injection scope for each
@@ -691,7 +690,7 @@ redelivers the same message, so make its effects idempotent.
 
 For a business rejection, persist the authoritative rejection outcome and return `Result.Success`
 once the queued request is fully handled. Return a failed result only while required processing is
-incomplete. Fitz 0.4.0 leaves the broker's reservation-attempt limit unset by default, so an
+incomplete. Fitz leaves the broker's reservation-attempt limit unset by default, so an
 unacknowledged delivery can be redelivered indefinitely. Configure `FITZ_QUEUE_MAX_ATTEMPTS`
 on the broker when the deployment needs a finite limit and best-effort dead-letter behavior.
 
@@ -704,7 +703,7 @@ redelivery, and configured dead-letter policy.
 Hosted stream failures reconnect after backoff. This does not
 republish failed messages or add application retry counters.
 
-Fitz 0.4.0 accepts `FITZ_QUEUE_MAX_ATTEMPTS` as a positive `u32` value at broker startup;
+Fitz accepts `FITZ_QUEUE_MAX_ATTEMPTS` as a positive `u32` value at broker startup;
 an unset value keeps retries unlimited. This broker-wide setting is independent of
 `QueueRunnerOptions.TerminalAttempt`. The .NET reserved-item contract still reports no durable
 attempt count, so Portia rejects a positive `TerminalAttempt` at startup and leaves retry policy

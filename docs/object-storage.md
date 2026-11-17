@@ -85,7 +85,7 @@ application's temporary-key namespace (for example `pending/` in the layout abov
 explicit aborts, failed digest verification, and completed uploads. An unresolved retry leaves staged data in place so
 that another completion request can recover it; the application's expiry rule eventually removes abandoned data.
 
-The `StorageIntegration` test lane uses a digest-pinned Sqrzl image to exercise authenticated signed parts, multipart
+The `StorageIntegration` test lane uses the `sqrzl-emulator:latest` image from `compose.yaml` to exercise authenticated signed parts, multipart
 completion, conditional writes and copies, shared and dedicated buckets, and separate API and worker registrations. Sqrzl surfaces
 SSE-KMS headers and metadata but does not perform KMS encryption. The test client normalizes the SDK's URL-encoded
 `CopySource` slashes before signing because this Sqrzl version parses literal slashes; the production adapter retains

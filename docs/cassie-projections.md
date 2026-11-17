@@ -131,7 +131,7 @@ see [validation authority](validation-authority.md).
 
 ## Supported boundary
 
-The integration tests exercise the published client and pinned server image, including SQL model
+The integration tests exercise the published client and `cassie:latest` image from `compose.yaml`, including SQL model
 and checkpoint atomicity, rollback, stale writers, tenant/pattern/generation isolation, repository
 recreation, and hosted retry and permanent-failure handling. See
 [the integration test setup](../CONTRIBUTING.md) to run them.
