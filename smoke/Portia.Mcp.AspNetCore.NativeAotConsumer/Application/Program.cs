@@ -11,6 +11,7 @@ builder.Services.AddSingleton<IPortiaOperations>(PortiaOperations.Create(builder
     new OperationalOptions(), new EmptyOperationalTopology(), new OperationalReadPolicy(), null));
 builder.WebHost.UseUrls("http://127.0.0.1:0");
 _ = builder.Services.AddPortia()
+    .AddExample("normal", new ReadGreeting("example"), use: PortiaContractUse.Input)
     .AddRequestHandler<ReadGreetingHandler>()
     .AddMcpTool<ReadGreeting>(tool => tool.ReadOnly())
     .AddMcpResource<ReadGreeting, string>("greetings://local/{name}",
@@ -46,6 +47,12 @@ var describedTool = tools.Single(tool => tool.Name == "greetings.read").Protocol
 if (describedTool.Description != "Reads an attributed greeting." ||
     describedTool.InputSchema.GetProperty("properties").GetProperty("name").GetProperty("description").GetString() != "Greeting recipient.")
     throw new InvalidOperationException("The packed native MCP tool lost standard Description attributes.");
+if (describedTool.InputSchema.GetProperty("examples")[0].GetProperty("name").GetString() != "example" ||
+    describedTool.InputSchema.GetProperty("properties").GetProperty("name").GetProperty("minLength").GetInt32() != 1)
+    throw new InvalidOperationException("Native MCP lost shared examples or compiled value constraints.");
+var invalid = await client.CallToolAsync("greetings.read", new Dictionary<string, object?> { ["name"] = "  " });
+if (invalid.IsError != true)
+    throw new InvalidOperationException("Native MCP accepted a value rejected by Required.");
 var result = await client.CallToolAsync("greetings.read", new Dictionary<string, object?>
 {
     ["name"] = "native-aot"
@@ -80,7 +87,7 @@ await app.StopAsync();
 [System.ComponentModel.Description("Reads an attributed greeting.")]
 [Discriminator("greetings.read")]
 [RequestRoute("public", "greetings", "message", "read")]
-sealed record ReadGreeting([property: System.ComponentModel.Description("Greeting recipient.")] string Name) : IRequest<string>, ICallable;
+sealed record ReadGreeting([property: System.ComponentModel.Description("Greeting recipient."), System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(64, MinimumLength = 1)] string Name) : IRequest<string>, ICallable;
 
 sealed class ReadGreetingHandler : IRequestHandler<ReadGreeting, string>
 {

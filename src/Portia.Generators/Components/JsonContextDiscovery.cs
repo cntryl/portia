@@ -28,7 +28,7 @@ static class JsonContextDiscovery
 
     static DiscoveredJsonContext? JsonContextModel(INamedTypeSymbol symbol) =>
         JsonContextShape.UnsupportedReason(symbol) is null ? new(symbol.ToDisplayString(), Type(symbol),
-            "static (type, member, policy) => { " + JsonDescriptionEmission.Body(symbol.GetAttributes()
+            "static type => { " + JsonDescriptionEmission.Body(symbol.GetAttributes()
                 .Where(attribute => attribute.AttributeClass?.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializableAttribute")
                 .Select(attribute => attribute.ConstructorArguments.FirstOrDefault().Value).OfType<ITypeSymbol>()).Replace("\r", string.Empty).Replace("\n", " ") + " }") : null;
 
@@ -53,7 +53,7 @@ static class JsonContextDiscovery
                 && factories.Add(factory))
             {
                 contexts.Add(new DiscoveredJsonContext(factory.ToDisplayString(), Type(factory) + ".Create",
-                    factory.GetMembers("Describe").Length > 0 ? Type(factory) + ".Describe" : "null"));
+                    factory.GetMembers("GetMetadata").Length > 0 ? Type(factory) + ".GetMetadata" : "null"));
             }
         }
 

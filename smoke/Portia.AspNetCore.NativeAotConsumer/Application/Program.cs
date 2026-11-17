@@ -24,6 +24,7 @@ _ = builder.Services.AddPortia().ConfigureJson(options =>
                     property.Name = "wire_" + property.Name;
         });
     })
+    .AddExample("external", new App_A.FirstPayload("example"), use: PortiaContractUse.Output)
     .AddHttp(options =>
     {
         options.OpenApiSchemaType = type => type == typeof(SmokeNames)
@@ -43,7 +44,8 @@ _ = app.MapPortiaOpenApi();
 _ = app.MapPortiaGet<SmokeExternalRequest, App_A.FirstPayload>("/external-contract");
 _ = app.MapPortiaGet<SmokeRequest, SmokePayload>("/smoke", endpoint => endpoint
     .Describe(x => x.Name, "Requested name.").DescribeResponse("Native response."));
-_ = app.MapPortiaPost<SmokeBinding, string>("/smoke-binding", endpoint => endpoint.Describe(x => x.A, "First value."));
+_ = app.MapPortiaPost<SmokeBinding, string>("/smoke-binding", endpoint => endpoint.Describe(x => x.A, "First value.")
+    .RequestExample("binding", new SmokeBinding(11, 22)).ResponseExample(200, "binding", "11,22"));
 _ = app.MapPortiaPost<SmokeUpload, int>("/smoke-upload", endpoint => endpoint
     .Accepts<Stream>("application/octet-stream")
     .OnBind(async (http, ct) =>
@@ -75,6 +77,9 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     if (bindingResponse.StatusCode != HttpStatusCode.OK || bindingResult != "\"11,22\"")
         throw new InvalidOperationException($"Renamed native JSON members lost constructor identity: {bindingResult}");
 
+    using var invalid = await client.GetAsync("/smoke?name=%20%20");
+    if (invalid.StatusCode != HttpStatusCode.BadRequest)
+        throw new InvalidOperationException("Native compiled Required validation accepted whitespace.");
     var response = await client.GetStringAsync("/smoke?name=native-aot");
     using var payload = JsonDocument.Parse(response);
     if (payload.RootElement.GetProperty("display_name").GetString() != "native-aot" ||
@@ -98,10 +103,17 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
         .GetProperty("properties");
     if (!bindingProperties.TryGetProperty("wire_a", out _) || !bindingProperties.TryGetProperty("wire_b", out _))
         throw new InvalidOperationException($"Native OpenAPI lost the resolved JSON member names: {document}");
+    var inputExample = openApi.RootElement.GetProperty("paths").GetProperty("/smoke-binding").GetProperty("post")
+        .GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("examples")
+        .GetProperty("binding").GetProperty("value");
+    if (inputExample.GetProperty("wire_a").GetInt32() != 11 || inputExample.GetProperty("wire_b").GetInt32() != 22)
+        throw new InvalidOperationException("Native typed input examples lost resolver-renamed members.");
     var components = openApi.RootElement.GetProperty("components").GetProperty("schemas");
     var externalSchema = ResolveSchema(openApi.RootElement.GetProperty("paths").GetProperty("/external-contract").GetProperty("get")
         .GetProperty("responses").GetProperty("200").GetProperty("content").GetProperty("application/json").GetProperty("schema"), components);
     if (externalSchema.GetProperty("description").GetString() != "Referenced payload." ||
+        externalSchema.GetProperty("title").GetString() != "Referenced payload title" ||
+        externalSchema.GetProperty("examples")[0].GetProperty("value").GetString() != "example" ||
         externalSchema.GetProperty("properties").GetProperty("value").GetProperty("description").GetString() != "Referenced value.")
         throw new InvalidOperationException("Native OpenAPI lost descriptions exported by a referenced context factory.");
     var schema = openApi.RootElement.GetProperty("paths").GetProperty("/smoke").GetProperty("get")
@@ -232,7 +244,7 @@ static bool HasSchemaType(JsonElement schema, string expected)
 
 [Discriminator("portia.smoke.native-aot.request")]
 [RequestRoute("portia-smoke", "requests", "native-aot", "get")]
-sealed record SmokeRequest(string Name) : IRequest<SmokePayload>, ICallable, ISmokeRequest;
+sealed record SmokeRequest([System.ComponentModel.DataAnnotations.Required, System.ComponentModel.DataAnnotations.StringLength(64, MinimumLength = 1)] string Name) : IRequest<SmokePayload>, ICallable, ISmokeRequest;
 
 sealed class SmokeRequestHandler : IRequestHandler<SmokeRequest, SmokePayload>
 {

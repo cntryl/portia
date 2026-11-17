@@ -149,7 +149,7 @@ public sealed class OpenApiJsonMemberMetadataTests
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(exception);
-        Assert.Contains("not present in its JSON contract", failure.Message, StringComparison.Ordinal);
+        Assert.True(failure.Message.Contains("not present in its JSON contract", StringComparison.Ordinal), failure.ToString());
     }
 
     [Fact]

@@ -284,6 +284,11 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 _ = body.Append(", ").Append(Type(iface.TypeArguments[1]));
 
             _ = body.Append(">(").Append(Permission(request, diagnostic, consumerAssembly)).AppendLine("));");
+            var contractMetadata = JsonDescriptionEmission.Body(iface.TypeArguments);
+            if (contractMetadata != "return null;")
+                body.Append("_ = builder.AddGeneratedContractMetadata(static type => { ")
+                    .Append(contractMetadata.Replace("\r", string.Empty).Replace("\n", " "))
+                    .AppendLine(" });");
             if (RequestTransportDiscovery.GetRequestTransportComponent(request) is { } transport)
             {
                 _ = body.Append("_ = builder.AddGeneratedRequest(").Append(RequestExpression(transport))

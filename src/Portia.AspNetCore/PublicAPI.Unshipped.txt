@@ -14,3 +14,27 @@ Cntryl.Portia.PortiaOpenApiParameter.Description.get -> string?
 Cntryl.Portia.PortiaOpenApiParameter.Description.init -> void
 Cntryl.Portia.PortiaOpenApiSchemaDescription<T>
 Cntryl.Portia.PortiaOpenApiSchemaDescription<T>.Property<TMember>(System.Linq.Expressions.Expression<System.Func<T, TMember>!>! member, string! description) -> Cntryl.Portia.PortiaOpenApiSchemaDescription<T>!
+
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.RequestExample<TBody>(string! name, TBody value, string? summary = null, string! contentType = "application/json") -> TConfiguration!
+
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.ResponseExample<TBody>(int statusCode, string! name, TBody value, string? summary = null, string! contentType = "application/json") -> TConfiguration!
+
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.ResponseHeader<T>(int statusCode, string! name, string! description, bool required = false) -> TConfiguration!
+
+Cntryl.Portia.PortiaOpenApiOptions.ConfigureDocument.get -> System.Action<Microsoft.OpenApi.OpenApiDocument!>?
+
+Cntryl.Portia.PortiaOpenApiOptions.ConfigureDocument.set -> void
+
+Cntryl.Portia.PortiaOpenApiOptions.SecurityFor<TRequest>(params System.Collections.Generic.IReadOnlyDictionary<string!, string![]!>![]! alternatives) -> Cntryl.Portia.PortiaOpenApiOptions!
+
+Cntryl.Portia.PortiaOpenApiOptions.SecurityFor<TRequest>(string! scheme, params string![]! scopes) -> Cntryl.Portia.PortiaOpenApiOptions!
+
+Cntryl.Portia.PortiaOpenApiOptions.SecurityPolicy(string! policy, params System.Collections.Generic.IReadOnlyDictionary<string!, string![]!>![]! alternatives) -> Cntryl.Portia.PortiaOpenApiOptions!
+
+Cntryl.Portia.PortiaOpenApiOptions.SecurityPolicy(string! policy, string! scheme, params string![]! scopes) -> Cntryl.Portia.PortiaOpenApiOptions!
+
+Cntryl.Portia.PortiaOpenApiOptions.SecuritySchemes.get -> System.Collections.Generic.IDictionary<string!, Microsoft.OpenApi.OpenApiSecurityScheme!>!
+
+Cntryl.Portia.PortiaOpenApiOptions.SecurityDefault(params System.Collections.Generic.IReadOnlyDictionary<string!, string![]!>![]! alternatives) -> Cntryl.Portia.PortiaOpenApiOptions!
+
+Cntryl.Portia.PortiaOpenApiOptions.SecurityFallback(params System.Collections.Generic.IReadOnlyDictionary<string!, string![]!>![]! alternatives) -> Cntryl.Portia.PortiaOpenApiOptions!

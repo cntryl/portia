@@ -21,6 +21,11 @@ sealed class PortiaOpenApiSchemaTransformer : IOpenApiSchemaTransformer
             ?? descriptions.Schema(context.JsonTypeInfo.Type, json);
         if (text is not null)
             schema.Description = text;
+        var member = context.JsonPropertyInfo is { } describedProperty
+            ? PortiaJsonDescriptions.PropertyMetadata(json, describedProperty) : null;
+        var contract = PortiaJsonDescriptions.Metadata(json, context.JsonTypeInfo.Type);
+        schema.Title = member?.Title ?? contract?.Title ?? schema.Title;
+        schema.Deprecated = member?.Deprecated == true || contract?.Deprecated == true || schema.Deprecated;
         foreach (var (name, child) in schema.Properties?.ToArray() ?? [])
         {
             if (child.Description is null)

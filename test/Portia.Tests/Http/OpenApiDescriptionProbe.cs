@@ -43,3 +43,21 @@ sealed class OpenApiAnnotatedHandler : IRequestHandler<OpenApiAnnotatedRequest, 
     public ValueTask<Result<OpenApiAnnotatedNode>> HandleAsync(IRequestContext<OpenApiAnnotatedRequest> context,
         CancellationToken ct) => ValueTask.FromResult(Result<OpenApiAnnotatedNode>.Success(context.Request.Payload));
 }
+
+[System.ComponentModel.DisplayName("A titled view")]
+sealed record OpenApiTitleView(
+    [property: System.ComponentModel.DataAnnotations.Display(Name = "Display label"), System.ComponentModel.Description("Visible label.")] string Label)
+{
+    [Obsolete("Use Label.")]
+    public string? LegacyLabel { get; init; }
+}
+
+[Discriminator("test.openapi.titles")]
+[RequestRoute("test", "openapi", "titles", "get")]
+sealed record OpenApiTitleRequest : IRequest<OpenApiTitleView>, ICallable;
+
+sealed class OpenApiTitleHandler : IRequestHandler<OpenApiTitleRequest, OpenApiTitleView>
+{
+    public ValueTask<Result<OpenApiTitleView>> HandleAsync(IRequestContext<OpenApiTitleRequest> context,
+        CancellationToken ct) => ValueTask.FromResult(Result<OpenApiTitleView>.Success(new OpenApiTitleView("label")));
+}

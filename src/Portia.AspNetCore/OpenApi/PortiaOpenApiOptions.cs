@@ -1,17 +1,21 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using Microsoft.OpenApi;
 
 namespace Cntryl.Portia;
 
 /// <summary>Explicit descriptions for Portia's OpenAPI document. Configure before generating the document.</summary>
-public sealed class PortiaOpenApiOptions
+public sealed partial class PortiaOpenApiOptions
 {
     readonly Dictionary<Type, PortiaOpenApiSchemaDescription> _schemas = [];
     readonly Dictionary<string, string> _members = [with(StringComparer.Ordinal)];
 
     /// <summary>Gets or sets whether document generation rejects missing operation, parameter, response, object schema or property descriptions.</summary>
     public bool RequireDescriptions { get; set; }
+
+    /// <summary>Customizes document information, servers, contact, license, terms, and external documentation.</summary>
+    public Action<OpenApiDocument>? ConfigureDocument { get; set; }
 
     /// <summary>Describes an exact contract type and, optionally, its direct CLR properties.</summary>
     public PortiaOpenApiOptions DescribeSchema<T>(string description,

@@ -13,6 +13,9 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     readonly List<object> _responses = [];
     readonly Dictionary<string, string> _descriptions = [with(StringComparer.OrdinalIgnoreCase)];
     readonly Dictionary<int, string> _responseDescriptions = [];
+    readonly List<PortiaHttpExample> _requestExamples = [];
+    readonly List<PortiaHttpExample> _responseExamples = [];
+    readonly List<PortiaHttpResponseHeader> _responseHeaders = [];
     string? _successDescription;
     bool _frozen;
     bool _hasResultHandler;
@@ -101,6 +104,34 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         if (_queryMembers.Contains(member, StringComparer.Ordinal))
             throw new InvalidOperationException($"FromQuery is declared more than once for '{member}'.");
         _queryMembers.Add(member);
+    }
+
+    public void Example<T>(string name, T value, string? summary, string contentType, int? status) where T : notnull
+    {
+        EnsureMutable();
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
+        if (status is < 100 or > 599)
+            throw new ArgumentOutOfRangeException(nameof(status));
+        var examples = status.HasValue ? _responseExamples : _requestExamples;
+        if (examples.Any(item => item.Example.Name == name && item.Status == status &&
+                                 string.Equals(item.ContentType, contentType, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException($"HTTP example '{name}' is declared more than once.");
+        examples.Add(new PortiaHttpExample(new PortiaContractExample(typeof(T), name, value, summary,
+            status.HasValue ? PortiaContractUse.Output : PortiaContractUse.Input), contentType, status));
+    }
+
+    public void ResponseHeader<T>(int status, string name, string description, bool required)
+    {
+        EnsureMutable();
+        if (status is < 100 or > 599)
+            throw new ArgumentOutOfRangeException(nameof(status));
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(description);
+        if (_responseHeaders.Any(item => item.Status == status && string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException($"Response header '{name}' is declared more than once for status {status}.");
+        _responseHeaders.Add(new PortiaHttpResponseHeader(status, name, typeof(T), description, required));
     }
 
     public bool IsQueryMember(int index) => (uint)index < (uint)_queryMemberFlags.Length && _queryMemberFlags[index];
@@ -217,6 +248,8 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         builder.Add(endpoint => endpoint.Metadata.Add(new PortiaOpenApiDescriptions(
             new Dictionary<string, string>(_descriptions, StringComparer.OrdinalIgnoreCase),
             new Dictionary<int, string>(_responseDescriptions), _successDescription)));
+        builder.Add(endpoint => endpoint.Metadata.Add(new PortiaOpenApiEnrichment(
+            [.. _requestExamples], [.. _responseExamples], [.. _responseHeaders])));
         foreach (var response in _responses)
             builder.Add(endpoint => endpoint.Metadata.Add(response));
         if (_queryMembers.Count != 0)

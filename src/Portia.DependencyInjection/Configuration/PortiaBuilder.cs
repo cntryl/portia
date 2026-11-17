@@ -15,7 +15,10 @@ public sealed class PortiaBuilder
     readonly ApplicationComponentCatalog _catalog = new();
     readonly Lock _generatedRegistrationGate = new();
     readonly HashSet<object> _generatedRegistrations = [with(ReferenceEqualityComparer.Instance)];
+    readonly List<PortiaContractExample> _examples = [];
     readonly PortiaJsonComposer _json = new();
+    readonly List<Func<Type, PortiaContractMetadata?>> _metadataProviders = [];
+    PortiaContractMetadataRegistry? _contracts;
 
     internal PortiaBuilder(IServiceCollection services)
     {
@@ -37,16 +40,41 @@ public sealed class PortiaBuilder
         return this;
     }
 
+    /// <summary>Registers a named typed example shared by OpenAPI and MCP contract schemas.</summary>
+    /// <typeparam name="T">The exact contract type, registered in the application's JSON context.</typeparam>
+    /// <param name="name">A name unique within this contract type and direction.</param>
+    /// <param name="value">A concrete value serialized with Portia's configured names and converters.</param>
+    /// <param name="summary">An optional human-readable summary.</param>
+    /// <param name="use">The contract directions illustrated by the example.</param>
+    /// <returns>This builder, for chaining.</returns>
+    public PortiaBuilder AddExample<T>(string name, T value, string? summary = null, PortiaContractUse use = PortiaContractUse.Both)
+        where T : notnull
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentNullException.ThrowIfNull(value);
+        if (use is PortiaContractUse.None || (use & ~PortiaContractUse.Both) != 0)
+            throw new ArgumentOutOfRangeException(nameof(use));
+        if (_contracts is not null)
+            throw new InvalidOperationException("Contract metadata is already composed.");
+        if (_examples.Any(example => example.Type == typeof(T) && example.Name == name && (example.Use & use) != 0))
+            throw new InvalidOperationException($"Contract example '{name}' for '{typeof(T)}' is registered more than once.");
+        _examples.Add(new PortiaContractExample(typeof(T), name, value, summary, use));
+        _json.AddRoot(typeof(T));
+        return this;
+    }
+
     /// <summary>Adds a generated JSON context factory to the application resolver chain.</summary>
     /// <param name="factory">Creates the context from the composed Portia JSON options.</param>
-    /// <param name="descriptions">Optional compile-time description metadata for the context contracts.</param>
+    /// <param name="metadata">Optional compile-time metadata for the context contracts.</param>
     /// <returns>This builder, for chaining.</returns>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public PortiaBuilder AddGeneratedJsonContext(Func<JsonSerializerOptions, JsonSerializerContext> factory,
-        Func<Type, string?, JsonNamingPolicy?, string?>? descriptions = null)
+        Func<Type, PortiaContractMetadata?>? metadata = null)
     {
         ArgumentNullException.ThrowIfNull(factory);
-        _json.AddContext(factory, descriptions);
+        _json.AddContext(factory);
+        if (metadata is not null)
+            AddGeneratedContractMetadata(metadata);
         return this;
     }
 
@@ -77,7 +105,22 @@ public sealed class PortiaBuilder
         return this;
     }
 
-    internal JsonSerializerOptions BuildJsonOptions() => _json.Build();
+    /// <summary>Adds transport-neutral metadata emitted by the compiler.</summary>
+    /// <param name="provider">Resolves compile-time facts and typed accessors.</param>
+    /// <returns>This builder, for chaining.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public PortiaBuilder AddGeneratedContractMetadata(Func<Type, PortiaContractMetadata?> provider)
+    {
+        ArgumentNullException.ThrowIfNull(provider);
+        if (_contracts is not null)
+            throw new InvalidOperationException("Contract metadata cannot change after application composition.");
+        _metadataProviders.Add(provider);
+        return this;
+    }
+
+    internal PortiaContractMetadataRegistry Contracts => _contracts ??= new([.. _metadataProviders], [.. _examples]);
+
+    internal JsonSerializerOptions BuildJsonOptions() => _json.Build(Contracts);
 
     /// <summary>
     ///     Requires every registered request to be protected by an applicable request authorizer or
@@ -135,11 +178,6 @@ public sealed class PortiaBuilder
         }
 
         _catalog.HandlerRequests[registration.RequestType] = registration.HandlerType;
-        _json.AddRoot(registration.RequestType);
-        if (registration.ResultType is not null)
-        {
-            _json.AddRoot(registration.ResultType);
-        }
 
         _ = Services.AddSingleton(registration);
         registration.Register(Services);
