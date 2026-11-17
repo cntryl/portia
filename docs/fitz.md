@@ -10,10 +10,14 @@ Broker storage and protocol upgrades follow the [broker migration guide](https:/
 
 ## Events and KV durability
 
-Event batches commit with `StreamCommitMode.Sync`. Fitz KV projection batches, reactor checkpoints,
-and tenant snapshots default to `KvDurability.Buffered`; each store can explicitly select
-`KvDurability.Sync`. A buffered KV commit keeps model writes and its checkpoint atomic but may
-rewind after a broker crash. Rebuild derived data from events and make reactor effects safe to replay.
+Event batches commit with `StreamCommitMode.Sync`. `FitzKvProjectionStore`, `UseKvCheckpoints`, and
+`UseKvTenantSnapshots` default to `KvDurability.Buffered` and allow explicit `KvDurability.Sync`.
+`UseOperations` uses synchronous commits for its operational journal and reactor checkpoints;
+see [processor operations](operations.md).
+
+Buffered projection commits keep model writes and their checkpoint atomic, but recent buffered KV
+state can be lost after a broker crash. Rebuild derived data from events and make reactor effects
+safe to replay.
 See [projectors and reactors](projectors-and-reactors.md#fitz-kv-persistence) for repository wiring.
 
 ## Queue publication options
