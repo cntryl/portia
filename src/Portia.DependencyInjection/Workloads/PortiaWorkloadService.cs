@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -177,22 +178,45 @@ sealed class PortiaWorkloadService(
                     : Task.CompletedTask, lifetime.Token).ConfigureAwait(false);
         }
 
+        _ = await Task.WhenAny(tenants, coordinator).ConfigureAwait(false);
+        Exception? cancellationFailure = null;
         try
-        {
-            _ = await Task.WhenAny(tenants, coordinator).ConfigureAwait(false);
-        }
-        finally
         {
             await lifetime.CancelAsync().ConfigureAwait(false);
         }
+        catch (Exception exception)
+        {
+            cancellationFailure = exception;
+            PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Cleanup, exception, _logger);
+        }
 
+        // Cancelling application callbacks may fail. The hosted lifetime still includes every
+        // participant's asynchronous cleanup, and the participant's original fault stays primary.
+        var completion = Task.WhenAll(tenants, coordinator);
+        Exception? failure = null;
         try
         {
-            await Task.WhenAll(tenants, coordinator).ConfigureAwait(false);
+            await completion.ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (lifetime.IsCancellationRequested)
+        catch (OperationCanceledException) when (lifetime.IsCancellationRequested && completion.IsCanceled)
         {
         }
+        catch (Exception exception)
+        {
+            failure = exception;
+            foreach (var secondary in completion.Exception?.InnerExceptions ?? [])
+                if (!ReferenceEquals(exception, secondary))
+                    ProcessorFailureException.RecordCleanup(exception, secondary);
+        }
+
+        if (failure is not null)
+        {
+            if (cancellationFailure is not null)
+                ProcessorFailureException.RecordCleanup(failure, cancellationFailure);
+            ExceptionDispatchInfo.Capture(failure).Throw();
+        }
+        if (cancellationFailure is not null)
+            ExceptionDispatchInfo.Capture(cancellationFailure).Throw();
 
         if (!stoppingToken.IsCancellationRequested)
         {
@@ -211,7 +235,8 @@ sealed class PortiaWorkloadService(
         IDomainEventSubscription? subscription = null;
         using var statusLifetime = statusRpc is null ? null : CancellationTokenSource.CreateLinkedTokenSource(ct);
         var statusTask = Task.CompletedTask;
-        EventStreamPattern? subscribedPattern = null;
+        EventStreamPattern? boundPattern = null;
+        Exception? failure = null;
         try
         {
             if (statusLifetime is not null)
@@ -227,6 +252,10 @@ sealed class PortiaWorkloadService(
                     provider.GetRequiredService<WorkloadContext>().Initialize(identity, registration.Name);
                     registration.Descriptor.Bind(provider, identity, registration.Name);
                     var passPattern = registration.Descriptor.Pattern(provider);
+                    if (boundPattern is not null && passPattern != boundPattern)
+                        throw new InvalidOperationException(
+                            $"Workload '{identity.Name}' ({registration.Scope}) changed its event-stream pattern from area '{boundPattern.Area ?? "*"}' to area '{passPattern.Area ?? "*"}' across dependency-injection scopes.");
+                    boundPattern = passPattern;
                     if (subscription is null)
                     {
                         // A failed subscription is retried with the same backoff as a failed pass, so a
@@ -240,13 +269,6 @@ sealed class PortiaWorkloadService(
                             else
                                 subscribeFailures = 0;
                         }
-
-                        subscribedPattern = passPattern;
-                    }
-                    else if (passPattern != subscribedPattern)
-                    {
-                        throw new InvalidOperationException(
-                            $"Workload '{identity.Name}' ({registration.Scope}) changed its event-stream pattern from area '{subscribedPattern?.Area ?? "*"}' to area '{passPattern.Area ?? "*"}' across dependency-injection scopes.");
                     }
 
                     var processing = registration.Processing;
@@ -377,9 +399,7 @@ sealed class PortiaWorkloadService(
                 {
                     PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Notification, ex,
                         _logger);
-                    await subscription.DisposeAsync().ConfigureAwait(false);
-                    subscription = null;
-                    subscribedPattern = null;
+                    await ReleaseSubscriptionAsync().ConfigureAwait(false);
                     try
                     {
                         await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false);
@@ -390,6 +410,11 @@ sealed class PortiaWorkloadService(
                     }
                 }
             }
+        }
+        catch (Exception exception)
+        {
+            failure = exception;
+            throw;
         }
         finally
         {
@@ -403,23 +428,48 @@ sealed class PortiaWorkloadService(
                     }
                     catch (Exception exception)
                     {
+                        if (failure is not null)
+                            ProcessorFailureException.RecordCleanup(failure, exception);
                         PortiaTelemetry.RecordRunnerFault(nameof(IProcessorStatusRpcRegistrar), RunnerFaultStage.Cleanup,
                             exception, _logger);
                     }
                     await statusTask.ConfigureAwait(false);
                 }
             }
+            catch (Exception exception) when (failure is not null)
+            {
+                ProcessorFailureException.RecordCleanup(failure, exception);
+                PortiaTelemetry.RecordRunnerFault(nameof(IProcessorStatusRpcRegistrar), RunnerFaultStage.Cleanup,
+                    exception, _logger);
+            }
             finally
             {
                 try
                 {
-                    if (subscription is not null)
-                        await subscription.DisposeAsync().ConfigureAwait(false);
+                    await ReleaseSubscriptionAsync().ConfigureAwait(false);
                 }
                 finally
                 {
                     PortiaTelemetry.RecordWorkload(registration.Name, telemetryScope, false, _logger);
                 }
+            }
+        }
+
+        async ValueTask ReleaseSubscriptionAsync()
+        {
+            var owned = subscription;
+            subscription = null;
+            if (owned is null)
+                return;
+            try
+            {
+                await owned.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                if (failure is not null)
+                    ProcessorFailureException.RecordCleanup(failure, exception);
+                PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Cleanup, exception, _logger);
             }
         }
 

@@ -292,6 +292,9 @@ Tenant additions become available for assignment. Removal cancels that tenant's 
 at the next coordinator reconciliation; retained global and other tenant workloads
 keep their ownership. Fleet membership changes transfer ownership between replicas.
 Each owned workload pass receives a fresh DI scope and reloads its checkpoint.
+The component's bound event-stream pattern must stay the same across those scopes, including
+when notification subscriptions are unavailable and the worker polls instead. Terminal pass failures
+retain their original diagnostic when notification cleanup also fails.
 When the directory supports `IResumableTenantDirectory`, Portia keeps one cursor across watch
 reconnects; its offset is in-process state and is not a durable restart checkpoint. Ordinary
 removal shares one `MultiTenantRunnerOptions.TenantStopTimeout` deadline between awaiting the

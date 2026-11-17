@@ -55,15 +55,10 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
                                ?? throw new InvalidOperationException("The workload snapshot cannot be null.");
                 var current = new HashSet<WorkloadIdentity>(declared);
 
-                // Release ownership of workloads that are no longer declared, awaiting each
-                // revoked callback before it stops being owned.
-                foreach (var identity in owned.Keys.Where(identity => !current.Contains(identity)).ToArray())
-                    await ReleaseAsync(owned, identity).ConfigureAwait(false);
-
-                // A callback that ended on its own either failed unrecoverably, which ends
-                // coordination, or completed and is restarted below.
-                foreach (var identity in owned.Keys.Where(identity => owned[identity].Run.IsCompleted).ToArray())
-                    await ReleaseAsync(owned, identity).ConfigureAwait(false);
+                // Cancel the entire release set before awaiting cleanup. One callback may need
+                // a sibling's cancellation signal to finish releasing their shared resources.
+                await ReleaseAsync(owned, [.. owned.Keys.Where(identity =>
+                    !current.Contains(identity) || owned[identity].Run.IsCompleted)]).ConfigureAwait(false);
 
                 foreach (var identity in current)
                 {
@@ -91,16 +86,13 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
         {
             // Every remaining workload is cancelled and awaited, whatever ended coordination.
             List<Exception> faults = [];
-            foreach (var identity in owned.Keys.ToArray())
+            try
             {
-                try
-                {
-                    await ReleaseAsync(owned, identity).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    faults.Add(ex);
-                }
+                await ReleaseAsync(owned, [.. owned.Keys]).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                faults.Add(ex);
             }
 
             // Faults raised while shutting down on request are not a coordination failure, but a
@@ -112,20 +104,24 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
         }
     }
 
-    static async Task ReleaseAsync(Dictionary<WorkloadIdentity, OwnedWorkload> owned, WorkloadIdentity identity)
+    static async Task ReleaseAsync(Dictionary<WorkloadIdentity, OwnedWorkload> owned, WorkloadIdentity[] identities)
     {
-        var workload = owned[identity];
-        _ = owned.Remove(identity);
-
+        if (identities.Length == 0)
+            return;
         // A run that ended before its token was cancelled was not stopped by this coordinator, so
         // any cancellation it ended with is its own failure, not a requested stop.
-        var stopRequested = !workload.Run.IsCompleted || workload.Cancellation.IsCancellationRequested;
+        var releasing = identities.Select(identity => owned[identity]).Select(workload =>
+            (Workload: workload, StopRequested: !workload.Run.IsCompleted || workload.Cancellation.IsCancellationRequested)).ToArray();
+        foreach (var identity in identities)
+            _ = owned.Remove(identity);
+
         List<Exception> faults = [];
-        try
+        List<Task> cancellations = [];
+        foreach (var (workload, _) in releasing)
         {
             try
             {
-                await workload.Cancellation.CancelAsync().ConfigureAwait(false);
+                cancellations.Add(workload.Cancellation.CancelAsync());
             }
             catch (Exception error)
             {
@@ -133,7 +129,16 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
                 // workload after it has already been removed from the coordinator's owned set.
                 faults.Add(error);
             }
+        }
+        foreach (var cancellation in cancellations)
+        {
+            try
+            { await cancellation.ConfigureAwait(false); }
+            catch (Exception error) { faults.Add(error); }
+        }
 
+        foreach (var (workload, stopRequested) in releasing)
+        {
             try
             {
                 await workload.Run.ConfigureAwait(false);
@@ -145,10 +150,10 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
             {
                 faults.Add(error);
             }
-        }
-        finally
-        {
-            workload.Cancellation.Dispose();
+            finally
+            {
+                workload.Cancellation.Dispose();
+            }
         }
 
         if (faults.Count == 1)
