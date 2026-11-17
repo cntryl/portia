@@ -3,14 +3,14 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Cntryl.Portia;
 
 sealed class WorkloadLifecycleDescriptor(Func<CancellationToken, ValueTask<ProjectionPassResult>> pass,
-    Func<EventStreamPattern>? pattern = null) : IWorkloadDescriptor
+    Func<EventStreamPattern>? pattern = null, Action? validate = null) : IWorkloadDescriptor
 {
     public Type ComponentType => typeof(WorkloadLifecycleDescriptor);
     public bool SupportsRebuild => true;
     public string Kind => "projector";
     public void Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName) { }
     public EventStreamPattern Pattern(IServiceProvider services) => pattern?.Invoke() ?? EventStreamPattern.ForPattern("test", "events");
-    public void Validate(IServiceProvider services, string componentName) { }
+    public void Validate(IServiceProvider services, string componentName) => validate?.Invoke();
     public ValueTask<ProjectionCheckpoint> LoadCheckpoint(IServiceProvider services, ProjectionRunOptions options, CancellationToken ct) => ValueTask.FromResult(default(ProjectionCheckpoint));
     public ValueTask<ProjectionPassResult> RunPass(IServiceProvider services, ProjectionRunOptions options, CancellationToken ct) => pass(ct);
     public void Register(IServiceCollection services) { }
