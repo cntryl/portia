@@ -5,6 +5,8 @@
     <IsRoslynComponent>true</IsRoslynComponent>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <IncludeBuildOutput>false</IncludeBuildOutput>
+    <!-- MSBuildWorkspace uses this path to match ordinary project references to compiler inputs. -->
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
     <!-- Shipped inside Cntryl.Portia.Analyzers under analyzers/dotnet/cs. -->
     <IsPackable>false</IsPackable>
     <LangVersion>15</LangVersion>
