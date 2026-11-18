@@ -3,12 +3,14 @@ using System.Text.Json.Serialization;
 namespace Cntryl.Portia;
 
 sealed record OpenApiDescribedNode(
-    [property: JsonPropertyName("wire-name")] string Name,
+    [property: JsonPropertyName("wire-name")]
+    string Name,
     OpenApiDescribedNode? Next = null);
 
 [Discriminator("test.openapi.descriptions")]
 [RequestRoute("test", "openapi", "descriptions", "echo")]
-sealed record OpenApiDescribedRequest(int Limit, OpenApiDescribedNode Payload) : IRequest<OpenApiDescribedNode>, ICallable;
+sealed record OpenApiDescribedRequest(int Limit, OpenApiDescribedNode Payload)
+    : IRequest<OpenApiDescribedNode>, ICallable;
 
 sealed class OpenApiDescribedHandler : IRequestHandler<OpenApiDescribedRequest, OpenApiDescribedNode>
 {
@@ -18,7 +20,8 @@ sealed class OpenApiDescribedHandler : IRequestHandler<OpenApiDescribedRequest, 
 
 [Discriminator("test.openapi.descriptions.other")]
 [RequestRoute("test", "openapi", "descriptions", "other")]
-sealed record OpenApiOtherDescribedRequest(int Limit, OpenApiDescribedNode Payload) : IRequest<OpenApiDescribedNode>, ICallable;
+sealed record OpenApiOtherDescribedRequest(int Limit, OpenApiDescribedNode Payload)
+    : IRequest<OpenApiDescribedNode>, ICallable;
 
 sealed class OpenApiOtherDescribedHandler : IRequestHandler<OpenApiOtherDescribedRequest, OpenApiDescribedNode>
 {
@@ -26,16 +29,19 @@ sealed class OpenApiOtherDescribedHandler : IRequestHandler<OpenApiOtherDescribe
         CancellationToken ct) => ValueTask.FromResult(Result<OpenApiDescribedNode>.Success(context.Request.Payload));
 }
 
-
 [System.ComponentModel.Description("Attributed node.")]
 sealed record OpenApiAnnotatedNode(
-    [property: System.ComponentModel.Description("Attributed name."), JsonPropertyName("wire-name")] string Name,
-    [property: System.ComponentModel.DataAnnotations.Display(Description = "Attributed next.")] OpenApiAnnotatedNode? Next = null);
+    [property: System.ComponentModel.Description("Attributed name."), JsonPropertyName("wire-name")]
+    string Name,
+    [property: System.ComponentModel.DataAnnotations.Display(Description = "Attributed next.")]
+    OpenApiAnnotatedNode? Next = null);
 
 [System.ComponentModel.Description("Attributed request.")]
 [Discriminator("test.openapi.annotated")]
 [RequestRoute("test", "openapi", "annotated", "echo")]
-sealed record OpenApiAnnotatedRequest([property: System.ComponentModel.Description("Attributed limit.")] int Limit,
+sealed record OpenApiAnnotatedRequest(
+    [property: System.ComponentModel.Description("Attributed limit.")]
+    int Limit,
     OpenApiAnnotatedNode Payload) : IRequest<OpenApiAnnotatedNode>, ICallable;
 
 sealed class OpenApiAnnotatedHandler : IRequestHandler<OpenApiAnnotatedRequest, OpenApiAnnotatedNode>
@@ -46,10 +52,11 @@ sealed class OpenApiAnnotatedHandler : IRequestHandler<OpenApiAnnotatedRequest, 
 
 [System.ComponentModel.DisplayName("A titled view")]
 sealed record OpenApiTitleView(
-    [property: System.ComponentModel.DataAnnotations.Display(Name = "Display label"), System.ComponentModel.Description("Visible label.")] string Label)
+    [property: System.ComponentModel.DataAnnotations.Display(Name = "Display label"),
+               System.ComponentModel.Description("Visible label.")]
+    string Label)
 {
-    [Obsolete("Use Label.")]
-    public string? LegacyLabel { get; init; }
+    [Obsolete("Use Label.")] public string? LegacyLabel { get; init; }
 }
 
 [Discriminator("test.openapi.titles")]

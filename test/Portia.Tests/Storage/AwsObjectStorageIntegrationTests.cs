@@ -13,7 +13,8 @@ public sealed class AwsObjectStorageIntegrationTests
     {
         // Arrange
         var endpoint = Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT")
-            ?? throw new InvalidOperationException("Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
+                       ?? throw new InvalidOperationException(
+                           "Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
         var bucket = $"portia-shared-{Guid.NewGuid():N}";
         using var client = CreateClient(endpoint);
         var services = new ServiceCollection();
@@ -30,7 +31,8 @@ public sealed class AwsObjectStorageIntegrationTests
             await ObjectStorageConformance.VerifyAsync(storage, new TenantId("tenant-one"), new TenantId("tenant-two"),
                 async (part, bytes, ct) =>
                 {
-                    using var response = await transfer.PutAsync(part.UploadUri, new ByteArrayContent(bytes.ToArray()), ct);
+                    using var response =
+                        await transfer.PutAsync(part.UploadUri, new ByteArrayContent(bytes.ToArray()), ct);
                     response.EnsureSuccessStatusCode();
                     return new ObjectPartReceipt(part.PartNumber, response.Headers.ETag!.Tag);
                 });
@@ -51,7 +53,8 @@ public sealed class AwsObjectStorageIntegrationTests
     {
         // Arrange
         var endpoint = Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT")
-            ?? throw new InvalidOperationException("Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
+                       ?? throw new InvalidOperationException(
+                           "Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
         var bucketSuffix = Guid.NewGuid().ToString("N");
         var firstBucket = $"portia-conformance-a-{bucketSuffix}";
         var secondBucket = $"portia-conformance-b-{bucketSuffix}";
@@ -85,7 +88,7 @@ public sealed class AwsObjectStorageIntegrationTests
                     using var response = await transfer.SendAsync(request, ct);
                     response.EnsureSuccessStatusCode();
                     var etag = response.Headers.ETag?.Tag
-                        ?? throw new InvalidDataException("The signed part upload returned no ETag.");
+                               ?? throw new InvalidDataException("The signed part upload returned no ETag.");
                     return new ObjectPartReceipt(part.PartNumber, etag);
                 });
         }
@@ -102,7 +105,8 @@ public sealed class AwsObjectStorageIntegrationTests
     {
         // Arrange
         var endpoint = Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT")
-            ?? throw new InvalidOperationException("Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
+                       ?? throw new InvalidOperationException(
+                           "Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
         var bucket = $"portia-conditional-{Guid.NewGuid():N}";
         using var client = CreateClient(endpoint);
 
@@ -121,14 +125,15 @@ public sealed class AwsObjectStorageIntegrationTests
                 UseChunkEncoding = false,
                 IfNoneMatch = "*"
             });
-            var putConflict = await Assert.ThrowsAsync<AmazonS3Exception>(() => client.PutObjectAsync(new PutObjectRequest
-            {
-                BucketName = bucket,
-                Key = "source",
-                ContentBody = "second",
-                UseChunkEncoding = false,
-                IfNoneMatch = "*"
-            }));
+            var putConflict = await Assert.ThrowsAsync<AmazonS3Exception>(() =>
+                client.PutObjectAsync(new PutObjectRequest
+                {
+                    BucketName = bucket,
+                    Key = "source",
+                    ContentBody = "second",
+                    UseChunkEncoding = false,
+                    IfNoneMatch = "*"
+                }));
             Assert.Equal(HttpStatusCode.PreconditionFailed, putConflict.StatusCode);
 
             await client.CopyObjectAsync(new CopyObjectRequest
@@ -139,14 +144,15 @@ public sealed class AwsObjectStorageIntegrationTests
                 DestinationKey = "destination",
                 IfNoneMatch = "*"
             });
-            var copyConflict = await Assert.ThrowsAsync<AmazonS3Exception>(() => client.CopyObjectAsync(new CopyObjectRequest
-            {
-                SourceBucket = bucket,
-                SourceKey = "source",
-                DestinationBucket = bucket,
-                DestinationKey = "destination",
-                IfNoneMatch = "*"
-            }));
+            var copyConflict = await Assert.ThrowsAsync<AmazonS3Exception>(() =>
+                client.CopyObjectAsync(new CopyObjectRequest
+                {
+                    SourceBucket = bucket,
+                    SourceKey = "source",
+                    DestinationBucket = bucket,
+                    DestinationKey = "destination",
+                    IfNoneMatch = "*"
+                }));
             Assert.Equal(HttpStatusCode.PreconditionFailed, copyConflict.StatusCode);
 
             using var source = await client.GetObjectAsync(bucket, "source");
@@ -167,7 +173,8 @@ public sealed class AwsObjectStorageIntegrationTests
     {
         // Arrange
         var endpoint = Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT")
-            ?? throw new InvalidOperationException("Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
+                       ?? throw new InvalidOperationException(
+                           "Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
         var bucketSuffix = Guid.NewGuid().ToString("N");
         var firstBucket = $"portia-storage-a-{bucketSuffix}";
         var secondBucket = $"portia-storage-b-{bucketSuffix}";
@@ -277,7 +284,8 @@ public sealed class AwsObjectStorageIntegrationTests
         return services.BuildServiceProvider();
     }
 
-    static async Task UploadAsync(IObjectStorage storage, TenantId tenant, ObjectDigest digest, byte[] content, HttpClient transfer)
+    static async Task UploadAsync(IObjectStorage storage, TenantId tenant, ObjectDigest digest, byte[] content,
+        HttpClient transfer)
     {
         var session = await storage.CreateUploadAsync(tenant, digest);
         var parts = new List<ObjectPartReceipt>();
@@ -296,10 +304,9 @@ public sealed class AwsObjectStorageIntegrationTests
                 using var response = await transfer.SendAsync(request);
                 response.EnsureSuccessStatusCode();
                 var etag = response.Headers.ETag?.Tag
-                    ?? throw new InvalidDataException("The signed part upload returned no ETag.");
+                           ?? throw new InvalidDataException("The signed part upload returned no ETag.");
                 parts.Add(new ObjectPartReceipt(number, etag));
             }
-
         }
         catch
         {
@@ -310,7 +317,8 @@ public sealed class AwsObjectStorageIntegrationTests
         await storage.CompleteUploadAsync(session, parts);
     }
 
-    sealed class TestTenantResolver(IReadOnlyDictionary<string, ObjectStorageLocation> locations) : IObjectStorageTenantResolver
+    sealed class TestTenantResolver(IReadOnlyDictionary<string, ObjectStorageLocation> locations)
+        : IObjectStorageTenantResolver
     {
         public string GetObjectKey(TenantId tenantId, ObjectDigest expected) =>
             $"content/sha256/{expected.Sha256[..2]}/{expected.Sha256}";

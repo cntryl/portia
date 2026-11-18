@@ -1,7 +1,8 @@
 namespace Cntryl.Portia.Tests.Storage;
 
 /// <summary>An application layout that isolates tenants by key within a shared bucket.</summary>
-sealed class ApplicationStorageResolver(string encryptionKey, string bucket = ApplicationStorageResolver.Bucket) : IObjectStorageTenantResolver
+sealed class ApplicationStorageResolver(string encryptionKey, string bucket = ApplicationStorageResolver.Bucket)
+    : IObjectStorageTenantResolver
 {
     internal const string Bucket = "shared-assets";
     internal string ContentRoot { get; set; } = "documents";

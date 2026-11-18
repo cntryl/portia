@@ -42,61 +42,61 @@ public sealed class TenantDirectoryConsumerTests
     {
         // Arrange
         const string source = """
-                                                    using System;
-                                                    using System.Collections.Generic;
-                                                    using System.Runtime.CompilerServices;
-                                                    using System.Threading;
-                                                    using System.Threading.Tasks;
-                                                    using Cntryl.Portia;
-                                                    using Cntryl.Portia.Testing;
-                                                    public sealed record Added : DomainEvent;
-                                                    public sealed record Removed : DomainEvent;
-                                                    public sealed class Reader : IDomainEventReader
-                                                    {
-                                                        public int Reads;
-                                                        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong offset, CancellationToken ct) => throw new NotSupportedException();
-                                                        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor, [EnumeratorCancellation] CancellationToken ct)
-                                                        {
-                                                            System.Threading.Interlocked.Increment(ref Reads);
-                                                            await Task.CompletedTask;
-                                                            yield break;
-                                                        }
-                                                    }
-                                                    public sealed class Changes : IDomainEventNotifier, IDomainEventSubscription
-                                                    {
-                                                        public TaskCompletionSource Subscribed = new(TaskCreationOptions.RunContinuationsAsynchronously);
-                                                        public TaskCompletionSource Changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
-                                                        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern, CancellationToken ct = default)
-                                                        { Subscribed.TrySetResult(); return ValueTask.FromResult<IDomainEventSubscription>(this); }
-                                                        public ValueTask WaitAsync(CancellationToken ct = default) => new(Changed.Task.WaitAsync(ct));
-                                                        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-                                                    }
-                                                    public static class Scenario
-                                                    {
-                                                        public static async Task<bool> Run()
-                                                        {
-                                                            var changes = new Changes();
-                                                            var source = new Reader();
-                                                            var directory = new EventSourcedTenantDirectory<Added, Removed>(source,
-                                                                EventStreamPattern.ForPattern("consumer", "tenants"), _ => new TenantId("acme"), notifier: changes);
-                                                            using var cancellation = new CancellationTokenSource();
-                                                            await using var watch = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator();
-                                                            var move = watch.MoveNextAsync().AsTask();
-                                                            await changes.Subscribed.Task.WaitAsync(TimeSpan.FromSeconds(3));
-                                                            // The directory subscribes before its first read; wait for that read, then stay idle.
-                                                            var deadline = DateTime.UtcNow.AddSeconds(3);
-                                                            while (System.Threading.Volatile.Read(ref source.Reads) < 1 && DateTime.UtcNow < deadline)
-                                                                await Task.Delay(5);
-                                                            await Task.Delay(50);
-                                                            var passed = System.Threading.Volatile.Read(ref source.Reads) == 1 && !move.IsCompleted;
-                                                            changes.Changed.TrySetResult();
-                                                            while (System.Threading.Volatile.Read(ref source.Reads) < 2) await Task.Yield();
-                                                            cancellation.Cancel();
-                                                            try { _ = await move; } catch (OperationCanceledException) { }
-                                                            return passed;
-                                                        }
-                                                    }
-                                                    """;
+                              using System;
+                              using System.Collections.Generic;
+                              using System.Runtime.CompilerServices;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              public sealed record Added : DomainEvent;
+                              public sealed record Removed : DomainEvent;
+                              public sealed class Reader : IDomainEventReader
+                              {
+                                  public int Reads;
+                                  public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong offset, CancellationToken ct) => throw new NotSupportedException();
+                                  public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor, [EnumeratorCancellation] CancellationToken ct)
+                                  {
+                                      System.Threading.Interlocked.Increment(ref Reads);
+                                      await Task.CompletedTask;
+                                      yield break;
+                                  }
+                              }
+                              public sealed class Changes : IDomainEventNotifier, IDomainEventSubscription
+                              {
+                                  public TaskCompletionSource Subscribed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                                  public TaskCompletionSource Changed = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                                  public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern, CancellationToken ct = default)
+                                  { Subscribed.TrySetResult(); return ValueTask.FromResult<IDomainEventSubscription>(this); }
+                                  public ValueTask WaitAsync(CancellationToken ct = default) => new(Changed.Task.WaitAsync(ct));
+                                  public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+                              }
+                              public static class Scenario
+                              {
+                                  public static async Task<bool> Run()
+                                  {
+                                      var changes = new Changes();
+                                      var source = new Reader();
+                                      var directory = new EventSourcedTenantDirectory<Added, Removed>(source,
+                                          EventStreamPattern.ForPattern("consumer", "tenants"), _ => new TenantId("acme"), notifier: changes);
+                                      using var cancellation = new CancellationTokenSource();
+                                      await using var watch = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator();
+                                      var move = watch.MoveNextAsync().AsTask();
+                                      await changes.Subscribed.Task.WaitAsync(TimeSpan.FromSeconds(3));
+                                      // The directory subscribes before its first read; wait for that read, then stay idle.
+                                      var deadline = DateTime.UtcNow.AddSeconds(3);
+                                      while (System.Threading.Volatile.Read(ref source.Reads) < 1 && DateTime.UtcNow < deadline)
+                                          await Task.Delay(5);
+                                      await Task.Delay(50);
+                                      var passed = System.Threading.Volatile.Read(ref source.Reads) == 1 && !move.IsCompleted;
+                                      changes.Changed.TrySetResult();
+                                      while (System.Threading.Volatile.Read(ref source.Reads) < 2) await Task.Yield();
+                                      cancellation.Cancel();
+                                      try { _ = await move; } catch (OperationCanceledException) { }
+                                      return passed;
+                                  }
+                              }
+                              """;
 
         // Act
         var assembly = GeneratorCompilation.Compile(source);

@@ -169,7 +169,8 @@ public sealed class ServerSentEventTests : IAsyncDisposable
     {
         int _writes;
 
-        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) =>
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
+            CancellationToken cancellationToken = default) =>
             ++_writes > 1
                 ? ValueTask.FromException(new IOException("The connection was reset."))
                 : base.WriteAsync(buffer, cancellationToken);

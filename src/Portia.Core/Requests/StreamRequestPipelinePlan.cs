@@ -21,10 +21,12 @@ sealed class StreamRequestPipelinePlan<TOut>
             new RequestPipelineFrame<IStreamRequest<TOut>>(this, services, registration, request, context,
                 _behaviors.Length), ct);
 
-    StreamRequestPipelineNext<TOut> CreateContinuation(RequestPipelineFrame<IStreamRequest<TOut>> frame, int position) =>
+    StreamRequestPipelineNext<TOut>
+        CreateContinuation(RequestPipelineFrame<IStreamRequest<TOut>> frame, int position) =>
         token => Continue(frame, position, token);
 
-    IAsyncEnumerable<TOut> Continue(RequestPipelineFrame<IStreamRequest<TOut>> frame, int position, CancellationToken ct)
+    IAsyncEnumerable<TOut> Continue(RequestPipelineFrame<IStreamRequest<TOut>> frame, int position,
+        CancellationToken ct)
     {
         if (!ReferenceEquals(Current.Value, frame))
             throw new InvalidOperationException(PipelineContinuationContract.SingleUseMessage);
@@ -62,7 +64,8 @@ sealed class StreamRequestPipelinePlan<TOut>
         try
         {
             await foreach (var item in _behaviors[position]
-                               .Invoke(frame.Services, frame.Request, frame.Context, CreateContinuation(frame, position), ct)
+                               .Invoke(frame.Services, frame.Request, frame.Context,
+                                   CreateContinuation(frame, position), ct)
                                .WithCancellation(ct).ConfigureAwait(false))
             {
                 yield return item;

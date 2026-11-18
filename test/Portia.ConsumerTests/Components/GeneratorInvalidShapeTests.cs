@@ -14,21 +14,21 @@ public sealed class GeneratorInvalidShapeTests
     {
         // Arrange
         const string source = """
-                                                                 using Cntryl.Portia;
-                                                                 using Microsoft.Extensions.DependencyInjection;
-                                                                 public static class Outer
-                                                                 {
-                                                                     private static class Events
-                                                                     {
-                                                                         [Discriminator("app.ev")]
-                                                                         public sealed record Ev : DomainEvent;
-                                                                     }
-                                                                 }
-                                                                 public static class Scenario
-                                                                 {
-                                                                     public static PortiaBuilder Register(IServiceCollection services) => services.AddPortia();
-                                                                 }
-                                                                 """;
+                              using Cntryl.Portia;
+                              using Microsoft.Extensions.DependencyInjection;
+                              public static class Outer
+                              {
+                                  private static class Events
+                                  {
+                                      [Discriminator("app.ev")]
+                                      public sealed record Ev : DomainEvent;
+                                  }
+                              }
+                              public static class Scenario
+                              {
+                                  public static PortiaBuilder Register(IServiceCollection services) => services.AddPortia();
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RegistrationCallInterceptorGenerator(),
@@ -43,15 +43,15 @@ public sealed class GeneratorInvalidShapeTests
     {
         // Arrange
         const string source = """
-                                                                 using Cntryl.Portia;
-                                                                 using Microsoft.Extensions.DependencyInjection;
-                                                                 [Discriminator("app.ev")]
-                                                                 file sealed record Ev : DomainEvent;
-                                                                 public static class Scenario
-                                                                 {
-                                                                     public static PortiaBuilder Register(IServiceCollection services) => services.AddPortia();
-                                                                 }
-                                                                 """;
+                              using Cntryl.Portia;
+                              using Microsoft.Extensions.DependencyInjection;
+                              [Discriminator("app.ev")]
+                              file sealed record Ev : DomainEvent;
+                              public static class Scenario
+                              {
+                                  public static PortiaBuilder Register(IServiceCollection services) => services.AddPortia();
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RegistrationCallInterceptorGenerator(),
@@ -66,22 +66,22 @@ public sealed class GeneratorInvalidShapeTests
     {
         // Arrange
         const string source = """
-                                                                 using System.Threading;
-                                                                 using System.Threading.Tasks;
-                                                                 using Cntryl.Portia;
-                                                                 using Microsoft.Extensions.DependencyInjection;
-                                                                 public sealed record Ping : IRequest;
-                                                                 file sealed class Handler : IRequestHandler<Ping>
-                                                                 {
-                                                                     public ValueTask<Result> HandleAsync(IRequestContext<Ping> context, CancellationToken ct) =>
-                                                                         ValueTask.FromResult(Result.Success);
-                                                                 }
-                                                                 public static class Scenario
-                                                                 {
-                                                                     public static PortiaBuilder Register(IServiceCollection services) =>
-                                                                         services.AddPortia().AddRequestHandler<Handler>();
-                                                                 }
-                                                                 """;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              using Microsoft.Extensions.DependencyInjection;
+                              public sealed record Ping : IRequest;
+                              file sealed class Handler : IRequestHandler<Ping>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<Ping> context, CancellationToken ct) =>
+                                      ValueTask.FromResult(Result.Success);
+                              }
+                              public static class Scenario
+                              {
+                                  public static PortiaBuilder Register(IServiceCollection services) =>
+                                      services.AddPortia().AddRequestHandler<Handler>();
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RegistrationCallInterceptorGenerator(),
@@ -94,7 +94,8 @@ public sealed class GeneratorInvalidShapeTests
 
     [Theory]
     [InlineData("file sealed record CreateOrder : IRequest, IQueuable;")]
-    [InlineData("public static class Outer { [RequestRoute(\"app\", \"orders\", \"order\", \"create\")] [Discriminator(\"app.orders.create\")] private sealed record CreateOrder : IRequest, IQueuable; }")]
+    [InlineData(
+        "public static class Outer { [RequestRoute(\"app\", \"orders\", \"order\", \"create\")] [Discriminator(\"app.orders.create\")] private sealed record CreateOrder : IRequest, IQueuable; }")]
     public void ShouldReportPortia015GivenInaccessibleTransportedRequest(string declaration)
     {
         // Arrange
@@ -116,20 +117,21 @@ public sealed class GeneratorInvalidShapeTests
     {
         // Arrange
         const string source = """
-                                                                 using System.Threading;
-                                                                 using System.Threading.Tasks;
-                                                                 using Cntryl.Portia;
-                                                                 [Discriminator("app.ev")]
-                                                                 public sealed record Ev : DomainEvent;
-                                                                 file sealed partial class View(IProjectionStore store)
-                                                                     : Projector(store, EventStreamPattern.ForPattern("test")), IProjectorHandler<Ev>
-                                                                 {
-                                                                     public ValueTask<Result> HandleAsync(IProjectorContext<Ev> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
-                                                                 }
-                                                                 """;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              [Discriminator("app.ev")]
+                              public sealed record Ev : DomainEvent;
+                              file sealed partial class View(IProjectionStore store)
+                                  : Projector(store, EventStreamPattern.ForPattern("test")), IProjectorHandler<Ev>
+                              {
+                                  public ValueTask<Result> HandleAsync(IProjectorContext<Ev> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                              }
+                              """;
 
         // Act
-        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new ProjectorReactorEventDispatcherGenerator());
+        var diagnostics =
+            GeneratorCompilation.OutputDiagnostics(source, new ProjectorReactorEventDispatcherGenerator());
 
         // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA015");
@@ -141,14 +143,14 @@ public sealed class GeneratorInvalidShapeTests
     {
         // Arrange
         const string source = """
-                                                                 using Cntryl.Portia;
-                                                                 using Microsoft.AspNetCore.Routing;
-                                                                 file sealed record GetOrder(int Id) : IRequest, ICallable;
-                                                                 public static class Endpoints
-                                                                 {
-                                                                     public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<GetOrder>("/orders/{id}");
-                                                                 }
-                                                                 """;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              file sealed record GetOrder(int Id) : IRequest, ICallable;
+                              public static class Endpoints
+                              {
+                                  public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<GetOrder>("/orders/{id}");
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
@@ -163,26 +165,26 @@ public sealed class GeneratorInvalidShapeTests
     {
         // Arrange
         const string source = """
-                                                                 using Cntryl.Portia;
-                                                                 namespace Billing
-                                                                 {
-                                                                     [RequestRoute("app", "billing", "charge", "create")]
-                                                                     [Discriminator("billing.charge")]
-                                                                     public sealed record Charge : IRequest, IQueuable;
-                                                                 }
-                                                                 namespace Sales
-                                                                 {
-                                                                     [RequestRoute("app", "sales", "charge", "create")]
-                                                                     [Discriminator("sales.charge")]
-                                                                     public sealed record Charge : IRequest, IQueuable;
-                                                                 }
-                                                                 namespace Other
-                                                                 {
-                                                                     [RequestRoute("app", "other", "charge", "create")]
-                                                                     [Discriminator("other.charge")]
-                                                                     public sealed record BillingCharge : IRequest, IQueuable;
-                                                                 }
-                                                                 """;
+                              using Cntryl.Portia;
+                              namespace Billing
+                              {
+                                  [RequestRoute("app", "billing", "charge", "create")]
+                                  [Discriminator("billing.charge")]
+                                  public sealed record Charge : IRequest, IQueuable;
+                              }
+                              namespace Sales
+                              {
+                                  [RequestRoute("app", "sales", "charge", "create")]
+                                  [Discriminator("sales.charge")]
+                                  public sealed record Charge : IRequest, IQueuable;
+                              }
+                              namespace Other
+                              {
+                                  [RequestRoute("app", "other", "charge", "create")]
+                                  [Discriminator("other.charge")]
+                                  public sealed record BillingCharge : IRequest, IQueuable;
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new PortiaServiceRegistrationGenerator());
@@ -196,25 +198,25 @@ public sealed class GeneratorInvalidShapeTests
     {
         // Arrange
         const string source = """
-                                                                 using System.Threading;
-                                                                 using System.Threading.Tasks;
-                                                                 using Cntryl.Portia;
-                                                                 using Microsoft.Extensions.DependencyInjection;
-                                                                 [Discriminator("app\nev")]
-                                                                 public sealed record Ev : DomainEvent;
-                                                                 [RequiresPermission("a\n{Id}")]
-                                                                 public sealed record Read(string Id) : IRequest;
-                                                                 public sealed class Handler : IRequestHandler<Read>
-                                                                 {
-                                                                     public ValueTask<Result> HandleAsync(IRequestContext<Read> context, CancellationToken ct) =>
-                                                                         ValueTask.FromResult(Result.Success);
-                                                                 }
-                                                                 public static class Scenario
-                                                                 {
-                                                                     public static PortiaBuilder Register(IServiceCollection services) =>
-                                                                         services.AddPortia().AddRequestHandler<Handler>();
-                                                                 }
-                                                                 """;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              using Microsoft.Extensions.DependencyInjection;
+                              [Discriminator("app\nev")]
+                              public sealed record Ev : DomainEvent;
+                              [RequiresPermission("a\n{Id}")]
+                              public sealed record Read(string Id) : IRequest;
+                              public sealed class Handler : IRequestHandler<Read>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<Read> context, CancellationToken ct) =>
+                                      ValueTask.FromResult(Result.Success);
+                              }
+                              public static class Scenario
+                              {
+                                  public static PortiaBuilder Register(IServiceCollection services) =>
+                                      services.AddPortia().AddRequestHandler<Handler>();
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RegistrationCallInterceptorGenerator(),
@@ -229,26 +231,26 @@ public sealed class GeneratorInvalidShapeTests
     {
         // Arrange
         const string source = """
-                                                                 using System.Threading;
-                                                                 using System.Threading.Tasks;
-                                                                 using Cntryl.Portia;
-                                                                 using Microsoft.Extensions.DependencyInjection;
-                                                                 [RequiresPermission("accounts:{Secret}:read")]
-                                                                 public sealed record Read(string Id) : IRequest
-                                                                 {
-                                                                     private string Secret => Id;
-                                                                 }
-                                                                 public sealed class Handler : IRequestHandler<Read>
-                                                                 {
-                                                                     public ValueTask<Result> HandleAsync(IRequestContext<Read> context, CancellationToken ct) =>
-                                                                         ValueTask.FromResult(Result.Success);
-                                                                 }
-                                                                 public static class Scenario
-                                                                 {
-                                                                     public static PortiaBuilder Register(IServiceCollection services) =>
-                                                                         services.AddPortia().AddRequestHandler<Handler>();
-                                                                 }
-                                                                 """;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              using Microsoft.Extensions.DependencyInjection;
+                              [RequiresPermission("accounts:{Secret}:read")]
+                              public sealed record Read(string Id) : IRequest
+                              {
+                                  private string Secret => Id;
+                              }
+                              public sealed class Handler : IRequestHandler<Read>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<Read> context, CancellationToken ct) =>
+                                      ValueTask.FromResult(Result.Success);
+                              }
+                              public static class Scenario
+                              {
+                                  public static PortiaBuilder Register(IServiceCollection services) =>
+                                      services.AddPortia().AddRequestHandler<Handler>();
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RegistrationCallInterceptorGenerator());
@@ -288,7 +290,8 @@ public sealed class GeneratorInvalidShapeTests
                                                                      public static PortiaBuilder Register(IServiceCollection services) =>
                                                                          services.AddPortia().AddRequestHandler<Handler>();
                                                                  }
-                                                                 """, [reference], new RegistrationCallInterceptorGenerator());
+                                                                 """, [reference],
+            new RegistrationCallInterceptorGenerator());
 
         // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA011");
@@ -300,20 +303,20 @@ public sealed class GeneratorInvalidShapeTests
     {
         // Arrange
         const string source = """
-                                                                 using Cntryl.Portia;
-                                                                 using Microsoft.AspNetCore.Routing;
-                                                                 public sealed record Probe(
-                                                                     double NotANumber = double.NaN,
-                                                                     double Positive = double.PositiveInfinity,
-                                                                     double Negative = double.NegativeInfinity,
-                                                                     float Single = float.NaN,
-                                                                     float SinglePositive = float.PositiveInfinity,
-                                                                     float SingleNegative = float.NegativeInfinity) : IRequest, ICallable;
-                                                                 public static class Endpoints
-                                                                 {
-                                                                     public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Probe>("/probe");
-                                                                 }
-                                                                 """;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              public sealed record Probe(
+                                  double NotANumber = double.NaN,
+                                  double Positive = double.PositiveInfinity,
+                                  double Negative = double.NegativeInfinity,
+                                  float Single = float.NaN,
+                                  float SinglePositive = float.PositiveInfinity,
+                                  float SingleNegative = float.NegativeInfinity) : IRequest, ICallable;
+                              public static class Endpoints
+                              {
+                                  public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Probe>("/probe");
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());

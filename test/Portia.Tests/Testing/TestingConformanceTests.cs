@@ -13,7 +13,8 @@ public sealed class TestingConformanceTests
         var probe = new CorrectDeduplicationProbe();
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await ReactionDeduplicationConformance.VerifyAsync(probe));
+        var exception =
+            await Record.ExceptionAsync(async () => await ReactionDeduplicationConformance.VerifyAsync(probe));
 
         // Assert
         Assert.Null(exception);

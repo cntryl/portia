@@ -79,7 +79,8 @@ public sealed partial class PortiaOpenApiOptions
 
     PortiaOpenApiSchemaDescription? Registration(Type type) =>
         _schemas.GetValueOrDefault(type) ?? (Nullable.GetUnderlyingType(type) is { } underlying
-            ? _schemas.GetValueOrDefault(underlying) : null);
+            ? _schemas.GetValueOrDefault(underlying)
+            : null);
 }
 
 sealed record PortiaOpenApiSchemaDescription(string Description, IReadOnlyDictionary<string, string> Properties);

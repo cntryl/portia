@@ -23,7 +23,8 @@ public sealed class ProjectorScenarioTests
 
         // Assert
         Assert.Equal(ids, users);
-        var checkpoint = await scenario.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern));
+        var checkpoint =
+            await scenario.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern));
         Assert.Equal(count.ToString(System.Globalization.CultureInfo.InvariantCulture), checkpoint.Cursor.ToString());
         await scenario.RunAsync(projector);
         Assert.Equal(ids, users);

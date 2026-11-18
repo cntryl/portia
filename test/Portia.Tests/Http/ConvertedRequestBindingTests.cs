@@ -74,7 +74,8 @@ sealed class ConvertedHttpHandler(ConvertedHttpObservation observed) : IRequestH
 
 sealed class ConvertedHttpRequestConverter : JsonConverter<ConvertedHttpRequest>
 {
-    public override ConvertedHttpRequest Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    public override ConvertedHttpRequest Read(ref Utf8JsonReader reader, Type typeToConvert,
+        JsonSerializerOptions options)
         => throw new InvalidOperationException("HTTP binding should deserialize each body member independently.");
 
     public override void Write(Utf8JsonWriter writer, ConvertedHttpRequest value, JsonSerializerOptions options)

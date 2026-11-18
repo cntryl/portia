@@ -45,26 +45,29 @@ public sealed class ConditionalSenderDiscoveryTests
     {
         var invocation = form switch
         {
-            "conditional" => "if (publisher?.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, new RequestQueueOptions(TtlHours: 1)) is { } pending) await pending;",
-            "conditional_legacy" => "if (publisher?.EnqueueAsync(new Queued(), RequestRouteValues.None, null) is { } pending) await pending;",
-            _ => "await publisher!.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, new RequestQueueOptions(TtlHours: 1));"
+            "conditional" =>
+                "if (publisher?.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, new RequestQueueOptions(TtlHours: 1)) is { } pending) await pending;",
+            "conditional_legacy" =>
+                "if (publisher?.EnqueueAsync(new Queued(), RequestRouteValues.None, null) is { } pending) await pending;",
+            _ =>
+                "await publisher!.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, new RequestQueueOptions(TtlHours: 1));"
         };
         return $$"""
-        #nullable enable
-        using System.Threading.Tasks;
-        using Cntryl.Portia;
-        using Microsoft.Extensions.DependencyInjection;
-        [RequestRoute("app", "jobs", "requests", "run")]
-        [Discriminator("test.conditional_queue")]
-        public sealed record Queued : IRequest, IQueuable;
-        public static class Scenario
-        {
-            public static async Task Run(IServiceCollection services, IRequestQueuePublisher? publisher)
-            {
-                var builder = services.AddPortia();
-                {{invocation}}
-            }
-        }
-        """;
+                 #nullable enable
+                 using System.Threading.Tasks;
+                 using Cntryl.Portia;
+                 using Microsoft.Extensions.DependencyInjection;
+                 [RequestRoute("app", "jobs", "requests", "run")]
+                 [Discriminator("test.conditional_queue")]
+                 public sealed record Queued : IRequest, IQueuable;
+                 public static class Scenario
+                 {
+                     public static async Task Run(IServiceCollection services, IRequestQueuePublisher? publisher)
+                     {
+                         var builder = services.AddPortia();
+                         {{invocation}}
+                     }
+                 }
+                 """;
     }
 }

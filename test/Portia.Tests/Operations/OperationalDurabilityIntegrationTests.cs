@@ -10,9 +10,15 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
     const string Image = "ghcr.io/cntryl/fitz:latest";
     const string Route = "kv://qualification/portia/checkpoints";
     const int StorageLeaseSeconds = 30;
-    static readonly OperationalTarget Target = new("durability-reactor", "stream://portia-durability/source/*", OperationalScope.Global);
+
+    static readonly OperationalTarget Target = new("durability-reactor", "stream://portia-durability/source/*",
+        OperationalScope.Global);
+
     readonly string _name = "portia-operations-test-" + Guid.NewGuid().ToString("N");
-    readonly string _directory = Path.Combine(Path.GetTempPath(), "portia-operations-test-" + Guid.NewGuid().ToString("N"));
+
+    readonly string _directory =
+        Path.Combine(Path.GetTempPath(), "portia-operations-test-" + Guid.NewGuid().ToString("N"));
+
     readonly List<Process> _children = [];
     Uri _endpoint = null!;
 
@@ -34,6 +40,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
             await child.WaitForExitAsync();
             child.Dispose();
         }
+
         _ = await DockerAsync("rm", "--force", "--volumes", _name);
         _ = await DockerAsync("volume", "rm", _name);
         Directory.Delete(_directory, recursive: true);
@@ -50,9 +57,12 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
             var aggregate = Uuid.CreateVersion4();
             DomainEvent[] source = [new ValueChanged(1), new ValueChanged(2)];
             for (var i = 0; i < source.Length; i++)
-                source[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregate, (ulong)i + 1, DateTimeOffset.UtcNow));
-            await events.AppendAsync(new EventStreamAddress("portia-durability", "source", aggregate.ToString()), 0, source);
+                source[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregate, (ulong)i + 1,
+                    DateTimeOffset.UtcNow));
+            await events.AppendAsync(new EventStreamAddress("portia-durability", "source", aggregate.ToString()), 0,
+                source);
         }
+
         var failed = await StartWorkerAsync("blocked");
         Guid failedAttempt;
 
@@ -69,6 +79,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
             Assert.Equal(2, state.Attempts[0].Sources.Count);
             Assert.Single(await ReadAsync(Events(client), "effects"));
         }
+
         await KillAsync(failed);
         await RecreateBrokerAsync();
         await using (var client = await ConnectAsync())
@@ -107,18 +118,26 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
             Assert.Equal(2, effects.Select(e => e.Event.Metadata.EventId).Distinct().Count());
             Assert.Equal([1, 2], effects.Select(e => ((ValueChanged)e.Event).Value));
             var repair = Assert.Single(state.Repairs);
-            var api = new PortiaOperations(TestOperationalAuthorizer.Configuration(), journal, new OperationalOptions(), new EmptyApplicationTopology(), new TestOperationalAuthorizer(), null);
-            Assert.Equal("indeterminate", (await api.VerifyRepairAsync(TestOperationalAuthorizer.AdministratorActor(), Target, repair.PlanId)).Status);
-            Assert.Empty(await api.ListIssuesAsync(TestOperationalAuthorizer.AdministratorActor(), OperationalScope.Global));
+            var api = new PortiaOperations(TestOperationalAuthorizer.Configuration(), journal, new OperationalOptions(),
+                new EmptyApplicationTopology(), new TestOperationalAuthorizer(), null);
+            Assert.Equal("indeterminate",
+                (await api.VerifyRepairAsync(TestOperationalAuthorizer.AdministratorActor(), Target, repair.PlanId))
+                .Status);
+            Assert.Empty(await api.ListIssuesAsync(TestOperationalAuthorizer.AdministratorActor(),
+                OperationalScope.Global));
         }
     }
 
     async Task<Process> StartWorkerAsync(string mode, Guid? previousOwner = null)
     {
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
-        var assembly = Path.GetFullPath($"../../../../../test/Portia.Operations.TestWorker/bin/{configuration}/net11.0/Portia.Operations.TestWorker.dll", AppContext.BaseDirectory);
+        var assembly =
+            Path.GetFullPath(
+                $"../../../../../test/Portia.Operations.TestWorker/bin/{configuration}/net11.0/Portia.Operations.TestWorker.dll",
+                AppContext.BaseDirectory);
         var signal = Path.Combine(_directory, mode);
-        var start = new ProcessStartInfo("dotnet") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        var start = new ProcessStartInfo("dotnet")
+        { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         start.ArgumentList.Add(assembly);
         start.ArgumentList.Add(mode);
         start.ArgumentList.Add(signal);
@@ -136,6 +155,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
                 Assert.Fail($"Worker exited before {mode}: {await output}\n{await error}");
             await Task.Delay(20, deadline.Token);
         }
+
         return child;
     }
 
@@ -178,16 +198,21 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
                     if (response.IsSuccessStatusCode)
                         return;
                 }
-                catch (HttpRequestException) { }
-                catch (TaskCanceledException) when (!deadline.IsCancellationRequested) { }
+                catch (HttpRequestException)
+                {
+                }
+                catch (TaskCanceledException) when (!deadline.IsCancellationRequested)
+                {
+                }
+
                 await Task.Delay(100, deadline.Token);
             }
         }
         catch (OperationCanceledException) when (deadline.IsCancellationRequested)
         {
             throw new InvalidOperationException("Qualification broker did not become ready: "
-                + await DockerAsync("inspect", "--format", "{{json .State}}", _name)
-                + await DockerAsync("logs", _name));
+                                                + await DockerAsync("inspect", "--format", "{{json .State}}", _name)
+                                                + await DockerAsync("logs", _name));
         }
     }
 
@@ -203,25 +228,28 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
         {
             await client.DisposeAsync();
             throw new InvalidOperationException("Qualification broker failed to become ready: "
-                + await DockerAsync("inspect", "--format", "{{json .State}}", _name)
-                + await DockerAsync("logs", _name), ex);
+                                                + await DockerAsync("inspect", "--format", "{{json .State}}", _name)
+                                                + await DockerAsync("logs", _name), ex);
         }
     }
 
-    static FitzEventStore Events(FitzClient client) => new(client.Stream, TestJson.DomainSerializer(new DomainEventTypeCatalog()
-        .Register<ValueChanged>(1, "portia.durability.changed")));
+    static FitzEventStore Events(FitzClient client) => new(client.Stream, TestJson.DomainSerializer(
+        new DomainEventTypeCatalog()
+            .Register<ValueChanged>(1, "portia.durability.changed")));
 
     static async Task<List<DomainEventRecord>> ReadAsync(FitzEventStore events, string area)
     {
         var records = new List<DomainEventRecord>();
-        await foreach (var record in events.ReadAsync(EventStreamPattern.ForPattern("portia-durability", area), EventCursor.Start, default))
+        await foreach (var record in events.ReadAsync(EventStreamPattern.ForPattern("portia-durability", area),
+                           EventCursor.Start, default))
             records.Add(record);
         return records;
     }
 
     static async Task<string> DockerAsync(params string[] arguments)
     {
-        var start = new ProcessStartInfo("docker") { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        var start = new ProcessStartInfo("docker")
+        { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
         foreach (var argument in arguments)
             start.ArgumentList.Add(argument);
         using var process = Process.Start(start)!;

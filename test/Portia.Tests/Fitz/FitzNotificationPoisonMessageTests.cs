@@ -334,6 +334,7 @@ public sealed class FitzNotificationPoisonMessageTests
 
         public Task CreateBatchAsync(IReadOnlyList<ScheduleEntry> entries, CancellationToken ct = default) =>
             throw new NotSupportedException();
+
         public Task<ScheduleListPage> ListAsync(string? continuation, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();
 

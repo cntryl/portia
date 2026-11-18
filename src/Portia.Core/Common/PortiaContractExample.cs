@@ -5,15 +5,24 @@ using System.Text.Json.Nodes;
 namespace Cntryl.Portia;
 
 sealed record PortiaContractExample(Type Type, string Name, object Value, string? Summary, PortiaContractUse Use);
-sealed record PortiaResolvedExample(string Name, string? Summary, JsonNode? Value, IReadOnlyDictionary<string, object?>? Members = null);
 
-sealed class PortiaContractExamples(IReadOnlyList<PortiaContractExample> examples, PortiaContractMetadataRegistry contracts)
+sealed record PortiaResolvedExample(
+    string Name,
+    string? Summary,
+    JsonNode? Value,
+    IReadOnlyDictionary<string, object?>? Members = null);
+
+sealed class PortiaContractExamples(
+    IReadOnlyList<PortiaContractExample> examples,
+    PortiaContractMetadataRegistry contracts)
 {
     readonly ConditionalWeakTable<JsonSerializerOptions, ExampleCache> _cache = [];
 
     internal IReadOnlyList<PortiaResolvedExample> Resolve(JsonSerializerOptions json, Type type, bool input) =>
         _cache.GetValue(json, static _ => new ExampleCache()).Resolve((type, input), () =>
-            examples.Where(example => example.Type == type && example.Use.HasFlag(input ? PortiaContractUse.Input : PortiaContractUse.Output))
+            examples.Where(example =>
+                    example.Type == type &&
+                    example.Use.HasFlag(input ? PortiaContractUse.Input : PortiaContractUse.Output))
                 .Select(example => Resolve(json, example, input)).ToArray());
 
     internal static PortiaResolvedExample Resolve(JsonSerializerOptions json, PortiaContractMetadataRegistry contracts,
@@ -38,7 +47,8 @@ sealed class PortiaContractExamples(IReadOnlyList<PortiaContractExample> example
         }
         catch (Exception error) when (error is not OperationCanceledException)
         {
-            throw new InvalidOperationException($"Contract example '{example.Name}' for '{example.Type}' is invalid: {error.Message}", error);
+            throw new InvalidOperationException(
+                $"Contract example '{example.Name}' for '{example.Type}' is invalid: {error.Message}", error);
         }
     }
 
@@ -50,7 +60,8 @@ sealed class PortiaContractExamples(IReadOnlyList<PortiaContractExample> example
         readonly Lock _gate = new();
         readonly Dictionary<(Type Type, bool Input), IReadOnlyList<PortiaResolvedExample>> _values = [];
 
-        internal IReadOnlyList<PortiaResolvedExample> Resolve((Type Type, bool Input) key, Func<IReadOnlyList<PortiaResolvedExample>> create)
+        internal IReadOnlyList<PortiaResolvedExample> Resolve((Type Type, bool Input) key,
+            Func<IReadOnlyList<PortiaResolvedExample>> create)
         {
             lock (_gate)
             {

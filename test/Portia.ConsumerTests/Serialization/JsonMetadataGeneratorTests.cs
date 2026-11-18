@@ -6,9 +6,12 @@ namespace Cntryl.Portia.Consumer;
 public sealed class JsonMetadataGeneratorTests
 {
     [Theory]
-    [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, new RequestQueueOptions(TtlHours: 1))")]
-    [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, RequestMetadata.Create(), new RequestQueueOptions(TtlHours: 1), default)")]
-    [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, parent, new RequestQueueOptions(TtlHours: 1))")]
+    [InlineData(
+        "publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, new RequestQueueOptions(TtlHours: 1))")]
+    [InlineData(
+        "publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, RequestMetadata.Create(), new RequestQueueOptions(TtlHours: 1), default)")]
+    [InlineData(
+        "publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, parent, new RequestQueueOptions(TtlHours: 1))")]
     public void ShouldRequireRequestJsonMetadataGivenOptionsPublication(string invocation)
     {
         // Arrange
@@ -39,21 +42,21 @@ public sealed class JsonMetadataGeneratorTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           [Discriminator("created")]
-                                                           public sealed record Created : DomainEvent;
-                                                           public sealed record Query : IRequest<Answer>;
-                                                           public sealed record Answer;
-                                                           public sealed class Handler : IRequestHandler<Query, Answer>
-                                                           {
-                                                               public ValueTask<Result<Answer>> HandleAsync(IRequestContext<Query> context, CancellationToken ct) => default;
-                                                           }
-                                                           public sealed class OtherHandler : IRequestHandler<Query, Answer>
-                                                           {
-                                                               public ValueTask<Result<Answer>> HandleAsync(IRequestContext<Query> context, CancellationToken ct) => default;
-                                                           }
-                                                           """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              [Discriminator("created")]
+                              public sealed record Created : DomainEvent;
+                              public sealed record Query : IRequest<Answer>;
+                              public sealed record Answer;
+                              public sealed class Handler : IRequestHandler<Query, Answer>
+                              {
+                                  public ValueTask<Result<Answer>> HandleAsync(IRequestContext<Query> context, CancellationToken ct) => default;
+                              }
+                              public sealed class OtherHandler : IRequestHandler<Query, Answer>
+                              {
+                                  public ValueTask<Result<Answer>> HandleAsync(IRequestContext<Query> context, CancellationToken ct) => default;
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
@@ -68,19 +71,19 @@ public sealed class JsonMetadataGeneratorTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Microsoft.Extensions.DependencyInjection;
-                                                           public sealed record Query : IRequest<Answer>;
-                                                           public sealed record Answer;
-                                                           public sealed class Handler : IRequestHandler<Query, Answer>
-                                                           {
-                                                               public ValueTask<Result<Answer>> HandleAsync(IRequestContext<Query> context, CancellationToken ct) => default;
-                                                           }
-                                                           public static class Scenario
-                                                           {
-                                                               public static void Configure(IServiceCollection services) => services.AddPortia().AddRequestHandler<Handler>();
-                                                           }
-                                                           """;
+                              using Cntryl.Portia;
+                              using Microsoft.Extensions.DependencyInjection;
+                              public sealed record Query : IRequest<Answer>;
+                              public sealed record Answer;
+                              public sealed class Handler : IRequestHandler<Query, Answer>
+                              {
+                                  public ValueTask<Result<Answer>> HandleAsync(IRequestContext<Query> context, CancellationToken ct) => default;
+                              }
+                              public static class Scenario
+                              {
+                                  public static void Configure(IServiceCollection services) => services.AddPortia().AddRequestHandler<Handler>();
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
@@ -197,21 +200,21 @@ public sealed class JsonMetadataGeneratorTests
     {
         // Arrange
         const string source = """
-                                                           using System.Text.Json.Serialization;
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           public sealed record Query(Nested Value) : IRequest<Answer>;
-                                                           public sealed record Nested;
-                                                           public sealed record Answer;
-                                                           public sealed class Handler : IRequestHandler<Query, Answer>
-                                                           {
-                                                               public ValueTask<Result<Answer>> HandleAsync(IRequestContext<Query> context, CancellationToken ct) => default;
-                                                           }
-                                                           [PortiaJsonContext]
-                                                           [JsonSerializable(typeof(Query))]
-                                                           [JsonSerializable(typeof(Answer))]
-                                                           internal sealed partial class AppJsonContext : JsonSerializerContext;
-                                                           """;
+                              using System.Text.Json.Serialization;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              public sealed record Query(Nested Value) : IRequest<Answer>;
+                              public sealed record Nested;
+                              public sealed record Answer;
+                              public sealed class Handler : IRequestHandler<Query, Answer>
+                              {
+                                  public ValueTask<Result<Answer>> HandleAsync(IRequestContext<Query> context, CancellationToken ct) => default;
+                              }
+                              [PortiaJsonContext]
+                              [JsonSerializable(typeof(Query))]
+                              [JsonSerializable(typeof(Answer))]
+                              internal sealed partial class AppJsonContext : JsonSerializerContext;
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
@@ -225,22 +228,22 @@ public sealed class JsonMetadataGeneratorTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           public sealed record Payload;
-                                                           public static class ConsumerApis
-                                                           {
-                                                               public static void AddEvent<T>() { }
-                                                               public static void RegisterDynamicRequest<T>() { }
-                                                               public static void MapPortiaPost<T>() { }
+                              using Cntryl.Portia;
+                              public sealed record Payload;
+                              public static class ConsumerApis
+                              {
+                                  public static void AddEvent<T>() { }
+                                  public static void RegisterDynamicRequest<T>() { }
+                                  public static void MapPortiaPost<T>() { }
 
-                                                               public static void Configure()
-                                                               {
-                                                                   AddEvent<Payload>();
-                                                                   RegisterDynamicRequest<Payload>();
-                                                                   MapPortiaPost<Payload>();
-                                                               }
-                                                           }
-                                                           """;
+                                  public static void Configure()
+                                  {
+                                      AddEvent<Payload>();
+                                      RegisterDynamicRequest<Payload>();
+                                      MapPortiaPost<Payload>();
+                                  }
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
@@ -255,26 +258,26 @@ public sealed class JsonMetadataGeneratorTests
     {
         // Arrange
         const string source = """
-                                                           using System;
-                                                           using System.Text.Json.Serialization;
-                                                           using Cntryl.Portia;
-                                                           using Microsoft.AspNetCore.Routing;
-                                                           public readonly record struct RouteId(string Value)
-                                                           {
-                                                               public static bool TryParse(string value, out RouteId result) { result = new(value); return true; }
-                                                           }
-                                                           public sealed record Query(RouteId Id, string Value) : IRequest, ICallable;
-                                                           public static class Scenario
-                                                           {
-                                                               public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Query>(
-                                                                   configure: endpoint => endpoint.NoInput().OnBind(_ => new Query(new("id"), "value")),
-                                                                   pattern: "/query/{id}");
-                                                           }
-                                                           [PortiaJsonContext]
-                                                           [JsonSerializable(typeof(Query))]
-                                                           [JsonSerializable(typeof(string))]
-                                                           internal sealed partial class AppJsonContext : JsonSerializerContext;
-                                                           """;
+                              using System;
+                              using System.Text.Json.Serialization;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              public readonly record struct RouteId(string Value)
+                              {
+                                  public static bool TryParse(string value, out RouteId result) { result = new(value); return true; }
+                              }
+                              public sealed record Query(RouteId Id, string Value) : IRequest, ICallable;
+                              public static class Scenario
+                              {
+                                  public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Query>(
+                                      configure: endpoint => endpoint.NoInput().OnBind(_ => new Query(new("id"), "value")),
+                                      pattern: "/query/{id}");
+                              }
+                              [PortiaJsonContext]
+                              [JsonSerializable(typeof(Query))]
+                              [JsonSerializable(typeof(string))]
+                              internal sealed partial class AppJsonContext : JsonSerializerContext;
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
@@ -288,25 +291,25 @@ public sealed class JsonMetadataGeneratorTests
     {
         // Arrange
         const string source = """
-                                                           using System.IO;
-                                                           using System.Text.Json.Serialization;
-                                                           using Cntryl.Portia;
-                                                           using Microsoft.AspNetCore.Routing;
-                                                           public sealed record Upload : IRequest, ICallable;
-                                                           public sealed class UploadStream : MemoryStream;
-                                                           public static class Scenario
-                                                           {
-                                                               public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Upload>("/upload",
-                                                                   endpoint => endpoint
-                                                                       .Accepts<UploadStream>("application/octet-stream")
-                                                                       .Produces<Stream>(201, "application/octet-stream")
-                                                                       .Produces<UploadStream>(202, "application/octet-stream")
-                                                                       .OnBind(_ => new Upload()));
-                                                           }
-                                                           [PortiaJsonContext]
-                                                           [JsonSerializable(typeof(Upload))]
-                                                           internal sealed partial class AppJsonContext : JsonSerializerContext;
-                                                           """;
+                              using System.IO;
+                              using System.Text.Json.Serialization;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              public sealed record Upload : IRequest, ICallable;
+                              public sealed class UploadStream : MemoryStream;
+                              public static class Scenario
+                              {
+                                  public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Upload>("/upload",
+                                      endpoint => endpoint
+                                          .Accepts<UploadStream>("application/octet-stream")
+                                          .Produces<Stream>(201, "application/octet-stream")
+                                          .Produces<UploadStream>(202, "application/octet-stream")
+                                          .OnBind(_ => new Upload()));
+                              }
+                              [PortiaJsonContext]
+                              [JsonSerializable(typeof(Upload))]
+                              internal sealed partial class AppJsonContext : JsonSerializerContext;
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
@@ -321,25 +324,25 @@ public sealed class JsonMetadataGeneratorTests
     {
         // Arrange
         const string source = """
-                                                           using System.Text.Json.Serialization;
-                                                           using Cntryl.Portia;
-                                                           using Microsoft.AspNetCore.Routing;
-                                                           public sealed record Create : IRequest, ICallable;
-                                                           public sealed record CreateBody;
-                                                           public sealed record CreatedDto;
-                                                           public readonly record struct Tenant(string Value);
-                                                           public static class Scenario
-                                                           {
-                                                               public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Create>("/create/{tenant}",
-                                                                   endpoint => endpoint.Parameter<Tenant>("tenant", PortiaHttpParameterLocation.Route)
-                                                                       .Accepts<CreateBody>("application/json")
-                                                                       .Produces<CreatedDto>(201)
-                                                                       .OnBind(_ => new Create()));
-                                                           }
-                                                           [PortiaJsonContext]
-                                                           [JsonSerializable(typeof(Create))]
-                                                           internal sealed partial class AppJsonContext : JsonSerializerContext;
-                                                           """;
+                              using System.Text.Json.Serialization;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              public sealed record Create : IRequest, ICallable;
+                              public sealed record CreateBody;
+                              public sealed record CreatedDto;
+                              public readonly record struct Tenant(string Value);
+                              public static class Scenario
+                              {
+                                  public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Create>("/create/{tenant}",
+                                      endpoint => endpoint.Parameter<Tenant>("tenant", PortiaHttpParameterLocation.Route)
+                                          .Accepts<CreateBody>("application/json")
+                                          .Produces<CreatedDto>(201)
+                                          .OnBind(_ => new Create()));
+                              }
+                              [PortiaJsonContext]
+                              [JsonSerializable(typeof(Create))]
+                              internal sealed partial class AppJsonContext : JsonSerializerContext;
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
@@ -354,20 +357,20 @@ public sealed class JsonMetadataGeneratorTests
     {
         // Arrange
         const string source = """
-                                                           using System;
-                                                           using System.Text.Json.Serialization;
-                                                           using Cntryl.Portia;
-                                                           using Microsoft.AspNetCore.Routing;
-                                                           public readonly record struct Money(long Cents);
-                                                           public sealed record Deposit(Uuid AccountId, long AmountCents, string Memo, Money? Fee, DateTimeOffset? At) : IRequest, ICallable;
-                                                           public static class Scenario
-                                                           {
-                                                               public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Deposit>("/accounts/{account_id}/deposits");
-                                                           }
-                                                           [PortiaJsonContext]
-                                                           [JsonSerializable(typeof(Deposit))]
-                                                           internal sealed partial class AppJsonContext : JsonSerializerContext;
-                                                           """;
+                              using System;
+                              using System.Text.Json.Serialization;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              public readonly record struct Money(long Cents);
+                              public sealed record Deposit(Uuid AccountId, long AmountCents, string Memo, Money? Fee, DateTimeOffset? At) : IRequest, ICallable;
+                              public static class Scenario
+                              {
+                                  public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Deposit>("/accounts/{account_id}/deposits");
+                              }
+                              [PortiaJsonContext]
+                              [JsonSerializable(typeof(Deposit))]
+                              internal sealed partial class AppJsonContext : JsonSerializerContext;
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
@@ -387,28 +390,28 @@ public sealed class JsonMetadataGeneratorTests
     {
         // Arrange
         var diagnostics = GeneratorCompilation.Diagnostics($$"""
-                                                            using System;
-                                                            using System.Text.Json;
-                                                            using System.Text.Json.Serialization;
-                                                            using Cntryl.Portia;
-                                                            using Microsoft.AspNetCore.Routing;
-                                                            public readonly record struct Body(int Value);
-                                                            [JsonConverter(typeof(ChangeConverter))]
-                                                            public sealed record Change(Uuid Id, Body? Value) : IRequest, ICallable;
-                                                            public sealed class ChangeConverter : JsonConverter<Change>
-                                                            {
-                                                                public override Change Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) => throw new NotSupportedException();
-                                                                public override void Write(Utf8JsonWriter writer, Change value, JsonSerializerOptions options) => throw new NotSupportedException();
-                                                            }
-                                                            public static class Scenario
-                                                            {
-                                                                public static void Map(IEndpointRouteBuilder app) => app.{{mapping}}<Change>("/changes/{id}");
-                                                            }
-                                                            [PortiaJsonContext]
-                                                            [JsonSerializable(typeof(Change))]
-                                                            {{(bodyRoot ? "[JsonSerializable(typeof(Body))]" : string.Empty)}}
-                                                            internal sealed partial class AppJsonContext : JsonSerializerContext;
-                                                            """, new JsonMetadataDiagnosticGenerator());
+                                                             using System;
+                                                             using System.Text.Json;
+                                                             using System.Text.Json.Serialization;
+                                                             using Cntryl.Portia;
+                                                             using Microsoft.AspNetCore.Routing;
+                                                             public readonly record struct Body(int Value);
+                                                             [JsonConverter(typeof(ChangeConverter))]
+                                                             public sealed record Change(Uuid Id, Body? Value) : IRequest, ICallable;
+                                                             public sealed class ChangeConverter : JsonConverter<Change>
+                                                             {
+                                                                 public override Change Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) => throw new NotSupportedException();
+                                                                 public override void Write(Utf8JsonWriter writer, Change value, JsonSerializerOptions options) => throw new NotSupportedException();
+                                                             }
+                                                             public static class Scenario
+                                                             {
+                                                                 public static void Map(IEndpointRouteBuilder app) => app.{{mapping}}<Change>("/changes/{id}");
+                                                             }
+                                                             [PortiaJsonContext]
+                                                             [JsonSerializable(typeof(Change))]
+                                                             {{(bodyRoot ? "[JsonSerializable(typeof(Body))]" : string.Empty)}}
+                                                             internal sealed partial class AppJsonContext : JsonSerializerContext;
+                                                             """, new JsonMetadataDiagnosticGenerator());
 
         // Act
         var required = !bodyRoot && mapping is "MapPortiaPost" or "MapPortiaPut" or "MapPortiaPatch";
@@ -427,31 +430,31 @@ public sealed class JsonMetadataGeneratorTests
     {
         // Arrange
         var source = $$""""
-                                                             using System;
-                                                             using System.Text.Json;
-                                                             using System.Text.Json.Serialization;
-                                                             using Cntryl.Portia;
-                                                             using Microsoft.AspNetCore.Routing;
-                                                             public readonly record struct FilePath(string Value)
-                                                             {
-                                                                 public static bool TryParse(string value, out FilePath result) { result = new(value); return true; }
-                                                             }
-                                                             [JsonConverter(typeof(UploadConverter))]
-                                                             public sealed record Upload(FilePath Path, string Name) : IRequest, ICallable;
-                                                             public sealed class UploadConverter : JsonConverter<Upload>
-                                                             {
-                                                                 public override Upload Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) => throw new NotSupportedException();
-                                                                 public override void Write(Utf8JsonWriter writer, Upload value, JsonSerializerOptions options) => throw new NotSupportedException();
-                                                             }
-                                                             public static class Scenario
-                                                             {
-                                                                 public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Upload>("{{route}}");
-                                                             }
-                                                             [PortiaJsonContext]
-                                                             [JsonSerializable(typeof(Upload))]
-                                                             [JsonSerializable(typeof(string))]
-                                                             internal sealed partial class AppJsonContext : JsonSerializerContext;
-                                                             """";
+                       using System;
+                       using System.Text.Json;
+                       using System.Text.Json.Serialization;
+                       using Cntryl.Portia;
+                       using Microsoft.AspNetCore.Routing;
+                       public readonly record struct FilePath(string Value)
+                       {
+                           public static bool TryParse(string value, out FilePath result) { result = new(value); return true; }
+                       }
+                       [JsonConverter(typeof(UploadConverter))]
+                       public sealed record Upload(FilePath Path, string Name) : IRequest, ICallable;
+                       public sealed class UploadConverter : JsonConverter<Upload>
+                       {
+                           public override Upload Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) => throw new NotSupportedException();
+                           public override void Write(Utf8JsonWriter writer, Upload value, JsonSerializerOptions options) => throw new NotSupportedException();
+                       }
+                       public static class Scenario
+                       {
+                           public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Upload>("{{route}}");
+                       }
+                       [PortiaJsonContext]
+                       [JsonSerializable(typeof(Upload))]
+                       [JsonSerializable(typeof(string))]
+                       internal sealed partial class AppJsonContext : JsonSerializerContext;
+                       """";
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
@@ -465,14 +468,14 @@ public sealed class JsonMetadataGeneratorTests
     {
         // Arrange
         const string source = """
-                                                           using System.Security.Claims;
-                                                           using Cntryl.Portia;
-                                                           public sealed record Ping : IRequest;
-                                                           public static class Scenario
-                                                           {
-                                                               public static void Send(IRequestBus? bus) => _ = bus?.SendAsync(new Ping(), new ClaimsPrincipal());
-                                                           }
-                                                           """;
+                              using System.Security.Claims;
+                              using Cntryl.Portia;
+                              public sealed record Ping : IRequest;
+                              public static class Scenario
+                              {
+                                  public static void Send(IRequestBus? bus) => _ = bus?.SendAsync(new Ping(), new ClaimsPrincipal());
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
@@ -486,18 +489,18 @@ public sealed class JsonMetadataGeneratorTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           [RequestRoute("test", "generators", "outcome", "only")]
-                                                           [Discriminator("outcome.only", 1)]
-                                                           public sealed record Ping : IRequest<Pong>, ICallable;
-                                                           public sealed record Pong;
-                                                           public static class Scenario
-                                                           {
-                                                               public static void Send(IRemoteRequestSender sender) => _ =
-                                                                   sender.SendWithOutcomeAsync<Ping, Pong>(new Ping(),
-                                                                       new RequestRouteValues(), null);
-                                                           }
-                                                           """;
+                              using Cntryl.Portia;
+                              [RequestRoute("test", "generators", "outcome", "only")]
+                              [Discriminator("outcome.only", 1)]
+                              public sealed record Ping : IRequest<Pong>, ICallable;
+                              public sealed record Pong;
+                              public static class Scenario
+                              {
+                                  public static void Send(IRemoteRequestSender sender) => _ =
+                                      sender.SendWithOutcomeAsync<Ping, Pong>(new Ping(),
+                                          new RequestRouteValues(), null);
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());

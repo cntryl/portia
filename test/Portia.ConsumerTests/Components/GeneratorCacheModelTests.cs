@@ -24,21 +24,21 @@ public sealed class GeneratorCacheModelTests
     {
         // Arrange
         const string source = """
-            using Cntryl.Portia;
-            using Microsoft.AspNetCore.Routing;
-            using Microsoft.AspNetCore.Builder;
-            using Microsoft.AspNetCore.Http;
-            public sealed record Query(int Id) : IRequest, ICallable;
-            public static class First {
-                public static void Map(IEndpointRouteBuilder app) {
-                    app.MapPortiaGet<Query>("/first/{id}").ExcludeFromDescription();
-                    app.MapPortiaGet<Query>("/query").ExcludeFromDescription();
-                }
-            }
-            public static class Second {
-                public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Query>("/second/{id}");
-            }
-            """;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              using Microsoft.AspNetCore.Builder;
+                              using Microsoft.AspNetCore.Http;
+                              public sealed record Query(int Id) : IRequest, ICallable;
+                              public static class First {
+                                  public static void Map(IEndpointRouteBuilder app) {
+                                      app.MapPortiaGet<Query>("/first/{id}").ExcludeFromDescription();
+                                      app.MapPortiaGet<Query>("/query").ExcludeFromDescription();
+                                  }
+                              }
+                              public static class Second {
+                                  public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Query>("/second/{id}");
+                              }
+                              """;
 
         // Act
         var options = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
@@ -49,37 +49,47 @@ public sealed class GeneratorCacheModelTests
         {
             var compilation = CSharpCompilation.Create("HttpSharing", [CSharpSyntaxTree.ParseText(text, options)],
                 References(), new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-            GeneratorDriver driver = CSharpGeneratorDriver.Create([new RequestHttpBindingGenerator().AsSourceGenerator()], parseOptions: options);
+            GeneratorDriver driver =
+                CSharpGeneratorDriver.Create([new RequestHttpBindingGenerator().AsSourceGenerator()],
+                    parseOptions: options);
             driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var generated, out var diagnostics);
-            Assert.DoesNotContain(diagnostics.Concat(generated.GetDiagnostics()), diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+            Assert.DoesNotContain(diagnostics.Concat(generated.GetDiagnostics()),
+                diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
             return driver.GetRunResult().Results.Single().GeneratedSources.ToDictionary(item => item.HintName,
                 item => item.SourceText.ToString(), StringComparer.Ordinal);
         }
 
         var original = Generate(source);
         var moved = Generate("\n\n" + source);
-        var implementations = original.Where(file => file.Key.StartsWith("PortiaHttpBinding.", StringComparison.Ordinal)).ToArray();
+        var implementations = original
+            .Where(file => file.Key.StartsWith("PortiaHttpBinding.", StringComparison.Ordinal)).ToArray();
         Assert.Single(implementations);
-        Assert.Equal(2, implementations.Sum(file => file.Value.Split("internal static class PortiaHttpBinding_").Length - 1));
-        Assert.Equal(2, original.Count(file => file.Key.StartsWith("PortiaHttpInterceptors.", StringComparison.Ordinal)));
+        Assert.Equal(2,
+            implementations.Sum(file => file.Value.Split("internal static class PortiaHttpBinding_").Length - 1));
+        Assert.Equal(2,
+            original.Count(file => file.Key.StartsWith("PortiaHttpInterceptors.", StringComparison.Ordinal)));
         Assert.All(implementations, file => Assert.Equal(file.Value, moved[file.Key]));
-        Assert.Equal(3, original.Values.Sum(text => text.Split("[global::System.Runtime.CompilerServices.InterceptsLocation(").Length - 1));
+        Assert.Equal(3,
+            original.Values.Sum(text =>
+                text.Split("[global::System.Runtime.CompilerServices.InterceptsLocation(").Length - 1));
     }
 
     [Fact]
     public void ShouldReuseProcessorImplementationGivenUnrelatedPragmaEditMovingLocations() =>
-        AssertCachedAfterUnrelatedPragmaEdit(new ProjectorReactorEventDispatcherGenerator(), "PortiaProcessorImplementations", """
-            using Cntryl.Portia;
-            public sealed record Changed : DomainEvent;
-            public sealed partial class Projection : Projector(null!, EventStreamPattern.ForPattern("events")), IProjectorHandler<Changed>;
-            """, moveLocation: true);
+        AssertCachedAfterUnrelatedPragmaEdit(new ProjectorReactorEventDispatcherGenerator(),
+            "PortiaProcessorImplementations", """
+                                              using Cntryl.Portia;
+                                              public sealed record Changed : DomainEvent;
+                                              public sealed partial class Projection : Projector(null!, EventStreamPattern.ForPattern("events")), IProjectorHandler<Changed>;
+                                              """, moveLocation: true);
 
     [Fact]
     public void ShouldGenerateBoundedDeterministicFilesGivenLargeRequestRegistrations()
     {
         // Arrange
         var declarations = Enumerable.Range(0, 1000).Select(index =>
-            $"[RequestRoute(\"*\", \"orders\", \"order\", \"create{index}\")] [Discriminator(\"orders.create{index}\")] public sealed record Create{index} : IRequest, IQueuable;").ToArray();
+                $"[RequestRoute(\"*\", \"orders\", \"order\", \"create{index}\")] [Discriminator(\"orders.create{index}\")] public sealed record Create{index} : IRequest, IQueuable;")
+            .ToArray();
 
         // Act
         var options = new CSharpParseOptions(LanguageVersion.Preview);
@@ -101,7 +111,9 @@ public sealed class GeneratorCacheModelTests
         var original = Generate(declarations);
         var reordered = Generate(declarations.Reverse());
         Assert.True(original.Count > 1);
-        Assert.Equal(1000, original.Values.Sum(source => source.Split("public static global::Cntryl.Portia.PortiaBuilder ").Length - 1));
+        Assert.Equal(1000,
+            original.Values.Sum(source =>
+                source.Split("public static global::Cntryl.Portia.PortiaBuilder ").Length - 1));
         Assert.All(original, file =>
         {
             Assert.InRange(file.Value.Split("public static global::Cntryl.Portia.PortiaBuilder ").Length - 1, 1, 128);
@@ -113,7 +125,8 @@ public sealed class GeneratorCacheModelTests
     public void ShouldNotRetainCompilerObjectsGivenIncrementalGeneratorCacheModels()
     {
         // Arrange
-        var assemblies = new[] { typeof(DomainEventCatalogGenerator).Assembly, typeof(RequestHttpBindingGenerator).Assembly };
+        var assemblies = new[]
+            { typeof(DomainEventCatalogGenerator).Assembly, typeof(RequestHttpBindingGenerator).Assembly };
         Assert.Equal(2, assemblies.Distinct().Count());
 
         // Act
@@ -209,15 +222,19 @@ public sealed class GeneratorCacheModelTests
 
         // Assert
         Assert.NotEmpty(outputs);
-        Assert.All(outputs, output => Assert.True(output.Reason is IncrementalStepRunReason.Unchanged or IncrementalStepRunReason.Cached));
+        Assert.All(outputs,
+            output => Assert.True(
+                output.Reason is IncrementalStepRunReason.Unchanged or IncrementalStepRunReason.Cached));
 
-        var changedRoot = CSharpSyntaxTree.ParseText((Environment.NewLine + source).Replace("typeof(string)", "typeof(int)", StringComparison.Ordinal),
+        var changedRoot = CSharpSyntaxTree.ParseText(
+            (Environment.NewLine + source).Replace("typeof(string)", "typeof(int)", StringComparison.Ordinal),
             options, "Example.cs");
         driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree, changedRoot));
         outputs = driver.GetRunResult().Results.Single().TrackedSteps["PortiaJsonRootEmission"]
             .SelectMany(step => step.Outputs).ToArray();
         Assert.Contains(outputs, output => output.Reason == IncrementalStepRunReason.Modified);
-        Assert.Contains("typeof(int)", driver.GetRunResult().GeneratedTrees.Single().ToString(), StringComparison.Ordinal);
+        Assert.Contains("typeof(int)", driver.GetRunResult().GeneratedTrees.Single().ToString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -239,22 +256,22 @@ public sealed class GeneratorCacheModelTests
                                     }
                                     """;
         const string source = """
-                                   using Cntryl.Portia;
-                                   using Microsoft.AspNetCore.Routing;
-                                   public sealed record GetOrder(int Id) : IRequest, ICallable;
-                                   public static class Endpoints
-                                   {
-                                       public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<GetOrder>("/orders/{id}");
-                                   }
-                                   """;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              public sealed record GetOrder(int Id) : IRequest, ICallable;
+                              public static class Endpoints
+                              {
+                                  public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<GetOrder>("/orders/{id}");
+                              }
+                              """;
 
         const string jsonRoot = """
-            using Cntryl.Portia;
-            using System.Text.Json.Serialization;
-            [PortiaJsonContext]
-            [JsonSerializable(typeof(string))]
-            public partial class ExampleContext : JsonSerializerContext;
-            """;
+                                using Cntryl.Portia;
+                                using System.Text.Json.Serialization;
+                                [PortiaJsonContext]
+                                [JsonSerializable(typeof(string))]
+                                public partial class ExampleContext : JsonSerializerContext;
+                                """;
 
         // Act
         var failure = Record.Exception(() =>

@@ -87,15 +87,15 @@ public sealed class GeneratedHttpMappingContractTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           using Microsoft.AspNetCore.Routing;
-                                                           public sealed record Binding(int Value) : IRequest<string>, ICallable, IQueuable;
-                                                           public static class Scenario
-                                                           {
-                                                               public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Binding, string>("/binding");
-                                                           }
-                                                           """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              using Microsoft.AspNetCore.Routing;
+                              public sealed record Binding(int Value) : IRequest<string>, ICallable, IQueuable;
+                              public static class Scenario
+                              {
+                                  public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Binding, string>("/binding");
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new RequestHttpBindingGenerator());

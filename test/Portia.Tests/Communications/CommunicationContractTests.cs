@@ -72,8 +72,11 @@ public sealed class CommunicationContractTests
 
         // Assert
         var printed = string.Join('|', mail, sms, invalidMail?.Message, invalidSms?.Message);
-        foreach (var secret in new[] { "person@example.com", "Secret subject", "Secret text", "Secret body",
-                     "+15005550006", "not an address", "555-0100 secret" })
+        foreach (var secret in new[]
+                 {
+                     "person@example.com", "Secret subject", "Secret text", "Secret body",
+                     "+15005550006", "not an address", "555-0100 secret"
+                 })
             Assert.DoesNotContain(secret, printed, StringComparison.Ordinal);
         _ = Assert.IsType<ArgumentException>(invalidMail);
         _ = Assert.IsType<ArgumentException>(invalidSms);
@@ -132,7 +135,8 @@ public sealed class CommunicationContractTests
         // Act
         var rejected = await sender.SendAsync(tenant, new SendId("a"), message);
         var unknown = await sender.SendAsync(tenant, new SendId("b"), message);
-        var throttled = await Record.ExceptionAsync(async () => await sender.SendAsync(tenant, new SendId("c"), message));
+        var throttled =
+            await Record.ExceptionAsync(async () => await sender.SendAsync(tenant, new SendId("c"), message));
         var accepted = await sender.SendAsync(tenant, new SendId("d"), message);
 
         // Assert

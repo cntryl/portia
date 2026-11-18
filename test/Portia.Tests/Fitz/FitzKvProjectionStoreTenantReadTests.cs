@@ -41,7 +41,8 @@ public sealed class FitzKvProjectionStoreTenantReadTests
         var repository = new BalancesRepository(client, "kv://portia/accounts/balances");
 
         // Assert
-        _ = await Assert.ThrowsAnyAsync<ArgumentException>(async () => await repository.ReadAsync(default(TenantId), "savings"));
+        _ = await Assert.ThrowsAnyAsync<ArgumentException>(async () =>
+            await repository.ReadAsync(default(TenantId), "savings"));
 
         Assert.Empty(client.Transactions);
     }

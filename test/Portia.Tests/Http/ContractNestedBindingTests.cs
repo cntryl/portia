@@ -33,10 +33,12 @@ public sealed class ContractNestedBindingTests
 }
 
 sealed record ContractNestedBindingModel(string Name);
+
 sealed record ContractNestedBindingRequest(ContractNestedBindingModel Payload) : IRequest<string>, ICallable;
 
 sealed class ContractNestedBindingHandler : IRequestHandler<ContractNestedBindingRequest, string>
 {
-    public ValueTask<Result<string>> HandleAsync(IRequestContext<ContractNestedBindingRequest> context, CancellationToken ct) =>
+    public ValueTask<Result<string>> HandleAsync(IRequestContext<ContractNestedBindingRequest> context,
+        CancellationToken ct) =>
         ValueTask.FromResult(Result<string>.Success(context.Request.Payload.Name));
 }

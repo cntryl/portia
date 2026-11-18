@@ -22,7 +22,8 @@ public sealed class TwilioSmsSenderTests
         var sender = CreateSender(handler, Callbacks);
 
         // Act
-        var outcome = await sender.SendAsync(Tenant, new SendId("order-1.shipped"), new SmsMessage(Recipient, "Hi there"));
+        var outcome =
+            await sender.SendAsync(Tenant, new SendId("order-1.shipped"), new SmsMessage(Recipient, "Hi there"));
 
         // Assert
         Assert.Equal(SendStatus.Accepted, outcome.Status);
@@ -31,7 +32,8 @@ public sealed class TwilioSmsSenderTests
         Assert.Equal(HttpMethod.Post, request.Method);
         Assert.Equal("https://api.twilio.com/2010-04-01/Accounts/ACtestaccount/Messages.json",
             request.Uri.AbsoluteUri);
-        Assert.Equal(Convert.ToBase64String(Encoding.UTF8.GetBytes($"SKkey:{Secret}")), request.Authorization?.Parameter);
+        Assert.Equal(Convert.ToBase64String(Encoding.UTF8.GetBytes($"SKkey:{Secret}")),
+            request.Authorization?.Parameter);
         Assert.Equal(Recipient, request.Form["To"]);
         Assert.Equal("Hi there", request.Form["Body"]);
         Assert.Equal("MGservice", request.Form["MessagingServiceSid"]);
@@ -229,7 +231,10 @@ public sealed class TwilioSmsSenderTests
             ValueTask.FromResult(tenant);
     }
 
-    sealed record CapturedRequest(HttpMethod Method, Uri Uri, AuthenticationHeaderValue? Authorization,
+    sealed record CapturedRequest(
+        HttpMethod Method,
+        Uri Uri,
+        AuthenticationHeaderValue? Authorization,
         Dictionary<string, string> Form);
 
     sealed class StubHandler(HttpStatusCode status, string body) : HttpMessageHandler
@@ -248,7 +253,8 @@ public sealed class TwilioSmsSenderTests
                     pair => WebUtility.UrlDecode(pair[0]), pair => WebUtility.UrlDecode(pair[1]))));
             if (Failure is not null)
                 throw Failure;
-            var response = new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+            var response = new HttpResponseMessage(status)
+            { Content = new StringContent(body, Encoding.UTF8, "application/json") };
             if (RetryAfter is { } delay)
                 response.Headers.RetryAfter = new RetryConditionHeaderValue(delay);
             return response;

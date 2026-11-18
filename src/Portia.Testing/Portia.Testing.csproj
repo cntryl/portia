@@ -4,6 +4,7 @@
     <!-- Test doubles and conformance suites live in their own namespace so they never appear in
          an application's completion list beside the production contracts. -->
     <RootNamespace>Cntryl.Portia.Testing</RootNamespace>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>

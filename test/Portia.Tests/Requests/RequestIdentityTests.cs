@@ -240,6 +240,7 @@ public sealed class RequestIdentityTests
     internal sealed class IdentifiedQueryHandler : IRequestHandler<IdentifiedQuery, Uuid>
     {
         public List<Uuid> Executions { get; } = [];
+
         public ValueTask<Result<Uuid>> HandleAsync(IRequestContext<IdentifiedQuery> context, CancellationToken ct)
         {
             Executions.Add(context.ExecutionId);
@@ -250,6 +251,7 @@ public sealed class RequestIdentityTests
     internal sealed class IdentifiedCommandHandler : IRequestHandler<IdentifiedCommand>
     {
         public List<IRequestContext<IdentifiedCommand>> Contexts { get; } = [];
+
         public ValueTask<Result> HandleAsync(IRequestContext<IdentifiedCommand> context, CancellationToken ct)
         {
             Contexts.Add(context);
@@ -269,12 +271,14 @@ public sealed class RequestIdentityTests
         public bool Allowed { get; init; } = true;
         public int Calls { get; private set; }
         public Uuid LastRequestId { get; private set; }
+
         public ValueTask<Result> AuthorizeAsync(IRequestContext<IdentifiedCommand> context, CancellationToken ct)
         {
             Calls++;
             LastRequestId = context.RequestId;
-            return ValueTask.FromResult(Allowed ? Result.Success :
-                Result.Failure(new RequestError(RequestErrorKind.Forbidden, "Denied")));
+            return ValueTask.FromResult(Allowed
+                ? Result.Success
+                : Result.Failure(new RequestError(RequestErrorKind.Forbidden, "Denied")));
         }
     }
 }

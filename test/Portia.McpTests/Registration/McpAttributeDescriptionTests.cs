@@ -74,7 +74,8 @@ public sealed class McpAttributeDescriptionTests
         var tool = Assert.Single(provider.GetServices<McpServerTool>()).ProtocolTool;
 
         // Assert
-        Assert.Equal("Opaque payload", tool.OutputSchema!.Value.GetProperty("properties").GetProperty("result").GetProperty("title").GetString());
+        Assert.Equal("Opaque payload",
+            tool.OutputSchema!.Value.GetProperty("properties").GetProperty("result").GetProperty("title").GetString());
     }
 
     [Fact]
@@ -92,7 +93,8 @@ public sealed class McpAttributeDescriptionTests
 
         // Assert
         Assert.Equal([1, 2], bound!.Values);
-        Assert.True(tool.InputSchema.GetProperty("properties").GetProperty("payload").GetProperty("properties").TryGetProperty("values", out _));
+        Assert.True(tool.InputSchema.GetProperty("properties").GetProperty("payload").GetProperty("properties")
+            .TryGetProperty("values", out _));
     }
 
     [Fact]
@@ -106,11 +108,14 @@ public sealed class McpAttributeDescriptionTests
 
         // Act
         var tool = Assert.Single(provider.GetServices<McpServerTool>()).ProtocolTool;
-        using var actual = JsonDocument.Parse("{\"result\":" + JsonSerializer.Serialize(new ConditionalReply(0), json.GetTypeInfo<ConditionalReply>()) + "}");
+        using var actual = JsonDocument.Parse("{\"result\":" +
+                                              JsonSerializer.Serialize(new ConditionalReply(0),
+                                                  json.GetTypeInfo<ConditionalReply>()) + "}");
 
         // Assert
         Assert.False(actual.RootElement.GetProperty("result").TryGetProperty("count", out _));
-        var schema = JsonSchema.Build(tool.OutputSchema!.Value, new BuildOptions { Dialect = Dialect.Draft202012, SchemaRegistry = new() });
+        var schema = JsonSchema.Build(tool.OutputSchema!.Value,
+            new BuildOptions { Dialect = Dialect.Draft202012, SchemaRegistry = new() });
         Assert.True(schema.Evaluate(actual.RootElement).IsValid);
     }
 
@@ -127,7 +132,8 @@ public sealed class McpAttributeDescriptionTests
         var tool = Assert.Single(provider.GetServices<McpServerTool>()).ProtocolTool;
 
         // Assert
-        var example = tool.OutputSchema!.Value.GetProperty("properties").GetProperty("result").GetProperty("examples")[0];
+        var example =
+            tool.OutputSchema!.Value.GetProperty("properties").GetProperty("result").GetProperty("examples")[0];
         Assert.Equal("#/data", example.GetProperty("$ref").GetString());
     }
 
@@ -146,7 +152,8 @@ public sealed class McpAttributeDescriptionTests
 
         // Assert
         var input = tool.InputSchema.GetProperty("examples")[0];
-        var output = tool.OutputSchema!.Value.GetProperty("properties").GetProperty("result").GetProperty("examples")[0];
+        var output = tool.OutputSchema!.Value.GetProperty("properties").GetProperty("result")
+            .GetProperty("examples")[0];
         Assert.Equal("secret", input.GetProperty("secret").GetString());
         Assert.False(output.TryGetProperty("secret", out _));
         Assert.Equal("visible", output.GetProperty("public_value").GetString());
@@ -159,17 +166,21 @@ public sealed class McpAttributeDescriptionTests
 
     public sealed class ReferenceToolHandler : IRequestHandler<ReferenceTool, ReferencePayload>
     {
-        public ValueTask<Result<ReferencePayload>> HandleAsync(IRequestContext<ReferenceTool> context, CancellationToken ct) =>
+        public ValueTask<Result<ReferencePayload>> HandleAsync(IRequestContext<ReferenceTool> context,
+            CancellationToken ct) =>
             ValueTask.FromResult(Result<ReferencePayload>.Success(new("#/data")));
     }
 
     [Discriminator("contract.direction")]
-    public sealed record DirectionalTool([property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWriting)] string Secret,
+    public sealed record DirectionalTool(
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWriting)]
+        string Secret,
         string PublicValue) : IRequest<DirectionalTool>, ICallable;
 
     public sealed class DirectionalToolHandler : IRequestHandler<DirectionalTool, DirectionalTool>
     {
-        public ValueTask<Result<DirectionalTool>> HandleAsync(IRequestContext<DirectionalTool> context, CancellationToken ct) =>
+        public ValueTask<Result<DirectionalTool>> HandleAsync(IRequestContext<DirectionalTool> context,
+            CancellationToken ct) =>
             ValueTask.FromResult(Result<DirectionalTool>.Success(context.Request));
     }
 
@@ -184,18 +195,22 @@ public sealed class McpAttributeDescriptionTests
 
     public sealed class PopulatedToolHandler : IRequestHandler<PopulatedTool, PopulatedPayload>
     {
-        public ValueTask<Result<PopulatedPayload>> HandleAsync(IRequestContext<PopulatedTool> context, CancellationToken ct) =>
+        public ValueTask<Result<PopulatedPayload>> HandleAsync(IRequestContext<PopulatedTool> context,
+            CancellationToken ct) =>
             ValueTask.FromResult(Result<PopulatedPayload>.Success(context.Request.Payload));
     }
 
     [Discriminator("contract.conditional")]
     public sealed record ConditionalTool : IRequest<ConditionalReply>, ICallable;
 
-    public sealed record ConditionalReply([property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] int Count);
+    public sealed record ConditionalReply(
+        [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+        int Count);
 
     public sealed class ConditionalToolHandler : IRequestHandler<ConditionalTool, ConditionalReply>
     {
-        public ValueTask<Result<ConditionalReply>> HandleAsync(IRequestContext<ConditionalTool> context, CancellationToken ct) =>
+        public ValueTask<Result<ConditionalReply>> HandleAsync(IRequestContext<ConditionalTool> context,
+            CancellationToken ct) =>
             ValueTask.FromResult(Result<ConditionalReply>.Success(new(0)));
     }
 
@@ -207,13 +222,18 @@ public sealed class McpAttributeDescriptionTests
 
     public sealed class OpaquePayloadConverter : JsonConverter<OpaquePayload>
     {
-        public override OpaquePayload Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => new(reader.GetString()!);
-        public override void Write(Utf8JsonWriter writer, OpaquePayload value, JsonSerializerOptions options) => writer.WriteStringValue(value.Value);
+        public override OpaquePayload
+            Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+            new(reader.GetString()!);
+
+        public override void Write(Utf8JsonWriter writer, OpaquePayload value, JsonSerializerOptions options) =>
+            writer.WriteStringValue(value.Value);
     }
 
     public sealed class OpaqueToolHandler : IRequestHandler<OpaqueTool, OpaquePayload>
     {
-        public ValueTask<Result<OpaquePayload>> HandleAsync(IRequestContext<OpaqueTool> context, CancellationToken ct) =>
+        public ValueTask<Result<OpaquePayload>>
+            HandleAsync(IRequestContext<OpaqueTool> context, CancellationToken ct) =>
             ValueTask.FromResult(Result<OpaquePayload>.Success(new("value")));
     }
 
@@ -221,17 +241,21 @@ public sealed class McpAttributeDescriptionTests
     [Description("Attributed tool.")]
     [Discriminator("attributes.describe")]
     public sealed record AnnotatedTool(
-        [property: Description("Attributed user name.")] string UserName,
+        [property: Description("Attributed user name.")]
+        string UserName,
         [property: System.ComponentModel.DataAnnotations.Display(Description = "Optional details.")]
         AnnotatedPayload? Details = null) : IRequest<AnnotatedPayload>, ICallable;
 
     [Description("Attributed payload.")]
-    public sealed record AnnotatedPayload([property: Description("Attributed value."), JsonPropertyName("wire-value")] string Value);
+    public sealed record AnnotatedPayload(
+        [property: Description("Attributed value."), JsonPropertyName("wire-value")]
+        string Value);
 
     public sealed class AnnotatedToolHandler : IRequestHandler<AnnotatedTool, AnnotatedPayload>
     {
         public ValueTask<Result<AnnotatedPayload>> HandleAsync(IRequestContext<AnnotatedTool> context,
-            CancellationToken ct) => ValueTask.FromResult(Result<AnnotatedPayload>.Success(new AnnotatedPayload(context.Request.UserName)));
+            CancellationToken ct) =>
+            ValueTask.FromResult(Result<AnnotatedPayload>.Success(new AnnotatedPayload(context.Request.UserName)));
     }
 }
 

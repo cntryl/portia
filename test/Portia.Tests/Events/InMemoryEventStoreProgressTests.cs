@@ -28,7 +28,8 @@ public sealed class InMemoryEventStoreProgressTests
         Assert.Equal(progress.PendingEvents, progress.PendingEventsLowerBound);
         Assert.False(progress.IsCaughtUp);
 
-        var caughtUp = await store.GetProgressAsync(EventStreamPattern.ForPattern("tenant", area, resource), Cursor(head));
+        var caughtUp =
+            await store.GetProgressAsync(EventStreamPattern.ForPattern("tenant", area, resource), Cursor(head));
         Assert.True(caughtUp.IsCaughtUp);
         Assert.Equal(0UL, caughtUp.PendingEvents);
     }
@@ -61,10 +62,13 @@ public sealed class InMemoryEventStoreProgressTests
                 DomainEventSeed.Attach(new Changed(index), aggregateId, (ulong)index + 1)).ToArray();
             await store.AppendAsync(stream, 0, events);
         }
+
         var audit = DomainEventSeed.Attach(new Changed(raisedCount), aggregateId, (ulong)raisedCount, isAudit: true);
         await store.AppendAsync(stream, (ulong)raisedCount, [audit]);
     }
 
-    static EventCursor Cursor(ulong position) => new(position.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    static EventCursor Cursor(ulong position) =>
+        new(position.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
     sealed record Changed(int Value) : DomainEvent;
 }

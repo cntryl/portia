@@ -47,9 +47,11 @@ public sealed class RequestTransportMarkerTests
         var sendId = remote.LastMetadata!.RequestId;
         _ = await ((IRemoteRequestSender)remote).SendWithOutcomeAsync(request, route, null);
         var sendWithOutcomeId = remote.LastMetadata!.RequestId;
-        _ = await ((IRemoteRequestSender)remote).SendAsync<RequestIdentityTests.IdentifiedQuery, Uuid>(query, route, null);
+        _ = await ((IRemoteRequestSender)remote).SendAsync<RequestIdentityTests.IdentifiedQuery, Uuid>(query, route,
+            null);
         var queryId = remote.LastMetadata!.RequestId;
-        _ = await ((IRemoteRequestSender)remote).SendWithOutcomeAsync<RequestIdentityTests.IdentifiedQuery, Uuid>(query, route, null);
+        _ = await ((IRemoteRequestSender)remote).SendWithOutcomeAsync<RequestIdentityTests.IdentifiedQuery, Uuid>(query,
+            route, null);
         var queryWithOutcomeId = remote.LastMetadata!.RequestId;
         await ((IRequestQueuePublisher)queue).EnqueueAsync(request, route, null);
         await ((INoticeRequestSender)notice).PublishAsync(request, route, null);

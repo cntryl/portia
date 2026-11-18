@@ -79,7 +79,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             .SelectMany(static (pair, ct) => GeneratedSource.Capture(
                 output => Generate(output, pair.Left.Left.Left, pair.Left.Left.Right, pair.Left.Right, pair.Right), ct))
             .WithTrackingName("PortiaRegistrationGeneratedFiles");
-        context.RegisterSourceOutput(files, static (output, file) => GeneratedSource.Add(output, file.HintName, file.Source));
+        context.RegisterSourceOutput(files,
+            static (output, file) => GeneratedSource.Add(output, file.HintName, file.Source));
     }
 
     static bool IsDispatchSyntax(SyntaxNode node)
@@ -147,11 +148,13 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 new RegistrationDiagnostic(RegistrationDiagnosticKind.UnsupportedCallSite, diagnosticLocation, role));
         }
 
-        var callingType = context.SemanticModel.GetEnclosingSymbol(invocation.SpanStart, ct)?.ContainingType?.ToDisplayString() ?? "TopLevel";
+        var callingType =
+            context.SemanticModel.GetEnclosingSymbol(invocation.SpanStart, ct)?.ContainingType?.ToDisplayString() ??
+            "TopLevel";
         if (role == "application")
         {
             return new Call(InterceptableLocationModel.From(location), "application", string.Empty, null,
-                DiagnosticLocation.From(invocation.GetLocation()))
+                    DiagnosticLocation.From(invocation.GetLocation()))
             { CallingType = callingType };
         }
 
@@ -176,7 +179,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         if (role == "domain event")
         {
             var attribute = type.GetAttributes().FirstOrDefault(candidate =>
-                candidate.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, "Cntryl.Portia.DiscriminatorAttribute"));
+                candidate.AttributeClass is { } attributeType &&
+                SymbolNames.Is(attributeType, "Cntryl.Portia.DiscriminatorAttribute"));
             return attribute is not null && attribute.ConstructorArguments.Length == 2
                                          && attribute.ConstructorArguments[0].Value is string name
                                          && attribute.ConstructorArguments[1].Value is int version
@@ -342,7 +346,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         }
 
         var discriminator = type.GetAttributes().FirstOrDefault(candidate =>
-            candidate.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, "Cntryl.Portia.DiscriminatorAttribute"));
+            candidate.AttributeClass is { } attributeType &&
+            SymbolNames.Is(attributeType, "Cntryl.Portia.DiscriminatorAttribute"));
         if (discriminator?.ConstructorArguments.FirstOrDefault().Value is not string name
             || string.IsNullOrWhiteSpace(name))
         {
@@ -350,25 +355,28 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 "the request needs a valid Discriminator attribute", diagnosticLocation);
         }
 
-        var description = JsonDescriptionEmission.Description(type) ?? DocumentationSummary(type) ?? $"Invokes the {type.Name} request.";
+        var description = JsonDescriptionEmission.Description(type) ??
+                          DocumentationSummary(type) ?? $"Invokes the {type.Name} request.";
 
         var propertyDescriptions = RequestProperties(type)
             .Where(property => !property.IsStatic && !property.IsIndexer
-                && property.GetMethod?.DeclaredAccessibility == Accessibility.Public)
+                                                  && property.GetMethod?.DeclaredAccessibility == Accessibility.Public)
             .OrderBy(property => property.Name, StringComparer.Ordinal)
             .Select(property => (Property: property,
                 Description: DocumentationSummary(property)
-                              ?? ParameterDescription(property.ContainingType, property.Name)))
+                             ?? ParameterDescription(property.ContainingType, property.Name)))
             .Where(item => item.Description is not null && JsonDescriptionEmission.Description(item.Property) is null)
             .ToArray();
-        var configure = propertyDescriptions.Length == 0 ? "configure"
+        var configure = propertyDescriptions.Length == 0
+            ? "configure"
             : "options => { " + string.Join(" ", propertyDescriptions.Select(item =>
-                "options!.DescribeProperty(" + RequestTransportDiscovery.FormatStringLiteral(item.Property.Name) + ", "
-                + RequestTransportDiscovery.FormatStringLiteral(item.Description!) + ", "
-                + (JsonPropertyName(item.Property) is { } jsonName
-                    ? RequestTransportDiscovery.FormatStringLiteral(jsonName)
-                    : "null") + ");"))
-              + " configure?.Invoke(options!); }";
+                                  "options!.DescribeProperty(" +
+                                  RequestTransportDiscovery.FormatStringLiteral(item.Property.Name) + ", "
+                                  + RequestTransportDiscovery.FormatStringLiteral(item.Description!) + ", "
+                                  + (JsonPropertyName(item.Property) is { } jsonName
+                                      ? RequestTransportDiscovery.FormatStringLiteral(jsonName)
+                                      : "null") + ");"))
+                              + " configure?.Invoke(options!); }";
 
         var genericTypes = new StringBuilder().Append('<').Append(Type(type));
         if (request.TypeArguments.Length == 1)
@@ -383,14 +391,15 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     static IEnumerable<IPropertySymbol> RequestProperties(INamedTypeSymbol type)
     {
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        for (var current = type; current is not null && current.SpecialType != SpecialType.System_Object;
+        for (var current = type;
+             current is not null && current.SpecialType != SpecialType.System_Object;
              current = current.BaseType)
         {
             foreach (var property in current.GetMembers().OfType<IPropertySymbol>())
             {
                 if (!property.IsStatic && !property.IsIndexer
-                    && property.GetMethod?.DeclaredAccessibility == Accessibility.Public
-                    && seen.Add(property.Name))
+                                       && property.GetMethod?.DeclaredAccessibility == Accessibility.Public
+                                       && seen.Add(property.Name))
                     yield return property;
             }
         }
@@ -438,6 +447,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                             && DocumentationSummary(candidate, visited) is { } inheritedInterfaceProperty)
                             return inheritedInterfaceProperty;
             }
+
             if (symbol is INamedTypeSymbol { } namedType)
                 foreach (var implemented in namedType.Interfaces)
                     if (DocumentationSummary(implemented, visited) is { } inheritedInterface)
@@ -459,7 +469,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         try
         {
             var parameter = XDocument.Parse(xml).Root?.Elements("param")
-                .FirstOrDefault(element => string.Equals((string?)element.Attribute("name"), propertyName, StringComparison.Ordinal));
+                .FirstOrDefault(element =>
+                    string.Equals((string?)element.Attribute("name"), propertyName, StringComparison.Ordinal));
             var rendered = parameter is null ? null : string.Concat(parameter.Nodes().Select(RenderDocumentationNode));
             return string.IsNullOrWhiteSpace(rendered) ? null : Regex.Replace(rendered, @"\s+", " ").Trim();
         }
@@ -471,7 +482,7 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
 
     static string? JsonPropertyName(IPropertySymbol property) => property.GetAttributes()
         .FirstOrDefault(attribute => attribute.AttributeClass?.ToDisplayString()
-            == "System.Text.Json.Serialization.JsonPropertyNameAttribute")
+                                     == "System.Text.Json.Serialization.JsonPropertyNameAttribute")
         ?.ConstructorArguments.FirstOrDefault().Value as string;
 
     static string RenderDocumentationNode(XNode node) => node switch
@@ -547,9 +558,11 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         {
             _ = contexts.Append("_ = builder.AddGeneratedJsonContext(static options => ");
             if (context.TypeName.EndsWith(".Create", StringComparison.Ordinal))
-                _ = contexts.Append(context.TypeName).Append("(options), ").Append(context.Descriptions).AppendLine(");");
+                _ = contexts.Append(context.TypeName).Append("(options), ").Append(context.Descriptions)
+                    .AppendLine(");");
             else
-                _ = contexts.Append("new ").Append(context.TypeName).Append("(options), ").Append(context.Descriptions).AppendLine(");");
+                _ = contexts.Append("new ").Append(context.TypeName).Append("(options), ").Append(context.Descriptions)
+                    .AppendLine(");");
         }
 
         var events = new StringBuilder();
@@ -582,7 +595,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     {
         if (request.GetAttributes()
                 .FirstOrDefault(attribute =>
-                    attribute.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, "Cntryl.Portia.RequiresPermissionAttribute"))
+                    attribute.AttributeClass is { } attributeType &&
+                    SymbolNames.Is(attributeType, "Cntryl.Portia.RequiresPermissionAttribute"))
                 ?.ConstructorArguments.FirstOrDefault().Value is not string value)
         {
             return "null";
@@ -625,7 +639,8 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
     {
         if (request.GetAttributes()
                 .FirstOrDefault(attribute =>
-                    attribute.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, "Cntryl.Portia.RequiresPermissionAttribute"))
+                    attribute.AttributeClass is { } attributeType &&
+                    SymbolNames.Is(attributeType, "Cntryl.Portia.RequiresPermissionAttribute"))
                 ?.ConstructorArguments.FirstOrDefault().Value is not string value)
         {
             return null;
@@ -693,11 +708,11 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                     call.Subject, call.Role, call.Error));
             }
         }
-
     }
 
     static void Generate(GeneratedOutput context, ImmutableArray<Call> calls,
-        ImmutableArray<RequestTransportComponent> dispatchedRequests, SharedRegistrationsModel shared, string assemblyIdentity)
+        ImmutableArray<RequestTransportComponent> dispatchedRequests, SharedRegistrationsModel shared,
+        string assemblyIdentity)
     {
         var sharedType = "PortiaSharedRegistrations_" + GeneratedSource.Identity(assemblyIdentity);
         var inferred = new StringBuilder();
@@ -711,8 +726,10 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         if (valid.Length == 0)
             return;
 
-        var source = new StringBuilder("// <auto-generated />\n#nullable enable\nnamespace Cntryl.Portia.Generated;\n\ninternal static partial class ")
-            .Append(sharedType).AppendLine("\n{");
+        var source =
+            new StringBuilder(
+                    "// <auto-generated />\n#nullable enable\nnamespace Cntryl.Portia.Generated;\n\ninternal static partial class ")
+                .Append(sharedType).AppendLine("\n{");
         // Compilation-wide registrations must not be copied into each interceptor: that produces
         // calls × events source growth (over a million lines in a large application). Keep the
         // existing call order, emit each block once, and apply it once per builder/assembly.
@@ -727,20 +744,26 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                 continue;
             var rootMethod = GeneratedSource.StatementTree(context, "Cntryl.Portia.Generated",
                 sharedType, name, "global::Cntryl.Portia.PortiaBuilder", "builder",
-                body.Split(new[] { (char)13, (char)10 }, StringSplitOptions.RemoveEmptyEntries), "PortiaShared." + name);
+                body.Split(new[] { (char)13, (char)10 }, StringSplitOptions.RemoveEmptyEntries),
+                "PortiaShared." + name);
             _ = source.Append("    private static readonly object ").Append(name).AppendLine("Identity = new();")
                 .Append("    internal static void ").Append(name)
                 .AppendLine("(global::Cntryl.Portia.PortiaBuilder target)\n    {")
-                .Append("        _ = target.AddGeneratedRegistrations(").Append(name).Append("Identity, static builder => ")
+                .Append("        _ = target.AddGeneratedRegistrations(").Append(name)
+                .Append("Identity, static builder => ")
                 .Append(rootMethod).AppendLine("(builder));").AppendLine("    }");
         }
 
         source.AppendLine("}");
         GeneratedSource.Add(context, "PortiaGeneratedRegistrationInterceptors.g.cs", source.ToString());
 
-        var jsonContextsCall = shared.JsonContexts.Length == 0 ? "" : "            " + sharedType + ".RegisterJsonContexts(builder);\n";
+        var jsonContextsCall = shared.JsonContexts.Length == 0
+            ? ""
+            : "            " + sharedType + ".RegisterJsonContexts(builder);\n";
         var eventsCall = shared.Events.Length == 0 ? "" : "            " + sharedType + ".RegisterEvents(builder);\n";
-        var dispatchedRequestsCall = inferred.Length == 0 ? "" : "            " + sharedType + ".RegisterDispatchedRequests(builder);\n";
+        var dispatchedRequestsCall = inferred.Length == 0
+            ? ""
+            : "            " + sharedType + ".RegisterDispatchedRequests(builder);\n";
         foreach (var group in valid.GroupBy(call => call.CallingType, StringComparer.Ordinal))
         {
             context.CancellationToken.ThrowIfCancellationRequested();
@@ -759,15 +782,20 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                         .Append(RequestTransportDiscovery.FormatStringLiteral(matching.Location.Value.Data))
                         .AppendLine(")]");
                 }
+
                 _ = call.Role == "application"
-                    ? source.Append("        public static global::Cntryl.Portia.PortiaBuilder Register").Append(identity)
-                        .AppendLine("(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services)\n        {")
+                    ? source.Append("        public static global::Cntryl.Portia.PortiaBuilder Register")
+                        .Append(identity)
+                        .AppendLine(
+                            "(this global::Microsoft.Extensions.DependencyInjection.IServiceCollection services)\n        {")
                         .AppendLine("            global::System.ArgumentNullException.ThrowIfNull(services);")
                         .AppendLine(
                             "            var builder = global::Cntryl.Portia.PortiaApplicationServiceCollectionExtensions.AddPortia(services);")
-                        .Append(jsonContextsCall).Append(Indent(call.Body)).Append(eventsCall).Append(dispatchedRequestsCall)
+                        .Append(jsonContextsCall).Append(Indent(call.Body)).Append(eventsCall)
+                        .Append(dispatchedRequestsCall)
                         .AppendLine("            return builder;").AppendLine("        }")
-                    : source.Append("        public static global::Cntryl.Portia.PortiaBuilder Register").Append(identity)
+                    : source.Append("        public static global::Cntryl.Portia.PortiaBuilder Register")
+                        .Append(identity)
                         .Append(call.Role switch
                         {
                             "authorizer" =>
@@ -777,17 +805,21 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
                                 "(this global::Cntryl.Portia.PortiaBuilder builder, global::System.Action<global::Cntryl.Portia.McpToolOptions>? configure = null)\n        {\n",
                             _ => "(this global::Cntryl.Portia.PortiaBuilder builder)\n        {\n"
                         })
-                        .AppendLine("            global::System.ArgumentNullException.ThrowIfNull(builder);").Append(Indent(call.Body))
+                        .AppendLine("            global::System.ArgumentNullException.ThrowIfNull(builder);")
+                        .Append(Indent(call.Body))
                         .Append(eventsCall).AppendLine("            return builder;").AppendLine("        }");
             }
 
             _ = source.AppendLine("    }").AppendLine("}");
-            GeneratedSource.Add(context, "PortiaRegistrationInterceptors." + GeneratedSource.Label(group.Key) + "." + GeneratedSource.Identity(group.Key) + ".g.cs",
+            GeneratedSource.Add(context,
+                "PortiaRegistrationInterceptors." + GeneratedSource.Label(group.Key) + "." +
+                GeneratedSource.Identity(group.Key) + ".g.cs",
                 source.ToString());
         }
     }
 
-    static string Indent(string? body) => string.IsNullOrEmpty(body) ? string.Empty
+    static string Indent(string? body) => string.IsNullOrEmpty(body)
+        ? string.Empty
         : string.Join("\n", body!.Split(new[] { (char)13, (char)10 }, StringSplitOptions.RemoveEmptyEntries)
             .Select(line => "            " + line)) + "\n";
 

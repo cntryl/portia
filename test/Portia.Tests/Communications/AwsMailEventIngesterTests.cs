@@ -39,9 +39,12 @@ public sealed class AwsMailEventIngesterTests
 
     /// <summary>Mail that Portia did not send, and engagement events, are not delivery events.</summary>
     [Theory]
-    [InlineData("""{"eventType":"Delivery","mail":{"timestamp":"2026-11-13T10:00:00Z","tags":{"ses:from-domain":["example.com"]}}}""")]
-    [InlineData("""{"eventType":"Open","mail":{"timestamp":"2026-11-13T10:00:00Z","tags":{"portia-tenant":["dGVuYW50"],"portia-send":["a"]}}}""")]
-    [InlineData("""{"eventType":"Delivery","mail":{"timestamp":"2026-11-13T10:00:00Z","tags":{"portia-tenant":["dGVuYW50"],"portia-send":["not a send id"]}}}""")]
+    [InlineData(
+        """{"eventType":"Delivery","mail":{"timestamp":"2026-11-13T10:00:00Z","tags":{"ses:from-domain":["example.com"]}}}""")]
+    [InlineData(
+        """{"eventType":"Open","mail":{"timestamp":"2026-11-13T10:00:00Z","tags":{"portia-tenant":["dGVuYW50"],"portia-send":["a"]}}}""")]
+    [InlineData(
+        """{"eventType":"Delivery","mail":{"timestamp":"2026-11-13T10:00:00Z","tags":{"portia-tenant":["dGVuYW50"],"portia-send":["not a send id"]}}}""")]
     [InlineData("""{"Type":"SubscriptionConfirmation","Message":"confirm"}""")]
     public async Task ShouldIgnoreEventGivenNoPortiaDeliveryEvent(string json)
     {

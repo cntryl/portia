@@ -4,12 +4,16 @@ using System.Text.Json.Serialization.Metadata;
 
 namespace Cntryl.Portia;
 
-sealed record OpenApiTenantCollections(TenantId[] Items, Dictionary<string, TenantId> Values,
-    TenantId?[] NullableItems, Dictionary<string, TenantId?> NullableValues);
+sealed record OpenApiTenantCollections(
+    TenantId[] Items,
+    Dictionary<string, TenantId> Values,
+    TenantId?[] NullableItems,
+    Dictionary<string, TenantId?> NullableValues);
 
 [Discriminator("test.openapi.tenant-collections")]
 [RequestRoute("test", "openapi", "tenant-collections", "echo")]
-sealed record OpenApiTenantCollectionRequest(OpenApiTenantCollections Payload) : IRequest<OpenApiTenantCollections>, ICallable;
+sealed record OpenApiTenantCollectionRequest(OpenApiTenantCollections Payload)
+    : IRequest<OpenApiTenantCollections>, ICallable;
 
 sealed class OpenApiTenantCollectionHandler : IRequestHandler<OpenApiTenantCollectionRequest, OpenApiTenantCollections>
 {
@@ -29,7 +33,8 @@ sealed class OpenApiTraversalCollectionConverter : JsonConverter<OpenApiTraversa
         JsonSerializerOptions options) => new(JsonSerializer.Deserialize(ref reader,
         options.GetTypeInfo<OpenApiTraversalItem[]>())!);
 
-    public override void Write(Utf8JsonWriter writer, OpenApiTraversalCollection value, JsonSerializerOptions options) =>
+    public override void Write(Utf8JsonWriter writer, OpenApiTraversalCollection value,
+        JsonSerializerOptions options) =>
         JsonSerializer.Serialize(writer, value.Values,
             options.GetTypeInfo<OpenApiTraversalItem[]>());
 }
@@ -52,8 +57,10 @@ sealed class OpenApiDictionaryTraversalHandler
 [JsonDerivedType(typeof(OpenApiTraversalTextVariant), "text")]
 abstract record OpenApiTraversalVariant;
 
-sealed record OpenApiTraversalCollectionVariant(OpenApiTraversalCollection Items,
-    Dictionary<string, OpenApiTraversalCollection> Groups, List<OpenApiTraversalCollection> Batches)
+sealed record OpenApiTraversalCollectionVariant(
+    OpenApiTraversalCollection Items,
+    Dictionary<string, OpenApiTraversalCollection> Groups,
+    List<OpenApiTraversalCollection> Batches)
     : OpenApiTraversalVariant;
 
 sealed record OpenApiTraversalTextVariant(string Description) : OpenApiTraversalVariant;
@@ -63,7 +70,8 @@ sealed record OpenApiTraversalTextVariant(string Description) : OpenApiTraversal
 sealed record OpenApiPolymorphicTraversalRequest(OpenApiTraversalVariant Payload)
     : IRequest<OpenApiTraversalVariant>, ICallable;
 
-sealed class OpenApiPolymorphicTraversalHandler : IRequestHandler<OpenApiPolymorphicTraversalRequest, OpenApiTraversalVariant>
+sealed class
+    OpenApiPolymorphicTraversalHandler : IRequestHandler<OpenApiPolymorphicTraversalRequest, OpenApiTraversalVariant>
 {
     public ValueTask<Result<OpenApiTraversalVariant>> HandleAsync(
         IRequestContext<OpenApiPolymorphicTraversalRequest> context, CancellationToken ct) =>
@@ -86,7 +94,8 @@ sealed record OpenApiTraversalCounts(OpenApiTraversalCount RequiredCount, OpenAp
 
 [Discriminator("test.openapi.nullable-traversal")]
 [RequestRoute("test", "openapi", "nullable-traversal", "echo")]
-sealed record OpenApiNullableTraversalRequest(OpenApiTraversalCounts Payload) : IRequest<OpenApiTraversalCounts>, ICallable;
+sealed record OpenApiNullableTraversalRequest(OpenApiTraversalCounts Payload)
+    : IRequest<OpenApiTraversalCounts>, ICallable;
 
 sealed class OpenApiNullableTraversalHandler : IRequestHandler<OpenApiNullableTraversalRequest, OpenApiTraversalCounts>
 {
@@ -113,7 +122,8 @@ sealed record OpenApiRecursiveArrayEnvelope([property: JsonPropertyName("a~/b")]
 
 [Discriminator("test.openapi.recursive-traversal")]
 [RequestRoute("test", "openapi", "recursive-traversal", "echo")]
-sealed record OpenApiRecursiveTraversalRequest(OpenApiRecursiveArrayEnvelope Payload) : IRequest<OpenApiRecursiveArray>, ICallable;
+sealed record OpenApiRecursiveTraversalRequest(OpenApiRecursiveArrayEnvelope Payload)
+    : IRequest<OpenApiRecursiveArray>, ICallable;
 
 sealed class OpenApiRecursiveTraversalHandler : IRequestHandler<OpenApiRecursiveTraversalRequest, OpenApiRecursiveArray>
 {
@@ -122,8 +132,10 @@ sealed class OpenApiRecursiveTraversalHandler : IRequestHandler<OpenApiRecursive
         ValueTask.FromResult(Result<OpenApiRecursiveArray>.Success(context.Request.Payload.Tree!));
 }
 
-sealed record OpenApiMappedCollectionNullability(List<OpenApiSelection?> Items,
-    Dictionary<string, OpenApiSelection?> Values, List<string> Labels);
+sealed record OpenApiMappedCollectionNullability(
+    List<OpenApiSelection?> Items,
+    Dictionary<string, OpenApiSelection?> Values,
+    List<string> Labels);
 
 [Discriminator("test.openapi.collection-nullability")]
 [RequestRoute("test", "openapi", "collection-nullability", "echo")]

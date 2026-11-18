@@ -29,6 +29,9 @@ Short runs are useful for guarding a focused change but have wider confidence in
 full benchmark campaign. Compare before and after in the same session and do not turn these values
 into xUnit timing assertions.
 
+For analyzer, code-fix, and source-generator qualification, see the proposed
+[compiler tooling benchmark design](compiler-benchmarks.md).
+
 ## Measured hot paths
 
 Request dispatch now reuses one typed request context and a cached pipeline plan while enforcing

@@ -190,7 +190,8 @@ public sealed class FitzKvProjectionStoreTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await store.BeginAsync(new ProjectionBatchContext(Identity, new ProjectionCheckpoint(new EventCursor("8")))));
+            await store.BeginAsync(new ProjectionBatchContext(Identity,
+                new ProjectionCheckpoint(new EventCursor("8")))));
 
         // Assert
         Assert.IsType<InvalidDataException>(exception);
@@ -545,7 +546,8 @@ public sealed class FitzKvProjectionStoreTests
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
         var identity = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-a", "orders"));
-        await using (var batch = await store.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)))
+        await using (var batch =
+                     await store.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)))
         {
             await store.AddAsync("widgets", 12);
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
@@ -571,7 +573,8 @@ public sealed class FitzKvProjectionStoreTests
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
         var tenantB = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-b", "orders"));
-        await using (var batch = await store.BeginAsync(new ProjectionBatchContext(tenantB, ProjectionCheckpoint.Start)))
+        await using (var batch =
+                     await store.BeginAsync(new ProjectionBatchContext(tenantB, ProjectionCheckpoint.Start)))
             await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
 
         _ = await store.ReadTotalAsync("tenant-a", "widgets");
@@ -599,7 +602,8 @@ public sealed class FitzKvProjectionStoreTests
         var store = new TotalsRepository(client, "kv://portia/state/orders");
 
         // Act
-        await using var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
+        await using var batch =
+            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
 
         // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>

@@ -24,6 +24,7 @@ public sealed class TenantCursorFailureTests
                 failOnce = false;
                 throw new IOException("tenant extraction failed once");
             }
+
             return GetTenant(ev);
         });
 
@@ -37,6 +38,7 @@ public sealed class TenantCursorFailureTests
             await AppendAsync(events, aggregate, 1, new Stopped("acme"));
             failOnce = true;
         }
+
         await AppendAsync(events, aggregate, removal ? 2UL : 1UL, new Started("beta"));
 
         _ = await Assert.ThrowsAsync<IOException>(() => ReadOneAsync(cursor));
@@ -149,7 +151,11 @@ public sealed class TenantCursorFailureTests
         {
             _ = await Assert.ThrowsAsync<InvalidOperationException>(() => ReadOneAsync(cursor));
         }
-        finally { notifier.AllowDisposal.TrySetResult(); }
+        finally
+        {
+            notifier.AllowDisposal.TrySetResult();
+        }
+
         _ = await Assert.ThrowsAsync<IOException>(() => cleanup);
         await AppendAsync(events, aggregate, 1, new Started("beta"));
 
@@ -180,14 +186,17 @@ public sealed class TenantCursorFailureTests
     }
 
     sealed record Started(string Tenant) : DomainEvent;
+
     sealed record Stopped(string Tenant) : DomainEvent;
 
     sealed class CleanupNotifier(bool failFirstDispose) : IDomainEventNotifier
     {
         int _subscriptions;
 
-        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern, CancellationToken ct = default)
-            => ValueTask.FromResult<IDomainEventSubscription>(new Subscription(failFirstDispose && _subscriptions++ == 0));
+        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
+            CancellationToken ct = default)
+            => ValueTask.FromResult<IDomainEventSubscription>(
+                new Subscription(failFirstDispose && _subscriptions++ == 0));
 
         sealed class Subscription(bool failDispose) : IDomainEventSubscription
         {
@@ -203,10 +212,14 @@ public sealed class TenantCursorFailureTests
     {
         readonly CleanupNotifier _later = new(false);
         bool _subscribed;
-        internal TaskCompletionSource DisposalStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal TaskCompletionSource DisposalStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         internal TaskCompletionSource AllowDisposal { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern, CancellationToken ct = default)
+        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
+            CancellationToken ct = default)
         {
             if (_subscribed)
                 return _later.SubscribeAsync(pattern, ct);

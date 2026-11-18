@@ -21,12 +21,16 @@ public sealed class McpLimits
 {
     /// <summary>Maximum UTF-8 bytes in a resource URI.</summary>
     public int MaxResourceUriBytes { get; set; } = 2048;
+
     /// <summary>Maximum UTF-8 bytes in prompt arguments.</summary>
     public int MaxPromptArgumentBytes { get; set; } = 65536;
+
     /// <summary>Maximum number of rendered prompt messages.</summary>
     public int MaxPromptMessages { get; set; } = 16;
+
     /// <summary>Maximum serialized result bytes.</summary>
     public int MaxResultBytes { get; set; } = 1048576;
+
     /// <summary>Maximum operation duration.</summary>
     public TimeSpan OperationDeadline { get; set; } = TimeSpan.FromMinutes(2);
 }
@@ -47,7 +51,8 @@ public abstract class McpEntryOptions
     public McpEntryOptions Titled(string title)
     {
         Title = string.IsNullOrWhiteSpace(title)
-            ? throw new ArgumentException("A title cannot be empty.", nameof(title)) : title;
+            ? throw new ArgumentException("A title cannot be empty.", nameof(title))
+            : title;
         return this;
     }
 
@@ -55,14 +60,17 @@ public abstract class McpEntryOptions
     public McpEntryOptions DescribedAs(string description)
     {
         Description = string.IsNullOrWhiteSpace(description)
-            ? throw new ArgumentException("A description cannot be empty.", nameof(description)) : description;
+            ? throw new ArgumentException("A description cannot be empty.", nameof(description))
+            : description;
         return this;
     }
 
     /// <summary>Allows authenticated actors to discover and invoke the entry.</summary>
     public void Authenticated() => Access = McpAccess.Authenticated;
+
     /// <summary>Explicitly exposes the entry to anonymous actors.</summary>
     public void Public() => Access = McpAccess.Public;
+
     /// <summary>Uses a registered policy for discovery and invocation.</summary>
     public void VisibleTo<TPolicy>() where TPolicy : IMcpVisibilityPolicy
     {
@@ -71,7 +79,13 @@ public abstract class McpEntryOptions
     }
 }
 
-enum McpAccess { Unset, Public, Authenticated, Policy }
+enum McpAccess
+{
+    Unset,
+    Public,
+    Authenticated,
+    Policy
+}
 
 /// <summary>Configures a resource's output and visibility.</summary>
 public sealed class McpResourceOptions<TOut> : McpEntryOptions
@@ -85,15 +99,18 @@ public sealed class McpResourceOptions<TOut> : McpEntryOptions
     public McpResourceOptions<TOut> Named(string name)
     {
         Name = string.IsNullOrWhiteSpace(name)
-            ? throw new ArgumentException("A resource name cannot be empty.", nameof(name)) : name;
+            ? throw new ArgumentException("A resource name cannot be empty.", nameof(name))
+            : name;
         return this;
     }
+
     /// <summary>Serializes the result using Portia's JSON configuration.</summary>
     public void AsJson()
     {
         SetMediaType("application/json");
         Json = true;
     }
+
     /// <summary>Projects the result to text.</summary>
     public void AsText(string mimeType, Func<TOut, string> project)
     {
@@ -101,6 +118,7 @@ public sealed class McpResourceOptions<TOut> : McpEntryOptions
         SetMediaType(mimeType);
         Text = project;
     }
+
     /// <summary>Projects the result to binary data.</summary>
     public void AsBinary(string mimeType, Func<TOut, byte[]> project)
     {
@@ -113,7 +131,8 @@ public sealed class McpResourceOptions<TOut> : McpEntryOptions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(mimeType);
         if (mimeType.Length > 128 || mimeType.Any(character => character < 0x21 || character > 0x7e))
-            throw new ArgumentException("MIME type must be printable ASCII and at most 128 characters.", nameof(mimeType));
+            throw new ArgumentException("MIME type must be printable ASCII and at most 128 characters.",
+                nameof(mimeType));
         if (MediaType is not null)
             throw new InvalidOperationException("Choose one resource projection.");
         MediaType = mimeType;
@@ -125,14 +144,19 @@ public sealed class McpPromptOptions : McpEntryOptions
 {
     internal Dictionary<string, bool> Arguments { get; } = [with(StringComparer.Ordinal)];
     internal Dictionary<string, string?> ArgumentDescriptions { get; } = [with(StringComparer.Ordinal)];
+
     /// <summary>Declares a required string argument.</summary>
     public void Required(string name) => Add(name, true, null);
+
     /// <summary>Declares a required string argument with a model-facing description.</summary>
     public void Required(string name, string description) => Add(name, true, description);
+
     /// <summary>Declares an optional string argument.</summary>
     public void Optional(string name) => Add(name, false, null);
+
     /// <summary>Declares an optional string argument with a model-facing description.</summary>
     public void Optional(string name, string description) => Add(name, false, description);
+
     void Add(string name, bool required, string? description)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -148,6 +172,7 @@ abstract class McpEntry(Type requestType, McpEntryOptions options)
 {
     internal Type RequestType { get; } = requestType;
     internal McpEntryOptions Options { get; } = options;
+
     internal async ValueTask<bool> VisibleAsync(IServiceProvider services, ClaimsPrincipal actor, CancellationToken ct)
     {
         try
@@ -180,6 +205,7 @@ abstract class McpResourceEntry(Type requestType, McpEntryOptions options, strin
     internal string Name { get; } = options.Name ?? template;
     internal bool IsTemplate => Template.Contains('{', StringComparison.Ordinal);
     internal abstract string MimeType { get; }
+
     internal abstract ValueTask<ReadResourceResult> ReadAsync(IReadOnlyDictionary<string, string> values,
         string uri, IServiceProvider services, ClaimsPrincipal actor, JsonSerializerOptions json, CancellationToken ct);
 
@@ -216,12 +242,15 @@ abstract class McpResourceEntry(Type requestType, McpEntryOptions options, strin
     }
 }
 
-sealed class McpResourceEntry<TRequest, TOut>(string template,
-    Func<IReadOnlyDictionary<string, string>, TRequest> bind, McpResourceOptions<TOut> options)
+sealed class McpResourceEntry<TRequest, TOut>(
+    string template,
+    Func<IReadOnlyDictionary<string, string>, TRequest> bind,
+    McpResourceOptions<TOut> options)
     : McpResourceEntry(typeof(TRequest), options, template)
     where TRequest : IRequest<TOut>, ICallable
 {
     internal override string MimeType => options.MediaType!;
+
     internal override async ValueTask<ReadResourceResult> ReadAsync(IReadOnlyDictionary<string, string> values,
         string uri, IServiceProvider services, ClaimsPrincipal actor, JsonSerializerOptions json, CancellationToken ct)
     {
@@ -237,10 +266,12 @@ sealed class McpResourceEntry<TRequest, TOut>(string template,
             content = BlobResourceContents.FromBytes(binary(result.Value), uri, MimeType);
         else
         {
-            var text = options.Text is { } projection ? projection(result.Value)
+            var text = options.Text is { } projection
+                ? projection(result.Value)
                 : JsonSerializer.Serialize(result.Value, json.GetTypeInfo<TOut>());
             content = new TextResourceContents { Uri = uri, MimeType = MimeType, Text = text };
         }
+
         return new ReadResourceResult
         {
             Contents = [content],
@@ -257,13 +288,16 @@ abstract class McpPromptEntry(Type requestType, McpPromptOptions options, string
     internal string? Title => PromptOptions.Title;
     internal string? Description => PromptOptions.Description;
     internal McpPromptOptions PromptOptions { get; } = options;
+
     internal abstract ValueTask<GetPromptResult> GetAsync(IReadOnlyDictionary<string, string> values,
         IServiceProvider services, ClaimsPrincipal actor, CancellationToken ct);
 }
 
-sealed class McpPromptEntry<TRequest, TOut>(string name,
+sealed class McpPromptEntry<TRequest, TOut>(
+    string name,
     Func<IReadOnlyDictionary<string, string>, TRequest> bind,
-    Func<TOut, IReadOnlyList<McpPromptMessage>> render, McpPromptOptions options)
+    Func<TOut, IReadOnlyList<McpPromptMessage>> render,
+    McpPromptOptions options)
     : McpPromptEntry(typeof(TRequest), options, name)
     where TRequest : IRequest<TOut>, ICallable
 {
@@ -332,8 +366,10 @@ static class McpUri
         if (template.Contains('{', StringComparison.Ordinal) &&
             (authorityEnd < 0 || template[..authorityEnd].Contains('{', StringComparison.Ordinal)))
             throw new ArgumentException("Resource placeholders must be path segments.", nameof(template));
-        if (!TryValidate(template.Replace("{", "x", StringComparison.Ordinal).Replace("}", "", StringComparison.Ordinal)))
-            throw new ArgumentException("Resource URI template must be an absolute URI without query or fragment.", nameof(template));
+        if (!TryValidate(
+                template.Replace("{", "x", StringComparison.Ordinal).Replace("}", "", StringComparison.Ordinal)))
+            throw new ArgumentException("Resource URI template must be an absolute URI without query or fragment.",
+                nameof(template));
         var names = new HashSet<string>(StringComparer.Ordinal);
         foreach (var segment in template.Split('/'))
         {
@@ -341,14 +377,16 @@ static class McpUri
                 continue;
             if (segment.Length < 3 || segment[0] != '{' || segment[^1] != '}'
                 || !names.Add(segment[1..^1]) || !segment[1..^1].All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
-                throw new ArgumentException("Resource placeholders must be unique whole path segments.", nameof(template));
+                throw new ArgumentException("Resource placeholders must be unique whole path segments.",
+                    nameof(template));
         }
     }
 
     internal static bool TryValidate(string uri)
     {
         if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed) || uri.Contains('?', StringComparison.Ordinal)
-            || uri.Contains('#', StringComparison.Ordinal) || uri.Contains('%') && !ValidEscapes(uri))
+                                                                  || uri.Contains('#', StringComparison.Ordinal) ||
+                                                                  uri.Contains('%') && !ValidEscapes(uri))
             return false;
         var pathStart = uri.IndexOf('/', uri.IndexOf("://", StringComparison.Ordinal) + 3);
         if (pathStart >= 0 && uri[pathStart..].Split('/').Any(segment => segment is "." or "..")
@@ -370,6 +408,7 @@ static class McpUri
                 return false;
             i += 2;
         }
+
         return true;
     }
 }

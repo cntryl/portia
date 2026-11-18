@@ -384,7 +384,8 @@ public sealed class FleetPartitionRunnerTests
         {
             var run = runner.RunAsync(
                 ["lease://portia/fleet/well-formed"],
-                (_, ct) => RunUntilCancelled("lease://portia/fleet/well-formed", new ConcurrentDictionary<string, bool>(),
+                (_, ct) => RunUntilCancelled("lease://portia/fleet/well-formed",
+                    new ConcurrentDictionary<string, bool>(),
                     ct),
                 SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)),
                 cts.Token);

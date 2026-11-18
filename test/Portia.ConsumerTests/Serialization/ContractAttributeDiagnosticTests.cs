@@ -15,11 +15,11 @@ public sealed class ContractAttributeDiagnosticTests
     {
         // Arrange
         var source = $$"""
-            using Cntryl.Portia;
-            using System.ComponentModel;
-            using System.ComponentModel.DataAnnotations;
-            public sealed class Contract : IRequest { {{member}} }
-            """;
+                       using Cntryl.Portia;
+                       using System.ComponentModel;
+                       using System.ComponentModel.DataAnnotations;
+                       public sealed class Contract : IRequest { {{member}} }
+                       """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonRootMarkerGenerator());
@@ -27,18 +27,19 @@ public sealed class ContractAttributeDiagnosticTests
         // Assert
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA031");
     }
+
     [Fact]
     public void ShouldIgnoreUnsupportedAttributeGivenUnrelatedModel()
     {
         // Arrange
         const string source = """
-            using System.ComponentModel.DataAnnotations;
-            public sealed class UnrelatedModel
-            {
-                [Range(typeof(decimal), "1", "10")]
-                public decimal Value { get; init; }
-            }
-            """;
+                              using System.ComponentModel.DataAnnotations;
+                              public sealed class UnrelatedModel
+                              {
+                                  [Range(typeof(decimal), "1", "10")]
+                                  public decimal Value { get; init; }
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonRootMarkerGenerator());
@@ -59,7 +60,9 @@ public sealed class ContractAttributeDiagnosticTests
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new JsonRootMarkerGenerator());
 
         // Assert
-        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity is Microsoft.CodeAnalysis.DiagnosticSeverity.Error or Microsoft.CodeAnalysis.DiagnosticSeverity.Warning);
+        Assert.DoesNotContain(diagnostics,
+            diagnostic => diagnostic.Severity is Microsoft.CodeAnalysis.DiagnosticSeverity.Error
+                or Microsoft.CodeAnalysis.DiagnosticSeverity.Warning);
     }
 
     [Fact]
@@ -88,8 +91,10 @@ public sealed class ContractAttributeDiagnosticTests
 
         // Act
         var assembly = GeneratorCompilation.Compile(source, new JsonRootMarkerGenerator());
-        var factory = assembly.GetTypes().Single(type => type.Name.StartsWith("PortiaJsonContextFactory_", StringComparison.Ordinal));
-        var metadata = (PortiaContractMetadata)factory.GetMethod("GetMetadata")!.Invoke(null, [assembly.GetType("Model")!])!;
+        var factory = assembly.GetTypes()
+            .Single(type => type.Name.StartsWith("PortiaJsonContextFactory_", StringComparison.Ordinal));
+        var metadata =
+            (PortiaContractMetadata)factory.GetMethod("GetMetadata")!.Invoke(null, [assembly.GetType("Model")!])!;
         var member = metadata.Members.Single();
 
         // Assert
@@ -106,7 +111,9 @@ public sealed class ContractAttributeDiagnosticTests
     public void ShouldRejectMetadataWithoutReflectionGivenReferencedTypeConverterAttribute(string member)
     {
         // Arrange
-        var reference = GeneratorCompilation.Reference("using System.ComponentModel; using System.ComponentModel.DataAnnotations; public sealed class Model { " + member + " }");
+        var reference = GeneratorCompilation.Reference(
+            "using System.ComponentModel; using System.ComponentModel.DataAnnotations; public sealed class Model { " +
+            member + " }");
         var source = ContextSource(string.Empty);
 
         // Act
@@ -119,22 +126,21 @@ public sealed class ContractAttributeDiagnosticTests
     }
 
     static string ContextSource(string model) => $$"""
-        #nullable enable
-        using System;
-        using System.ComponentModel;
-        using System.ComponentModel.DataAnnotations;
-        using System.Text.Json;
-        using System.Text.Json.Serialization;
-        using System.Text.Json.Serialization.Metadata;
-        using Cntryl.Portia;
-        {{model}}
-        [PortiaJsonContext, JsonSerializable(typeof(Model))]
-        sealed class Context : JsonSerializerContext
-        {
-            public Context(JsonSerializerOptions options) : base(options) { }
-            protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
-            public override JsonTypeInfo? GetTypeInfo(Type type) => null;
-        }
-        """;
-
+                                                   #nullable enable
+                                                   using System;
+                                                   using System.ComponentModel;
+                                                   using System.ComponentModel.DataAnnotations;
+                                                   using System.Text.Json;
+                                                   using System.Text.Json.Serialization;
+                                                   using System.Text.Json.Serialization.Metadata;
+                                                   using Cntryl.Portia;
+                                                   {{model}}
+                                                   [PortiaJsonContext, JsonSerializable(typeof(Model))]
+                                                   sealed class Context : JsonSerializerContext
+                                                   {
+                                                       public Context(JsonSerializerOptions options) : base(options) { }
+                                                       protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                                                       public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                                                   }
+                                                   """;
 }

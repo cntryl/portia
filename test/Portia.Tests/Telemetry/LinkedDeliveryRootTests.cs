@@ -65,6 +65,7 @@ public sealed class LinkedDeliveryRootTests
             if (process is not null)
                 Assert.Equal(default, process.ParentSpanId);
         }
+
         Assert.Same(caller, Activity.Current);
         Assert.True(tracer.ForceFlush());
         Assert.Equal(sampleRoot ? 1 : 0, exported.Count);
@@ -81,7 +82,8 @@ public sealed class LinkedDeliveryRootTests
     [InlineData("schedule", "valid")]
     [InlineData("schedule", "absent")]
     [InlineData("schedule", "invalid")]
-    public async Task ShouldCreateIndependentLinkedRootsAndRestoreAmbientGivenTransportAndPropagation(string transport, string propagation)
+    public async Task ShouldCreateIndependentLinkedRootsAndRestoreAmbientGivenTransportAndPropagation(string transport,
+        string propagation)
     {
         // Arrange
         using var listener = new ActivityListener
@@ -126,6 +128,7 @@ public sealed class LinkedDeliveryRootTests
                 }
                 else
                     Assert.Empty(process.Links);
+
                 await Task.Yield();
                 Assert.Same(process, Activity.Current);
                 using (var execute = PortiaTelemetry.StartExecute("linked.delivery", transport))
@@ -135,8 +138,10 @@ public sealed class LinkedDeliveryRootTests
                     await Task.Yield();
                     Assert.Same(execute, Activity.Current);
                 }
+
                 Assert.Same(process, Activity.Current);
             }
+
             Assert.Same(ambient, Activity.Current);
         }
     }

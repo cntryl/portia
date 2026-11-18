@@ -35,13 +35,16 @@ static partial class Program
         builder.Services.AddSingleton(new Control(mode, signal));
         builder.Services.AddSingleton<IOperationalAuthorizer, Policy>();
         builder.Services.AddPortia().UseFitzClient(client, fitz => fitz.DisableRequestWorkers()
-                .UseFleet(new FleetRunOptions { MembershipSelector = "lease://qualification/portia-members/*" }).UseOperations(Route))
+                .UseFleet(new FleetRunOptions { MembershipSelector = "lease://qualification/portia-members/*" })
+                .UseOperations(Route))
             .AddReactor<DurabilityReactor>(Target.Processor, WorkloadScope.Global,
                 options => options.PollInterval = TimeSpan.FromMilliseconds(20)).AddWorkers();
         using var host = builder.Build();
         var operations = host.Services.GetRequiredService<IPortiaOperations>();
-        var actor = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "qualification-operator"),
-            new Claim(ClaimTypes.Role, "qualification-operators")], "qualification"));
+        var actor = new ClaimsPrincipal(new ClaimsIdentity([
+            new Claim(ClaimTypes.NameIdentifier, "qualification-operator"),
+            new Claim(ClaimTypes.Role, "qualification-operators")
+        ], "qualification"));
         var previousOwner = mode == "crash" ? Guid.Parse(args[2]) : Guid.Empty;
         if (mode == "crash")
         {
@@ -49,12 +52,14 @@ static partial class Program
             Require(prior?.Block is not null && prior.OwnerSession == previousOwner,
                 "Expected the previous owner's durable block before starting replacement workers.");
         }
+
         await host.StartAsync();
         if (mode is "blocked" or "crash")
         {
             // The durable block can be visible before this process acquires the workload. A repair
             // prepared against the previous session would be invalidated by the ownership handoff.
-            await UntilAsync(async () => (await operations.InspectProcessorAsync(actor, Target)) is { Block: not null } state
+            await UntilAsync(async () =>
+                (await operations.InspectProcessorAsync(actor, Target)) is { Block: not null } state
                 && (mode != "crash" || state.OwnerSession != previousOwner));
             if (mode == "blocked")
                 await File.WriteAllTextAsync(signal!, "durable block");
@@ -64,16 +69,20 @@ static partial class Program
                 _ = await operations.ApproveRepairAsync(actor, Target, plan.Id);
                 _ = await operations.ExecuteRepairAsync(actor, Target, plan.Id);
             }
+
             await Task.Delay(Timeout.InfiniteTimeSpan);
         }
         else if (mode == "recover")
         {
-            await UntilAsync(async () => (await operations.InspectProcessorAsync(actor, Target))?.Attempts.Any(a => a.Outcome == "committed") == true);
+            await UntilAsync(async () =>
+                (await operations.InspectProcessorAsync(actor, Target))?.Attempts.Any(a => a.Outcome == "committed") ==
+                true);
             await File.WriteAllTextAsync(signal!, "recovery checkpoint committed");
             await Task.Delay(Timeout.InfiniteTimeSpan);
         }
         else
             throw new ArgumentException("Unknown qualification mode.");
+
         await host.StopAsync();
     }
 
@@ -91,10 +100,14 @@ static partial class Program
     }
 
     internal sealed record Control(string Mode, string? Signal);
+
     [Discriminator("portia.durability.changed")]
     internal sealed record Changed(int Value) : DomainEvent;
 
-    internal sealed partial class DurabilityReactor(IProjectionCheckpointStore checkpoints, IEventStore events, Control control)
+    internal sealed partial class DurabilityReactor(
+        IProjectionCheckpointStore checkpoints,
+        IEventStore events,
+        Control control)
         : BatchReactor(checkpoints, Program.Pattern), IReactorHandler<Changed>
     {
         public async ValueTask<Result> HandleAsync(IReactorContext<Changed> context, CancellationToken ct)
@@ -106,28 +119,34 @@ static partial class Program
             var exists = false;
             await foreach (var existing in events.ReadAsync(stream, 0, ct))
             {
-                Require(((Changed)existing.Event).Value == context.Trigger.Value, "Stable effect identity changed content.");
+                Require(((Changed)existing.Event).Value == context.Trigger.Value,
+                    "Stable effect identity changed content.");
                 exists = true;
             }
+
             if (!exists)
             {
                 var effect = new Changed(context.Trigger.Value);
                 effect.AttachMetadata(new DomainEventMetadata(id, id, 1, context.StartedAt));
                 await events.AppendAsync(stream, 0, [effect], ct);
             }
+
             if (control.Mode == "crash" && context.Trigger.Value == 1)
             {
                 await File.WriteAllTextAsync(control.Signal!, "effect observed; checkpoint uncommitted", ct);
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             }
+
             return Result.Success;
         }
     }
 
     sealed class Policy : IOperationalAuthorizer
     {
-        public ValueTask<bool> AuthorizeAsync(ClaimsPrincipal actor, OperationalScope scope, OperationalAccess permission,
-            CancellationToken ct = default) => ValueTask.FromResult(scope == OperationalScope.Global && actor.Identity?.IsAuthenticated == true);
+        public ValueTask<bool> AuthorizeAsync(ClaimsPrincipal actor, OperationalScope scope,
+            OperationalAccess permission,
+            CancellationToken ct = default) =>
+            ValueTask.FromResult(scope == OperationalScope.Global && actor.Identity?.IsAuthenticated == true);
     }
 }
 

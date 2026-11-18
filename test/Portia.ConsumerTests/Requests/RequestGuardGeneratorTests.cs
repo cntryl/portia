@@ -55,14 +55,14 @@ public sealed class RequestGuardGeneratorTests
     {
         // Arrange
         const string source = """
-                                                                        using Cntryl.Portia;
-                                                                        using Microsoft.Extensions.DependencyInjection;
-                                                                        public sealed class NotAGuard;
-                                                                        public static class Scenario
-                                                                        {
-                                                                            public static void Register() => new ServiceCollection().AddPortia().AddRequestGuard<NotAGuard>();
-                                                                        }
-                                                                        """;
+                              using Cntryl.Portia;
+                              using Microsoft.Extensions.DependencyInjection;
+                              public sealed class NotAGuard;
+                              public static class Scenario
+                              {
+                                  public static void Register() => new ServiceCollection().AddPortia().AddRequestGuard<NotAGuard>();
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source,
@@ -79,20 +79,20 @@ public sealed class RequestGuardGeneratorTests
     {
         // Arrange
         const string source = """
-                                                                 using System.Threading;
-                                                                 using System.Threading.Tasks;
-                                                                 using Cntryl.Portia;
-                                                                 using Microsoft.Extensions.DependencyInjection;
-                                                                 public sealed record Command : IRequest;
-                                                                 public sealed class Broken : IRequestGuard<Command>
-                                                                 {
-                                                                     public ValueTask<Result> GuardAsync(IRequestContext<Command> context) => ValueTask.FromResult(Result.Success);
-                                                                 }
-                                                                 public static class Scenario
-                                                                 {
-                                                                     public static void Register() => new ServiceCollection().AddPortia().AddRequestGuard<Broken>();
-                                                                 }
-                                                                 """;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              using Microsoft.Extensions.DependencyInjection;
+                              public sealed record Command : IRequest;
+                              public sealed class Broken : IRequestGuard<Command>
+                              {
+                                  public ValueTask<Result> GuardAsync(IRequestContext<Command> context) => ValueTask.FromResult(Result.Success);
+                              }
+                              public static class Scenario
+                              {
+                                  public static void Register() => new ServiceCollection().AddPortia().AddRequestGuard<Broken>();
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RegistrationCallInterceptorGenerator());
@@ -106,15 +106,15 @@ public sealed class RequestGuardGeneratorTests
     {
         // Arrange
         const string source = """
-                                                                        using System.Threading;
-                                                                        using System.Threading.Tasks;
-                                                                        using Cntryl.Portia;
-                                                                        public sealed record Command : IRequest;
-                                                                        public sealed class Guard<T> : IRequestGuard<Command>
-                                                                        {
-                                                                            public ValueTask<Result> GuardAsync(IRequestContext<Command> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
-                                                                        }
-                                                                        """;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              public sealed record Command : IRequest;
+                              public sealed class Guard<T> : IRequestGuard<Command>
+                              {
+                                  public ValueTask<Result> GuardAsync(IRequestContext<Command> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new RequestShapeDiagnosticsGenerator());
@@ -178,14 +178,14 @@ public sealed class RequestGuardGeneratorTests
     {
         // Arrange
         const string source = """
-                                                                        using Cntryl.Portia;
-                                                                        using Microsoft.Extensions.DependencyInjection;
-                                                                        public sealed class NotAGuard;
-                                                                        public static class Scenario
-                                                                        {
-                                                                            public static void Register() => new ServiceCollection().AddPortia().AddRequestGuard<NotAGuard>();
-                                                                        }
-                                                                        """;
+                              using Cntryl.Portia;
+                              using Microsoft.Extensions.DependencyInjection;
+                              public sealed class NotAGuard;
+                              public static class Scenario
+                              {
+                                  public static void Register() => new ServiceCollection().AddPortia().AddRequestGuard<NotAGuard>();
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source,
@@ -203,16 +203,16 @@ public sealed class RequestGuardGeneratorTests
     {
         // Arrange
         const string source = """
-                                                                        using Cntryl.Portia;
-                                                                        public static class Scenario
-                                                                        {
-                                                                            public static void Register<TGuard>(PortiaBuilder builder) where TGuard : class => builder.AddRequestGuard<TGuard>();
-                                                                        }
-                                                                        """;
+                              using Cntryl.Portia;
+                              public static class Scenario
+                              {
+                                  public static void Register<TGuard>(PortiaBuilder builder) where TGuard : class => builder.AddRequestGuard<TGuard>();
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source,
-                new RegistrationCallInterceptorGenerator());
+            new RegistrationCallInterceptorGenerator());
 
         // Assert
         var diagnostic = Assert.Single(diagnostics,
@@ -226,23 +226,23 @@ public sealed class RequestGuardGeneratorTests
     {
         // Arrange
         const string source = """
-                                                             using System.Threading;
-                                                             using System.Threading.Tasks;
-                                                             using Cntryl.Portia;
-                                                             namespace Requests
-                                                             {
-                                                                 [Discriminator("requests.component")]
-                                                                 [RequestRoute("app", "components", "*", "run")]
-                                                                 public sealed record Component : IRequest, IQueuable;
-                                                             }
-                                                             namespace Guards
-                                                             {
-                                                                 public sealed class Component : IRequestGuard<Requests.Component>
-                                                                 {
-                                                                     public ValueTask<Result> GuardAsync(IRequestContext<Requests.Component> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
-                                                                 }
-                                                             }
-                                                             """;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              namespace Requests
+                              {
+                                  [Discriminator("requests.component")]
+                                  [RequestRoute("app", "components", "*", "run")]
+                                  public sealed record Component : IRequest, IQueuable;
+                              }
+                              namespace Guards
+                              {
+                                  public sealed class Component : IRequestGuard<Requests.Component>
+                                  {
+                                      public ValueTask<Result> GuardAsync(IRequestContext<Requests.Component> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                                  }
+                              }
+                              """;
 
         // Act
         var generated = GeneratorCompilation.GeneratedSource(source, new PortiaServiceRegistrationGenerator());

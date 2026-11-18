@@ -16,18 +16,23 @@ static class ApplicationAnalyzerCompilation
             .Where(path => !Path.GetFileName(path).StartsWith("Portia.", StringComparison.Ordinal)
                            && !Path.GetFileName(path).StartsWith("Cntryl.", StringComparison.Ordinal))
             .Append(typeof(Aggregate).Assembly.Location)
-            .Concat(projectName.EndsWith(".Common", StringComparison.Ordinal) ? [] : new[] { typeof(PortiaBuilder).Assembly.Location })
+            .Concat(projectName.EndsWith(".Common", StringComparison.Ordinal)
+                ? []
+                : new[] { typeof(PortiaBuilder).Assembly.Location })
             .Distinct(StringComparer.Ordinal)
             .Select(path => MetadataReference.CreateFromFile(path));
         var directory = projectDirectory ?? "/workspace/" + projectName;
         var compilation = CSharpCompilation.Create(assemblyName ?? projectName,
             files.Select(file => CSharpSyntaxTree.ParseText(file.Source,
                 new CSharpParseOptions(LanguageVersion.Preview), file.Path.StartsWith('/')
-                    ? file.Path : directory + "/" + file.Path)),
+                    ? file.Path
+                    : directory + "/" + file.Path)),
             platformReferences.Concat(references ?? []),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-        Assert.DoesNotContain(compilation.GetDiagnostics(), diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
-        var diagnostics = compilation.WithAnalyzers([analyzer], Options(projectName, directory, rootNamespace, enabled, isTest))
+        Assert.DoesNotContain(compilation.GetDiagnostics(),
+            diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        var diagnostics = compilation
+            .WithAnalyzers([analyzer], Options(projectName, directory, rootNamespace, enabled, isTest))
             .GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "AD0001");
         return diagnostics;

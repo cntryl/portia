@@ -40,7 +40,8 @@ static class ScenarioEngine
             .ConfigureAwait(false);
 
         // The declared permission is reported as its own phase, so it is not counted as an authorizer.
-        var authorizers = policies.Authorizers.Where(registration => registration is not PermissionAuthorizerRegistration)
+        var authorizers = policies.Authorizers
+            .Where(registration => registration is not PermissionAuthorizerRegistration)
             .Select(registration => registration.AuthorizerType).ToHashSet();
         var guards = policies.Guards.Select(registration => registration.GuardType).ToArray();
         var behaviors = policies.Behaviors.Select(registration => registration.BehaviorType).ToHashSet();

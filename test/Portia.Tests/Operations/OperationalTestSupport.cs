@@ -24,11 +24,13 @@ sealed class MemoryOperationalStore : IOperationalStore, IOperationalReactionChe
             if (Unavailable)
                 throw new IOException("offline");
             return ValueTask.FromResult(_documents.TryGetValue(target, out var bytes)
-                ? JsonSerializer.Deserialize(bytes, FitzJsonContext.Default.OperationalProcessorState) : null);
+                ? JsonSerializer.Deserialize(bytes, FitzJsonContext.Default.OperationalProcessorState)
+                : null);
         }
     }
 
-    public async ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(OperationalScope scope, CancellationToken ct = default)
+    public async ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(OperationalScope scope,
+        CancellationToken ct = default)
     {
         OperationalTarget[] targets;
         lock (_documents)
@@ -49,7 +51,8 @@ sealed class MemoryOperationalStore : IOperationalStore, IOperationalReactionChe
     }
 
     OperationalProcessorState? Read(OperationalTarget target) => _documents.TryGetValue(target, out var bytes)
-        ? JsonSerializer.Deserialize(bytes, FitzJsonContext.Default.OperationalProcessorState) : null;
+        ? JsonSerializer.Deserialize(bytes, FitzJsonContext.Default.OperationalProcessorState)
+        : null;
 
     bool Exchange(OperationalProcessorState replacement, long expectedRevision, Guid expectedOwner)
     {
@@ -74,7 +77,8 @@ sealed class MemoryOperationalStore : IOperationalStore, IOperationalReactionChe
             return ValueTask.FromResult(_checkpoints.GetValueOrDefault(identity));
     }
 
-    public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+    public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
+        CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
         lock (_documents)
@@ -92,7 +96,8 @@ sealed class MemoryOperationalStore : IOperationalStore, IOperationalReactionChe
             if (!Exchange(replacement, expectedRevision, ownerSession))
                 return ValueTask.FromResult(false);
             _checkpoints[replacement.Target.Identity] = new ProjectionCheckpoint(nextCheckpoint is null
-                ? EventCursor.Start : new EventCursor(nextCheckpoint));
+                ? EventCursor.Start
+                : new EventCursor(nextCheckpoint));
             return ValueTask.FromResult(true);
         }
     }
@@ -111,13 +116,15 @@ sealed class TestOperationalAuthorizer : IOperationalAuthorizer
     {
         ct.ThrowIfCancellationRequested();
         var allowed = actor.HasClaim("scope", scope.Tenant ?? "global")
-            && (permission != OperationalAccess.Approve || actor.IsInRole("operator"));
+                      && (permission != OperationalAccess.Approve || actor.IsInRole("operator"));
         return ValueTask.FromResult(allowed);
     }
 
     internal static ClaimsPrincipal Actor(bool approval = false, string scope = "global") => new(new ClaimsIdentity(
-        [new Claim(ClaimTypes.NameIdentifier, approval ? "operator" : "agent"), new Claim("scope", scope),
-            new Claim(ClaimTypes.Role, approval ? "operator" : "agent")], "test"));
+    [
+        new Claim(ClaimTypes.NameIdentifier, approval ? "operator" : "agent"), new Claim("scope", scope),
+        new Claim(ClaimTypes.Role, approval ? "operator" : "agent")
+    ], "test"));
 
     internal static ClaimsPrincipal AdministratorActor(bool approval = false, string scope = "global")
     {

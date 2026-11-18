@@ -23,20 +23,26 @@ public sealed class RequestNotificationRunnerTests
     [InlineData(false, true, true)]
     [InlineData(true, false, true)]
     [InlineData(true, true, true)]
-    public async Task ShouldExportCorrelatedOutcomeLogsGivenFaultAmbientAndScheduleVariations(bool fault, bool ambient, bool schedule)
+    public async Task ShouldExportCorrelatedOutcomeLogsGivenFaultAmbientAndScheduleVariations(bool fault, bool ambient,
+        bool schedule)
     {
         // Arrange
         using var capture = new RunnerExportCapture();
         using var caller = ambient ? new Activity("unrelated-caller").Start() : null;
         using var busHost = TestRequestBus.Create(telemetryFailureActionHandler:
-            fault ? new TelemetryFailureActionHandler(new InvalidOperationException("Controlled handler fault.")) : null);
+            fault
+                ? new TelemetryFailureActionHandler(new InvalidOperationException("Controlled handler fault."))
+                : null);
         var notifications = Enumerable.Range(1, 2).Select(_ => new RequestNotification(
             fault || schedule ? new TelemetryFailureAction() : new ChangeValue(1),
             fault ? "valid-token" : "invalid-token", RequestMetadata.Create(),
-            schedule ? new ScheduleInvocation("schedule://test/work/item") : new NoticeInvocation("notice://test/work/item"),
+            schedule
+                ? new ScheduleInvocation("schedule://test/work/item")
+                : new NoticeInvocation("notice://test/work/item"),
             new RequestTraceContext(RunnerExportCapture.Parent), schedule ? RequestActor.System : null)).ToArray();
         var runner = new RequestNotificationRunner(new FakeRequestNotificationConsumer(notifications),
-            RequestDeliveryScopes.Fixed(busHost.Bus, new TestRequestActorValidator("invalid-token")), capture.Logger<RequestNotificationRunner>());
+            RequestDeliveryScopes.Fixed(busHost.Bus, new TestRequestActorValidator("invalid-token")),
+            capture.Logger<RequestNotificationRunner>());
 
         // Act
         await runner.RunAsync();

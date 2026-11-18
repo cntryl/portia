@@ -15,7 +15,13 @@ public sealed class FakeGcsHandler : HttpMessageHandler
     readonly object _gate = new();
     long _generation = 1000;
     readonly Dictionary<string, PendingUpload> _uploads = [];
-    sealed record PendingUpload(string Bucket, string Name, Dictionary<string, string> Query, Dictionary<string, string>? Metadata, MemoryStream Data);
+
+    sealed record PendingUpload(
+        string Bucket,
+        string Name,
+        Dictionary<string, string> Query,
+        Dictionary<string, string>? Metadata,
+        MemoryStream Data);
 
     /// <summary>A stored object revision.</summary>
     public sealed record Stored(byte[] Data, long Generation, string? KmsKey, Dictionary<string, string>? Metadata);
@@ -56,25 +62,34 @@ public sealed class FakeGcsHandler : HttpMessageHandler
 
     /// <summary>Gets the objects in a bucket whose names start with the prefix.</summary>
     public string[] Names(string bucket, string prefix) =>
-        [.. Objects.Keys.Where(key => key.Bucket == bucket && key.Name.StartsWith(prefix, StringComparison.Ordinal)).Select(static key => key.Name).Order(StringComparer.Ordinal)];
+    [
+        .. Objects.Keys.Where(key => key.Bucket == bucket && key.Name.StartsWith(prefix, StringComparison.Ordinal))
+            .Select(static key => key.Name).Order(StringComparer.Ordinal)
+    ];
 
     /// <inheritdoc />
-    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+        CancellationToken cancellationToken)
     {
         var body = request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken);
         var uri = request.RequestUri!;
         var query = HttpUtility.ParseQueryString(uri.Query).AllKeys
             .Where(static key => key is not null)
-            .ToDictionary(static key => key!, key => HttpUtility.ParseQueryString(uri.Query)[key]!, StringComparer.Ordinal);
-        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.UnescapeDataString).ToArray();
+            .ToDictionary(static key => key!, key => HttpUtility.ParseQueryString(uri.Query)[key]!,
+                StringComparer.Ordinal);
+        var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Select(Uri.UnescapeDataString)
+            .ToArray();
         lock (_gate)
         {
             Requests.Add(new Recorded(request.Method.Method, string.Join('/', segments), query, body));
-            return segments[0] == "upload" ? StartUpload(request, segments, query, body) : Route(request, segments, query, body);
+            return segments[0] == "upload"
+                ? StartUpload(request, segments, query, body)
+                : Route(request, segments, query, body);
         }
     }
 
-    HttpResponseMessage Route(HttpRequestMessage request, string[] segments, Dictionary<string, string> query, string body)
+    HttpResponseMessage Route(HttpRequestMessage request, string[] segments, Dictionary<string, string> query,
+        string body)
     {
         // storage/v1/b/{bucket}[/o[/{name}[/compose | /rewriteTo/b/{bucket}/o/{name}]]]
         var bucket = segments[3];
@@ -92,27 +107,35 @@ public sealed class FakeGcsHandler : HttpMessageHandler
         if (segments.Length == 5)
         {
             var prefix = query.GetValueOrDefault("prefix", string.Empty);
-            var items = Names(bucket, prefix).Select(name => new Dictionary<string, object?> { ["name"] = name, ["bucket"] = bucket }).ToArray();
-            return Json(HttpStatusCode.OK, items.Length == 0 ? [] : new Dictionary<string, object?> { ["items"] = items });
+            var items = Names(bucket, prefix).Select(name => new Dictionary<string, object?>
+            { ["name"] = name, ["bucket"] = bucket }).ToArray();
+            return Json(HttpStatusCode.OK,
+                items.Length == 0 ? [] : new Dictionary<string, object?> { ["items"] = items });
         }
 
         var name = segments[5];
 
         if (request.Method == HttpMethod.Delete)
         {
-            return Objects.Remove((bucket, name)) ? new HttpResponseMessage(HttpStatusCode.NoContent) : Error(HttpStatusCode.NotFound, "object");
+            return Objects.Remove((bucket, name))
+                ? new HttpResponseMessage(HttpStatusCode.NoContent)
+                : Error(HttpStatusCode.NotFound, "object");
         }
 
         if (!Objects.TryGetValue((bucket, name), out var stored) ||
-            (query.TryGetValue("generation", out var wanted) && wanted != stored.Generation.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+            (query.TryGetValue("generation", out var wanted) &&
+             wanted != stored.Generation.ToString(System.Globalization.CultureInfo.InvariantCulture)))
         {
             return Error(HttpStatusCode.NotFound, "object");
         }
 
-        return query.GetValueOrDefault("alt") == "media" ? Media(request, stored) : Json(HttpStatusCode.OK, Describe(bucket, name, stored));
+        return query.GetValueOrDefault("alt") == "media"
+            ? Media(request, stored)
+            : Json(HttpStatusCode.OK, Describe(bucket, name, stored));
     }
 
-    HttpResponseMessage StartUpload(HttpRequestMessage request, string[] segments, Dictionary<string, string> query, string body)
+    HttpResponseMessage StartUpload(HttpRequestMessage request, string[] segments, Dictionary<string, string> query,
+        string body)
     {
         // upload/storage/v1/b/{bucket}/o?uploadType=resumable (start) or ?upload_id=N (chunk)
         var bucket = segments[4];
@@ -131,14 +154,17 @@ public sealed class FakeGcsHandler : HttpMessageHandler
                 using var document = JsonDocument.Parse(body);
                 if (document.RootElement.TryGetProperty("metadata", out var custom))
                 {
-                    metadata = custom.EnumerateObject().ToDictionary(static property => property.Name, static property => property.Value.GetString()!, StringComparer.Ordinal);
+                    metadata = custom.EnumerateObject().ToDictionary(static property => property.Name,
+                        static property => property.Value.GetString()!, StringComparer.Ordinal);
                 }
             }
 
             var id = (++_generation).ToString(System.Globalization.CultureInfo.InvariantCulture);
             _uploads[id] = new PendingUpload(bucket, name, query, metadata, new MemoryStream());
             var started = new HttpResponseMessage(HttpStatusCode.OK);
-            started.Headers.Location = new Uri($"https://storage.googleapis.com/upload/storage/v1/b/{bucket}/o?uploadType=resumable&upload_id={id}");
+            started.Headers.Location =
+                new Uri(
+                    $"https://storage.googleapis.com/upload/storage/v1/b/{bucket}/o?uploadType=resumable&upload_id={id}");
             return started;
         }
 
@@ -158,7 +184,8 @@ public sealed class FakeGcsHandler : HttpMessageHandler
         }
 
         BeforeRewrite?.Invoke(this);
-        if (pending.Query.GetValueOrDefault("ifGenerationMatch") == "0" && Objects.ContainsKey((pending.Bucket, pending.Name)))
+        if (pending.Query.GetValueOrDefault("ifGenerationMatch") == "0" &&
+            Objects.ContainsKey((pending.Bucket, pending.Name)))
         {
             return Error(HttpStatusCode.PreconditionFailed, "destination exists");
         }
@@ -187,7 +214,8 @@ public sealed class FakeGcsHandler : HttpMessageHandler
             Content = new ByteArrayContent(stored.Data, (int)from, (int)Math.Max(0, to - from + 1))
         };
         response.Content.Headers.ContentRange = new System.Net.Http.Headers.ContentRangeHeaderValue(from, to, total);
-        response.Headers.Add("x-goog-generation", stored.Generation.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        response.Headers.Add("x-goog-generation",
+            stored.Generation.ToString(System.Globalization.CultureInfo.InvariantCulture));
         return response;
     }
 

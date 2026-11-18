@@ -45,8 +45,10 @@ public sealed class McpPrimitiveTests
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            const string meta = "\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientCapabilities\":{}}";
-            await process.StandardInput.WriteLineAsync($"{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"server/discover\",\"params\":{{{meta}}}}}");
+            const string meta =
+                "\"_meta\":{\"io.modelcontextprotocol/protocolVersion\":\"2026-07-28\",\"io.modelcontextprotocol/clientCapabilities\":{}}";
+            await process.StandardInput.WriteLineAsync(
+                $"{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"server/discover\",\"params\":{{{meta}}}}}");
             await process.StandardInput.FlushAsync(timeout.Token);
             using (var discovery = JsonDocument.Parse((await process.StandardOutput.ReadLineAsync(timeout.Token))!))
             {
@@ -55,7 +57,9 @@ public sealed class McpPrimitiveTests
                 Assert.False(supported.TryGetProperty("listChanged", out _));
                 Assert.False(supported.TryGetProperty("subscribe", out _));
             }
-            await process.StandardInput.WriteLineAsync($"{{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"{listMethod}\",\"params\":{{{meta}}}}}");
+
+            await process.StandardInput.WriteLineAsync(
+                $"{{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"{listMethod}\",\"params\":{{{meta}}}}}");
             await process.StandardInput.FlushAsync(timeout.Token);
             using var listed = JsonDocument.Parse((await process.StandardOutput.ReadLineAsync(timeout.Token))!);
             var result = listed.RootElement.GetProperty("result");
@@ -63,7 +67,8 @@ public sealed class McpPrimitiveTests
             Assert.Equal("private", result.GetProperty("cacheScope").GetString());
             if (mode == "--resource-only")
             {
-                await process.StandardInput.WriteLineAsync($"{{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"resources/read\",\"params\":{{\"uri\":\"greetings://stdio/Portia\",{meta}}}}}");
+                await process.StandardInput.WriteLineAsync(
+                    $"{{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"resources/read\",\"params\":{{\"uri\":\"greetings://stdio/Portia\",{meta}}}}}");
                 await process.StandardInput.FlushAsync(timeout.Token);
                 using var read = JsonDocument.Parse((await process.StandardOutput.ReadLineAsync(timeout.Token))!);
                 var content = read.RootElement.GetProperty("result");
@@ -107,7 +112,8 @@ public sealed class McpPrimitiveTests
         {
             Assert.Single(await client.ListResourceTemplatesAsync(cancellationToken: timeout.Token));
             var result = await client.ReadResourceAsync("greetings://stdio/Portia", cancellationToken: timeout.Token);
-            Assert.Contains("stdio-test-actor", Assert.IsType<TextResourceContents>(Assert.Single(result.Contents)).Text,
+            Assert.Contains("stdio-test-actor",
+                Assert.IsType<TextResourceContents>(Assert.Single(result.Contents)).Text,
                 StringComparison.Ordinal);
         }
         else
@@ -115,7 +121,8 @@ public sealed class McpPrimitiveTests
             Assert.Single(await client.ListPromptsAsync(cancellationToken: timeout.Token));
             var result = await client.GetPromptAsync("stdio-greeting",
                 new Dictionary<string, object?> { ["name"] = "Portia" }, cancellationToken: timeout.Token);
-            Assert.Contains("stdio-test-actor", Assert.IsType<TextContentBlock>(Assert.Single(result.Messages).Content).Text,
+            Assert.Contains("stdio-test-actor",
+                Assert.IsType<TextContentBlock>(Assert.Single(result.Messages).Content).Text,
                 StringComparison.Ordinal);
         }
     }
@@ -177,24 +184,48 @@ public sealed class McpPrimitiveTests
             .AddRequestHandler<McpRegistrationTests.ReadGreetingHandler>()
             .AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://index/fixed-first",
                 _ => new McpRegistrationTests.ReadGreeting("fixed-first"),
-                options => { options.Public(); options.AsText("text/plain", static value => value); })
+                options =>
+                {
+                    options.Public();
+                    options.AsText("text/plain", static value => value);
+                })
             .AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://index/fixed-second",
                 _ => new McpRegistrationTests.ReadGreeting("fixed-second"),
-                options => { options.Public(); options.AsText("text/plain", static value => value); })
+                options =>
+                {
+                    options.Public();
+                    options.AsText("text/plain", static value => value);
+                })
             .AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://index/template/{name}",
                 values => new McpRegistrationTests.ReadGreeting($"template:{values["name"]}"),
-                options => { options.Public(); options.AsText("text/plain", static value => value); })
+                options =>
+                {
+                    options.Public();
+                    options.AsText("text/plain", static value => value);
+                })
             .AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://index/alternate/{name}",
                 values => new McpRegistrationTests.ReadGreeting($"alternate:{values["name"]}"),
-                options => { options.Public(); options.AsText("text/plain", static value => value); })
+                options =>
+                {
+                    options.Public();
+                    options.AsText("text/plain", static value => value);
+                })
             .AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>("prompt-first",
                 values => new McpRegistrationTests.ReadGreeting($"first:{values["name"]}"),
                 value => [new McpPromptMessage("user", value)],
-                options => { options.Public(); options.Required("name"); })
+                options =>
+                {
+                    options.Public();
+                    options.Required("name");
+                })
             .AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>("prompt-last",
                 values => new McpRegistrationTests.ReadGreeting($"last:{values["name"]}"),
                 value => [new McpPromptMessage("user", value)],
-                options => { options.Public(); options.Required("name"); })
+                options =>
+                {
+                    options.Public();
+                    options.Required("name");
+                })
             .AddMcpHttp();
         await using var app = builder.Build();
         _ = app.MapPortiaMcp().AllowAnonymous();
@@ -215,19 +246,25 @@ public sealed class McpPrimitiveTests
         Assert.Equal(["greetings://index/template/{name}", "greetings://index/alternate/{name}"],
             templates.Select(resource => resource.UriTemplate));
         var firstFixed = await client.ReadResourceAsync("greetings://index/fixed-first");
-        Assert.Equal("Hello, fixed-first.", Assert.IsType<TextResourceContents>(Assert.Single(firstFixed.Contents)).Text);
+        Assert.Equal("Hello, fixed-first.",
+            Assert.IsType<TextResourceContents>(Assert.Single(firstFixed.Contents)).Text);
         var lastTemplate = await client.ReadResourceAsync("greetings://index/alternate/Portia");
-        Assert.Equal("Hello, alternate:Portia.", Assert.IsType<TextResourceContents>(Assert.Single(lastTemplate.Contents)).Text);
+        Assert.Equal("Hello, alternate:Portia.",
+            Assert.IsType<TextResourceContents>(Assert.Single(lastTemplate.Contents)).Text);
         var escapedTemplate = await client.ReadResourceAsync("greetings://index/template/Portia%20Smith");
         Assert.Equal("Hello, template:Portia Smith.",
             Assert.IsType<TextResourceContents>(Assert.Single(escapedTemplate.Contents)).Text);
 
         var prompts = await client.ListPromptsAsync();
         Assert.Equal(["prompt-first", "prompt-last"], prompts.Select(prompt => prompt.Name));
-        var firstPrompt = await client.GetPromptAsync("prompt-first", new Dictionary<string, object?> { ["name"] = "Portia" });
-        var lastPrompt = await client.GetPromptAsync("prompt-last", new Dictionary<string, object?> { ["name"] = "Portia" });
-        Assert.Equal("Hello, first:Portia.", Assert.IsType<TextContentBlock>(Assert.Single(firstPrompt.Messages).Content).Text);
-        Assert.Equal("Hello, last:Portia.", Assert.IsType<TextContentBlock>(Assert.Single(lastPrompt.Messages).Content).Text);
+        var firstPrompt =
+            await client.GetPromptAsync("prompt-first", new Dictionary<string, object?> { ["name"] = "Portia" });
+        var lastPrompt =
+            await client.GetPromptAsync("prompt-last", new Dictionary<string, object?> { ["name"] = "Portia" });
+        Assert.Equal("Hello, first:Portia.",
+            Assert.IsType<TextContentBlock>(Assert.Single(firstPrompt.Messages).Content).Text);
+        Assert.Equal("Hello, last:Portia.",
+            Assert.IsType<TextContentBlock>(Assert.Single(lastPrompt.Messages).Content).Text);
     }
 
     [Fact]
@@ -270,7 +307,8 @@ public sealed class McpPrimitiveTests
         Assert.Equal("greeting", prompt.Name);
         Assert.Equal("Greeting prompt", prompt.ProtocolPrompt.Title);
         Assert.Equal("Renders a greeting for a supplied name.", prompt.ProtocolPrompt.Description);
-        Assert.Equal("The person whose greeting should be read.", Assert.Single(prompt.ProtocolPrompt.Arguments!).Description);
+        Assert.Equal("The person whose greeting should be read.",
+            Assert.Single(prompt.ProtocolPrompt.Arguments!).Description);
         var result = await client.GetPromptAsync("greeting", new Dictionary<string, object?> { ["name"] = "Portia" });
         Assert.Equal("Hello, Portia.", Assert.IsType<TextContentBlock>(Assert.Single(result.Messages).Content).Text);
     }
@@ -327,7 +365,11 @@ public sealed class McpPrimitiveTests
             .AddRequestHandler<McpRegistrationTests.ReadGreetingHandler>()
             .AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://local/fixed",
                 _ => new McpRegistrationTests.ReadGreeting("Owner"),
-                options => { options.VisibleTo<NamedVisibilityPolicy>(); options.AsJson(); })
+                options =>
+                {
+                    options.VisibleTo<NamedVisibilityPolicy>();
+                    options.AsJson();
+                })
             .AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>("owner-greeting",
                 _ => new McpRegistrationTests.ReadGreeting("Owner"),
                 value => [new McpPromptMessage("user", value)],
@@ -400,11 +442,19 @@ public sealed class McpPrimitiveTests
             .AddRequestAuthorizer<ReadTenantAuthorizer>()
             .AddMcpResource<ReadTenant, string>("tenant://records/{tenant}",
                 values => new ReadTenant(values["tenant"]),
-                options => { options.Authenticated(); options.AsText("text/plain", value => value); })
+                options =>
+                {
+                    options.Authenticated();
+                    options.AsText("text/plain", value => value);
+                })
             .AddMcpPrompt<ReadTenant, string>("tenant-summary",
                 values => new ReadTenant(values["tenant"]),
                 value => [new McpPromptMessage("user", value)],
-                options => { options.Authenticated(); options.Required("tenant"); })
+                options =>
+                {
+                    options.Authenticated();
+                    options.Required("tenant");
+                })
             .AddMcpHttp();
         await using var app = builder.Build();
         app.Use((context, next) =>
@@ -470,7 +520,11 @@ public sealed class McpPrimitiveTests
         // Act
         var exception = Record.Exception(() => application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
             uri, _ => new McpRegistrationTests.ReadGreeting("Portia"),
-            options => { options.Public(); options.AsJson(); }));
+            options =>
+            {
+                options.Public();
+                options.AsJson();
+            }));
 
         // Assert
         Assert.IsType<ArgumentException>(exception);
@@ -488,7 +542,11 @@ public sealed class McpPrimitiveTests
         var resource = Record.Exception(() =>
             application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
                 "greetings://local/fixed", _ => new McpRegistrationTests.ReadGreeting("Portia"),
-                options => { options.Public(); options.AsJson(); }));
+                options =>
+                {
+                    options.Public();
+                    options.AsJson();
+                }));
         var prompt = Record.Exception(() =>
             application.AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>(
                 "greeting", _ => new McpRegistrationTests.ReadGreeting("Portia"),
@@ -513,7 +571,11 @@ public sealed class McpPrimitiveTests
         var resource = Record.Exception(() =>
             application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
                 "greetings://local/fixed", _ => new McpRegistrationTests.ReadGreeting("Portia"),
-                options => { options.Public(); options.AsJson(); }));
+                options =>
+                {
+                    options.Public();
+                    options.AsJson();
+                }));
         var prompt = Record.Exception(() =>
             application.AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>(
                 "greeting", _ => new McpRegistrationTests.ReadGreeting("Portia"),
@@ -535,7 +597,11 @@ public sealed class McpPrimitiveTests
         var application = new ServiceCollection().AddPortia()
             .AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
                 uri, _ => new McpRegistrationTests.ReadGreeting("Portia"),
-                options => { options.Public(); options.AsJson(); });
+                options =>
+                {
+                    options.Public();
+                    options.AsJson();
+                });
 
         // Act
         var exception = Record.Exception(() =>
@@ -557,7 +623,11 @@ public sealed class McpPrimitiveTests
         var application = new ServiceCollection().AddPortia()
             .AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
                 uri, _ => new McpRegistrationTests.ReadGreeting("Portia"),
-                options => { options.Public(); options.AsJson(); });
+                options =>
+                {
+                    options.Public();
+                    options.AsJson();
+                });
         using var services = application.Services.BuildServiceProvider();
 
         // Act
@@ -578,12 +648,21 @@ public sealed class McpPrimitiveTests
         // Act
         _ = application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://local/{name}",
             values => new McpRegistrationTests.ReadGreeting(values["name"]),
-            options => { options.Public(); options.AsJson(); });
+            options =>
+            {
+                options.Public();
+                options.AsJson();
+            });
 
         // Assert
-        Assert.Throws<InvalidOperationException>(() => application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
-            "greetings://local/Portia", _ => new McpRegistrationTests.ReadGreeting("Portia"),
-            options => { options.Public(); options.AsJson(); }));
+        Assert.Throws<InvalidOperationException>(() =>
+            application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
+                "greetings://local/Portia", _ => new McpRegistrationTests.ReadGreeting("Portia"),
+                options =>
+                {
+                    options.Public();
+                    options.AsJson();
+                }));
     }
 
     [Fact]
@@ -595,12 +674,21 @@ public sealed class McpPrimitiveTests
         // Act
         _ = application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://local/{name}/item",
             values => new McpRegistrationTests.ReadGreeting(values["name"]),
-            options => { options.Public(); options.AsJson(); });
+            options =>
+            {
+                options.Public();
+                options.AsJson();
+            });
 
         // Assert
-        Assert.Throws<InvalidOperationException>(() => application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
-            "greetings://local/alice/{item}", _ => new McpRegistrationTests.ReadGreeting("Alice"),
-            options => { options.Public(); options.AsJson(); }));
+        Assert.Throws<InvalidOperationException>(() =>
+            application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
+                "greetings://local/alice/{item}", _ => new McpRegistrationTests.ReadGreeting("Alice"),
+                options =>
+                {
+                    options.Public();
+                    options.AsJson();
+                }));
     }
 
     [Fact]
@@ -612,12 +700,21 @@ public sealed class McpPrimitiveTests
         // Act
         _ = application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://local/A",
             _ => new McpRegistrationTests.ReadGreeting("A"),
-            options => { options.Public(); options.AsJson(); });
+            options =>
+            {
+                options.Public();
+                options.AsJson();
+            });
 
         // Assert
-        Assert.Throws<InvalidOperationException>(() => application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
-            "greetings://local/%41", _ => new McpRegistrationTests.ReadGreeting("A"),
-            options => { options.Public(); options.AsJson(); }));
+        Assert.Throws<InvalidOperationException>(() =>
+            application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
+                "greetings://local/%41", _ => new McpRegistrationTests.ReadGreeting("A"),
+                options =>
+                {
+                    options.Public();
+                    options.AsJson();
+                }));
     }
 
     [Fact]
@@ -630,7 +727,11 @@ public sealed class McpPrimitiveTests
         var exception = Record.Exception(() => application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
             "greetings://local",
             _ => new McpRegistrationTests.ReadGreeting("Portia"),
-            options => { options.Public(); options.AsJson(); }));
+            options =>
+            {
+                options.Public();
+                options.AsJson();
+            }));
 
         // Assert
         Assert.Null(exception);
@@ -648,7 +749,11 @@ public sealed class McpPrimitiveTests
         // Assert
         Assert.Throws<ArgumentException>(() => application.AddMcpResource<McpRegistrationTests.ReadGreeting, string>(
             uri, _ => new McpRegistrationTests.ReadGreeting("Portia"),
-            options => { options.Public(); options.AsJson(); }));
+            options =>
+            {
+                options.Public();
+                options.AsJson();
+            }));
     }
 
     [Fact]
@@ -666,12 +771,20 @@ public sealed class McpPrimitiveTests
                 {
                     options.Public();
                     options.AsBinary("application/octet-stream",
-                    value => System.Text.Encoding.UTF8.GetBytes(value));
+                        value => System.Text.Encoding.UTF8.GetBytes(value));
                 })
             .AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>("bound-greeting",
-                values => { Interlocked.Increment(ref bound); return new McpRegistrationTests.ReadGreeting(values["name"]); },
+                values =>
+                {
+                    Interlocked.Increment(ref bound);
+                    return new McpRegistrationTests.ReadGreeting(values["name"]);
+                },
                 value => [new McpPromptMessage("user", value)],
-                options => { options.Public(); options.Required("name"); })
+                options =>
+                {
+                    options.Public();
+                    options.Required("name");
+                })
             .AddMcpHttp();
         await using var app = builder.Build();
         _ = app.MapPortiaMcp().AllowAnonymous();
@@ -709,8 +822,16 @@ public sealed class McpPrimitiveTests
         _ = builder.Services.AddPortia()
             .AddRequestHandler<McpRegistrationTests.ReadGreetingHandler>()
             .AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://local/{name}",
-                values => { Interlocked.Increment(ref bound); return new McpRegistrationTests.ReadGreeting(values["name"]); },
-                options => { options.Public(); options.AsText("text/plain", value => value); })
+                values =>
+                {
+                    Interlocked.Increment(ref bound);
+                    return new McpRegistrationTests.ReadGreeting(values["name"]);
+                },
+                options =>
+                {
+                    options.Public();
+                    options.AsText("text/plain", value => value);
+                })
             .AddMcpHttp();
         await using var app = builder.Build();
         _ = app.MapPortiaMcp().AllowAnonymous();
@@ -740,15 +861,27 @@ public sealed class McpPrimitiveTests
             .AddMcpTool<McpRegistrationTests.ReadGreeting>()
             .AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://local/fixed",
                 _ => new McpRegistrationTests.ReadGreeting("Portia"),
-                options => { options.Public(); options.AsText("text/plain", value => value); })
+                options =>
+                {
+                    options.Public();
+                    options.AsText("text/plain", value => value);
+                })
             .AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>("too-many-messages",
                 _ => new McpRegistrationTests.ReadGreeting("Portia"),
                 value => [new McpPromptMessage("user", value), new McpPromptMessage("assistant", value)],
                 options => options.Public())
             .AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>("too-many-argument-bytes",
-                values => { Interlocked.Increment(ref bound); return new McpRegistrationTests.ReadGreeting(values["name"]); },
+                values =>
+                {
+                    Interlocked.Increment(ref bound);
+                    return new McpRegistrationTests.ReadGreeting(values["name"]);
+                },
                 value => [new McpPromptMessage("user", value)],
-                options => { options.Public(); options.Required("name"); })
+                options =>
+                {
+                    options.Public();
+                    options.Required("name");
+                })
             .ConfigureMcpLimits(limits =>
             {
                 limits.MaxPromptArgumentBytes = 12;
@@ -791,7 +924,11 @@ public sealed class McpPrimitiveTests
             .AddRequestHandler<SlowReadHandler>()
             .AddMcpResource<SlowRead, string>("slow://local/item",
                 _ => new SlowRead(),
-                options => { options.Public(); options.AsText("text/plain", value => value); })
+                options =>
+                {
+                    options.Public();
+                    options.AsText("text/plain", value => value);
+                })
             .ConfigureMcpLimits(limits => limits.OperationDeadline = TimeSpan.FromMilliseconds(100))
             .AddMcpHttp();
         await using var app = builder.Build();

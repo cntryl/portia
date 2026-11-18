@@ -132,7 +132,8 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
     {
         ArgumentNullException.ThrowIfNull(pattern);
         if (pattern.IsTenantTemplate)
-            throw new ArgumentException("Bind the processor's tenant before observing source progress.", nameof(pattern));
+            throw new ArgumentException("Bind the processor's tenant before observing source progress.",
+                nameof(pattern));
         ct.ThrowIfCancellationRequested();
         var offset = Offset(position);
 
@@ -155,6 +156,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
                 if (observed.Contiguous && observed.Count == head - offset)
                     pending = observed.Count;
             }
+
             return new EventStreamProgress(position, Cursor(head), pending,
                 offset <= head ? offset == head : null, DateTimeOffset.UtcNow, lowerBound);
         }
@@ -243,6 +245,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
                 default:
                     throw new InvalidOperationException("Fitz returned a malformed source entry.");
             }
+
             if (first < next || last < first)
                 throw new InvalidOperationException("Fitz returned nonmonotonic source progress.");
             if (first != next)
@@ -252,6 +255,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
                 count++;
             next = checked(last + 1);
         }
+
         return (count, contiguous, next);
     }
 
@@ -290,6 +294,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
                 throw new EventStreamConcurrencyException(
                     $"A stream in area '{stream.Area}' already has an active append session.", ex);
             }
+
             var failed = false;
             var committed = false;
             try

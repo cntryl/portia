@@ -43,10 +43,14 @@ public sealed class WorkloadLifecycleTests
         var descriptor = new WorkloadLifecycleDescriptor(_ =>
         {
             patterns.Add(current);
-            return current == "first" ? ValueTask.FromResult(new ProjectionPassResult(default, true))
+            return current == "first"
+                ? ValueTask.FromResult(new ProjectionPassResult(default, true))
                 : ValueTask.FromException<ProjectionPassResult>(new IOException("processed second pattern"));
         }, () => EventStreamPattern.ForPattern("audit", current = ++reads <= 2 ? "first" : "second"));
-        using var worker = WorkloadLifecycleTestHost.Worker(provider, descriptor, notificationMode == 0 ? null : new WorkloadLifecycleNotifier(false, throwOnSubscribe: notificationMode == 2));
+        using var worker = WorkloadLifecycleTestHost.Worker(provider, descriptor,
+            notificationMode == 0
+                ? null
+                : new WorkloadLifecycleNotifier(false, throwOnSubscribe: notificationMode == 2));
         await worker.StartAsync(default);
 
         // Act
@@ -103,9 +107,11 @@ public sealed class WorkloadLifecycleTests
         internal int Subscriptions { get; private set; }
         internal int FailedDisposals { get; private set; }
 
-        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern, CancellationToken ct = default)
+        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
+            CancellationToken ct = default)
             => ValueTask.FromResult<IDomainEventSubscription>(++Subscriptions == 1
-                ? new FailedSubscription(this) : new HealthySubscription());
+                ? new FailedSubscription(this)
+                : new HealthySubscription());
 
         sealed class FailedSubscription(RecoveringNotifier owner) : IDomainEventSubscription
         {

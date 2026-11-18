@@ -17,12 +17,14 @@ sealed class PortiaOpenApiSchemaTransformer : IOpenApiSchemaTransformer
         var descriptions = context.ApplicationServices.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.OpenApi;
         var json = context.ApplicationServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
         var text = (context.JsonPropertyInfo is { } property
-            ? descriptions.Property(property, context.JsonTypeInfo.Options, json) : null)
-            ?? descriptions.Schema(context.JsonTypeInfo.Type, json);
+                       ? descriptions.Property(property, context.JsonTypeInfo.Options, json)
+                       : null)
+                   ?? descriptions.Schema(context.JsonTypeInfo.Type, json);
         if (text is not null)
             schema.Description = text;
         var member = context.JsonPropertyInfo is { } describedProperty
-            ? PortiaJsonDescriptions.PropertyMetadata(json, describedProperty) : null;
+            ? PortiaJsonDescriptions.PropertyMetadata(json, describedProperty)
+            : null;
         var contract = PortiaJsonDescriptions.Metadata(json, context.JsonTypeInfo.Type);
         schema.Title = member?.Title ?? contract?.Title ?? schema.Title;
         schema.Deprecated = member?.Deprecated == true || contract?.Deprecated == true || schema.Deprecated;
@@ -31,6 +33,7 @@ sealed class PortiaOpenApiSchemaTransformer : IOpenApiSchemaTransformer
             if (child.Description is null)
                 schema.Properties![name] = PortiaOpenApiDescriptions.Annotate(child, descriptions.SharedMember(name));
         }
+
         return Task.CompletedTask;
     }
 }

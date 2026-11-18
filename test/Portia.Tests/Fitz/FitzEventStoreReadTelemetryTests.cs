@@ -13,7 +13,8 @@ public sealed class FitzEventStoreReadTelemetryTests
     [InlineData(false, true, 1)]
     [InlineData(true, false, 2)]
     [InlineData(true, true, 1)]
-    public async Task ShouldReportSuccessGivenReadEndingByCompletionOrEarlyDisposal(bool pattern, bool stopEarly, long expectedCount)
+    public async Task ShouldReportSuccessGivenReadEndingByCompletionOrEarlyDisposal(bool pattern, bool stopEarly,
+        long expectedCount)
     {
         // Arrange
         var measurements = new Measurements();
@@ -45,7 +46,8 @@ public sealed class FitzEventStoreReadTelemetryTests
     [InlineData(true, true, "canceled")]
     [InlineData(false, false, "fault")]
     [InlineData(true, false, "fault")]
-    public async Task ShouldDistinguishCancellationFromFailureGivenCancelledOrFaultedRead(bool pattern, bool cancel, string outcome)
+    public async Task ShouldDistinguishCancellationFromFailureGivenCancelledOrFaultedRead(bool pattern, bool cancel,
+        string outcome)
     {
         // Arrange
         var measurements = new Measurements();
@@ -129,7 +131,8 @@ public sealed class FitzEventStoreReadTelemetryTests
             ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(),
                 (ulong)index + 1, DateTimeOffset.UtcNow));
             var record = new StreamRecord(stream.ToString(), (ulong)index, (ulong)index, (ulong)index,
-                (ulong)index, serializer.Serialize(ev).ToArray(), Encoding.UTF8.GetBytes((metadataStream ?? stream).ToString()), 0);
+                (ulong)index, serializer.Serialize(ev).ToArray(),
+                Encoding.UTF8.GetBytes((metadataStream ?? stream).ToString()), 0);
             return new StreamReadItem(stream.ToString(), 0, record, (ulong)index,
                 (ulong)index, (ulong)index);
         }).ToArray();

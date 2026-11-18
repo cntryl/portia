@@ -203,7 +203,9 @@ public sealed class PartialProcessorCodeFixTests
         var document = workspace.AddDocument(project.Id, "Processor.cs", SourceText.From(source));
         // Project and solution runs have another document; solution also includes another project.
         if (scope != FixAllScope.Document)
-            _ = workspace.AddDocument(project.Id, "Other.cs", SourceText.From(source.Replace("Outer", "OtherOuter").Replace("Projection", "OtherProjection").Replace("Reaction", "OtherReaction").Replace("Changed", "OtherChanged")));
+            _ = workspace.AddDocument(project.Id, "Other.cs",
+                SourceText.From(source.Replace("Outer", "OtherOuter").Replace("Projection", "OtherProjection")
+                    .Replace("Reaction", "OtherReaction").Replace("Changed", "OtherChanged")));
         if (scope == FixAllScope.Solution)
         {
             var other = workspace.AddProject("OtherProject", LanguageNames.CSharp)
@@ -212,6 +214,7 @@ public sealed class PartialProcessorCodeFixTests
             Assert.True(workspace.TryApplyChanges(other.Solution));
             _ = workspace.AddDocument(other.Id, "Processor.cs", SourceText.From(source));
         }
+
         document = workspace.CurrentSolution.GetDocument(document.Id)!;
         var provider = new PartialProcessorCodeFixProvider();
         var context = new FixAllContext(document, provider, scope, equivalenceKey, provider.FixableDiagnosticIds,
@@ -224,16 +227,19 @@ public sealed class PartialProcessorCodeFixTests
         foreach (var changed in solution.Projects.SelectMany(item => item.Documents))
         {
             var text = (await changed.GetTextAsync()).ToString();
-            Assert.DoesNotContain(GeneratorCompilation.Diagnostics(text, new ProjectorReactorEventDispatcherGenerator()),
+            Assert.DoesNotContain(
+                GeneratorCompilation.Diagnostics(text, new ProjectorReactorEventDispatcherGenerator()),
                 diagnostic => diagnostic.Id is "PORTIA002" or "PORTIA005" or "PORTIA015");
             _ = GeneratorCompilation.Compile(text, new ProjectorReactorEventDispatcherGenerator());
         }
+
         return (await solution.GetDocument(document.Id)!.GetTextAsync()).ToString();
     }
 
     sealed class ProcessorDiagnosticProvider : FixAllContext.DiagnosticProvider
     {
-        public override async Task<IEnumerable<Diagnostic>> GetDocumentDiagnosticsAsync(Document document, CancellationToken cancellationToken)
+        public override async Task<IEnumerable<Diagnostic>> GetDocumentDiagnosticsAsync(Document document,
+            CancellationToken cancellationToken)
         {
             var compilation = await document.Project.GetCompilationAsync(cancellationToken);
             var tree = await document.GetSyntaxTreeAsync(cancellationToken);
@@ -250,10 +256,12 @@ public sealed class PartialProcessorCodeFixTests
                     Location.Create(tree!, diagnostic.Location.SourceSpan), diagnostic.Properties));
         }
 
-        public override Task<IEnumerable<Diagnostic>> GetProjectDiagnosticsAsync(Project project, CancellationToken cancellationToken) =>
+        public override Task<IEnumerable<Diagnostic>> GetProjectDiagnosticsAsync(Project project,
+            CancellationToken cancellationToken) =>
             Task.FromResult(Enumerable.Empty<Diagnostic>());
 
-        public override async Task<IEnumerable<Diagnostic>> GetAllDiagnosticsAsync(Project project, CancellationToken cancellationToken)
+        public override async Task<IEnumerable<Diagnostic>> GetAllDiagnosticsAsync(Project project,
+            CancellationToken cancellationToken)
         {
             var diagnostics = new List<Diagnostic>();
             foreach (var document in project.Documents)

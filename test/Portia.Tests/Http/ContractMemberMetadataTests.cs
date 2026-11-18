@@ -25,11 +25,16 @@ public sealed class ContractMemberMetadataTests
         var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
 
         // Assert
-        var first = document.Paths["/first-title"].Operations![HttpMethod.Post].RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
-        var second = document.Paths["/second-title"].Operations![HttpMethod.Post].RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
+        var first =
+            document.Paths["/first-title"].Operations![HttpMethod.Post].RequestBody!.Content!["application/json"]
+                .Schema!.Properties!["payload"];
+        var second =
+            document.Paths["/second-title"].Operations![HttpMethod.Post].RequestBody!.Content!["application/json"]
+                .Schema!.Properties!["payload"];
         Assert.Equal("First payload", first.Title);
         Assert.Equal("Second payload", second.Title);
-        Assert.Equal(Assert.IsType<OpenApiSchemaReference>(first).Reference.Id, Assert.IsType<OpenApiSchemaReference>(second).Reference.Id);
+        Assert.Equal(Assert.IsType<OpenApiSchemaReference>(first).Reference.Id,
+            Assert.IsType<OpenApiSchemaReference>(second).Reference.Id);
     }
 
     /// <summary>A valid literal initializer permits omission despite a Required value rule.</summary>
@@ -49,10 +54,13 @@ public sealed class ContractMemberMetadataTests
         var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
 
         // Assert
-        var schema = document.Paths["/literal-default"].Operations![HttpMethod.Post].RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
+        var schema =
+            document.Paths["/literal-default"].Operations![HttpMethod.Post].RequestBody!.Content!["application/json"]
+                .Schema!.Properties!["payload"];
         Assert.DoesNotContain("name", schema.Required?.ToArray() ?? []);
         Assert.Equal("fallback", schema.Properties!["name"].Default!.GetValue<string>());
     }
+
     /// <summary>Query requirements follow value validation and do not inherit JSON-only presence rules.</summary>
     [Fact]
     public async Task ShouldRequireQueryValueGivenRequiredWithNullDefault()
@@ -92,8 +100,9 @@ public sealed class ContractMemberMetadataTests
         var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
 
         // Assert
-        var schema = document.Paths["/ignored-input"].Operations![HttpMethod.Post].RequestBody!.Content!["application/json"].Schema!;
+        var schema =
+            document.Paths["/ignored-input"].Operations![HttpMethod.Post].RequestBody!.Content!["application/json"]
+                .Schema!;
         Assert.False(schema.Properties?.ContainsKey("server_name") == true);
     }
-
 }

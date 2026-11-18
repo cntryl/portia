@@ -224,7 +224,9 @@ public sealed class FleetBrokerTests
     sealed class PausedStartCountComparer : IEqualityComparer<string>, IDisposable
     {
         readonly ManualResetEventSlim _resume = new();
-        internal TaskCompletionSource RecordingStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal TaskCompletionSource RecordingStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public bool Equals(string? x, string? y) => StringComparer.Ordinal.Equals(x, y);
 

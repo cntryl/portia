@@ -3,8 +3,10 @@
     <RootNamespace>Cntryl.Portia.Consumer</RootNamespace>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <InterceptorsNamespaces>$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../bench/Portia.CompilerBenchmarks/Portia.CompilerBenchmarks.csproj"/>
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all"/>
     <FrameworkReference Include="Microsoft.AspNetCore.App"/>
     <PackageReference Include="Cntryl.Conventions.Testing.Analyzers"/>

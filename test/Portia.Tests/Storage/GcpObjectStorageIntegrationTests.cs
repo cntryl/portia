@@ -19,8 +19,9 @@ public sealed class GcpObjectStorageIntegrationTests
     {
         // Arrange
         var endpoint = Environment.GetEnvironmentVariable("PORTIA_GCS_TEST_ENDPOINT")
-            ?? Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT")
-            ?? throw new InvalidOperationException("Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
+                       ?? Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT")
+                       ?? throw new InvalidOperationException(
+                           "Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
         var suffix = Guid.NewGuid().ToString("N")[..12];
         var firstBucket = $"portia-gcs-a-{suffix}";
         var secondBucket = $"portia-gcs-b-{suffix}";
@@ -61,15 +62,17 @@ public sealed class GcpObjectStorageIntegrationTests
                 {
                     // Sqrzl serves the GCS XML API for requests whose Host is storage.googleapis.com, which is also
                     // the host that was signed. Send the signed path and query to the local endpoint.
-                    using var request = new HttpRequestMessage(HttpMethod.Put, new Uri(uri, part.UploadUri.PathAndQuery))
-                    {
-                        Content = new ByteArrayContent(bytes.ToArray())
-                    };
+                    using var request =
+                        new HttpRequestMessage(HttpMethod.Put, new Uri(uri, part.UploadUri.PathAndQuery))
+                        {
+                            Content = new ByteArrayContent(bytes.ToArray())
+                        };
                     request.Headers.Host = part.UploadUri.Host;
                     using var response = await transfer.SendAsync(request, ct);
                     if (!response.IsSuccessStatusCode)
                     {
-                        throw new InvalidDataException($"{(int)response.StatusCode} from {part.UploadUri}: {await response.Content.ReadAsStringAsync(ct)}");
+                        throw new InvalidDataException(
+                            $"{(int)response.StatusCode} from {part.UploadUri}: {await response.Content.ReadAsStringAsync(ct)}");
                     }
 
                     var generation = response.Headers.TryGetValues("x-goog-generation", out var values)

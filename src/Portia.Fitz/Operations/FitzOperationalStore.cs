@@ -20,7 +20,8 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
     }
 
     /// <inheritdoc />
-    public async ValueTask<OperationalProcessorState?> ReadAsync(OperationalTarget target, CancellationToken ct = default)
+    public async ValueTask<OperationalProcessorState?> ReadAsync(OperationalTarget target,
+        CancellationToken ct = default)
     {
         var identity = target.Identity;
         await using var tx = await _client.BeginAsync(FitzKvCheckpoints.WorkloadRoute(_route, identity),
@@ -38,15 +39,19 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
         await using (var tx = await _client.BeginAsync(IndexRoute(scope), KvMode.ReadOnly, ct).ConfigureAwait(false))
         {
             var value = await tx.GetAsync(IndexKey(scope), ct).ConfigureAwait(false);
-            targets = value is KvFound { Value: var valueBytes } ? JsonSerializer.Deserialize(valueBytes.Span,
-                FitzJsonContext.Default.OperationalTargetArray)! : [];
+            targets = value is KvFound { Value: var valueBytes }
+                ? JsonSerializer.Deserialize(valueBytes.Span,
+                    FitzJsonContext.Default.OperationalTargetArray)!
+                : [];
         }
+
         var states = new List<OperationalProcessorState>();
         foreach (var target in targets.Where(t => t.Scope == scope))
         {
             if (await ReadAsync(target, ct).ConfigureAwait(false) is { } state)
                 states.Add(state);
         }
+
         return states;
     }
 
@@ -76,7 +81,8 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
         => FitzKvCheckpoints.LoadAsync(_client, FitzKvCheckpoints.WorkloadRoute(_route, identity), identity, ct);
 
     /// <summary>Rejects writes without the owning worker's fenced completion receipt.</summary>
-    public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+    public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
+        CancellationToken ct = default)
         => ValueTask.FromException(new InvalidOperationException(
             "Operational reactor progress must commit through its owning worker and completion receipt."));
 
@@ -92,23 +98,31 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
         {
             var actual = await ReadStateAsync(tx, replacement.Target, ct).ConfigureAwait(false);
             if (!Matches(actual, expectedRevision, ownerSession)
-                || actual!.Attempts.SingleOrDefault(a => a.Id == attemptId) is not { Outcome: OperationalAttemptOutcomes.Running } attempt
+                || actual!.Attempts.SingleOrDefault(a => a.Id == attemptId) is not
+                { Outcome: OperationalAttemptOutcomes.Running } attempt
                 || attempt.OwnerSession != ownerSession || attempt.ExpectedCheckpoint != expectedCheckpoint)
                 return false;
             var stored = await tx.GetAsync(FitzKvCheckpoints.Key(identity), ct).ConfigureAwait(false);
-            var checkpoint = stored is KvFound { Value: var storedBytes } ? FitzKvCheckpoints.Decode(storedBytes.Span).Value : null;
+            var checkpoint = stored is KvFound { Value: var storedBytes }
+                ? FitzKvCheckpoints.Decode(storedBytes.Span).Value
+                : null;
             if (checkpoint != expectedCheckpoint)
                 throw new OperationalCheckpointConflictException();
             var receipt = replacement.Attempts.Single(a => a.Id == attemptId);
             if (replacement.OwnerSession != ownerSession || replacement.Checkpoint != nextCheckpoint
-                || receipt.Outcome != OperationalAttemptOutcomes.Committed || receipt.NextCheckpoint != nextCheckpoint
-                || receipt.OwnerSession != ownerSession || receipt.StartedAt != attempt.StartedAt
-                || attempt.NextCheckpoint != nextCheckpoint
-                || receipt.ExpectedCheckpoint != expectedCheckpoint || !receipt.Sources.SequenceEqual(attempt.Sources)
-                || replacement.Settings != actual.Settings)
-                throw new ArgumentException("A reactor commit requires its matching completion receipt.", nameof(replacement));
+                                                         || receipt.Outcome != OperationalAttemptOutcomes.Committed ||
+                                                         receipt.NextCheckpoint != nextCheckpoint
+                                                         || receipt.OwnerSession != ownerSession ||
+                                                         receipt.StartedAt != attempt.StartedAt
+                                                         || attempt.NextCheckpoint != nextCheckpoint
+                                                         || receipt.ExpectedCheckpoint != expectedCheckpoint ||
+                                                         !receipt.Sources.SequenceEqual(attempt.Sources)
+                                                         || replacement.Settings != actual.Settings)
+                throw new ArgumentException("A reactor commit requires its matching completion receipt.",
+                    nameof(replacement));
             await tx.PutAsync(FitzKvCheckpoints.Key(identity), FitzKvCheckpoints.Encode(
-                nextCheckpoint is null ? EventCursor.Start : new EventCursor(nextCheckpoint)), ct).ConfigureAwait(false);
+                    nextCheckpoint is null ? EventCursor.Start : new EventCursor(nextCheckpoint)), ct)
+                .ConfigureAwait(false);
             await PutStateAsync(tx, replacement, ct).ConfigureAwait(false);
             return true;
         }, ct).ConfigureAwait(false);
@@ -117,22 +131,27 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
     static void ValidateRevision(OperationalProcessorState replacement, long expectedRevision)
     {
         if (replacement.Revision != checked(expectedRevision + 1))
-            throw new ArgumentException("An operational transition must advance the revision exactly once.", nameof(replacement));
+            throw new ArgumentException("An operational transition must advance the revision exactly once.",
+                nameof(replacement));
     }
 
     static bool Matches(OperationalProcessorState? actual, long revision, Guid owner)
-        => actual is null ? revision == 0 && owner == Guid.Empty : actual.Revision == revision && actual.OwnerSession == owner;
+        => actual is null
+            ? revision == 0 && owner == Guid.Empty
+            : actual.Revision == revision && actual.OwnerSession == owner;
 
     static ReadOnlyMemory<byte> Key(OperationalTarget target) => Encoding.UTF8.GetBytes(
         "operations-v1\0" + Encoding.UTF8.GetString(FitzKvCheckpoints.Key(target.Identity).Span)
-        + "\0" + (target.Scope.Tenant is null ? "global" : "tenant:" + target.Scope.Tenant));
+                          + "\0" + (target.Scope.Tenant is null ? "global" : "tenant:" + target.Scope.Tenant));
 
     static async ValueTask<OperationalProcessorState?> ReadStateAsync(IKvTransaction tx, OperationalTarget target,
         CancellationToken ct)
     {
         var value = await tx.GetAsync(Key(target), ct).ConfigureAwait(false);
-        var state = value is KvFound { Value: var valueBytes } ? JsonSerializer.Deserialize(valueBytes.Span,
-            FitzJsonContext.Default.OperationalProcessorState) : null;
+        var state = value is KvFound { Value: var valueBytes }
+            ? JsonSerializer.Deserialize(valueBytes.Span,
+                FitzJsonContext.Default.OperationalProcessorState)
+            : null;
         if (state is not null && state.Target != target)
             throw new InvalidDataException("The operational document does not match the requested target.");
         return state;
@@ -146,18 +165,23 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
         "portia-operations-index", scope.Tenant is null ? "global" : "tenant:" + scope.Tenant);
 
     static ReadOnlyMemory<byte> IndexKey(OperationalScope scope)
-        => Encoding.UTF8.GetBytes("operations-index-v1\0" + (scope.Tenant is null ? "global" : "tenant:" + scope.Tenant));
+        => Encoding.UTF8.GetBytes(
+            "operations-index-v1\0" + (scope.Tenant is null ? "global" : "tenant:" + scope.Tenant));
 
     async ValueTask AddIndexAsync(OperationalTarget target, CancellationToken ct)
     {
-        await using var tx = await _client.BeginAsync(IndexRoute(target.Scope), KvMode.ReadWrite, ct).ConfigureAwait(false);
+        await using var tx = await _client.BeginAsync(IndexRoute(target.Scope), KvMode.ReadWrite, ct)
+            .ConfigureAwait(false);
         var value = await tx.GetAsync(IndexKey(target.Scope), ct).ConfigureAwait(false);
-        var existing = value is KvFound { Value: var valueBytes } ? JsonSerializer.Deserialize(valueBytes.Span,
-            FitzJsonContext.Default.OperationalTargetArray)! : [];
+        var existing = value is KvFound { Value: var valueBytes }
+            ? JsonSerializer.Deserialize(valueBytes.Span,
+                FitzJsonContext.Default.OperationalTargetArray)!
+            : [];
         if (existing.Contains(target))
             return;
         await tx.PutAsync(IndexKey(target.Scope), JsonSerializer.SerializeToUtf8Bytes(
-            existing.Append(target).ToArray(), FitzJsonContext.Default.OperationalTargetArray), ct).ConfigureAwait(false);
+                existing.Append(target).ToArray(), FitzJsonContext.Default.OperationalTargetArray), ct)
+            .ConfigureAwait(false);
         await tx.CommitAsync(KvDurability.Sync, ct).ConfigureAwait(false);
     }
 
@@ -183,8 +207,13 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
         finally
         {
             try
-            { await tx.DisposeAsync().ConfigureAwait(false); }
-            catch when (committed) { /* The receipt already proves the journal commit. */ }
+            {
+                await tx.DisposeAsync().ConfigureAwait(false);
+            }
+            catch when (committed)
+            {
+                /* The receipt already proves the journal commit. */
+            }
         }
     }
 }

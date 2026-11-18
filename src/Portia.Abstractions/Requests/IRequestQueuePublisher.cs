@@ -75,7 +75,8 @@ public interface IRequestQueuePublisher
         options.Validate();
         ct.ThrowIfCancellationRequested();
         if (options.TtlHours is not null || options.Delay is { } delay && delay != TimeSpan.Zero)
-            throw new NotSupportedException("This queue publisher does not support publication delay or message lifetime.");
+            throw new NotSupportedException(
+                "This queue publisher does not support publication delay or message lifetime.");
         return EnqueueAsync(request, routeValues, actorToken, metadata, ct);
     }
 }

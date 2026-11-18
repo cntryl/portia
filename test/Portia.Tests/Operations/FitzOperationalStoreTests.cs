@@ -3,7 +3,8 @@ namespace Cntryl.Portia;
 /// <summary>Qualifies synchronous journaling and atomic completion against the Fitz transaction contract.</summary>
 public sealed class FitzOperationalStoreTests
 {
-    static readonly OperationalTarget Target = new("reactor", "stream://tenant/orders/*", OperationalScope.ForTenant(new TenantId("tenant")));
+    static readonly OperationalTarget Target = new("reactor", "stream://tenant/orders/*",
+        OperationalScope.ForTenant(new TenantId("tenant")));
 
     /// <summary>Unfenced writes cannot replace authoritative operational progress.</summary>
     [Fact]
@@ -17,7 +18,8 @@ public sealed class FitzOperationalStoreTests
         var operations = new FitzOperationalStore(client, "kv://test/state/progress");
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await operations.SaveAsync(Target.Identity, ProjectionCheckpoint.Start));
+        var exception = await Record.ExceptionAsync(async () =>
+            await operations.SaveAsync(Target.Identity, ProjectionCheckpoint.Start));
 
         // Assert
         Assert.IsType<InvalidOperationException>(exception);
@@ -47,12 +49,18 @@ public sealed class FitzOperationalStoreTests
         {
             Revision = 2,
             Checkpoint = "opaque:next",
-            Attempts = [attempt with
-            { Outcome = "committed", CompletedAt = DateTimeOffset.UtcNow }]
+            Attempts =
+            [
+                attempt with
+                {
+                    Outcome = "committed", CompletedAt = DateTimeOffset.UtcNow
+                }
+            ]
         };
         Assert.False(await store.CommitAsync(next, 1, Guid.NewGuid(), attemptId, null, "opaque:next"));
         client.CommitFailure = new IOException("injected commit failure");
-        _ = await Assert.ThrowsAsync<IOException>(() => store.CommitAsync(next, 1, owner, attemptId, null, "opaque:next").AsTask());
+        _ = await Assert.ThrowsAsync<IOException>(() =>
+            store.CommitAsync(next, 1, owner, attemptId, null, "opaque:next").AsTask());
         client.CommitFailure = null;
         Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(Target.Identity));
         Assert.Equal("running", Assert.Single((await store.ReadAsync(Target))!.Attempts).Outcome);
@@ -72,7 +80,11 @@ public sealed class FitzOperationalStoreTests
         var store = new FitzOperationalStore(client, "kv://test/state/progress");
         _ = await store.ReadAsync(Target);
         var firstRoute = client.LastTransaction.Route;
-        var other = Target with { Pattern = "stream://other/orders/*", Scope = OperationalScope.ForTenant(new TenantId("other")) };
+        var other = Target with
+        {
+            Pattern = "stream://other/orders/*",
+            Scope = OperationalScope.ForTenant(new TenantId("other"))
+        };
 
         // Act
         _ = await store.ReadAsync(other);

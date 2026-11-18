@@ -19,7 +19,8 @@ public sealed class AggregateReplayFailureTests
     [InlineData(0, true, true)]
     [InlineData(1, true, true)]
     [InlineData(2, true, true)]
-    public async Task ShouldDiscardAggregateGivenReplayApplicationFailure(int failureIndex, bool readOnly, bool useOverride)
+    public async Task ShouldDiscardAggregateGivenReplayApplicationFailure(int failureIndex, bool readOnly,
+        bool useOverride)
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -36,14 +37,20 @@ public sealed class AggregateReplayFailureTests
         Assert.Equal(failureIndex + 1, aggregate.Applied);
         Assert.Equal((ulong)failureIndex, aggregate.Version);
         Assert.Equal(0UL, aggregate.CommittedStreamPosition);
-        Assert.Contains("discarded", Assert.Throws<InvalidOperationException>(() => aggregate.Load(history)).Message, StringComparison.Ordinal);
-        Assert.Contains("discarded", Assert.Throws<InvalidOperationException>(aggregate.Raise).Message, StringComparison.Ordinal);
-        Assert.Contains("discarded", Assert.Throws<InvalidOperationException>(aggregate.Audit).Message, StringComparison.Ordinal);
+        Assert.Contains("discarded", Assert.Throws<InvalidOperationException>(() => aggregate.Load(history)).Message,
+            StringComparison.Ordinal);
+        Assert.Contains("discarded", Assert.Throws<InvalidOperationException>(aggregate.Raise).Message,
+            StringComparison.Ordinal);
+        Assert.Contains("discarded", Assert.Throws<InvalidOperationException>(aggregate.Audit).Message,
+            StringComparison.Ordinal);
         var repository = new AggregateRepository(new InMemoryEventStore());
         var context = new RequestDispatchContext(RequestActor.System);
-        var saveFailure = await Assert.ThrowsAsync<InvalidOperationException>(() => repository.SaveAsync(aggregate, context).AsTask());
+        var saveFailure =
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                repository.SaveAsync(aggregate, context).AsTask());
         Assert.Contains("discarded", saveFailure.Message, StringComparison.Ordinal);
-        var hydrationFailure = await Assert.ThrowsAsync<InvalidOperationException>(() => repository.HydrateAsync(aggregate).AsTask());
+        var hydrationFailure =
+            await Assert.ThrowsAsync<InvalidOperationException>(() => repository.HydrateAsync(aggregate).AsTask());
         Assert.Contains("discarded", hydrationFailure.Message, StringComparison.Ordinal);
         var fresh = new ReplayAggregate(id, -1, useOverride, failure);
         fresh.Load(history);
@@ -64,7 +71,8 @@ public sealed class AggregateReplayFailureTests
         var first = DomainEventSeed.Attach(new ValueChanged(1), id, 1);
 
         // Assert
-        Assert.Throws<InvalidOperationException>(() => aggregate.Load([first, DomainEventSeed.Attach(new ValueChanged(2), id, 3)]));
+        Assert.Throws<InvalidOperationException>(() =>
+            aggregate.Load([first, DomainEventSeed.Attach(new ValueChanged(2), id, 3)]));
         Assert.Equal(0, aggregate.Applied);
         aggregate.Load([first, DomainEventSeed.Attach(new ValueChanged(2), id, 2)]);
         Assert.Equal(2, aggregate.Applied);
@@ -75,6 +83,7 @@ public sealed class AggregateReplayFailureTests
         readonly int _failureIndex;
         readonly bool _useOverride;
         readonly Exception _failure;
+
         public ReplayAggregate(Uuid id, int failureIndex, bool useOverride, Exception failure)
             : base(id, new EventStreamAddress("test", "replay-failure", id.ToString()))
         {
@@ -83,9 +92,11 @@ public sealed class AggregateReplayFailureTests
             _failure = failure;
             On<ValueChanged>(_ => Mutate());
         }
+
         public int Applied { get; private set; }
         public void Raise() => RaiseEvent(new ValueChanged(10));
         public void Audit() => AuditEvent(new ValueAudited("test"));
+
         protected override void Apply(DomainEvent ev)
         {
             if (_useOverride)
@@ -93,6 +104,7 @@ public sealed class AggregateReplayFailureTests
             else
                 base.Apply(ev);
         }
+
         void Mutate()
         {
             if (Applied++ == _failureIndex)

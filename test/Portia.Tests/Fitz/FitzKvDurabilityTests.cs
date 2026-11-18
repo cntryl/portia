@@ -43,7 +43,8 @@ public sealed class FitzKvDurabilityTests
         var checkpoint = new ProjectionCheckpoint(new EventCursor("1"));
 
         // Assert
-        await using (var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
+        await using (var batch =
+                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
         {
             await store.WriteAsync();
             Assert.Empty(client.Committed);
@@ -124,7 +125,8 @@ public sealed class FitzKvDurabilityTests
     [Theory]
     [InlineData(KvDurability.Buffered, KvDurability.Sync)]
     [InlineData(KvDurability.Sync, KvDurability.Buffered)]
-    public void ShouldRejectConflictingDurabilityGivenRepeatedCheckpointSelection(KvDurability first, KvDurability second)
+    public void ShouldRejectConflictingDurabilityGivenRepeatedCheckpointSelection(KvDurability first,
+        KvDurability second)
     {
         // Arrange
         var services = new ServiceCollection();
@@ -154,7 +156,8 @@ public sealed class FitzKvDurabilityTests
         // Assert
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new FitzKvCheckpointStore(client, Route, durability));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new Projection(client, durability));
-        _ = Assert.Throws<ArgumentOutOfRangeException>(() => new FitzKvTenantDirectorySnapshotStore(client, Route, durability));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new FitzKvTenantDirectorySnapshotStore(client, Route, durability));
         var services = new ServiceCollection();
         _ = Assert.Throws<ArgumentOutOfRangeException>(() =>
             services.AddPortia().AddFitz(Configuration(), builder => builder.UseKvCheckpoints(Route, durability)));

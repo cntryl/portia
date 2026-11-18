@@ -55,7 +55,7 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
         var checkpoint = await ProcessorCheckpoints.LoadAsync(projector.Store,
             new CheckpointIdentity(projector.Name, projector.Pattern, options.RebuildId), ct).ConfigureAwait(false);
         return await services.GetRequiredService<ProjectorRunner>().RunPassAsync(
-            services.GetService<OperationalExecution>()?.Session, projector, checkpoint, options, ct)
+                services.GetService<OperationalExecution>()?.Session, projector, checkpoint, options, ct)
             .ConfigureAwait(false);
     }
 

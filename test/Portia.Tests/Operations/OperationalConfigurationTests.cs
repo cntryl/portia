@@ -24,7 +24,8 @@ public sealed class OperationalConfigurationTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task ShouldRejectMixedCheckpointOwnershipGivenOperationsAndCheckpointsInEitherOrder(bool operationsFirst)
+    public async Task ShouldRejectMixedCheckpointOwnershipGivenOperationsAndCheckpointsInEitherOrder(
+        bool operationsFirst)
     {
         // Arrange
         await using var client = new FitzClient(new ClientConfig(new Uri("ws://127.0.0.1:1/ws")));
@@ -61,8 +62,11 @@ public sealed class OperationalConfigurationTests
         services.AddPortia().UseFitzClient(client);
 
         // Assert
-        Assert.Same(client.Kv, Assert.Single(services, service => service.ServiceType == typeof(IKvClient)).ImplementationInstance);
-        Assert.Same(client.Stream, Assert.Single(services, service => service.ServiceType == typeof(IStreamClient)).ImplementationInstance);
-        Assert.Same(client.Schedule, Assert.Single(services, service => service.ServiceType == typeof(IScheduleClient)).ImplementationInstance);
+        Assert.Same(client.Kv,
+            Assert.Single(services, service => service.ServiceType == typeof(IKvClient)).ImplementationInstance);
+        Assert.Same(client.Stream,
+            Assert.Single(services, service => service.ServiceType == typeof(IStreamClient)).ImplementationInstance);
+        Assert.Same(client.Schedule,
+            Assert.Single(services, service => service.ServiceType == typeof(IScheduleClient)).ImplementationInstance);
     }
 }

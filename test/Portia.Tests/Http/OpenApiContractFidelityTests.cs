@@ -36,7 +36,8 @@ public sealed class OpenApiContractFidelityTests
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, omitted.StatusCode);
         Assert.Equal(HttpStatusCode.OK, valid.StatusCode);
-        var parameter = Assert.Single(document.Paths["/query-default"].Operations![System.Net.Http.HttpMethod.Get].Parameters!);
+        var parameter =
+            Assert.Single(document.Paths["/query-default"].Operations![System.Net.Http.HttpMethod.Get].Parameters!);
         Assert.True(parameter.Required);
         Assert.Null(parameter.Schema!.Default);
     }
@@ -48,13 +49,15 @@ public sealed class OpenApiContractFidelityTests
         // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
-        _ = builder.Services.AddPortia().ConfigureJson(options => options.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower)
+        _ = builder.Services.AddPortia()
+            .ConfigureJson(options => options.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower)
             .AddHttp().AddRequestHandler<AuditHandler>();
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaGet<ReadAudit, AuditReply>("/explicit-response", config => config.Produces<AuditReply>(201)
             .OnResult((http, result) => Results.Json(result.Value,
-                http.RequestServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json), statusCode: 201)));
+                http.RequestServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json),
+                statusCode: 201)));
         await app.StartAsync();
         var actual = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/explicit-response"))!;
 
@@ -63,7 +66,9 @@ public sealed class OpenApiContractFidelityTests
 
         // Assert
         Assert.Equal("accepted", actual["long_property_name"]!.GetValue<string>());
-        var schema = document.Paths["/explicit-response"].Operations![System.Net.Http.HttpMethod.Get].Responses!["201"].Content!["application/json"].Schema!;
+        var schema =
+            document.Paths["/explicit-response"].Operations![System.Net.Http.HttpMethod.Get].Responses!["201"].Content![
+                "application/json"].Schema!;
         Assert.Contains("long_property_name", schema.Properties!.Keys);
         Assert.DoesNotContain("longPropertyName", schema.Properties.Keys);
         Assert.Equal(20, schema.Properties["long_property_name"].MaxLength);
@@ -76,17 +81,22 @@ public sealed class OpenApiContractFidelityTests
         // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
-        _ = builder.Services.AddAuthentication().AddScheme<AuthenticationSchemeOptions, AuditAuthHandler>("alpha", _ => { })
+        _ = builder.Services.AddAuthentication()
+            .AddScheme<AuthenticationSchemeOptions, AuditAuthHandler>("alpha", _ => { })
             .AddScheme<AuthenticationSchemeOptions, AuditAuthHandler>("beta", _ => { });
         _ = builder.Services.AddAuthorization(options =>
         {
-            options.AddPolicy("alpha-policy", policy => policy.AddAuthenticationSchemes("alpha").RequireAuthenticatedUser());
-            options.AddPolicy("beta-policy", policy => policy.AddAuthenticationSchemes("beta").RequireAuthenticatedUser());
+            options.AddPolicy("alpha-policy",
+                policy => policy.AddAuthenticationSchemes("alpha").RequireAuthenticatedUser());
+            options.AddPolicy("beta-policy",
+                policy => policy.AddAuthenticationSchemes("beta").RequireAuthenticatedUser());
         });
         _ = builder.Services.AddPortia().AddHttp(options =>
         {
-            options.OpenApi.SecuritySchemes.Add("alpha", new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
-            options.OpenApi.SecuritySchemes.Add("beta", new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
+            options.OpenApi.SecuritySchemes.Add("alpha",
+                new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
+            options.OpenApi.SecuritySchemes.Add("beta",
+                new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
             _ = options.OpenApi.SecurityPolicy("alpha-policy", "alpha");
             _ = options.OpenApi.SecurityPolicy("beta-policy", "beta");
         }).AddRequestHandler<AuditHandler>();
@@ -155,7 +165,8 @@ public sealed class OpenApiContractFidelityTests
         using var missing = await app.GetTestClient().PostAsync("/confirm", new System.Net.Http.FormUrlEncodedContent(
             new System.Collections.Generic.Dictionary<string, string> { ["marker"] = "present" }));
         using var valid = await app.GetTestClient().PostAsync("/confirm", new System.Net.Http.FormUrlEncodedContent(
-            new System.Collections.Generic.Dictionary<string, string> { ["accepted"] = "true", ["marker"] = "present" }));
+            new System.Collections.Generic.Dictionary<string, string>
+            { ["accepted"] = "true", ["marker"] = "present" }));
 
         // Act
         var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
@@ -194,7 +205,8 @@ public sealed class OpenApiContractFidelityTests
     public void ShouldRetainPortablePatternGivenUnambiguousAsciiSyntax(string pattern)
     {
         // Arrange
-        var member = new PortiaContractMemberMetadata("Value", typeof(string)) { Rules = [new RegularExpressionAttribute(pattern)] };
+        var member = new PortiaContractMemberMetadata("Value", typeof(string))
+        { Rules = [new RegularExpressionAttribute(pattern)] };
         var schema = new JsonObject { ["type"] = "string" };
 
         // Act

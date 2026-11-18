@@ -44,6 +44,7 @@ public static class PortiaMcpApplicationExtensions
             if (CanOverlap(existing.Template, uriTemplate))
                 throw new InvalidOperationException("Ambiguous MCP resource registration.");
         }
+
         var entry = new McpResourceEntry<TRequest, TOut>(uriTemplate, bind, options);
         catalog.AddResource(entry);
         _ = application.Services.AddSingleton<McpResourceEntry>(entry);
@@ -98,10 +99,12 @@ public static class PortiaMcpApplicationExtensions
             CopyLimits(existing, proposed);
         configure(proposed);
         if (proposed.MaxResourceUriBytes <= 0 || proposed.MaxPromptArgumentBytes <= 0 ||
-            proposed.MaxPromptMessages <= 0 || proposed.MaxResultBytes <= 0 || proposed.OperationDeadline <= TimeSpan.Zero)
+            proposed.MaxPromptMessages <= 0 || proposed.MaxResultBytes <= 0 ||
+            proposed.OperationDeadline <= TimeSpan.Zero)
             throw new ArgumentOutOfRangeException(nameof(configure), "MCP limits must be positive.");
         if (PrimitiveCatalogs.TryGetValue(application, out var catalog) &&
-            catalog.Resources.Any(resource => Encoding.UTF8.GetByteCount(resource.Template) > proposed.MaxResourceUriBytes))
+            catalog.Resources.Any(resource =>
+                Encoding.UTF8.GetByteCount(resource.Template) > proposed.MaxResourceUriBytes))
             throw new ArgumentOutOfRangeException(nameof(configure),
                 "The MCP resource URI limit is shorter than a registered resource URI template.");
         if (existing is not null)
@@ -227,12 +230,11 @@ public static class PortiaMcpApplicationExtensions
         && left.Idempotent == right.Idempotent && left.OpenWorld == right.OpenWorld
         && left.PropertyDescriptions.Count == right.PropertyDescriptions.Count
         && left.PropertyDescriptions.All(pair => right.PropertyDescriptions.TryGetValue(pair.Key, out var description)
-                                                   && pair.Value == description);
+                                                 && pair.Value == description);
 
     sealed class ToolCatalog
     {
         internal Dictionary<Type, McpToolRegistration> Registrations { get; } = [];
         internal Dictionary<string, Type> Names { get; } = [with(StringComparer.Ordinal)];
     }
-
 }

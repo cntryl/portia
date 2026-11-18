@@ -171,7 +171,8 @@ static class GeneratorCompilation
     public static MetadataReference Reference(string source, params IIncrementalGenerator[] generators) =>
         ReferenceNamed("Reference_" + Guid.NewGuid().ToString("N"), source, generators);
 
-    public static MetadataReference ReferenceNamed(string assemblyName, string source, params IIncrementalGenerator[] generators)
+    public static MetadataReference ReferenceNamed(string assemblyName, string source,
+        params IIncrementalGenerator[] generators)
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);

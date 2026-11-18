@@ -212,11 +212,14 @@ public sealed class HttpBindingMetadataIdentityTests
         public long A { get; } = a;
 
         [JsonConstructor]
-        AlternateConstructorBinding(int b, long a) : this(a, b) { }
+        AlternateConstructorBinding(int b, long a) : this(a, b)
+        {
+        }
     }
 
     sealed record AliasedBinding(
-        [property: JsonPropertyName("alias_a"), JsonPropertyOrder(2), JsonConverter(typeof(HttpMemberHexConverter))] int A,
+        [property: JsonPropertyName("alias_a"), JsonPropertyOrder(2), JsonConverter(typeof(HttpMemberHexConverter))]
+        int A,
         [property: JsonPropertyOrder(1)] int B);
 
     sealed class ParameterlessJsonBinding(int a, int b)
@@ -225,12 +228,15 @@ public sealed class HttpBindingMetadataIdentityTests
         public int A { get; set; } = a;
 
         [JsonConstructor]
-        ParameterlessJsonBinding() : this(0, 0) { }
+        ParameterlessJsonBinding() : this(0, 0)
+        {
+        }
     }
 }
 
 sealed record HttpMemberMetadataBinding(
-    [property: JsonPropertyOrder(2), JsonConverter(typeof(HttpMemberHexConverter))] int First,
+    [property: JsonPropertyOrder(2), JsonConverter(typeof(HttpMemberHexConverter))]
+    int First,
     [property: JsonPropertyOrder(1)] int Second);
 
 sealed class HttpMemberHexConverter : JsonConverter<int>

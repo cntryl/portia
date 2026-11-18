@@ -34,8 +34,10 @@ public sealed partial class OperationalValidationAuthorityTests
 
         var journal = new MemoryOperationalStore();
         var target = new OperationalTarget("reservations", "stream://authority/orders/*", OperationalScope.Global);
-        var session = new OperationalSession(journal, new OperationalOptions(), new EmptyApplicationTopology(), TimeProvider.System);
-        await session.AcquireAsync(target, "reactor", new OperationalProcessingSettings(512, 4096, 3, 1, 1), ProjectionCheckpoint.Start, default);
+        var session = new OperationalSession(journal, new OperationalOptions(), new EmptyApplicationTopology(),
+            TimeProvider.System);
+        await session.AcquireAsync(target, "reactor", new OperationalProcessingSettings(512, 4096, 3, 1, 1),
+            ProjectionCheckpoint.Start, default);
         var reactor = new ReservationReactor(journal, repository);
         reactor.BindWorkload(new WorkloadIdentity(target.Processor), target.Processor);
         var checkpoint = await new ReactorRunner(events).RunAsync(session, reactor, ProjectionCheckpoint.Start);
@@ -45,7 +47,8 @@ public sealed partial class OperationalValidationAuthorityTests
         Assert.Equal("rejected", (await repository.HydrateAsync(new Order(orderId))).State);
 
         // Replaying the original trigger obtains the already committed participant decision.
-        _ = await new ReactorRunner(events).RunAsync(new ReservationReactor(new InMemoryProjectionCheckpointStore(), repository),
+        _ = await new ReactorRunner(events).RunAsync(
+            new ReservationReactor(new InMemoryProjectionCheckpointStore(), repository),
             ProjectionCheckpoint.Start);
         var decisions = new List<DomainEvent>();
         await foreach (var record in events.ReadAsync(new Inventory(inventoryId).Stream, 0, default))
@@ -61,34 +64,50 @@ public sealed partial class OperationalValidationAuthorityTests
 
     [Discriminator("test.authority.stockadded")]
     internal sealed record StockAdded : DomainEvent;
+
     [Discriminator("test.authority.reservationaccepted")]
     internal sealed record ReservationAccepted(Uuid Reservation) : DomainEvent;
+
     [Discriminator("test.authority.reservationrefused")]
     internal sealed record ReservationRefused(Uuid Reservation) : DomainEvent;
+
     [Discriminator("test.authority.orderplaced")]
     internal sealed record OrderPlaced(Uuid Inventory) : DomainEvent;
+
     [Discriminator("test.authority.orderrejected")]
     internal sealed record OrderRejected : DomainEvent;
+
     [Discriminator("test.authority.orderconfirmed")]
     internal sealed record OrderConfirmed : DomainEvent;
 
     sealed class Inventory : Aggregate
     {
         readonly Dictionary<Uuid, bool> _decisions = [];
+
         internal Inventory(Uuid id) : base(id, new EventStreamAddress("authority", "inventory", id.ToString()))
         {
             On<StockAdded>(_ => Available++);
-            On<ReservationAccepted>(e => { Available--; _decisions.Add(e.Reservation, true); });
+            On<ReservationAccepted>(e =>
+            {
+                Available--;
+                _decisions.Add(e.Reservation, true);
+            });
             On<ReservationRefused>(e => _decisions.Add(e.Reservation, false));
         }
+
         internal int Available { get; private set; }
         internal void AddStock() => RaiseEvent(new StockAdded());
+
         internal bool Reserve(Uuid reservation)
         {
             if (_decisions.TryGetValue(reservation, out var existing))
                 return existing;
             if (Available == 0)
-            { RaiseEvent(new ReservationRefused(reservation)); return false; }
+            {
+                RaiseEvent(new ReservationRefused(reservation));
+                return false;
+            }
+
             RaiseEvent(new ReservationAccepted(reservation));
             return true;
         }
@@ -102,8 +121,10 @@ public sealed partial class OperationalValidationAuthorityTests
             On<OrderRejected>(_ => State = "rejected");
             On<OrderConfirmed>(_ => State = "confirmed");
         }
+
         internal string State { get; private set; } = "new";
         internal void Place(Uuid inventory) => RaiseEvent(new OrderPlaced(inventory));
+
         internal void Complete(bool accepted)
         {
             if (State != "pending")
@@ -115,11 +136,16 @@ public sealed partial class OperationalValidationAuthorityTests
         }
     }
 
-    internal sealed partial class ReservationReactor(IProjectionCheckpointStore checkpoints, IAggregateReader reader,
-        IAggregateWriter writer) : Reactor(checkpoints, EventStreamPattern.ForPattern("authority", "orders")), IReactorHandler<OrderPlaced>
+    internal sealed partial class ReservationReactor(
+        IProjectionCheckpointStore checkpoints,
+        IAggregateReader reader,
+        IAggregateWriter writer) : Reactor(checkpoints, EventStreamPattern.ForPattern("authority", "orders")),
+        IReactorHandler<OrderPlaced>
     {
         internal ReservationReactor(IProjectionCheckpointStore checkpoints, AggregateRepository repository)
-            : this(checkpoints, repository, repository) { }
+            : this(checkpoints, repository, repository)
+        {
+        }
 
         public async ValueTask<Result> HandleAsync(IReactorContext<OrderPlaced> context, CancellationToken ct)
         {

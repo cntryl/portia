@@ -12,7 +12,8 @@ public sealed partial class ComponentHostingTests
     {
         // Arrange
         var services = ConsumerHost.CreateServices();
-        _ = services.AddPortia().AddReactor<FirstReactor>("upgraded-reactor", WorkloadScope.Global).AddWorkers().UseSingleProcessWorkloads();
+        _ = services.AddPortia().AddReactor<FirstReactor>("upgraded-reactor", WorkloadScope.Global).AddWorkers()
+            .UseSingleProcessWorkloads();
         await using var provider = ConsumerHost.Build(services);
 
         // Act
@@ -215,7 +216,8 @@ public sealed partial class ComponentHostingTests
         var services = ConsumerHost.CreateServices();
         _ = services.AddSingleton<TimeProvider>(clock);
         _ = services.AddPortia().AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
-            o => o.Processing = new ProjectionRunOptions { RebuildId = rebuildId }).AddWorkers().UseSingleProcessWorkloads();
+                o => o.Processing = new ProjectionRunOptions { RebuildId = rebuildId }).AddWorkers()
+            .UseSingleProcessWorkloads();
         await using var provider = ConsumerHost.Build(services);
         var storage = provider.GetRequiredService<ConsumerHost.ProjectionStorage>();
         storage.FailAfterCommit = true;
@@ -299,8 +301,9 @@ public sealed partial class ComponentHostingTests
         _ = services.AddSingleton<IDomainEventReader>(reader);
         var portia = services.AddPortia();
         _ = (projector
-            ? portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.Global)
-            : portia.AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)).AddWorkers().UseSingleProcessWorkloads();
+                ? portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.Global)
+                : portia.AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)).AddWorkers()
+            .UseSingleProcessWorkloads();
 
         // Act
         await using var provider = ConsumerHost.Build(services);
@@ -335,8 +338,9 @@ public sealed partial class ComponentHostingTests
         _ = services.AddSingleton<TimeProvider>(clock);
         var portia = services.AddPortia();
         _ = (projector
-            ? portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.Global)
-            : portia.AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)).AddWorkers().UseSingleProcessWorkloads();
+                ? portia.AddProjector<FirstProjector>("first-projector", WorkloadScope.Global)
+                : portia.AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)).AddWorkers()
+            .UseSingleProcessWorkloads();
 
         // Act
         await using var provider = ConsumerHost.Build(services);
@@ -553,6 +557,7 @@ public sealed partial class ComponentHostingTests
     sealed class ChangingPatternProjector(IAccountRepository target, PatternSequence patterns)
         : Projector(target, patterns.Next(), "changing-pattern"), IProjectorHandler<Deposited>
     {
-        public ValueTask<Result> HandleAsync(IProjectorContext<Deposited> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+        public ValueTask<Result> HandleAsync(IProjectorContext<Deposited> context, CancellationToken ct) =>
+            ValueTask.FromResult(Result.Success);
     }
 }

@@ -3,8 +3,11 @@ namespace Cntryl.Portia;
 /// <summary>Projection authority remains in the application repository during operational recovery.</summary>
 public sealed partial class OperationalProjectionTests
 {
-    static readonly OperationalTarget Target = new("operational-projector", "stream://test/operational/*", OperationalScope.Global);
-    static readonly OperationalProcessingSettings Settings = new(512, 4096, 1, TimeSpan.TicksPerMillisecond, TimeSpan.TicksPerSecond);
+    static readonly OperationalTarget Target = new("operational-projector", "stream://test/operational/*",
+        OperationalScope.Global);
+
+    static readonly OperationalProcessingSettings Settings = new(512, 4096, 1, TimeSpan.TicksPerMillisecond,
+        TimeSpan.TicksPerSecond);
 
     /// <summary>A confirmed commit followed by cleanup failure resumes without reapplying any event.</summary>
     [Fact]
@@ -19,13 +22,16 @@ public sealed partial class OperationalProjectionTests
         var events = await OperationalExecutionTests.EventsAsync();
 
         // Assert
-        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ProjectorRunner(events).RunAsync(session, new ProbeProjector(native), ProjectionCheckpoint.Start).AsTask());
+        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
+            new ProjectorRunner(events).RunAsync(session, new ProbeProjector(native), ProjectionCheckpoint.Start)
+                .AsTask());
         Assert.Equal(ProcessorFailureStage.Disposing, failure.Stage);
         Assert.Equal("committed_cleanup_failed", Assert.Single(session.State.Attempts).Outcome);
         Assert.Equal(1, session.State.ConsecutiveFailures);
         Assert.Equal("2", native.Checkpoint.Cursor.Value);
         Assert.Equal(2, native.Changes);
-        var api = new PortiaOperations(TestOperationalAuthorizer.Configuration(), journal, new OperationalOptions(), new EmptyApplicationTopology(), new TestOperationalAuthorizer(), null);
+        var api = new PortiaOperations(TestOperationalAuthorizer.Configuration(), journal, new OperationalOptions(),
+            new EmptyApplicationTopology(), new TestOperationalAuthorizer(), null);
         var actor = TestOperationalAuthorizer.AdministratorActor(true);
         var plan = await api.PreviewRepairAsync(actor, Target);
         Assert.Equal("resume", plan.Action);
@@ -45,7 +51,11 @@ public sealed partial class OperationalProjectionTests
         var journal = new MemoryOperationalStore();
         var native = new NativeStore();
         var committed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        native.AfterCommit = () => { journal.Unavailable = true; committed.TrySetResult(); };
+        native.AfterCommit = () =>
+        {
+            journal.Unavailable = true;
+            committed.TrySetResult();
+        };
         var session = await SessionAsync(journal, ProjectionCheckpoint.Start);
         var events = await OperationalExecutionTests.EventsAsync();
         using var interrupted = new CancellationTokenSource();
@@ -97,14 +107,16 @@ public sealed partial class OperationalProjectionTests
 
     static async Task<OperationalSession> SessionAsync(MemoryOperationalStore store, ProjectionCheckpoint checkpoint)
     {
-        var session = new OperationalSession(store, new OperationalOptions { JournalRetryDelay = TimeSpan.FromMilliseconds(1) },
+        var session = new OperationalSession(store,
+            new OperationalOptions { JournalRetryDelay = TimeSpan.FromMilliseconds(1) },
             new EmptyApplicationTopology(), TimeProvider.System);
         await session.AcquireAsync(Target, "projector", Settings, checkpoint, default);
         return session;
     }
 
-    internal sealed partial class ProbeProjector(NativeStore store) : BatchProjector(store, Target.Identity.Pattern, Target.Processor),
-        IProjectorHandler<ValueChanged>
+    internal sealed partial class ProbeProjector(NativeStore store)
+        : BatchProjector(store, Target.Identity.Pattern, Target.Processor),
+            IProjectorHandler<ValueChanged>
     {
         public ValueTask<Result> HandleAsync(IProjectorContext<ValueChanged> context, CancellationToken ct)
         {
@@ -121,13 +133,17 @@ public sealed partial class OperationalProjectionTests
         internal int Staged { get; set; }
         internal int Changes { get; private set; }
         internal int OpenTransactions { get; private set; }
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default) => ValueTask.FromResult(Checkpoint);
+
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
+            CancellationToken ct = default) => ValueTask.FromResult(Checkpoint);
+
         public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
         {
             Assert.Equal(Checkpoint, context.Checkpoint);
             OpenTransactions++;
             return ValueTask.FromResult<IProjectionBatch>(new Batch(this));
         }
+
         sealed class Batch(NativeStore store) : IProjectionBatch
         {
             public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
@@ -138,11 +154,14 @@ public sealed partial class OperationalProjectionTests
                 store.AfterCommit?.Invoke();
                 return ValueTask.CompletedTask;
             }
+
             public ValueTask DisposeAsync()
             {
                 store.OpenTransactions--;
                 store.Staged = 0;
-                return store.FailDispose ? ValueTask.FromException(new IOException("cleanup")) : ValueTask.CompletedTask;
+                return store.FailDispose
+                    ? ValueTask.FromException(new IOException("cleanup"))
+                    : ValueTask.CompletedTask;
             }
         }
     }

@@ -20,7 +20,11 @@ public readonly record struct TenantId(string Value) : ISpanParsable<TenantId>, 
 {
     /// <summary>Gets the tenant identity, a realm segment other than the reserved <c>{tenant}</c> template token.</summary>
     /// <exception cref="ArgumentException">The value is not a valid tenant realm segment.</exception>
-    public string Value { get; init => field = Validate(value, nameof(Value)); } = Validate(Value, nameof(Value));
+    public string Value
+    {
+        get;
+        init => field = Validate(value, nameof(Value));
+    } = Validate(Value, nameof(Value));
 
     /// <inheritdoc />
     public override string ToString() => Value ?? string.Empty;

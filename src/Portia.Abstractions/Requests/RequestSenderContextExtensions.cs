@@ -52,7 +52,8 @@ public static class RequestSenderContextExtensions
         RequestRouteValues routeValues, string? actorToken, IExecutionContext parent, RequestQueueOptions options,
         CancellationToken ct = default)
         where TRequest : IRequest, IQueuable
-        => sender.EnqueueWithOptionsAsync(request, routeValues, actorToken, ChildMetadata(request, parent), options, ct);
+        => sender.EnqueueWithOptionsAsync(request, routeValues, actorToken, ChildMetadata(request, parent), options,
+            ct);
 
     /// <summary>Calls a new child request remotely.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>
@@ -168,6 +169,7 @@ public static class RequestSenderContextExtensions
         CancellationToken ct = default)
         where TRequest : IRequest, ISchedulable
         => sender.ScheduleAsync(request, spec, routeValues, actor, ChildMetadata(request, parent), ct);
+
     static RequestMetadata ChildMetadata(IRequestBase request, IExecutionContext parent)
     {
         ArgumentNullException.ThrowIfNull(parent);

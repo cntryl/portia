@@ -107,14 +107,16 @@ public sealed class RequestScenario
     /// <typeparam name="TOut">The type of each item.</typeparam>
     /// <param name="request">The request.</param>
     /// <returns>Expectations to add before awaiting.</returns>
-    public StreamRequestExpectations<TOut> When<TOut>(IStreamRequest<TOut> request) => When(request, CancellationToken.None);
+    public StreamRequestExpectations<TOut> When<TOut>(IStreamRequest<TOut> request) =>
+        When(request, CancellationToken.None);
 
     /// <summary>Collects a stream with caller cancellation.</summary>
     /// <typeparam name="TOut">The item type.</typeparam>
     /// <param name="request">The request.</param>
     /// <param name="cancellationToken">Cancellation propagated through dispatch and enumeration.</param>
     /// <returns>Expectations for the observed sequence.</returns>
-    public StreamRequestExpectations<TOut> When<TOut>(IStreamRequest<TOut> request, CancellationToken cancellationToken) =>
+    public StreamRequestExpectations<TOut>
+        When<TOut>(IStreamRequest<TOut> request, CancellationToken cancellationToken) =>
         Stream(request, null, cancellationToken);
 
     /// <summary>Collects at most the requested number of items, disposing the stream when the limit is reached.</summary>
@@ -131,7 +133,8 @@ public sealed class RequestScenario
         return Stream(request, maxItems, cancellationToken);
     }
 
-    StreamRequestExpectations<TOut> Stream<TOut>(IStreamRequest<TOut> request, int? maxItems, CancellationToken cancellationToken)
+    StreamRequestExpectations<TOut> Stream<TOut>(IStreamRequest<TOut> request, int? maxItems,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
         return new StreamRequestExpectations<TOut>(Definition(request, async (bus, context) =>
@@ -139,7 +142,8 @@ public sealed class RequestScenario
             var items = new List<TOut>();
             try
             {
-                await foreach (var item in bus.DispatchStreamAsync(request, context, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+                await foreach (var item in bus.DispatchStreamAsync(request, context, cancellationToken)
+                                   .WithCancellation(cancellationToken).ConfigureAwait(false))
                 {
                     items.Add(item);
                     if (items.Count == maxItems)

@@ -38,13 +38,13 @@ public sealed class OpenApiTests : IAsyncDisposable
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia().AddHttp(options =>
-            options.OpenApiSchemaType = type => type switch
-            {
-                var value when value == typeof(OpenApiSelectionList) => typeof(OpenApiSelection[]),
-                var value when value == typeof(OpenApiRootSelectionRequest) => typeof(OpenApiSelection[]),
-                var value when value == typeof(OpenApiSelection) => typeof(OpenApiSelectionSchema),
-                _ => null
-            })
+                options.OpenApiSchemaType = type => type switch
+                {
+                    var value when value == typeof(OpenApiSelectionList) => typeof(OpenApiSelection[]),
+                    var value when value == typeof(OpenApiRootSelectionRequest) => typeof(OpenApiSelection[]),
+                    var value when value == typeof(OpenApiSelection) => typeof(OpenApiSelectionSchema),
+                    _ => null
+                })
             .AddRequestHandler<OpenApiConvertedHandler>();
         _app = builder.Build();
         _ = _app.MapPortiaOpenApi();
@@ -94,7 +94,6 @@ public sealed class OpenApiTests : IAsyncDisposable
                 Assert.Contains(next.AnyOf!, schema => schema.Type == JsonSchemaType.Null);
                 Assert.Contains(next.AnyOf!, schema => schema is OpenApiSchemaReference);
             }
-
         }
     }
 
@@ -167,7 +166,8 @@ public sealed class OpenApiTests : IAsyncDisposable
         _ = _app.MapPortiaPost<OpenApiRootSelectionRequest, OpenApiSelectionList?>("/converted-root", configure =>
             configure.Accepts<OpenApiRootSelectionRequest>("application/json").OnBind(async (context, ct) =>
             {
-                var json = context.RequestServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
+                var json =
+                    context.RequestServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
                 var request = await JsonSerializer.DeserializeAsync(context.Request.Body,
                     json.GetTypeInfo<OpenApiRootSelectionRequest>(), ct);
                 return request ?? throw new JsonException("The test request body was null.");
@@ -209,9 +209,11 @@ public sealed class OpenApiTests : IAsyncDisposable
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia().AddHttp(options => options.OpenApiSchemaType = type =>
-            type == typeof(OpenApiSelectionList)
-                ? missingMetadata ? typeof(OpenApiMissingRepresentation) : typeof(OpenApiSelection[])
-                : !missingMetadata && type == typeof(OpenApiSelection[]) ? typeof(OpenApiSelectionList) : null)
+                type == typeof(OpenApiSelectionList)
+                    ? missingMetadata ? typeof(OpenApiMissingRepresentation) : typeof(OpenApiSelection[])
+                    : !missingMetadata && type == typeof(OpenApiSelection[])
+                        ? typeof(OpenApiSelectionList)
+                        : null)
             .AddRequestHandler<OpenApiConvertedHandler>();
         _app = builder.Build();
         _ = _app.MapPortiaOpenApi();
@@ -225,10 +227,12 @@ public sealed class OpenApiTests : IAsyncDisposable
         foreach (var format in new[] { "json", "yml" })
         {
             if (missingMetadata)
-                _ = await Assert.ThrowsAsync<NotSupportedException>(() => client.GetStringAsync("/openapi/v1." + format));
+                _ = await Assert.ThrowsAsync<NotSupportedException>(() =>
+                    client.GetStringAsync("/openapi/v1." + format));
             else
             {
-                var error = await Assert.ThrowsAsync<InvalidOperationException>(() => client.GetStringAsync("/openapi/v1." + format));
+                var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                    client.GetStringAsync("/openapi/v1." + format));
                 Assert.Contains("Cyclic OpenAPI schema type mapping", error.Message, StringComparison.Ordinal);
             }
         }
@@ -320,7 +324,8 @@ public sealed class OpenApiTests : IAsyncDisposable
                 Assert.Contains("wire-name", schema.Properties.Keys);
                 Assert.Contains("display_name", schema.Required!);
                 Assert.Contains(schema.Properties["day_value"].Enum!, value => value!.GetValue<string>() == "Monday");
-                Assert.Equal(customizeMoney ? JsonSchemaType.String : (JsonSchemaType?)null, schema.Properties["custom_value"].Type);
+                Assert.Equal(customizeMoney ? JsonSchemaType.String : (JsonSchemaType?)null,
+                    schema.Properties["custom_value"].Type);
                 Assert.Equal(JsonSchemaType.String, schema.Properties["team_id"].Type);
                 Assert.Equal("uuid", schema.Properties["team_id"].Format);
                 var candidateApplicationIds = schema.Properties["candidate_application_ids"];
@@ -546,7 +551,8 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.Equal(2, componentResponses.EnumerateObject().Count());
         var problem = componentResponses.GetProperty("CntrylPortiaHttpProblemResponse");
         Assert.Equal("Error", problem.GetProperty("description").GetString());
-        var problemSchema = problem.GetProperty("content").GetProperty("application/problem+json").GetProperty("schema");
+        var problemSchema = problem.GetProperty("content").GetProperty("application/problem+json")
+            .GetProperty("schema");
         Assert.True(problemSchema.GetProperty("properties").TryGetProperty("status", out _));
         Assert.True(problemSchema.GetProperty("properties").TryGetProperty("detail", out _));
         Assert.False(problemSchema.GetProperty("properties").TryGetProperty("message", out _));

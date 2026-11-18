@@ -78,7 +78,8 @@ public sealed class InMemoryEventStore : IEventStore, IDomainEventProgressReader
     {
         ArgumentNullException.ThrowIfNull(pattern);
         if (pattern.IsTenantTemplate)
-            throw new ArgumentException("Bind the processor's tenant before observing source progress.", nameof(pattern));
+            throw new ArgumentException("Bind the processor's tenant before observing source progress.",
+                nameof(pattern));
         ct.ThrowIfCancellationRequested();
         var offset = Decode(position);
         lock (_gate)

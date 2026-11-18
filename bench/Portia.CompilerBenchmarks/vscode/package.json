@@ -1,0 +1,25 @@
+{
+  "name": "portia-compiler-benchmarks",
+  "displayName": "Portia Compiler Benchmarks",
+  "publisher": "cntryl",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "main": "./extension.cjs",
+  "activationEvents": [
+    "onCommand:portia.compilerBenchmarks.run"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "portia.compilerBenchmarks.run",
+        "title": "Portia: Replay Compiler Benchmarks"
+      }
+    ]
+  },
+  "scripts": {
+    "test": "node --test state.test.cjs"
+  }
+}

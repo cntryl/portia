@@ -24,8 +24,14 @@ public static class ProcessingObservation
         var source = context.Source.Event.Metadata.EventId.ToString();
         observe("handler", handlerName, source, null, "started");
         try
-        { return CompleteAsync(handler.HandleAsync(context, ct), observe, handlerName, source); }
-        catch { observe("handler", handlerName, source, null, "fault"); throw; }
+        {
+            return CompleteAsync(handler.HandleAsync(context, ct), observe, handlerName, source);
+        }
+        catch
+        {
+            observe("handler", handlerName, source, null, "fault");
+            throw;
+        }
     }
 
     /// <summary>Observes a generated single-event reactor invocation without allocating a dispatch closure.</summary>
@@ -38,8 +44,14 @@ public static class ProcessingObservation
         var source = context.Source.Event.Metadata.EventId.ToString();
         observe("handler", handlerName, source, null, "started");
         try
-        { return CompleteAsync(handler.HandleAsync(context, ct), observe, handlerName, source); }
-        catch { observe("handler", handlerName, source, null, "fault"); throw; }
+        {
+            return CompleteAsync(handler.HandleAsync(context, ct), observe, handlerName, source);
+        }
+        catch
+        {
+            observe("handler", handlerName, source, null, "fault");
+            throw;
+        }
     }
 
     /// <summary>Observes a generated batch projector invocation without allocating a dispatch closure.</summary>
@@ -54,8 +66,14 @@ public static class ProcessingObservation
         foreach (var context in contexts)
             observe("handler-source", handlerName, context.Source.Event.Metadata.EventId.ToString(), null, "included");
         try
-        { return CompleteAsync(handler.HandleAsync(contexts, ct), observe, handlerName, source); }
-        catch { observe("handler", handlerName, source, null, "fault"); throw; }
+        {
+            return CompleteAsync(handler.HandleAsync(contexts, ct), observe, handlerName, source);
+        }
+        catch
+        {
+            observe("handler", handlerName, source, null, "fault");
+            throw;
+        }
     }
 
     /// <summary>Observes a generated batch reactor invocation without allocating a dispatch closure.</summary>
@@ -68,10 +86,17 @@ public static class ProcessingObservation
         var source = contexts[0].Source.Event.Metadata.EventId.ToString();
         observe("handler", handlerName, source, null, "started");
         foreach (var context in contexts)
-            observe("handler-source", handlerName, context.Source.Event.Metadata.EventId.ToString(), context.ExecutionId.ToString(), "included");
+            observe("handler-source", handlerName, context.Source.Event.Metadata.EventId.ToString(),
+                context.ExecutionId.ToString(), "included");
         try
-        { return CompleteAsync(handler.HandleAsync(contexts, ct), observe, handlerName, source); }
-        catch { observe("handler", handlerName, source, null, "fault"); throw; }
+        {
+            return CompleteAsync(handler.HandleAsync(contexts, ct), observe, handlerName, source);
+        }
+        catch
+        {
+            observe("handler", handlerName, source, null, "fault");
+            throw;
+        }
     }
 
     static async ValueTask<Result> CompleteAsync(ValueTask<Result> pending,

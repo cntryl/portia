@@ -8,7 +8,9 @@ public sealed class PortiaOpenApiSchemaDescription<T>
 {
     readonly Dictionary<string, string> _properties = [with(StringComparer.OrdinalIgnoreCase)];
 
-    internal PortiaOpenApiSchemaDescription() { }
+    internal PortiaOpenApiSchemaDescription()
+    {
+    }
 
     /// <summary>Describes a direct member, such as <c>x =&gt; x.Name</c>, independently of its serialized name.</summary>
     public PortiaOpenApiSchemaDescription<T> Property<TMember>(Expression<Func<T, TMember>> member, string description)
@@ -30,7 +32,8 @@ static class PortiaOpenApiMemberSelector
     {
         ArgumentNullException.ThrowIfNull(member);
         var body = member.Body is UnaryExpression { NodeType: ExpressionType.Convert } convert
-            ? convert.Operand : member.Body;
+            ? convert.Operand
+            : member.Body;
         return body is MemberExpression { Member: PropertyInfo or FieldInfo } access &&
                access.Expression == member.Parameters[0]
             ? access.Member.Name

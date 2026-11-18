@@ -51,5 +51,6 @@ public sealed class DomainEventTypeCatalogAtomicityTests
     }
 
     sealed record Created : DomainEvent;
+
     sealed record Other : DomainEvent;
 }

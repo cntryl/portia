@@ -41,7 +41,8 @@ static class SyntaxFilters
     // A declaration without bases can acquire a role only from another part. Plain DTO/value
     // classes cannot implement Portia contracts, and binding thousands of them on each edit is waste.
     public static bool HasBaseListOrPartial(SyntaxNode node) => node is TypeDeclarationSyntax type
-        && (type.BaseList is not null || type.Modifiers.Any(SyntaxKind.PartialKeyword));
+                                                                && (type.BaseList is not null ||
+                                                                    type.Modifiers.Any(SyntaxKind.PartialKeyword));
 }
 
 // The simple names of every public domain event a referenced Portia assembly declares. A type reference whose
@@ -76,14 +77,18 @@ static class ReferencedEventNames
         // fallback for namespaces or unresolved targets whose members cannot be narrowed here.
         foreach (var tree in compilation.SyntaxTrees)
         {
-            var aliases = tree.GetRoot().DescendantNodes(node => node is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax)
+            var aliases = tree.GetRoot()
+                .DescendantNodes(node => node is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax)
                 .OfType<UsingDirectiveSyntax>().Where(directive => directive.Alias is not null).ToArray();
             if (aliases.Length == 0)
                 continue;
             var model = compilation.GetSemanticModel(tree);
             foreach (var directive in aliases)
             {
-                if (model.GetDeclaredSymbol(directive)?.Target is not INamedTypeSymbol { TypeKind: not TypeKind.Error } target)
+                if (model.GetDeclaredSymbol(directive)?.Target is not INamedTypeSymbol
+                    {
+                        TypeKind: not TypeKind.Error
+                    } target)
                     return static _ => true;
                 if (DerivesFromDomainEvent(target))
                     _ = names.Add(directive.Alias!.Name.Identifier.ValueText);

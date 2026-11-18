@@ -196,6 +196,7 @@ public static partial class PortiaTelemetry
             {
                 Activity.Current = previous;
             }
+
             // A non-W3C parent sentinel prevents Start from adopting Activity.Current.
             // Sampling ran with an empty context above; the resulting span remains a root.
             activity?.SetParentId(" ").Start();
@@ -204,6 +205,7 @@ public static partial class PortiaTelemetry
         {
             activity = ActivitySource.StartActivity(ProcessActivityName, ActivityKind.Consumer, parent);
         }
+
         if (activity?.IsAllDataRequested == true)
         {
             _ = activity.SetTag("portia.request.name", requestName);
@@ -587,6 +589,7 @@ public static partial class PortiaTelemetry
     static partial void LogLostDelivery(ILogger logger, string requestName, string transport);
 
     [LoggerMessage(EventId = 1005, Level = LogLevel.Warning,
-        Message = "Portia classified queue request {RequestName} as terminal on {Transport}; transport retains delivery")]
+        Message =
+            "Portia classified queue request {RequestName} as terminal on {Transport}; transport retains delivery")]
     static partial void LogTerminalDelivery(ILogger logger, string requestName, string transport);
 }

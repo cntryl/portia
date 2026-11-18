@@ -16,7 +16,8 @@ public static class AzureObjectStorageServiceCollectionExtensions
         services.AddSingleton<IObjectStorage>(provider => new AzureObjectStorage(
             client,
             provider.GetRequiredService<IObjectStorageTenantResolver>(),
-            provider.GetRequiredService<IDataProtectionProvider>().CreateProtector("Cntryl.Portia.Storage.Azure.UploadSession.v2")));
+            provider.GetRequiredService<IDataProtectionProvider>()
+                .CreateProtector("Cntryl.Portia.Storage.Azure.UploadSession.v2")));
         return services;
     }
 }

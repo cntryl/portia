@@ -81,7 +81,8 @@ public sealed class JsonMetadataCodeFixProvider : CodeFixProvider
 
             var declarations = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
                 .Where(declaration => declaration.BaseList is not null || declaration.AttributeLists.Count != 0
-                    || declaration.Modifiers.Any(SyntaxKind.PartialKeyword)).ToArray();
+                                                                       || declaration.Modifiers.Any(SyntaxKind
+                                                                           .PartialKeyword)).ToArray();
             if (declarations.Length == 0)
                 continue;
             var model = await document.GetSemanticModelAsync(cancellationToken).ConfigureAwait(false);

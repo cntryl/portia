@@ -88,6 +88,7 @@ public class ReactorDispatchBenchmarks
     sealed class BatchBenchmarkReactor(IProjectionCheckpointStore checkpoints)
         : BatchReactor(checkpoints, EventStreamPattern.ForPattern("bench"))
     {
-        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts,
+            CancellationToken ct) => ValueTask.FromResult(Result.Success);
     }
 }

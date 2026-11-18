@@ -26,7 +26,8 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         var aggregate = Uuid.CreateVersion4();
         DomainEvent[] source = [new ValueChanged(100), new ValueChanged(200)];
         for (var i = 0; i < source.Length; i++)
-            source[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregate, (ulong)i + 1, DateTimeOffset.UtcNow));
+            source[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregate, (ulong)i + 1,
+                DateTimeOffset.UtcNow));
         await events.AppendAsync(new EventStreamAddress(realm, "source", aggregate.ToString()), 0, source);
 
         // Act
@@ -51,7 +52,11 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
                 Assert.Equal(2, control.Invocations);
                 Assert.Single(await ReadEffectsAsync(events, realm));
             }
-            finally { await worker.StopAsync(default); worker.Dispose(); }
+            finally
+            {
+                await worker.StopAsync(default);
+                worker.Dispose();
+            }
         }
 
         await using (var provider = Services(client, events, control, route).BuildServiceProvider())
@@ -61,24 +66,32 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
             try
             {
                 var operations = provider.GetRequiredService<IPortiaOperations>();
-                await WaitAsync(async () => await operations.InspectProcessorAsync(TestOperationalAuthorizer.AdministratorActor(), target)
-                    is { Block: not null } state && state.OwnerSession != previousOwner);
+                await WaitAsync(async () =>
+                    await operations.InspectProcessorAsync(TestOperationalAuthorizer.AdministratorActor(), target)
+                        is { Block: not null } state && state.OwnerSession != previousOwner);
                 Assert.Equal(2, control.Invocations);
                 var agent = TestOperationalAuthorizer.AdministratorActor();
                 var plan = await operations.PreviewRepairAsync(agent, target);
-                _ = await operations.ApproveRepairAsync(TestOperationalAuthorizer.AdministratorActor(true), target, plan.Id);
+                _ = await operations.ApproveRepairAsync(TestOperationalAuthorizer.AdministratorActor(true), target,
+                    plan.Id);
                 control.Fail = false;
                 _ = await operations.ExecuteRepairAsync(agent, target, plan.Id);
-                await WaitAsync(async () => (await operations.VerifyRepairAsync(agent, target, plan.Id)).Status == "committed");
+                await WaitAsync(async () =>
+                    (await operations.VerifyRepairAsync(agent, target, plan.Id)).Status == "committed");
                 var verification = await operations.VerifyRepairAsync(agent, target, plan.Id);
-                var checkpoint = await provider.GetRequiredService<IProjectionCheckpointStore>().LoadAsync(target.Identity);
+                var checkpoint = await provider.GetRequiredService<IProjectionCheckpointStore>()
+                    .LoadAsync(target.Identity);
                 Assert.Equal(checkpoint.Cursor.Value, verification.Checkpoint);
                 Assert.NotEqual(ProjectionCheckpoint.Start, checkpoint);
                 Assert.Equal(4, control.Invocations);
                 Assert.Equal(2, (await ReadEffectsAsync(events, realm)).Count);
                 Assert.Null((await operations.InspectProcessorAsync(agent, target))!.Block);
             }
-            finally { await worker.StopAsync(default); worker.Dispose(); }
+            finally
+            {
+                await worker.StopAsync(default);
+                worker.Dispose();
+            }
         }
 
         await using var database = await Database.OpenAsync();
@@ -102,9 +115,12 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         services.AddSingleton<IOperationalAuthorizer, TestOperationalAuthorizer>();
         services.AddSingleton<IConfiguration>(TestOperationalAuthorizer.Configuration());
         services.AddPortia().UseFitzClient(client, fitz => fitz.DisableRequestWorkers()
-                .UseFleet(new FleetRunOptions { MembershipSelector = $"lease://{control.Pattern.Realm}/portia-members/*" }).UseOperations(route))
-            .AddReactor<JourneyReactor>("journey", WorkloadScope.Global, options => options.PollInterval = TimeSpan.FromMilliseconds(10))
-            .AddReactor<IndependentReactor>("independent", WorkloadScope.Global, options => options.PollInterval = TimeSpan.FromMilliseconds(10))
+                .UseFleet(new FleetRunOptions
+                { MembershipSelector = $"lease://{control.Pattern.Realm}/portia-members/*" }).UseOperations(route))
+            .AddReactor<JourneyReactor>("journey", WorkloadScope.Global,
+                options => options.PollInterval = TimeSpan.FromMilliseconds(10))
+            .AddReactor<IndependentReactor>("independent", WorkloadScope.Global,
+                options => options.PollInterval = TimeSpan.FromMilliseconds(10))
             .AddWorkers();
         return services;
     }
@@ -112,7 +128,8 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
     static async Task<List<DomainEventRecord>> ReadEffectsAsync(FitzEventStore events, string realm)
     {
         var results = new List<DomainEventRecord>();
-        await foreach (var record in events.ReadAsync(EventStreamPattern.ForPattern(realm, "accounts"), EventCursor.Start, default))
+        await foreach (var record in events.ReadAsync(EventStreamPattern.ForPattern(realm, "accounts"),
+                           EventCursor.Start, default))
             results.Add(record);
         return results;
     }
@@ -130,10 +147,15 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         internal volatile bool Fail = true;
         internal int Invocations;
         internal Exception? LastException;
-        internal TaskCompletionSource IndependentProgress { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal TaskCompletionSource IndependentProgress { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    internal sealed partial class JourneyReactor(IProjectionCheckpointStore checkpoints, IEventStore events, JourneyControl control)
+    internal sealed partial class JourneyReactor(
+        IProjectionCheckpointStore checkpoints,
+        IEventStore events,
+        JourneyControl control)
         : BatchReactor(checkpoints, control.Pattern), IReactorHandler<ValueChanged>
     {
         public async ValueTask<Result> HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
@@ -150,14 +172,19 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
                     Assert.Equal(context.Trigger.Value, Assert.IsType<ValueChanged>(existing.Event).Value);
                     return Result.Success;
                 }
+
                 var change = new ValueChanged(context.Trigger.Value);
                 change.AttachMetadata(new DomainEventMetadata(effect, effect, 1, context.StartedAt,
-                    context.CorrelationId, context.CauseId)
+                        context.CorrelationId, context.CauseId)
                 { ExecutionId = context.ExecutionId, Actor = ActorAttribution.FromPrincipal(context.Actor) });
                 await events.AppendAsync(stream, 0, [change], ct);
                 return Result.Success;
             }
-            catch (Exception ex) { control.LastException = ex; throw; }
+            catch (Exception ex)
+            {
+                control.LastException = ex;
+                throw;
+            }
         }
     }
 

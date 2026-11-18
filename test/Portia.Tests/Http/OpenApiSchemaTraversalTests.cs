@@ -51,9 +51,11 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
         Assert.Equal("acme", actual.RootElement.GetProperty("items")[0].GetString());
         Assert.Equal("globex", actual.RootElement.GetProperty("values").GetProperty("first").GetString());
         Assert.Equal(JsonValueKind.Null, actual.RootElement.GetProperty("nullable_items")[1].ValueKind);
-        Assert.Equal(JsonValueKind.Null, actual.RootElement.GetProperty("nullable_values").GetProperty("second").ValueKind);
+        Assert.Equal(JsonValueKind.Null,
+            actual.RootElement.GetProperty("nullable_values").GetProperty("second").ValueKind);
 
-        var operation = (await ReadDocumentAsync(client, format)).Paths!["/tenant-collections"].Operations![HttpMethod.Post];
+        var operation =
+            (await ReadDocumentAsync(client, format)).Paths!["/tenant-collections"].Operations![HttpMethod.Post];
         var request = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
         var result = operation.Responses!["200"].Content!["application/json"].Schema!;
         foreach (var envelope in new[] { request, result })
@@ -85,7 +87,8 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
             .AddRequestHandler<OpenApiDictionaryTraversalHandler>();
         _app = builder.Build();
         _ = _app.MapPortiaOpenApi();
-        _ = _app.MapPortiaPost<OpenApiDictionaryTraversalRequest, Dictionary<string, OpenApiTraversalCollection>>("/dictionary-traversal");
+        _ = _app.MapPortiaPost<OpenApiDictionaryTraversalRequest, Dictionary<string, OpenApiTraversalCollection>>(
+            "/dictionary-traversal");
         await _app.StartAsync();
         using var client = _app.GetTestClient();
 
@@ -98,10 +101,12 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
         using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         // Assert
-        Assert.Equal("child", actual.RootElement.GetProperty("first")[0].GetProperty("next").GetProperty("item_id").GetString());
+        Assert.Equal("child",
+            actual.RootElement.GetProperty("first")[0].GetProperty("next").GetProperty("item_id").GetString());
         Assert.Equal("sibling", actual.RootElement.GetProperty("second")[0].GetProperty("item_id").GetString());
 
-        var operation = (await ReadDocumentAsync(client, format)).Paths!["/dictionary-traversal"].Operations![HttpMethod.Post];
+        var operation =
+            (await ReadDocumentAsync(client, format)).Paths!["/dictionary-traversal"].Operations![HttpMethod.Post];
         var request = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
         var result = operation.Responses!["200"].Content!["application/json"].Schema!;
         foreach (var dictionary in new[] { request, result })
@@ -141,11 +146,14 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
 
         // Assert
         Assert.Equal("collection", actual.RootElement.GetProperty("kind").GetString());
-        Assert.Equal("nested", actual.RootElement.GetProperty("items")[0].GetProperty("next").GetProperty("item_id").GetString());
-        Assert.Equal("group", actual.RootElement.GetProperty("groups").GetProperty("first")[0].GetProperty("item_id").GetString());
+        Assert.Equal("nested",
+            actual.RootElement.GetProperty("items")[0].GetProperty("next").GetProperty("item_id").GetString());
+        Assert.Equal("group",
+            actual.RootElement.GetProperty("groups").GetProperty("first")[0].GetProperty("item_id").GetString());
         Assert.Equal("batch", actual.RootElement.GetProperty("batches")[0][0].GetProperty("item_id").GetString());
 
-        var operation = (await ReadDocumentAsync(client, format)).Paths!["/polymorphic-traversal"].Operations![HttpMethod.Post];
+        var operation =
+            (await ReadDocumentAsync(client, format)).Paths!["/polymorphic-traversal"].Operations![HttpMethod.Post];
         var request = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
         var result = operation.Responses!["200"].Content!["application/json"].Schema!;
         foreach (var polymorphic in new[] { request, result })
@@ -196,7 +204,8 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
             Assert.Equal(optional, actual.RootElement.GetProperty("optional_count").GetRawText());
         }
 
-        var operation = (await ReadDocumentAsync(client, format)).Paths!["/nullable-traversal"].Operations![HttpMethod.Post];
+        var operation =
+            (await ReadDocumentAsync(client, format)).Paths!["/nullable-traversal"].Operations![HttpMethod.Post];
         var request = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
         var result = operation.Responses!["200"].Content!["application/json"].Schema!;
         foreach (var envelope in new[] { request, result })

@@ -15,8 +15,11 @@ public sealed class ContractMetadataEdgeCaseTests
         // Arrange
         var first = new PortiaContractMemberMetadata("First", typeof(string)) { JsonName = "second" };
         var other = new PortiaContractMemberMetadata("Other", typeof(string)) { JsonName = "First" };
-        var registry = new PortiaContractMetadataRegistry([type => type == typeof(object)
-            ? new PortiaContractMetadata(type) { Members = [first, other] } : null]);
+        var registry = new PortiaContractMetadataRegistry([
+            type => type == typeof(object)
+                ? new PortiaContractMetadata(type) { Members = [first, other] }
+                : null
+        ]);
 
         // Act
         var result = registry.Member(typeof(object), "First", JsonNamingPolicy.SnakeCaseLower);
@@ -67,11 +70,17 @@ public sealed class ContractMetadataEdgeCaseTests
     public void ShouldRejectConfigurationGivenValidationWithoutValueAccessor()
     {
         // Arrange
-        var registry = new PortiaContractMetadataRegistry([type => new PortiaContractMetadata(type)
-        {
-            HasValidation = true,
-            Members = [new PortiaContractMemberMetadata("Value", typeof(string)) { HasValidation = true, Rules = [new RequiredAttribute()] }]
-        }]);
+        var registry = new PortiaContractMetadataRegistry([
+            type => new PortiaContractMetadata(type)
+            {
+                HasValidation = true,
+                Members =
+                [
+                    new PortiaContractMemberMetadata("Value", typeof(string))
+                        { HasValidation = true, Rules = [new RequiredAttribute()] }
+                ]
+            }
+        ]);
 
         // Act
         var exception = Record.Exception(() => registry.Type(typeof(object)));
@@ -81,6 +90,7 @@ public sealed class ContractMetadataEdgeCaseTests
         Assert.Contains("Value", failure.Message, StringComparison.Ordinal);
         Assert.Contains("accessor", failure.Message, StringComparison.OrdinalIgnoreCase);
     }
+
     /// <summary>An omission rejected by a value rule is required and has no advertised invalid default.</summary>
     [Fact]
     public void ShouldRequirePresenceGivenDefaultRejectedByRange()
@@ -135,5 +145,4 @@ public sealed class ContractMetadataEdgeCaseTests
         Assert.Null(schema["maximum"]);
         Assert.NotNull(schema["x-portia-range"]);
     }
-
 }

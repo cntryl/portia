@@ -92,7 +92,8 @@ public abstract class Reactor
             throw new ArgumentException("An effect name cannot contain malformed UTF-16 text.", nameof(effectName));
         return Uuid.CreateVersion5(Uuid.UrlNamespace,
             "portia:effect:v2:" + EffectField(_boundIdentity?.Name) + EffectField(_boundIdentity?.Tenant?.Value)
-            + EffectField(Name) + EffectField(context.Source.Event.Metadata.EventId.ToString()) + EffectField(effectName));
+            + EffectField(Name) + EffectField(context.Source.Event.Metadata.EventId.ToString()) +
+            EffectField(effectName));
     }
 
     static string EffectField(string? value) => value is null
@@ -110,6 +111,7 @@ public abstract class Reactor
                 && (++index == value.Length || !char.IsLowSurrogate(value[index])))
                 return true;
         }
+
         return false;
     }
 
@@ -132,7 +134,8 @@ public abstract class Reactor
     /// <param name="contexts">One context per triggering event, in source order.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task that completes once every reaction has run.</returns>
-    protected virtual async ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
+    protected virtual async ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts,
+        CancellationToken ct)
     {
         foreach (var context in contexts)
         {

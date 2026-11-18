@@ -11,7 +11,9 @@ public sealed class ProjectorScenario
     readonly ScenarioProjectionStore _store = new();
 
     /// <summary>Creates a scenario for the default test tenant.</summary>
-    public ProjectorScenario() : this(new TenantId("scenario")) { }
+    public ProjectorScenario() : this(new TenantId("scenario"))
+    {
+    }
 
     /// <summary>Creates a scenario for a specific tenant's streams.</summary>
     /// <param name="tenant">The tenant to bind tenant-scoped projectors to.</param>

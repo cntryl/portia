@@ -6,7 +6,9 @@ namespace Cntryl.Portia;
 public sealed class OperationalRecoveryTests
 {
     static readonly OperationalTarget Target = new("reactor", "stream://operations/orders/*", OperationalScope.Global);
-    static readonly OperationalProcessingSettings Settings = new(512, 4096, 3, TimeSpan.TicksPerSecond, TimeSpan.TicksPerMinute);
+
+    static readonly OperationalProcessingSettings Settings = new(512, 4096, 3, TimeSpan.TicksPerSecond,
+        TimeSpan.TicksPerMinute);
 
     /// <summary>A resource-lock conflict rebuilds the plan from the winning writer's durable state.</summary>
     [Fact]
@@ -120,7 +122,8 @@ public sealed class OperationalRecoveryTests
         var operations = Api(store);
         var actor = TestOperationalAuthorizer.AdministratorActor(true);
         var plan = await operations.PreviewRepairAsync(actor, Target);
-        var next = new OperationalSession(store, new OperationalOptions(), new EmptyApplicationTopology(), TimeProvider.System);
+        var next = new OperationalSession(store, new OperationalOptions(), new EmptyApplicationTopology(),
+            TimeProvider.System);
 
         // Act
         await next.AcquireAsync(Target, "reactor", Settings, ProjectionCheckpoint.Start, default);
@@ -128,7 +131,8 @@ public sealed class OperationalRecoveryTests
         // Assert
         Assert.NotEqual(stale.OwnerSession, next.State.OwnerSession);
         Assert.NotNull(next.State.Block);
-        Assert.False(await store.CompareExchangeAsync(stale with { Revision = stale.Revision + 1 }, stale.Revision, stale.OwnerSession));
+        Assert.False(await store.CompareExchangeAsync(stale with { Revision = stale.Revision + 1 }, stale.Revision,
+            stale.OwnerSession));
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await operations.ApproveRepairAsync(actor, Target, plan.Id));
     }
@@ -146,7 +150,8 @@ public sealed class OperationalRecoveryTests
 
         // Assert
         _ = await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
-            await operations.InspectProcessorAsync(TestOperationalAuthorizer.AdministratorActor(scope: "tenant-a"), Target));
+            await operations.InspectProcessorAsync(TestOperationalAuthorizer.AdministratorActor(scope: "tenant-a"),
+                Target));
         Assert.Empty(await operations.ListIssuesAsync(TestOperationalAuthorizer.AdministratorActor(scope: "tenant-a"),
             OperationalScope.ForTenant(new TenantId("tenant-a"))));
     }
@@ -162,7 +167,8 @@ public sealed class OperationalRecoveryTests
         var store = new MemoryOperationalStore();
         _ = await BlockAsync(store);
         var clock = new ManualTestClock();
-        var operations = new PortiaOperations(TestOperationalAuthorizer.Configuration(), store, new OperationalOptions(), new EmptyApplicationTopology(),
+        var operations = new PortiaOperations(TestOperationalAuthorizer.Configuration(), store,
+            new OperationalOptions(), new EmptyApplicationTopology(),
             new TestOperationalAuthorizer(), clock);
         var actor = TestOperationalAuthorizer.AdministratorActor(true);
         var plan = await operations.PreviewRepairAsync(actor, Target);
@@ -184,10 +190,13 @@ public sealed class OperationalRecoveryTests
                 Checkpoint = "opaque:changed"
             }, state.Revision, state.OwnerSession));
         }
+
         if (change == "revoked")
-            _ = await Assert.ThrowsAsync<UnauthorizedAccessException>(async () => await operations.ExecuteRepairAsync(actor, Target, plan.Id));
+            _ = await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
+                await operations.ExecuteRepairAsync(actor, Target, plan.Id));
         else
-            _ = await Assert.ThrowsAsync<InvalidOperationException>(async () => await operations.ExecuteRepairAsync(actor, Target, plan.Id));
+            _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+                await operations.ExecuteRepairAsync(actor, Target, plan.Id));
         Assert.Empty((await store.ReadAsync(Target))!.Repairs);
     }
 
@@ -222,7 +231,8 @@ public sealed class OperationalRecoveryTests
         var clock = new ManualTestClock();
         var session = new OperationalSession(store, new OperationalOptions(), new EmptyApplicationTopology(), clock);
         await session.AcquireAsync(Target, "reactor", Settings, ProjectionCheckpoint.Start, default);
-        var failure = new ProcessorFailureException(Target.Identity, ProjectionCheckpoint.Start, ProcessorFailureStage.Reading,
+        var failure = new ProcessorFailureException(Target.Identity, ProjectionCheckpoint.Start,
+            ProcessorFailureStage.Reading,
             error: RequestError.Validation("dependency unavailable"));
 
         // Act
@@ -230,7 +240,8 @@ public sealed class OperationalRecoveryTests
 
         // Assert
         var original = Assert.Single(session.State.Attempts).Id;
-        var operations = new PortiaOperations(TestOperationalAuthorizer.Configuration(), store, new OperationalOptions(), new EmptyApplicationTopology(),
+        var operations = new PortiaOperations(TestOperationalAuthorizer.Configuration(), store,
+            new OperationalOptions(), new EmptyApplicationTopology(),
             new TestOperationalAuthorizer(), clock);
         var actor = TestOperationalAuthorizer.AdministratorActor(true);
         var plan = await operations.PreviewRepairAsync(actor, Target);
@@ -245,15 +256,18 @@ public sealed class OperationalRecoveryTests
         Assert.Equal(Assert.Single(session.State.Attempts).Id, session.State.Block!.AttemptId);
     }
 
-    static PortiaOperations Api(MemoryOperationalStore store) => new(TestOperationalAuthorizer.Configuration(), store, new OperationalOptions(),
+    static PortiaOperations Api(MemoryOperationalStore store) => new(TestOperationalAuthorizer.Configuration(), store,
+        new OperationalOptions(),
         new EmptyApplicationTopology(), new TestOperationalAuthorizer(), null);
 
     static async Task<OperationalSession> BlockAsync(MemoryOperationalStore store)
     {
-        var session = new OperationalSession(store, new OperationalOptions(), new EmptyApplicationTopology(), TimeProvider.System);
+        var session = new OperationalSession(store, new OperationalOptions(), new EmptyApplicationTopology(),
+            TimeProvider.System);
         await session.AcquireAsync(Target, "reactor", Settings, ProjectionCheckpoint.Start, default);
         await session.RecordFailureAsync(new ProcessorFailureException(Target.Identity, ProjectionCheckpoint.Start,
-            ProcessorFailureStage.Reading, error: new RequestError(RequestErrorKind.Validation, "private message")), null, default);
+                ProcessorFailureStage.Reading, error: new RequestError(RequestErrorKind.Validation, "private message")),
+            null, default);
         Assert.NotNull(session.State.Block);
         return session;
     }

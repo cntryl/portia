@@ -56,7 +56,8 @@ static class DomainEventDiscovery
     static DiscoveredEvent? EventModel(INamedTypeSymbol symbol)
     {
         var attribute = symbol.GetAttributes().FirstOrDefault(candidate =>
-            candidate.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, "Cntryl.Portia.DiscriminatorAttribute"));
+            candidate.AttributeClass is { } attributeType &&
+            SymbolNames.Is(attributeType, "Cntryl.Portia.DiscriminatorAttribute"));
         return attribute is null || attribute.ConstructorArguments.Length != 2
             ? null
             : new DiscoveredEvent(symbol.ToDisplayString(),

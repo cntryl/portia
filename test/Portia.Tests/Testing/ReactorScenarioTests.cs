@@ -141,7 +141,8 @@ public sealed class ReactorScenarioTests
         // Arrange
         var scenario = new ReactorScenario()
             .Given(new UserCreated(Uuid.CreateVersion4()))
-            .RespondTo<SendWelcomeEmail>(Result.Failure(new RequestError(RequestErrorKind.Conflict, "already welcomed")));
+            .RespondTo<SendWelcomeEmail>(
+                Result.Failure(new RequestError(RequestErrorKind.Conflict, "already welcomed")));
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>

@@ -13,6 +13,7 @@ public sealed class SdkCancellationProbeTests
         using var cancellation = new CancellationTokenSource();
         var published = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var operation = Task.CompletedTask;
+
         async Task PublishStartedAsync(CancellationToken ct)
         {
             await File.WriteAllTextAsync(Path.Combine(directory, "started"), "started", CancellationToken.None);
@@ -24,7 +25,8 @@ public sealed class SdkCancellationProbeTests
         try
         {
             // Act
-            operation = SdkCancellationProbe.WaitForCancellationAsync(directory, PublishStartedAsync, cancellation.Token);
+            operation = SdkCancellationProbe.WaitForCancellationAsync(directory, PublishStartedAsync,
+                cancellation.Token);
             await published.Task.WaitAsync(TimeSpan.FromSeconds(5));
             await cancellation.CancelAsync();
             var exception = await Record.ExceptionAsync(() => operation);

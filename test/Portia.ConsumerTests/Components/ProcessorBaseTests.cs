@@ -163,7 +163,8 @@ public sealed class ProcessorBaseTests
     sealed class BatchReaction(ReactionRepository repository)
         : BatchReactor(repository, EventStreamPattern.ForPattern("bases", "accounts"))
     {
-        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
+        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts,
+            CancellationToken ct)
         {
             repository.Contexts.AddRange(contexts);
             return ValueTask.FromResult(Result.Success);

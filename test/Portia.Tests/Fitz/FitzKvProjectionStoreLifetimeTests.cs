@@ -60,7 +60,8 @@ public sealed class FitzKvProjectionStoreLifetimeTests
     {
         // Arrange
         var store = new StrayWriteRepository(new FakeKvClient(), "kv://portia/state/orders");
-        await using var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
+        await using var batch =
+            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
         await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
 
         // Act

@@ -46,7 +46,8 @@ sealed class PortiaMcpServerTool(
         {
             var result = await registration.InvokeAsync(request, json, deadline.Token).ConfigureAwait(false);
             var size = result.Result.StructuredContent is { } structured
-                ? Encoding.UTF8.GetByteCount(structured.GetRawText()) + 128L : 128L;
+                ? Encoding.UTF8.GetByteCount(structured.GetRawText()) + 128L
+                : 128L;
             foreach (var block in result.Result.Content.OfType<TextContentBlock>())
                 size += JsonEncodedText.Encode(block.Text).EncodedUtf8Bytes.Length + 64L;
             if (result.Result.Meta is { } meta)

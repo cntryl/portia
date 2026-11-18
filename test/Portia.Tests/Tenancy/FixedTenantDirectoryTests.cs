@@ -74,8 +74,9 @@ public sealed class FixedTenantDirectoryTests
         }, (_, _) => Task.CompletedTask, shutdown.Token);
 
         await Task.WhenAll(
-            started.GetOrAdd(new TenantId("acme"), _ => new TaskCompletionSource()).Task,
-            started.GetOrAdd(new TenantId("beta"), _ => new TaskCompletionSource()).Task).WaitAsync(TimeSpan.FromSeconds(5));
+                started.GetOrAdd(new TenantId("acme"), _ => new TaskCompletionSource()).Task,
+                started.GetOrAdd(new TenantId("beta"), _ => new TaskCompletionSource()).Task)
+            .WaitAsync(TimeSpan.FromSeconds(5));
         await shutdown.CancelAsync();
 
         // Act

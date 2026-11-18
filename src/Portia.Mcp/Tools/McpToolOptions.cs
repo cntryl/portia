@@ -6,6 +6,7 @@ namespace Cntryl.Portia;
 public sealed class McpToolOptions
 {
     readonly Dictionary<string, McpJsonPropertyDescription> _propertyDescriptions = [with(StringComparer.Ordinal)];
+
     /// <summary>Overrides the request discriminator used as the tool name.</summary>
     internal string? Name { get; private set; }
 
@@ -26,6 +27,7 @@ public sealed class McpToolOptions
 
     /// <summary>Gets or sets whether the tool may interact with entities outside a closed domain.</summary>
     internal bool? OpenWorldHint { get; private set; }
+
     internal IReadOnlyDictionary<string, McpJsonPropertyDescription> PropertyDescriptions => _propertyDescriptions;
 
     /// <summary>Overrides the stable discriminator-derived tool name.</summary>
@@ -64,7 +66,8 @@ public sealed class McpToolOptions
         ArgumentException.ThrowIfNullOrWhiteSpace(propertyName);
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
         if (!_propertyDescriptions.TryAdd(propertyName, new McpJsonPropertyDescription(description, jsonName)))
-            throw new ArgumentException($"Request property '{propertyName}' has more than one description.", nameof(propertyName));
+            throw new ArgumentException($"Request property '{propertyName}' has more than one description.",
+                nameof(propertyName));
         return this;
     }
 

@@ -21,7 +21,8 @@ public sealed class FitzRequestQueuePublisherOptionsTests
         var options = new RequestQueueOptions(TimeSpan.FromSeconds(seconds), hours is { } value ? (uint)value : null);
 
         // Act
-        await publisher.EnqueueWithOptionsAsync(request, RequestRouteValues.None, "actor-token", metadata, options, default);
+        await publisher.EnqueueWithOptionsAsync(request, RequestRouteValues.None, "actor-token", metadata, options,
+            default);
 
         // Assert
         Assert.Equal("queue://test/shared/action", queue.Route);
@@ -86,7 +87,8 @@ public sealed class FitzRequestQueuePublisherOptionsTests
         var queue = new PublicationQueue();
 
         // Act
-        IRequestQueuePublisher publisher = new FitzRequestQueuePublisher(queue, TestJson.Serializer(typeof(UniversalAction)));
+        IRequestQueuePublisher publisher =
+            new FitzRequestQueuePublisher(queue, TestJson.Serializer(typeof(UniversalAction)));
 
         // Assert
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
@@ -103,7 +105,8 @@ public sealed class FitzRequestQueuePublisherOptionsTests
     {
         // Arrange
         var queue = new PublicationQueue();
-        IRequestQueuePublisher publisher = new FitzRequestQueuePublisher(queue, TestJson.Serializer(typeof(UniversalAction)));
+        IRequestQueuePublisher publisher =
+            new FitzRequestQueuePublisher(queue, TestJson.Serializer(typeof(UniversalAction)));
         using var cancellation = new CancellationTokenSource();
 
         // Act
@@ -126,7 +129,8 @@ public sealed class FitzRequestQueuePublisherOptionsTests
         var queue = new PublicationQueue { SupportsLifetime = false };
 
         // Act
-        IRequestQueuePublisher publisher = new FitzRequestQueuePublisher(queue, TestJson.Serializer(typeof(UniversalAction)));
+        IRequestQueuePublisher publisher =
+            new FitzRequestQueuePublisher(queue, TestJson.Serializer(typeof(UniversalAction)));
 
         // Assert
         await Assert.ThrowsAsync<NotSupportedException>(async () =>
@@ -144,7 +148,8 @@ public sealed class FitzRequestQueuePublisherOptionsTests
     {
         // Arrange
         var queue = new PublicationQueue();
-        IRequestQueuePublisher publisher = new FitzRequestQueuePublisher(queue, TestJson.Serializer(typeof(UniversalAction)));
+        IRequestQueuePublisher publisher =
+            new FitzRequestQueuePublisher(queue, TestJson.Serializer(typeof(UniversalAction)));
 
         // Act
         await publisher.EnqueueAsync(new UniversalAction(1), RequestRouteValues.None, null);

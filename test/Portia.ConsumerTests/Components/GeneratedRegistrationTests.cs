@@ -10,25 +10,25 @@ public sealed class GeneratedRegistrationTests
     {
         // Arrange
         var assembly = GeneratorCompilation.Compile("""
-            using System;
-            using System.Text.Json;
-            using System.Text.Json.Serialization;
-            using System.Text.Json.Serialization.Metadata;
-            using Cntryl.Portia;
-            using Microsoft.Extensions.DependencyInjection;
-            [PortiaJsonContext]
-            public partial class CountingContext : JsonSerializerContext
-            {
-                public static int Instances;
-                public CountingContext(JsonSerializerOptions options) : base(options) { Instances++; }
-                protected override JsonSerializerOptions GeneratedSerializerOptions => new();
-                public override JsonTypeInfo GetTypeInfo(Type type) => null;
-            }
-            public static class Composition
-            {
-                public static PortiaBuilder Compose(IServiceCollection services) => services.AddPortia();
-            }
-            """, new RegistrationCallInterceptorGenerator());
+                                                    using System;
+                                                    using System.Text.Json;
+                                                    using System.Text.Json.Serialization;
+                                                    using System.Text.Json.Serialization.Metadata;
+                                                    using Cntryl.Portia;
+                                                    using Microsoft.Extensions.DependencyInjection;
+                                                    [PortiaJsonContext]
+                                                    public partial class CountingContext : JsonSerializerContext
+                                                    {
+                                                        public static int Instances;
+                                                        public CountingContext(JsonSerializerOptions options) : base(options) { Instances++; }
+                                                        protected override JsonSerializerOptions GeneratedSerializerOptions => new();
+                                                        public override JsonTypeInfo GetTypeInfo(Type type) => null;
+                                                    }
+                                                    public static class Composition
+                                                    {
+                                                        public static PortiaBuilder Compose(IServiceCollection services) => services.AddPortia();
+                                                    }
+                                                    """, new RegistrationCallInterceptorGenerator());
         var services = new ServiceCollection();
         var compose = assembly.GetType("Composition")!.GetMethod("Compose")!;
 
@@ -67,6 +67,7 @@ public sealed class GeneratedRegistrationTests
         var builder = new ServiceCollection().AddPortia();
         var key = new object();
         var attempts = 0;
+
         void Register(PortiaBuilder _)
         {
             if (++attempts == 1)
@@ -105,6 +106,7 @@ public sealed class GeneratedRegistrationTests
         // Arrange
         var builder = new ServiceCollection().AddPortia();
         var key = new object();
+
         static void Repeat(PortiaBuilder target, object identity, int count)
         {
             for (var index = 0; index < count; index++)

@@ -116,6 +116,9 @@ public sealed class ReactorEffectPatternsTests
     {
         protected override async ValueTask<Result> ReactToEventAsync(
             DomainEventRecord record, IExecutionContext context, CancellationToken ct)
-        { await effects.SendReceiptAsync((Deposited)record.Event, (IReactorContext)context, ct).ConfigureAwait(false); return Result.Success; }
+        {
+            await effects.SendReceiptAsync((Deposited)record.Event, (IReactorContext)context, ct).ConfigureAwait(false);
+            return Result.Success;
+        }
     }
 }

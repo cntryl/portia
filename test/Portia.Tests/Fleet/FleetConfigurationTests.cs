@@ -8,7 +8,8 @@ public sealed class FleetConfigurationTests
     public async Task ShouldRejectConfigurationGivenLeaseTtlNotSupportedByFitz()
     {
         // Arrange
-        var options = new FleetRunOptions { MembershipSelector = "lease://audit/members/*", WorkerId = "w", LeaseTtl = TimeSpan.FromDays(60) };
+        var options = new FleetRunOptions
+        { MembershipSelector = "lease://audit/members/*", WorkerId = "w", LeaseTtl = TimeSpan.FromDays(60) };
         await using var client = new FitzClient(new ClientConfig(new Uri("ws://127.0.0.1:1")));
         var sdkFailure = await Record.ExceptionAsync(() => client.Lease.WithLeaseAsync("lease://test/members/w",
             options.LeaseTtl, _ => ValueTask.CompletedTask).WaitAsync(TimeSpan.FromSeconds(3)));
@@ -48,7 +49,8 @@ public sealed class FleetConfigurationTests
     public void ShouldAcceptConfigurationGivenSchedulableLeaseTtl(long ticks)
     {
         // Arrange
-        var options = new FleetRunOptions { MembershipSelector = "lease://test/members/*", LeaseTtl = TimeSpan.FromTicks(ticks) };
+        var options = new FleetRunOptions
+        { MembershipSelector = "lease://test/members/*", LeaseTtl = TimeSpan.FromTicks(ticks) };
         var fitz = new PortiaFitzBuilder(new ServiceCollection().AddPortia());
 
         // Act

@@ -133,8 +133,10 @@ public sealed class ProcessorStatusTests
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
         var authenticated = new ClaimsIdentity(
-            [new Claim(ClaimTypes.NameIdentifier, "operator"), new Claim("scope", "global"),
-                new Claim(roleClaimType, AdministratorRole)], "test", ClaimTypes.Name, roleClaimType);
+        [
+            new Claim(ClaimTypes.NameIdentifier, "operator"), new Claim("scope", "global"),
+            new Claim(roleClaimType, AdministratorRole)
+        ], "test", ClaimTypes.Name, roleClaimType);
         var actor = new ClaimsPrincipal([new ClaimsIdentity(), authenticated]);
 
         // Act
@@ -354,7 +356,8 @@ public sealed class ProcessorStatusTests
     {
         // Arrange
         var store = new StatusCheckpointStore();
-        store.Set(new CheckpointIdentity("projection", EventStreamPattern.ForPattern("global", "events")), "native-progress");
+        store.Set(new CheckpointIdentity("projection", EventStreamPattern.ForPattern("global", "events")),
+            "native-progress");
         var services = Services(store);
         _ = services.AddSingleton<IDomainEventProgressReader>(new MismatchedStatusProgressReader());
         _ = services.AddPortia().AddProjector<GlobalStatusProjector>("projection", WorkloadScope.Global);
@@ -427,9 +430,11 @@ public sealed class ProcessorStatusTests
             Assert.Equal(2, result.Value.Failure.ConsecutiveFailures);
             Assert.Equal(completed, result.Value.Failure.FailedAt);
         }
+
         Assert.Equal(0, store.Writes);
         var options = provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
-        Assert.DoesNotContain("private source detail", JsonSerializer.Serialize(result.Value, options), StringComparison.Ordinal);
+        Assert.DoesNotContain("private source detail", JsonSerializer.Serialize(result.Value, options),
+            StringComparison.Ordinal);
     }
 
     /// <summary>Preserves caller cancellation instead of converting it to an unknown source observation.</summary>
@@ -466,10 +471,12 @@ public sealed class ProcessorStatusTests
     {
         // Arrange
         var store = new StatusCheckpointStore();
-        store.Set(new CheckpointIdentity("projection", EventStreamPattern.ForPattern("global", "events")), "native-progress");
+        store.Set(new CheckpointIdentity("projection", EventStreamPattern.ForPattern("global", "events")),
+            "native-progress");
         var services = Services(store);
         _ = services.AddSingleton<IDomainEventProgressReader>(sourceUnavailable
-            ? new FailingStatusProgressReader() : new StatusProgressReader());
+            ? new FailingStatusProgressReader()
+            : new StatusProgressReader());
         _ = services.AddSingleton<IOperationalStore>(new UnavailableStatusJournal());
         _ = services.AddPortia().AddProjector<GlobalStatusProjector>("projection", WorkloadScope.Global);
         await using var provider = services.BuildServiceProvider();
@@ -487,7 +494,8 @@ public sealed class ProcessorStatusTests
         Assert.Single(store.Reads);
         Assert.Equal(0, store.Writes);
         var options = provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
-        Assert.DoesNotContain("private journal detail", JsonSerializer.Serialize(result.Value, options), StringComparison.Ordinal);
+        Assert.DoesNotContain("private journal detail", JsonSerializer.Serialize(result.Value, options),
+            StringComparison.Ordinal);
     }
 
     /// <summary>Preserves caller cancellation while reading operational failure evidence.</summary>
@@ -532,16 +540,21 @@ public sealed class ProcessorStatusTests
         using var provider = services.BuildServiceProvider();
 
         // Assert
-        Assert.Single(provider.GetServices<RequestHandlerRegistration>(), item => item.RequestType == typeof(GetProcessorStatus));
-        Assert.Single(provider.GetServices<RequestAuthorizerRegistration>(), item => item.RequestType == typeof(GetProcessorStatus));
-        Assert.Single(provider.GetServices<RequestTransportRegistration>(), item => item.RequestType == typeof(GetProcessorStatus));
+        Assert.Single(provider.GetServices<RequestHandlerRegistration>(),
+            item => item.RequestType == typeof(GetProcessorStatus));
+        Assert.Single(provider.GetServices<RequestAuthorizerRegistration>(),
+            item => item.RequestType == typeof(GetProcessorStatus));
+        Assert.Single(provider.GetServices<RequestTransportRegistration>(),
+            item => item.RequestType == typeof(GetProcessorStatus));
         var options = provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
         var request = new GetProcessorStatus("projection", "tenant-a");
         var json = JsonSerializer.Serialize(request, options);
         Assert.Equal(request, JsonSerializer.Deserialize<GetProcessorStatus>(json, options));
         var status = new ProcessorStatus("projection", "projector", "tenant-a", "stream://tenant-a/events/*", null,
-            new EventStreamProgress(new EventCursor("checkpoint"), new EventCursor("head"), 3, false, DateTimeOffset.UtcNow), null);
-        Assert.Equal(status, JsonSerializer.Deserialize<ProcessorStatus>(JsonSerializer.Serialize(status, options), options));
+            new EventStreamProgress(new EventCursor("checkpoint"), new EventCursor("head"), 3, false,
+                DateTimeOffset.UtcNow), null);
+        Assert.Equal(status,
+            JsonSerializer.Deserialize<ProcessorStatus>(JsonSerializer.Serialize(status, options), options));
     }
 
     static ServiceCollection Services(StatusCheckpointStore store)
@@ -555,7 +568,9 @@ public sealed class ProcessorStatusTests
     }
 
     static IConfiguration Configuration(string? role = AdministratorRole) => new ConfigurationBuilder()
-        .AddInMemoryCollection(role is null ? [] : new Dictionary<string, string?> { ["PORTIA_SYSTEM_ADMIN_ROLE"] = role })
+        .AddInMemoryCollection(role is null
+            ? []
+            : new Dictionary<string, string?> { ["PORTIA_SYSTEM_ADMIN_ROLE"] = role })
         .Build();
 
     static async ValueTask<Result<ProcessorStatus>> SendAsync(IServiceProvider provider, GetProcessorStatus request,
@@ -579,9 +594,11 @@ public sealed class ProcessorStatusTests
         internal List<CheckpointIdentity> Reads { get; } = [];
         internal int Writes { get; private set; }
 
-        internal void Set(CheckpointIdentity identity, string cursor) => _checkpoints[identity] = new ProjectionCheckpoint(new EventCursor(cursor));
+        internal void Set(CheckpointIdentity identity, string cursor) =>
+            _checkpoints[identity] = new ProjectionCheckpoint(new EventCursor(cursor));
 
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default)
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
+            CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
             Reads.Add(identity);
@@ -597,7 +614,8 @@ public sealed class ProcessorStatusTests
             throw new InvalidOperationException("Status inspection must not begin processing.");
         }
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default)
         {
             Writes++;
             throw new InvalidOperationException("Status inspection must not change progress.");
@@ -630,7 +648,8 @@ public sealed class ProcessorStatusTests
             ct.ThrowIfCancellationRequested();
             Pattern = pattern;
             Position = position;
-            return ValueTask.FromResult(new EventStreamProgress(position, new EventCursor("opaque-head"), 3, false, DateTimeOffset.UtcNow));
+            return ValueTask.FromResult(new EventStreamProgress(position, new EventCursor("opaque-head"), 3, false,
+                DateTimeOffset.UtcNow));
         }
     }
 
@@ -644,6 +663,7 @@ public sealed class ProcessorStatusTests
                 cancellation.Cancel();
                 ct.ThrowIfCancellationRequested();
             }
+
             throw new IOException("private source detail");
         }
     }
@@ -671,14 +691,17 @@ public sealed class ProcessorStatusTests
 
     sealed class StatusJournal(OperationalProcessorState state) : IOperationalStore
     {
-        public ValueTask<OperationalProcessorState?> ReadAsync(OperationalTarget target, CancellationToken ct = default) =>
+        public ValueTask<OperationalProcessorState?>
+            ReadAsync(OperationalTarget target, CancellationToken ct = default) =>
             ValueTask.FromResult<OperationalProcessorState?>(target == state.Target ? state : null);
 
-        public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(OperationalScope scope, CancellationToken ct = default) =>
+        public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(OperationalScope scope,
+            CancellationToken ct = default) =>
             ValueTask.FromResult<IReadOnlyList<OperationalProcessorState>>([state]);
 
         public ValueTask<bool> CompareExchangeAsync(OperationalProcessorState replacement, long expectedRevision,
-            Guid expectedOwner, CancellationToken ct = default) => throw new InvalidOperationException("Status inspection must not change the journal.");
+            Guid expectedOwner, CancellationToken ct = default) =>
+            throw new InvalidOperationException("Status inspection must not change the journal.");
     }
 
     sealed class UnavailableStatusJournal(CancellationTokenSource? cancellation = null) : IOperationalStore
@@ -690,13 +713,16 @@ public sealed class ProcessorStatusTests
                 cancellation.Cancel();
                 ct.ThrowIfCancellationRequested();
             }
+
             throw new IOException("private journal detail");
         }
 
         public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(OperationalScope scope,
-            CancellationToken ct = default) => throw new InvalidOperationException("Status inspection must read one exact target.");
+            CancellationToken ct = default) =>
+            throw new InvalidOperationException("Status inspection must read one exact target.");
 
         public ValueTask<bool> CompareExchangeAsync(OperationalProcessorState replacement, long expectedRevision,
-            Guid expectedOwner, CancellationToken ct = default) => throw new InvalidOperationException("Status inspection must not change the journal.");
+            Guid expectedOwner, CancellationToken ct = default) =>
+            throw new InvalidOperationException("Status inspection must not change the journal.");
     }
 }

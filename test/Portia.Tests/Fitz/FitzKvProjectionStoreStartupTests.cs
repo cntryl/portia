@@ -62,7 +62,8 @@ public sealed class FitzKvProjectionStoreStartupTests
             scope == WorkloadScope.PerTenant
                 ? EventStreamPattern.ForTenant("orders")
                 : EventStreamPattern.ForPattern("test", "orders")));
-        _ = builder.Services.AddPortia().AddProjector<OrdersProjector>(registeredAs, scope).AddWorkers().UseSingleProcessWorkloads();
+        _ = builder.Services.AddPortia().AddProjector<OrdersProjector>(registeredAs, scope).AddWorkers()
+            .UseSingleProcessWorkloads();
         return builder.Build();
     }
 }
@@ -70,13 +71,15 @@ public sealed class FitzKvProjectionStoreStartupTests
 // Per-tenant validation needs a directory registered; no tenant ever becomes active.
 sealed class NoTenants : ITenantDirectory
 {
-    public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync([EnumeratorCancellation] CancellationToken ct = default)
+    public async IAsyncEnumerable<TenantId> GetActiveTenantsAsync(
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         await Task.CompletedTask;
         yield break;
     }
 
-    public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync([EnumeratorCancellation] CancellationToken ct = default)
+    public async IAsyncEnumerable<TenantLifecycleChange> WatchAsync(
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         await Task.Delay(Timeout.Infinite, ct);
         yield break;
@@ -89,5 +92,6 @@ sealed class OrdersRepository(IKvClient kv, string projector)
 sealed partial class OrdersProjector(OrdersRepository orders, EventStreamPattern pattern)
     : Projector(orders, pattern), IProjectorHandler<ValueChanged>
 {
-    public ValueTask<Result> HandleAsync(IProjectorContext<ValueChanged> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+    public ValueTask<Result> HandleAsync(IProjectorContext<ValueChanged> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result.Success);
 }

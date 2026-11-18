@@ -79,7 +79,7 @@ public sealed partial class FleetPartitionRunner(
             try
             {
                 await _membership.RunAsync(options, (observer, membershipCt) =>
-                    ReconcileAsync(partitions, callback, options, observer, session, membershipCt), ct)
+                        ReconcileAsync(partitions, callback, options, observer, session, membershipCt), ct)
                     .ConfigureAwait(false);
                 if (!ct.IsCancellationRequested)
                 {
@@ -310,6 +310,7 @@ public sealed partial class FleetPartitionRunner(
                     _ = ObserveLateAsync(run);
                     continue;
                 }
+
                 var failure = await ObserveCompletedAsync(run).ConfigureAwait(false);
                 if (terminal is null)
                     terminal = failure;
@@ -327,12 +328,14 @@ public sealed partial class FleetPartitionRunner(
             if (_logger is not null)
                 LogPartitionTerminationTimeout(_logger, timeoutFailure);
         }
+
         if (terminal is not null)
         {
             if (timeoutFailure is not null)
                 ProcessorFailureException.RecordCleanup(terminal, timeoutFailure);
             ExceptionDispatchInfo.Capture(terminal).Throw();
         }
+
         if (timeoutFailure is not null)
             throw timeoutFailure;
     }
@@ -363,6 +366,7 @@ public sealed partial class FleetPartitionRunner(
             run.Registration.Dispose();
             run.Cancellation.Dispose();
         }
+
         return null;
     }
 

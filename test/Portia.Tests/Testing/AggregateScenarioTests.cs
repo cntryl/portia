@@ -73,7 +73,8 @@ public sealed class AggregateScenarioTests
         var result = scenario.When(aggregate =>
         {
             aggregate.ChangeValue(5);
-            return AggregateOutcome.CommitOnSuccess(Result.Failure(new RequestError(RequestErrorKind.Conflict, "taken")));
+            return AggregateOutcome.CommitOnSuccess(
+                Result.Failure(new RequestError(RequestErrorKind.Conflict, "taken")));
         });
 
         // Assert

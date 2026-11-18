@@ -139,7 +139,8 @@ public sealed class ManualEffectIdentityTests
 
     sealed class EffectProbe(string name, bool tenantTemplate = false)
         : Reactor(new InMemoryProjectionCheckpointStore(),
-            tenantTemplate ? EventStreamPattern.ForTenant("events") : EventStreamPattern.ForPattern("acme", "events"), name)
+            tenantTemplate ? EventStreamPattern.ForTenant("events") : EventStreamPattern.ForPattern("acme", "events"),
+            name)
     {
         public Uuid EffectId(IReactorContext context, string effectName) => CreateEffectId(context, effectName);
     }

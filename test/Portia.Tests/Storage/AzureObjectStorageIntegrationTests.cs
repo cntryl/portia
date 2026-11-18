@@ -9,16 +9,19 @@ namespace Cntryl.Portia.Tests.Storage;
 public sealed class AzureObjectStorageIntegrationTests
 {
     /// <summary>Runs the reusable storage contract checks against the Azure adapter.</summary>
-    [Fact(Skip = "Sqrzl does not yet accept an encryption scope in a blob SAS or Copy Blob From URL (sqrzl-emulator#85, #86).")]
+    [Fact(Skip =
+        "Sqrzl does not yet accept an encryption scope in a blob SAS or Copy Blob From URL (sqrzl-emulator#85, #86).")]
     public async Task ShouldPassSharedConformanceGivenAzureBlobEndpoint()
     {
         // Arrange
         // Sqrzl serves Azure Blob under the account name as the first path segment, with the compose credentials.
         var connection = Environment.GetEnvironmentVariable("PORTIA_AZURE_BLOB_TEST_CONNECTION")
-            ?? (Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT") is { } endpoint
-                ? $"DefaultEndpointsProtocol=http;AccountName=portia-test;AccountKey={Convert.ToBase64String("portia-local-secret"u8)};BlobEndpoint={endpoint.TrimEnd('/')}/portia-test;"
-                : throw new InvalidOperationException("Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'."));
-        var scope = Environment.GetEnvironmentVariable("PORTIA_AZURE_BLOB_TEST_ENCRYPTION_SCOPE") ?? "portia-conformance";
+                         ?? (Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT") is { } endpoint
+                             ? $"DefaultEndpointsProtocol=http;AccountName=portia-test;AccountKey={Convert.ToBase64String("portia-local-secret"u8)};BlobEndpoint={endpoint.TrimEnd('/')}/portia-test;"
+                             : throw new InvalidOperationException(
+                                 "Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'."));
+        var scope = Environment.GetEnvironmentVariable("PORTIA_AZURE_BLOB_TEST_ENCRYPTION_SCOPE") ??
+                    "portia-conformance";
         var suffix = Guid.NewGuid().ToString("N")[..12];
         var firstTenant = new TenantId("conformance-a");
         var secondTenant = new TenantId("conformance-b");
@@ -44,10 +47,12 @@ public sealed class AzureObjectStorageIntegrationTests
         var run = async () => await ObjectStorageConformance.VerifyAsync(storage, firstTenant, secondTenant,
             async (part, bytes, ct) =>
             {
-                using var request = new HttpRequestMessage(HttpMethod.Put, part.UploadUri) { Content = new ByteArrayContent(bytes.ToArray()) };
+                using var request = new HttpRequestMessage(HttpMethod.Put, part.UploadUri)
+                { Content = new ByteArrayContent(bytes.ToArray()) };
                 using var response = await transfer.SendAsync(request, ct);
                 response.EnsureSuccessStatusCode();
-                return new ObjectPartReceipt(part.PartNumber, HttpUtility.ParseQueryString(part.UploadUri.Query)["blockid"]!);
+                return new ObjectPartReceipt(part.PartNumber,
+                    HttpUtility.ParseQueryString(part.UploadUri.Query)["blockid"]!);
             });
 
         // Assert
@@ -64,7 +69,8 @@ public sealed class AzureObjectStorageIntegrationTests
         }
     }
 
-    sealed class LocationResolver(IReadOnlyDictionary<string, ObjectStorageLocation> locations) : IObjectStorageTenantResolver
+    sealed class LocationResolver(IReadOnlyDictionary<string, ObjectStorageLocation> locations)
+        : IObjectStorageTenantResolver
     {
         public string GetObjectKey(TenantId tenantId, ObjectDigest expected) =>
             $"content/sha256/{expected.Sha256[..2]}/{expected.Sha256}";

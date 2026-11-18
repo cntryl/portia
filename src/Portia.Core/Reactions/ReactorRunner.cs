@@ -142,15 +142,18 @@ public sealed class ReactorRunner(
             {
                 var journal = reactor.Checkpoints as IOperationalReactionCheckpointStore;
                 if (session is not null && journal is null)
-                    throw new InvalidOperationException("Operations requires the registered operational reactor checkpoint store.");
+                    throw new InvalidOperationException(
+                        "Operations requires the registered operational reactor checkpoint store.");
                 if (session is { } operations)
-                    _ = await operations.BeginAsync(contexts.Select(c => c.Source).ToArray(), checkpoint, ct).ConfigureAwait(false);
+                    _ = await operations.BeginAsync(contexts.Select(c => c.Source).ToArray(), checkpoint, ct)
+                        .ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
                 using var observation = session?.Observe();
                 if (session is not null)
                     foreach (var context in contexts)
-                        ProcessingObservation.Record("execution", reactor.Name, context.Source.Event.Metadata.EventId.ToString(),
-                        context.ExecutionId.ToString(), "started");
+                        ProcessingObservation.Record("execution", reactor.Name,
+                            context.Source.Event.Metadata.EventId.ToString(),
+                            context.ExecutionId.ToString(), "started");
                 var result = await reactor.ReactAsync(contexts, ct).ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
                 if (!result.IsSuccess)
@@ -173,10 +176,10 @@ public sealed class ReactorRunner(
                 if (exception is OperationCanceledException && ct.IsCancellationRequested)
                     throw;
                 var failure = exception as ProcessorFailureException
-                    ?? new ProcessorFailureException(identity, checkpoint, stage,
-                        contexts[0].Source, contexts[^1].Source, UninitializedResult.Is(exception)
-                            ? UninitializedResult.ReturnedBy("reactor", reactor.GetType(), exception)
-                            : exception);
+                              ?? new ProcessorFailureException(identity, checkpoint, stage,
+                                  contexts[0].Source, contexts[^1].Source, UninitializedResult.Is(exception)
+                                      ? UninitializedResult.ReturnedBy("reactor", reactor.GetType(), exception)
+                                      : exception);
                 if (session is { } operations)
                     await operations.RecordFailureAsync(failure, null, ct).ConfigureAwait(false);
                 throw failure;

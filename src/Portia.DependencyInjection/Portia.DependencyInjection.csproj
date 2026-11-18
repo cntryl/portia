@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>Wires Portia's background runners (queue, notifications, multi-tenancy, projectors, reactors) into a Microsoft.Extensions.Hosting host as IHostedServices.</Description>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>

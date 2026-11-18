@@ -43,7 +43,8 @@ public static class TwilioSmsServiceCollectionExtensions
     /// <param name="services">The services.</param>
     /// <param name="configure">Configures the provider.</param>
     /// <returns>The services.</returns>
-    public static IServiceCollection AddTwilioSms(this IServiceCollection services, Action<TwilioSmsBuilder>? configure = null)
+    public static IServiceCollection AddTwilioSms(this IServiceCollection services,
+        Action<TwilioSmsBuilder>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         var builder = new TwilioSmsBuilder();

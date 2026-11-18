@@ -11,7 +11,8 @@ static class UninitializedResult
         Mark(new InvalidOperationException("The result is uninitialized."));
 
     internal static InvalidOperationException ReturnedBy(string role, Type owner, Exception inner) =>
-        Mark(new InvalidOperationException($"Portia {role} '{owner.FullName}' returned an uninitialized Result.", inner));
+        Mark(new InvalidOperationException($"Portia {role} '{owner.FullName}' returned an uninitialized Result.",
+            inner));
 
     internal static bool Is(Exception? exception) =>
         exception is InvalidOperationException && exception.Data.Contains(Marker);

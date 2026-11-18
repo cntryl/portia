@@ -33,7 +33,8 @@ public sealed class InMemoryRpcClient : IRpcClient
         if (timeout < TimeSpan.Zero || timeout > TimeSpan.FromDays(1))
             throw new ArgumentOutOfRangeException(nameof(timeout), "RPC timeout must be between zero and one day.");
 
-        var cancellation = new TaskCompletionSource<RpcCancellationOutcome>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var cancellation =
+            new TaskCompletionSource<RpcCancellationOutcome>(TaskCreationOptions.RunContinuationsAsynchronously);
         return new RpcCall(CallCoreAsync(route, body, timeout, cancellation, ct), cancellation.Task);
     }
 #pragma warning restore RS0026
@@ -54,6 +55,7 @@ public sealed class InMemoryRpcClient : IRpcClient
             else
                 deadline.CancelAfter(budget);
         }
+
         var callToken = deadline.Token;
 
         try
@@ -179,7 +181,8 @@ public sealed class InMemoryRpcClient : IRpcClient
             _cancellation = cancellation;
             _callerRegistration = ct.Register(Cancel);
             // Independent dispatch also bounds callers of synchronously blocking handlers.
-            _worker = Task.Run(() => RunAsync(worker, route, body, timeout, budgetStartedAt, ct), CancellationToken.None);
+            _worker = Task.Run(() => RunAsync(worker, route, body, timeout, budgetStartedAt, ct),
+                CancellationToken.None);
         }
 
         public IAsyncEnumerable<RpcResponseFrame> ReadAsync(CancellationToken ct) => _frames.Reader.ReadAllAsync(ct);

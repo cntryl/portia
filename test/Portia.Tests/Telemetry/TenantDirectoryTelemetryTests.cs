@@ -187,7 +187,7 @@ public sealed class TenantDirectoryTelemetryTests
 
     static bool HasTags(Measurement measurement, string operation, string phase, string outcome) =>
         measurement.Tags.Any(tag => tag is { Key: "portia.operation", Value: { } } &&
-                                            Equals(tag.Value, operation)) &&
+                                    Equals(tag.Value, operation)) &&
         measurement.Tags.Any(tag => tag is { Key: "portia.phase", Value: { } } && Equals(tag.Value, phase)) &&
         measurement.Tags.Any(tag => tag is { Key: "portia.outcome", Value: { } } && Equals(tag.Value, outcome));
 

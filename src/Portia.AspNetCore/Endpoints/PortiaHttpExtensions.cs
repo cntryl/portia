@@ -48,7 +48,8 @@ public static class PortiaHttpExtensions
                 document.Info.Version = DocumentName;
                 context.ApplicationServices.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.OpenApi
                     .ConfigureDocument?.Invoke(document);
-                context.ApplicationServices.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.OpenApi.ApplySecuritySchemes(document);
+                context.ApplicationServices.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.OpenApi
+                    .ApplySecuritySchemes(document);
                 var duplicate = document.Paths
                     .SelectMany(path => path.Value.Operations ?? [])
                     .Select(operation => operation.Value.OperationId)
@@ -59,7 +60,8 @@ public static class PortiaHttpExtensions
                     ? true
                     : throw new InvalidOperationException(
                         $"OpenAPI operationId '{duplicate.Key}' is duplicated; the document cannot be served.");
-                if (context.ApplicationServices.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.OpenApi.RequireDescriptions)
+                if (context.ApplicationServices.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.OpenApi
+                    .RequireDescriptions)
                     PortiaOpenApiDescriptionCoverage.Validate(document);
                 return Task.CompletedTask;
             });

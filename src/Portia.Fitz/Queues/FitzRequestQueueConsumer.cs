@@ -106,7 +106,9 @@ public sealed class FitzRequestQueueConsumer(
     {
         readonly Lazy<DeserializedRequest> _envelope;
         readonly IQueueReservedItem _item;
+
         readonly CancellationTokenSource _lost;
+
         // Captured up front: CancellationTokenSource.Token throws once the source is disposed, but
         // a request is still read by its consumer after the reservation resources were released.
         readonly CancellationToken _lostToken;
@@ -228,7 +230,8 @@ public sealed class FitzRequestQueueConsumer(
         void BeginDisposition()
         {
             if (Interlocked.CompareExchange(ref _dispositionStarted, 1, 0) != 0)
-                throw new InvalidOperationException("This reservation already has an acknowledgment or retry outcome in progress.");
+                throw new InvalidOperationException(
+                    "This reservation already has an acknowledgment or retry outcome in progress.");
         }
 
         static IRequest Validate(IRequestBase requestBase, RequestTransportCatalog catalog)

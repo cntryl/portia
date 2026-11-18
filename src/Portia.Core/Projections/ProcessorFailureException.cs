@@ -7,14 +7,19 @@ public enum ProcessorFailureStage
 {
     /// <summary>Reading source events failed.</summary>
     Reading,
+
     /// <summary>Opening the projection transaction failed.</summary>
     Beginning,
+
     /// <summary>An event handler failed.</summary>
     Handling,
+
     /// <summary>Committing model data or checkpoint progress failed; the outcome may be uncertain.</summary>
     Committing,
+
     /// <summary>Releasing the projection transaction failed.</summary>
     Disposing,
+
     /// <summary>Loading authoritative checkpoint progress failed.</summary>
     Loading
 }
@@ -94,9 +99,11 @@ public sealed class ProcessorFailureException : Exception
     {
         if (failure is ProcessorFailureException diagnostic)
             diagnostic.CleanupException = diagnostic.CleanupException is { } previous
-                ? new AggregateException(previous, cleanup) : cleanup;
+                ? new AggregateException(previous, cleanup)
+                : cleanup;
         else
             failure.Data["Portia.CleanupException"] = failure.Data["Portia.CleanupException"] is Exception previous
-                ? new AggregateException(previous, cleanup) : cleanup;
+                ? new AggregateException(previous, cleanup)
+                : cleanup;
     }
 }

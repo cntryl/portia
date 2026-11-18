@@ -23,13 +23,15 @@ public sealed class OperationalConcurrencyIntegrationTests(FitzBrokerFixture bro
         // Assert
         Assert.True(await journal.CompareExchangeAsync(state, 0, Guid.Empty));
         var next = state with { Revision = 2, ConsecutiveFailures = 1 };
-        await using (var competing = await client.Kv.BeginAsync(FitzKvCheckpoints.WorkloadRoute(route, target.Identity)))
+        await using (var competing =
+                     await client.Kv.BeginAsync(FitzKvCheckpoints.WorkloadRoute(route, target.Identity)))
         {
             _ = await Assert.ThrowsAsync<ProjectionConcurrencyException>(() => journal
                 .CompareExchangeAsync(next, state.Revision, state.OwnerSession).AsTask());
             Assert.Equal(1, (await journal.ReadAsync(target))!.Revision);
             await competing.RollbackAsync();
         }
+
         Assert.True(await journal.CompareExchangeAsync(next, state.Revision, state.OwnerSession));
         Assert.False(await journal.CompareExchangeAsync(next, state.Revision, state.OwnerSession));
         Assert.Equal(2, (await journal.ReadAsync(target))!.Revision);

@@ -46,12 +46,15 @@ public sealed class MemberMetadataBindingTests
 }
 
 sealed record MemberMetadataBinding(
-    [property: JsonPropertyOrder(2), JsonConverter(typeof(MemberMetadataHexConverter))] int First,
+    [property: JsonPropertyOrder(2), JsonConverter(typeof(MemberMetadataHexConverter))]
+    int First,
     [property: JsonPropertyOrder(1)] int Second);
 
 readonly record struct MemberMetadataStruct(
-    [property: JsonPropertyName("wire_first"), JsonPropertyOrder(2)] int First,
-    [property: JsonPropertyName("wire_second"), JsonPropertyOrder(1)] int Second);
+    [property: JsonPropertyName("wire_first"), JsonPropertyOrder(2)]
+    int First,
+    [property: JsonPropertyName("wire_second"), JsonPropertyOrder(1)]
+    int Second);
 
 sealed class MemberMetadataHexConverter : JsonConverter<int>
 {

@@ -33,7 +33,7 @@ public sealed class OpenApiSchemaIdentityTests
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia().AddHttp(options =>
-            options.OpenApi.DescribeSchema<OpenApiDescribedNode>(description))
+                options.OpenApi.DescribeSchema<OpenApiDescribedNode>(description))
             .AddRequestHandler<OpenApiDescribedHandler>();
         var app = builder.Build();
         _ = app.MapPortiaOpenApi();
@@ -45,7 +45,8 @@ public sealed class OpenApiSchemaIdentityTests
     static async Task<OpenApiSchemaReference> ReadResultSchemaAsync(WebApplication app)
     {
         using var client = app.GetTestClient();
-        var parsed = OpenApiDocument.Parse(await client.GetStringAsync("/openapi/v1.json"), "json", new OpenApiReaderSettings());
+        var parsed = OpenApiDocument.Parse(await client.GetStringAsync("/openapi/v1.json"), "json",
+            new OpenApiReaderSettings());
         Assert.Empty(parsed.Diagnostic!.Errors);
         return Assert.IsType<OpenApiSchemaReference>(parsed.Document!.Paths["/identity"].Operations![HttpMethod.Post]
             .Responses!["200"].Content!["application/json"].Schema);

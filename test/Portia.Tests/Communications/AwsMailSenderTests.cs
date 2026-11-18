@@ -48,7 +48,8 @@ public sealed class AwsMailSenderTests
     [InlineData(typeof(AccountSuspendedException), "suspended", SendRejectionReason.SenderNotAuthorized)]
     [InlineData(typeof(SendingPausedException), "paused", SendRejectionReason.SenderNotAuthorized)]
     [InlineData(typeof(MailFromDomainNotVerifiedException), "domain", SendRejectionReason.SenderNotAuthorized)]
-    [InlineData(typeof(MessageRejectedException), "Email address is not verified.", SendRejectionReason.SenderNotAuthorized)]
+    [InlineData(typeof(MessageRejectedException), "Email address is not verified.",
+        SendRejectionReason.SenderNotAuthorized)]
     [InlineData(typeof(MessageRejectedException), "The message contains a virus.", SendRejectionReason.ContentRejected)]
     [InlineData(typeof(BadRequestException), "bad", SendRejectionReason.Other)]
     public async Task ShouldReportRejectionGivenDefinitiveSesRefusal(Type exceptionType, string providerMessage,
@@ -78,7 +79,8 @@ public sealed class AwsMailSenderTests
         proxy.Failure = ServiceFailure(exceptionType, "slow down", HttpStatusCode.TooManyRequests);
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
+        var exception =
+            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
 
         // Assert
         _ = Assert.IsType<SendThrottledException>(exception);
@@ -116,7 +118,8 @@ public sealed class AwsMailSenderTests
         proxy.Failure = ServiceFailure(exceptionType, $"Refused for {Recipient}", status);
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
+        var exception =
+            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(exception);
@@ -133,7 +136,8 @@ public sealed class AwsMailSenderTests
             new HttpRequestException(HttpRequestError.NameResolutionError, "No such host."));
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
+        var exception =
+            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
 
         // Assert
         _ = Assert.IsType<AmazonServiceException>(exception);

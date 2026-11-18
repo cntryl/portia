@@ -14,8 +14,11 @@ namespace Cntryl.Portia;
 public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
 {
     static readonly DiagnosticDescriptor Behavior = new("PORTIA209", "Common declares executable behavior",
-        "Common member '{0}' declares executable behavior; keep business behavior in Core", "PortiaStructure", DiagnosticSeverity.Warning, true);
-    static readonly DiagnosticDescriptor Discriminator = new("PORTIA210", "Contract requires an explicit feature discriminator",
+        "Common member '{0}' declares executable behavior; keep business behavior in Core", "PortiaStructure",
+        DiagnosticSeverity.Warning, true);
+
+    static readonly DiagnosticDescriptor Discriminator = new("PORTIA210",
+        "Contract requires an explicit feature discriminator",
         "Contract '{0}' needs [Discriminator(\"{1}.name\", version)] with two snake_case parts and an explicit positive schema version",
         "PortiaStructure", DiagnosticSeverity.Warning, true);
 
@@ -32,10 +35,13 @@ public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
         context.EnableConcurrentExecution();
         context.RegisterCompilationStartAction(start =>
         {
-            if (ApplicationProject.From(start.Options.AnalyzerConfigOptionsProvider) is not { Role: "Common", IsTest: false } project)
+            if (ApplicationProject.From(start.Options.AnalyzerConfigOptionsProvider) is not
+                { Role: "Common", IsTest: false } project)
                 return;
-            start.RegisterSyntaxNodeAction(node => AnalyzeBehavior(node, project), SyntaxKind.MethodDeclaration, SyntaxKind.ConstructorDeclaration,
-                SyntaxKind.DestructorDeclaration, SyntaxKind.OperatorDeclaration, SyntaxKind.ConversionOperatorDeclaration,
+            start.RegisterSyntaxNodeAction(node => AnalyzeBehavior(node, project), SyntaxKind.MethodDeclaration,
+                SyntaxKind.ConstructorDeclaration,
+                SyntaxKind.DestructorDeclaration, SyntaxKind.OperatorDeclaration,
+                SyntaxKind.ConversionOperatorDeclaration,
                 SyntaxKind.PropertyDeclaration, SyntaxKind.IndexerDeclaration, SyntaxKind.EventDeclaration,
                 SyntaxKind.FieldDeclaration, SyntaxKind.EventFieldDeclaration);
             start.RegisterSymbolAction(symbol => AnalyzeDiscriminator(symbol, project), SymbolKind.NamedType);
@@ -56,15 +62,18 @@ public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
             return;
 
         if (context.Node is MethodDeclarationSyntax privateValidation
-            && context.SemanticModel.GetDeclaredSymbol(privateValidation, context.CancellationToken) is { DeclaredAccessibility: Accessibility.Private }
+            && context.SemanticModel.GetDeclaredSymbol(privateValidation, context.CancellationToken) is
+            { DeclaredAccessibility: Accessibility.Private }
             && privateValidation.Parent is RecordDeclarationSyntax valueRecord
-            && context.SemanticModel.GetDeclaredSymbol(valueRecord, context.CancellationToken) is { IsSealed: true, IsRecord: true }
+            && context.SemanticModel.GetDeclaredSymbol(valueRecord, context.CancellationToken) is
+            { IsSealed: true, IsRecord: true }
             && path.Length == 4 && path[0] == "Features" && path[2] == "Values")
             return;
 
         if (context.Node is MethodDeclarationSyntax catalogAdapter
             && catalogAdapter.Identifier.ValueText == "AddTo"
-            && context.SemanticModel.GetDeclaredSymbol(catalogAdapter, context.CancellationToken) is { IsStatic: true } catalogMethod
+            && context.SemanticModel.GetDeclaredSymbol(catalogAdapter, context.CancellationToken) is
+            { IsStatic: true } catalogMethod
             && catalogMethod.ContainingType is { } containingType
             && path.Length == 4 && path[0] == "Features" && path[2] == "Events"
             && ApplicationProject.IsDomainEventCatalogAdapter(containingType))
@@ -73,17 +82,21 @@ public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
         if (context.Node is ConstructorDeclarationSyntax valueConstructor
             && !valueConstructor.Modifiers.Any(SyntaxKind.StaticKeyword)
             && valueConstructor.Parent is RecordDeclarationSyntax record
-            && context.SemanticModel.GetDeclaredSymbol(record, context.CancellationToken) is { IsSealed: true, IsRecord: true }
+            && context.SemanticModel.GetDeclaredSymbol(record, context.CancellationToken) is
+            { IsSealed: true, IsRecord: true }
             && path.Length == 4 && path[0] == "Features" && path[2] == "Values")
             return;
         var executable = context.Node switch
         {
             BaseMethodDeclarationSyntax method => method.Body is not null || method.ExpressionBody is not null,
-            PropertyDeclarationSyntax property => property.ExpressionBody is not null || HasAccessorBody(property.AccessorList)
-                || CallsCode(property.Initializer),
-            IndexerDeclarationSyntax indexer => indexer.ExpressionBody is not null || HasAccessorBody(indexer.AccessorList),
+            PropertyDeclarationSyntax property => property.ExpressionBody is not null ||
+                                                  HasAccessorBody(property.AccessorList)
+                                                  || CallsCode(property.Initializer),
+            IndexerDeclarationSyntax indexer => indexer.ExpressionBody is not null ||
+                                                HasAccessorBody(indexer.AccessorList),
             EventDeclarationSyntax @event => HasAccessorBody(@event.AccessorList),
-            BaseFieldDeclarationSyntax field => field.Declaration.Variables.Any(variable => CallsCode(variable.Initializer)),
+            BaseFieldDeclarationSyntax field => field.Declaration.Variables.Any(variable =>
+                CallsCode(variable.Initializer)),
             _ => false
         };
         if (!executable)
@@ -104,7 +117,8 @@ public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
         context.ReportDiagnostic(Diagnostic.Create(Behavior, name.GetLocation(), name.ValueText));
 
         static bool HasAccessorBody(AccessorListSyntax? accessors) =>
-            accessors?.Accessors.Any(accessor => accessor.Body is not null || accessor.ExpressionBody is not null) == true;
+            accessors?.Accessors.Any(accessor => accessor.Body is not null || accessor.ExpressionBody is not null) ==
+            true;
 
         static bool CallsCode(EqualsValueClauseSyntax? initializer) => initializer?.DescendantNodes().Any(node =>
             node is InvocationExpressionSyntax or AnonymousFunctionExpressionSyntax or AwaitExpressionSyntax) == true;
@@ -124,20 +138,24 @@ public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
             return;
         var feature = SnakeCase(path[1]);
         var attribute = symbol.GetAttributes().FirstOrDefault(item => item.AttributeClass is { } type
-            && SymbolNames.Is(type, "Cntryl.Portia.DiscriminatorAttribute"));
+                                                                      && SymbolNames.Is(type,
+                                                                          "Cntryl.Portia.DiscriminatorAttribute"));
         var syntax = attribute?.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken) as AttributeSyntax;
         var arguments = syntax?.ArgumentList?.Arguments;
-        var explicitVersion = arguments is { } list && (list.Any(argument => argument.NameColon?.Name.Identifier.ValueText == "version")
-            || list.Count > 1 && list[1].NameColon is null && list[1].NameEquals is null);
+        var explicitVersion = arguments is { } list &&
+                              (list.Any(argument => argument.NameColon?.Name.Identifier.ValueText == "version")
+                               || list.Count > 1 && list[1].NameColon is null && list[1].NameEquals is null);
         var constructorArguments = attribute?.ConstructorArguments ?? [];
         var name = constructorArguments.Length > 0 ? constructorArguments[0].Value as string : null;
         var version = constructorArguments.Length > 1 && constructorArguments[1].Value is int value ? value : 0;
         var identityValid = version > 0 && name is not null
-            && name.StartsWith(feature + ".", StringComparison.Ordinal) && WireName.IsMatch(name);
+                                        && name.StartsWith(feature + ".", StringComparison.Ordinal) &&
+                                        WireName.IsMatch(name);
         if (!identityValid || !explicitVersion)
         {
             var properties = identityValid && !explicitVersion
-                ? ImmutableDictionary<string, string?>.Empty.Add("ImplicitVersion", version.ToString(CultureInfo.InvariantCulture))
+                ? ImmutableDictionary<string, string?>.Empty.Add("ImplicitVersion",
+                    version.ToString(CultureInfo.InvariantCulture))
                 : ImmutableDictionary<string, string?>.Empty;
             context.ReportDiagnostic(Diagnostic.Create(Discriminator, syntax?.GetLocation() ?? symbol.Locations[0],
                 properties, symbol.Name, feature));
@@ -152,7 +170,7 @@ public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
             var current = feature[index];
             if (char.IsUpper(current) && index > 0 && feature[index - 1] != '_'
                 && (char.IsLower(feature[index - 1]) || char.IsDigit(feature[index - 1])
-                    || index + 1 < feature.Length && char.IsLower(feature[index + 1])))
+                                                     || index + 1 < feature.Length && char.IsLower(feature[index + 1])))
             {
                 _ = result.Append('_');
             }

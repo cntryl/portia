@@ -32,7 +32,8 @@ sealed class OpenApiRootSelectionRequestConverter : JsonConverter<OpenApiRootSel
         JsonSerializerOptions options) => new(JsonSerializer.Deserialize(ref reader,
         options.GetTypeInfo<OpenApiSelection[]>())!);
 
-    public override void Write(Utf8JsonWriter writer, OpenApiRootSelectionRequest value, JsonSerializerOptions options) =>
+    public override void Write(Utf8JsonWriter writer, OpenApiRootSelectionRequest value,
+        JsonSerializerOptions options) =>
         JsonSerializer.Serialize(writer, value.Values,
             options.GetTypeInfo<OpenApiSelection[]>());
 }
@@ -58,7 +59,8 @@ sealed record OpenApiConvertedRequest(OpenApiSelectionEnvelope Payload) : IReque
 sealed class OpenApiConvertedHandler : IRequestHandler<OpenApiConvertedRequest, OpenApiSelectionList>
 {
     public ValueTask<Result<OpenApiSelectionList>> HandleAsync(IRequestContext<OpenApiConvertedRequest> context,
-        CancellationToken ct) => ValueTask.FromResult(Result<OpenApiSelectionList>.Success(context.Request.Payload.Items));
+        CancellationToken ct) =>
+        ValueTask.FromResult(Result<OpenApiSelectionList>.Success(context.Request.Payload.Items));
 }
 
 sealed record OpenApiMissingRepresentation(string Value);

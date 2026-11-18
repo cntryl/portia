@@ -26,17 +26,21 @@ sealed class RunnerExportCapture : IDisposable
     }
 
     public ILogger<T> Logger<T>() => _provider.GetRequiredService<ILogger<T>>();
+
     public void Flush()
     {
         Assert.True(_provider.GetRequiredService<TracerProvider>().ForceFlush());
         Assert.True(_provider.GetRequiredService<LoggerProvider>().ForceFlush());
     }
+
     public void Dispose() => _provider.Dispose();
 
-    public void AssertCorrelated(int expectedEventId, LogLevel expectedLevel, int expectedDeliveries, int? expectedExecutions = null)
+    public void AssertCorrelated(int expectedEventId, LogLevel expectedLevel, int expectedDeliveries,
+        int? expectedExecutions = null)
     {
         Flush();
-        var processes = Activities.Where(activity => activity.OperationName == PortiaTelemetry.ProcessActivityName).ToArray();
+        var processes = Activities.Where(activity => activity.OperationName == PortiaTelemetry.ProcessActivityName)
+            .ToArray();
         Assert.Equal(expectedDeliveries, processes.Length);
         Assert.All(processes, process => Assert.Equal(default, process.ParentSpanId));
         Assert.Equal(expectedDeliveries, processes.Select(activity => activity.TraceId).Distinct().Count());
@@ -55,16 +59,23 @@ sealed class RunnerExportCapture : IDisposable
                 Assert.Single(process.Events, item => item.Name == "exception");
                 Assert.Equal("fault", process.GetTagItem("portia.outcome"));
                 Assert.Equal(ActivityStatusCode.Error, process.Status);
-                Assert.Contains(log.Attributes!, attribute => attribute.Key == "RunnerName" && attribute.Value is nameof(QueueRunner) or nameof(RequestNotificationRunner));
-                Assert.Contains(log.Attributes!, attribute => attribute.Key == "Stage" && attribute.Value is "execution" or "cleanup");
-                Assert.Contains(log.Attributes!, attribute => attribute.Key == "ErrorType" && attribute.Value is string);
+                Assert.Contains(log.Attributes!,
+                    attribute => attribute.Key == "RunnerName" &&
+                                 attribute.Value is nameof(QueueRunner) or nameof(RequestNotificationRunner));
+                Assert.Contains(log.Attributes!,
+                    attribute => attribute.Key == "Stage" && attribute.Value is "execution" or "cleanup");
+                Assert.Contains(log.Attributes!,
+                    attribute => attribute.Key == "ErrorType" && attribute.Value is string);
             }
             else
             {
-                Assert.Contains(log.Attributes!, attribute => attribute.Key == "RequestName" && attribute.Value is string);
-                Assert.Contains(log.Attributes!, attribute => attribute.Key == "Transport" && attribute.Value is "queue" or "notice" or "schedule");
+                Assert.Contains(log.Attributes!,
+                    attribute => attribute.Key == "RequestName" && attribute.Value is string);
+                Assert.Contains(log.Attributes!,
+                    attribute => attribute.Key == "Transport" && attribute.Value is "queue" or "notice" or "schedule");
             }
         }
+
         Assert.Equal(expectedDeliveries + (expectedExecutions ?? expectedDeliveries), Activities.Count);
     }
 }
@@ -73,17 +84,53 @@ sealed class LockedExportCollection<T> : ICollection<T>
 {
     readonly List<T> _items = [];
     readonly object _gate = new();
-    public int Count { get { lock (_gate) return _items.Count; } }
+
+    public int Count
+    {
+        get
+        {
+            lock (_gate)
+                return _items.Count;
+        }
+    }
+
     public bool IsReadOnly => false;
-    public void Add(T item) { lock (_gate) _items.Add(item); }
-    public void Clear() { lock (_gate) _items.Clear(); }
-    public bool Contains(T item) { lock (_gate) return _items.Contains(item); }
-    public void CopyTo(T[] array, int arrayIndex) { lock (_gate) _items.CopyTo(array, arrayIndex); }
-    public bool Remove(T item) { lock (_gate) return _items.Remove(item); }
+
+    public void Add(T item)
+    {
+        lock (_gate)
+            _items.Add(item);
+    }
+
+    public void Clear()
+    {
+        lock (_gate)
+            _items.Clear();
+    }
+
+    public bool Contains(T item)
+    {
+        lock (_gate)
+            return _items.Contains(item);
+    }
+
+    public void CopyTo(T[] array, int arrayIndex)
+    {
+        lock (_gate)
+            _items.CopyTo(array, arrayIndex);
+    }
+
+    public bool Remove(T item)
+    {
+        lock (_gate)
+            return _items.Remove(item);
+    }
+
     public IEnumerator<T> GetEnumerator()
     {
         lock (_gate)
             return ((IEnumerable<T>)_items.ToArray()).GetEnumerator();
     }
+
     System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
 }

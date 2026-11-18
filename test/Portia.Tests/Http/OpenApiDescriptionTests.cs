@@ -25,7 +25,8 @@ public sealed class OpenApiDescriptionTests
             options.OpenApi.DescribeMember("next", "Next node.");
             options.OpenApi.DescribeSchema<OpenApiDescribedRequest>("Request.", d => d
                 .Property(x => x.Limit, "Type limit.").Property(x => x.Payload, "Type payload."));
-            options.OpenApi.DescribeSchema<OpenApiOtherDescribedRequest>("Other request.", d => d.Property(x => x.Limit, "Type limit."));
+            options.OpenApi.DescribeSchema<OpenApiOtherDescribedRequest>("Other request.",
+                d => d.Property(x => x.Limit, "Type limit."));
             options.OpenApi.DescribeSchema<OpenApiDescribedNode>("A node.", d => d.Property(x => x.Name, "Type name."));
         }).AddRequestHandler<OpenApiDescribedHandler>().AddRequestHandler<OpenApiOtherDescribedHandler>();
         await using var app = builder.Build();
@@ -34,7 +35,8 @@ public sealed class OpenApiDescriptionTests
             .FromQuery(x => x.Limit).Describe(x => x.Limit, "Endpoint limit.")
             .Describe(x => x.Payload, "Endpoint payload.").DescribeResponse("A node response.")
             .DescribeResponse(409, "This endpoint's conflict."));
-        _ = app.MapPortiaPost<OpenApiOtherDescribedRequest, OpenApiDescribedNode>("/second", c => c.FromQuery(x => x.Limit));
+        _ = app.MapPortiaPost<OpenApiOtherDescribedRequest, OpenApiDescribedNode>("/second",
+            c => c.FromQuery(x => x.Limit));
         await app.StartAsync();
 
         // Act
@@ -68,7 +70,8 @@ public sealed class OpenApiDescriptionTests
             .AddRequestHandler<OpenApiDescribedHandler>();
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
-        _ = app.MapPortiaPost<OpenApiDescribedRequest, OpenApiDescribedNode>("/missing", c => c.FromQuery(x => x.Limit));
+        _ = app.MapPortiaPost<OpenApiDescribedRequest, OpenApiDescribedNode>("/missing",
+            c => c.FromQuery(x => x.Limit));
         await app.StartAsync();
 
         // Act
@@ -98,7 +101,8 @@ public sealed class OpenApiDescriptionTests
         }).AddRequestHandler<OpenApiDescribedHandler>();
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
-        _ = app.MapPortiaPost<OpenApiDescribedRequest, OpenApiDescribedNode>("/complete", c => c.FromQuery(x => x.Limit))
+        _ = app.MapPortiaPost<OpenApiDescribedRequest, OpenApiDescribedNode>("/complete",
+                c => c.FromQuery(x => x.Limit))
             .WithSummary("Echo a node.");
         await app.StartAsync();
 
@@ -226,10 +230,12 @@ public sealed class OpenApiDescriptionTests
         var builder = CreateBuilder();
         _ = builder.Services.AddPortia().AddHttp(options =>
         {
-            options.OpenApiSchemaType = type => type == typeof(OpenApiTraversalCollection) ? typeof(OpenApiTraversalItem[]) : null;
+            options.OpenApiSchemaType = type =>
+                type == typeof(OpenApiTraversalCollection) ? typeof(OpenApiTraversalItem[]) : null;
             options.OpenApi.DescribeMember("kind", "Variant discriminator.");
             options.OpenApi.DescribeSchema<OpenApiTraversalCollection>("Collection.");
-            options.OpenApi.DescribeSchema<OpenApiTraversalItem>("Item.", d => d.Property(x => x.ItemId, "Identifier."));
+            options.OpenApi.DescribeSchema<OpenApiTraversalItem>("Item.",
+                d => d.Property(x => x.ItemId, "Identifier."));
             options.OpenApi.DescribeSchema<OpenApiTraversalCollectionVariant>("Collection variant.");
             options.OpenApi.DescribeSchema<OpenApiTraversalTextVariant>("Text variant.");
         }).AddRequestHandler<OpenApiPolymorphicTraversalHandler>();
@@ -251,7 +257,8 @@ public sealed class OpenApiDescriptionTests
         Assert.Equal("Collection.", values.Description);
         Assert.Equal("Item.", values.Items!.Description);
         Assert.Equal("Identifier.", values.Items.Properties!["item_id"].Description);
-        Assert.Equal("Text variant.", Assert.Single(branches, branch => branch.Properties!.ContainsKey("description")).Description);
+        Assert.Equal("Text variant.",
+            Assert.Single(branches, branch => branch.Properties!.ContainsKey("description")).Description);
     }
 
     /// <summary>Route and query parameters use their binding names while selectors retain CLR identity.</summary>
@@ -264,7 +271,8 @@ public sealed class OpenApiDescriptionTests
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaGet<HttpGetWidget, string>("/described/{widget_id}", c => c
-            .Describe(x => x.WidgetId, "Widget identifier.").Describe(x => x.IncludeArchived, "Include archived widgets."));
+            .Describe(x => x.WidgetId, "Widget identifier.")
+            .Describe(x => x.IncludeArchived, "Include archived widgets."));
         await app.StartAsync();
 
         // Act
@@ -273,7 +281,8 @@ public sealed class OpenApiDescriptionTests
         // Assert
         var parameters = document.Paths["/described/{widget_id}"].Operations![HttpMethod.Get].Parameters!;
         Assert.Equal("Widget identifier.", Assert.Single(parameters, p => p.Name == "widget_id").Description);
-        Assert.Equal("Include archived widgets.", Assert.Single(parameters, p => p.Name == "include_archived").Description);
+        Assert.Equal("Include archived widgets.",
+            Assert.Single(parameters, p => p.Name == "include_archived").Description);
     }
 
     /// <summary>Standard model attributes describe parameters, schemas and recursive properties without registrations.</summary>
@@ -284,10 +293,12 @@ public sealed class OpenApiDescriptionTests
     {
         // Arrange
         var builder = CreateBuilder();
-        _ = builder.Services.AddPortia().AddHttp(options => options.OpenApi.RequireDescriptions = true).AddRequestHandler<OpenApiAnnotatedHandler>();
+        _ = builder.Services.AddPortia().AddHttp(options => options.OpenApi.RequireDescriptions = true)
+            .AddRequestHandler<OpenApiAnnotatedHandler>();
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
-        _ = app.MapPortiaPost<OpenApiAnnotatedRequest, OpenApiAnnotatedNode>("/attributes", c => c.FromQuery(x => x.Limit));
+        _ = app.MapPortiaPost<OpenApiAnnotatedRequest, OpenApiAnnotatedNode>("/attributes",
+            c => c.FromQuery(x => x.Limit));
         await app.StartAsync();
 
         // Act
@@ -317,7 +328,8 @@ public sealed class OpenApiDescriptionTests
         {
             options.OpenApi.DescribeMember("limit", "Shared limit.");
             if (scope is "type" or "endpoint")
-                options.OpenApi.DescribeSchema<OpenApiAnnotatedRequest>("Application request.", d => d.Property(x => x.Limit, "Application limit."));
+                options.OpenApi.DescribeSchema<OpenApiAnnotatedRequest>("Application request.",
+                    d => d.Property(x => x.Limit, "Application limit."));
         }).AddRequestHandler<OpenApiAnnotatedHandler>();
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
@@ -358,7 +370,7 @@ public sealed class OpenApiDescriptionTests
         // Assert
         var schemas = document.Components!.Schemas!;
         var retained = Assert.Single(schemas, schema => !schema.Key.StartsWith("Portia_", StringComparison.Ordinal) &&
-            schema.Value.Properties?.ContainsKey("limit") == true).Value;
+                                                        schema.Value.Properties?.ContainsKey("limit") == true).Value;
         Assert.Equal("Attributed limit.", retained.Properties!["limit"].Description);
     }
 
@@ -378,7 +390,9 @@ public sealed class OpenApiDescriptionTests
         var document = await ReadAsync(app, "json");
 
         // Assert
-        var schema = document.Paths["/titles"].Operations![HttpMethod.Get].Responses!["200"].Content!["application/json"].Schema!;
+        var schema =
+            document.Paths["/titles"].Operations![HttpMethod.Get].Responses!["200"].Content!["application/json"]
+                .Schema!;
         Assert.Equal("A titled view", schema.Title);
         Assert.Equal("Display label", schema.Properties!["label"].Title);
         Assert.True(schema.Properties["legacy_label"].Deprecated);

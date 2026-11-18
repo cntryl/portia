@@ -45,7 +45,8 @@ public static class RequestBusExtensions
         ArgumentNullException.ThrowIfNull(bus);
         if (RequestMetadata.IdentityError(request) is { } error)
             return ValueTask.FromResult(Result.Failure(error));
-        return bus.DispatchAsync(request, bus.CreateContext(actor, request is IIdentifiedRequest ? RequestMetadata.FromRequest(request) : null), ct);
+        return bus.DispatchAsync(request,
+            bus.CreateContext(actor, request is IIdentifiedRequest ? RequestMetadata.FromRequest(request) : null), ct);
     }
 
     /// <summary>Dispatches a request that produces a result to its handler.</summary>
@@ -61,7 +62,8 @@ public static class RequestBusExtensions
         ArgumentNullException.ThrowIfNull(bus);
         if (RequestMetadata.IdentityError(request) is { } error)
             return ValueTask.FromResult(Result<TOut>.Failure(error));
-        return bus.DispatchAsync(request, bus.CreateContext(actor, request is IIdentifiedRequest ? RequestMetadata.FromRequest(request) : null), ct);
+        return bus.DispatchAsync(request,
+            bus.CreateContext(actor, request is IIdentifiedRequest ? RequestMetadata.FromRequest(request) : null), ct);
     }
 
     /// <summary>Dispatches a request that produces a sequence of results to its handler.</summary>
@@ -75,7 +77,8 @@ public static class RequestBusExtensions
         ClaimsPrincipal actor, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(bus);
-        return bus.DispatchStreamAsync(request, bus.CreateContext(actor, request is IIdentifiedRequest ? RequestMetadata.FromRequest(request) : null), ct);
+        return bus.DispatchStreamAsync(request,
+            bus.CreateContext(actor, request is IIdentifiedRequest ? RequestMetadata.FromRequest(request) : null), ct);
     }
 
     /// <summary>Dispatches a new child request, inheriting actor and correlation from an explicit parent.</summary>
@@ -91,7 +94,8 @@ public static class RequestBusExtensions
         ArgumentNullException.ThrowIfNull(parent);
         if (RequestMetadata.IdentityError(request) is { } error)
             return ValueTask.FromResult(Result.Failure(error));
-        return bus.DispatchAsync(request, bus.CreateContext(parent.Actor, RequestMetadata.FromRequest(request, parent)), ct);
+        return bus.DispatchAsync(request, bus.CreateContext(parent.Actor, RequestMetadata.FromRequest(request, parent)),
+            ct);
     }
 
     /// <summary>Dispatches a new result-bearing child request with explicit causal inheritance.</summary>
@@ -108,7 +112,8 @@ public static class RequestBusExtensions
         ArgumentNullException.ThrowIfNull(parent);
         if (RequestMetadata.IdentityError(request) is { } error)
             return ValueTask.FromResult(Result<TOut>.Failure(error));
-        return bus.DispatchAsync(request, bus.CreateContext(parent.Actor, RequestMetadata.FromRequest(request, parent)), ct);
+        return bus.DispatchAsync(request, bus.CreateContext(parent.Actor, RequestMetadata.FromRequest(request, parent)),
+            ct);
     }
 
     /// <summary>Streams a new child request with explicit causal inheritance.</summary>
@@ -123,7 +128,8 @@ public static class RequestBusExtensions
     {
         ArgumentNullException.ThrowIfNull(bus);
         ArgumentNullException.ThrowIfNull(parent);
-        return bus.DispatchStreamAsync(request, bus.CreateContext(parent.Actor, RequestMetadata.FromRequest(request, parent)),
+        return bus.DispatchStreamAsync(request,
+            bus.CreateContext(parent.Actor, RequestMetadata.FromRequest(request, parent)),
             ct);
     }
 }

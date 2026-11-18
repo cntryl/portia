@@ -68,7 +68,9 @@ public sealed class McpRegistrationTests
     }
 
     [Discriminator("identities.record", 1)]
-    public sealed record IdentifiedInvocation([property: JsonPropertyName("command_id")] Uuid CommandId)
+    public sealed record IdentifiedInvocation(
+        [property: JsonPropertyName("command_id")]
+        Uuid CommandId)
         : IRequest<string>, ICallable, IIdentifiedRequest
     {
         Uuid IIdentifiedRequest.RequestId => CommandId;
@@ -80,15 +82,18 @@ public sealed class McpRegistrationTests
         public List<Uuid> Executions { get; } = [];
     }
 
-    public sealed class IdentifiedInvocationHandler(IdentifiedProbe probe) : IRequestHandler<IdentifiedInvocation, string>
+    public sealed class IdentifiedInvocationHandler(IdentifiedProbe probe)
+        : IRequestHandler<IdentifiedInvocation, string>
     {
-        public ValueTask<Result<string>> HandleAsync(IRequestContext<IdentifiedInvocation> context, CancellationToken ct)
+        public ValueTask<Result<string>> HandleAsync(IRequestContext<IdentifiedInvocation> context,
+            CancellationToken ct)
         {
             probe.RequestIds.Add(context.RequestId);
             probe.Executions.Add(context.ExecutionId);
             return ValueTask.FromResult(Result<string>.Success(context.RequestId.ToString()));
         }
     }
+
     static readonly int[] NestedInputValues = [2, 3, 5];
     static readonly int[] MalformedInputValues = [1];
 
@@ -839,7 +844,8 @@ public sealed class McpRegistrationTests
         Assert.Equal("Binding", failure.GetProperty("kind").GetString());
         Assert.Equal("The tool input is not valid.", failure.GetProperty("message").GetString());
         Assert.False(failure.GetProperty("isTransient").GetBoolean());
-        Assert.Equal("The tool input is not valid.", Assert.IsType<TextContentBlock>(Assert.Single(result.Content)).Text);
+        Assert.Equal("The tool input is not valid.",
+            Assert.IsType<TextContentBlock>(Assert.Single(result.Content)).Text);
     }
 
     static JsonElement PortiaFailure(CallToolResult result) =>
@@ -1373,12 +1379,15 @@ public sealed class McpRegistrationTests
     /// <summary>Reads a greeting by its documented name.</summary>
     /// <param name="Name">The person whose greeting should be read.</param>
     [Discriminator("greetings.documented")]
-    public sealed record DocumentedGreeting([property: JsonPropertyName("greeting_name")] string Name)
+    public sealed record DocumentedGreeting(
+        [property: JsonPropertyName("greeting_name")]
+        string Name)
         : IRequest<string>, ICallable;
 
     public sealed class DocumentedGreetingHandler : IRequestHandler<DocumentedGreeting, string>
     {
-        public ValueTask<Result<string>> HandleAsync(IRequestContext<DocumentedGreeting> context, CancellationToken ct) =>
+        public ValueTask<Result<string>>
+            HandleAsync(IRequestContext<DocumentedGreeting> context, CancellationToken ct) =>
             ValueTask.FromResult(Result<string>.Success(context.Request.Name));
     }
 
@@ -1417,8 +1426,12 @@ public sealed class McpRegistrationTests
 
     /// <summary>Inspects structured MCP input.</summary>
     [Discriminator("inputs.inspect")]
-    public sealed record InspectNestedInput(NestedInput Payload, IReadOnlyList<NestedInput> Rows, int[] Values,
-        string Label, string? Note)
+    public sealed record InspectNestedInput(
+        NestedInput Payload,
+        IReadOnlyList<NestedInput> Rows,
+        int[] Values,
+        string Label,
+        string? Note)
         : IRequest<string>, ICallable;
 
     public sealed record NestedInput(string SourceRecordId, string Name);

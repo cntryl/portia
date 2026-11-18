@@ -30,10 +30,10 @@ public sealed class ScenarioObservationAnalyzer : DiagnosticAnalyzer
                                                GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.EnableConcurrentExecution();
         context.RegisterSyntaxNodeAction(static syntaxContext =>
-        {
-            if (Analyze(syntaxContext) is { } finding)
-                syntaxContext.ReportDiagnostic(Diagnostic.Create(Unobserved, finding.Location, finding.TypeName));
-        }, SyntaxKind.ExpressionStatement, SyntaxKind.ArrowExpressionClause,
+            {
+                if (Analyze(syntaxContext) is { } finding)
+                    syntaxContext.ReportDiagnostic(Diagnostic.Create(Unobserved, finding.Location, finding.TypeName));
+            }, SyntaxKind.ExpressionStatement, SyntaxKind.ArrowExpressionClause,
             SyntaxKind.SimpleLambdaExpression, SyntaxKind.ParenthesizedLambdaExpression);
     }
 
@@ -55,22 +55,28 @@ public sealed class ScenarioObservationAnalyzer : DiagnosticAnalyzer
         {
             ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
                 when assignment.IsKind(SyntaxKind.SimpleAssignmentExpression)
-                     && context.SemanticModel.GetOperation(assignment.Left, context.CancellationToken) is IDiscardOperation
+                     && context.SemanticModel.GetOperation(assignment.Left, context.CancellationToken) is
+                         IDiscardOperation
                 => assignment.Right,
             ExpressionStatementSyntax statement => statement.Expression,
             ArrowExpressionClauseSyntax arrow
                 when ReturnsVoid(arrow, context.SemanticModel, context.CancellationToken) => arrow.Expression,
             LambdaExpressionSyntax { Body: ExpressionSyntax body } lambda
-                when context.SemanticModel.GetOperation(lambda, context.CancellationToken) is IAnonymousFunctionOperation
-                { Symbol.ReturnsVoid: true } => body,
+                when context.SemanticModel.GetOperation(lambda, context.CancellationToken) is
+                    IAnonymousFunctionOperation
+                {
+                    Symbol.ReturnsVoid: true
+                } => body,
             _ => null
         };
         while (discarded is ParenthesizedExpressionSyntax parenthesized)
             discarded = parenthesized.Expression;
         var expression = discarded is InvocationExpressionSyntax invocation && MayBeScenario(invocation)
-            ? invocation : null;
+            ? invocation
+            : null;
         if (expression is null
-            || context.SemanticModel.GetTypeInfo(expression, context.CancellationToken).Type is not INamedTypeSymbol type
+            || context.SemanticModel.GetTypeInfo(expression, context.CancellationToken).Type is not INamedTypeSymbol
+                type
             || !SymbolNames.IsInNamespace(type, "Cntryl.Portia.Testing")
             || !type.GetMembers("GetAwaiter").OfType<IMethodSymbol>()
                 .Any(method => method is { IsStatic: false, Parameters.Length: 0 }))

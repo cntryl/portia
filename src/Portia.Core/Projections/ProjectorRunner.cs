@@ -108,7 +108,6 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
             source.Failure = failure;
             throw failure;
         }
-
     }
 
     static async ValueTask<ProjectionCheckpoint> CommitAsync(
@@ -138,7 +137,8 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
             stage = ProcessorFailureStage.Handling;
             ct.ThrowIfCancellationRequested();
             using var observation = session?.Observe();
-            var result = await projector.ProjectAsync(records, new ProjectorContext(identity), ct).ConfigureAwait(false);
+            var result = await projector.ProjectAsync(records, new ProjectorContext(identity), ct)
+                .ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
             if (!result.IsSuccess)
                 throw new ProcessorFailureException(identity, checkpoint, stage, first, last, error: result.Error);
@@ -159,12 +159,13 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         {
             outcome = "fault";
             var diagnostic = ex as ProcessorFailureException
-                ?? new ProcessorFailureException(identity, checkpoint, stage, first, last,
-                    UninitializedResult.Is(ex)
-                        ? UninitializedResult.ReturnedBy("projector", projector.GetType(), ex)
-                        : ex);
+                             ?? new ProcessorFailureException(identity, checkpoint, stage, first, last,
+                                 UninitializedResult.Is(ex)
+                                     ? UninitializedResult.ReturnedBy("projector", projector.GetType(), ex)
+                                     : ex);
             failure = diagnostic;
         }
+
         try
         {
             if (batch is not null)
@@ -192,6 +193,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
                 await operations.RecordFailureAsync(failure, committed ? confirmed : null, ct).ConfigureAwait(false);
             ExceptionDispatchInfo.Capture(failure).Throw();
         }
+
         if (session is { } confirmation)
         {
             // The repository has already committed, so a confirmation failure belongs to the commit

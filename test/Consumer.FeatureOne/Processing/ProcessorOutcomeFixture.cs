@@ -44,18 +44,24 @@ public static partial class ProcessorOutcomeFixture
             return Error is null ? Result.Success : Result.Failure(Error);
         }
 
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default)
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
+            CancellationToken ct = default)
         {
             Loads++;
             return ValueTask.FromResult(Checkpoint);
         }
-        public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default) => LoadCheckpointAsync(identity, ct);
+
+        public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default) =>
+            LoadCheckpointAsync(identity, ct);
+
         public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
         {
             _pending = 0;
             return ValueTask.FromResult<IProjectionBatch>(new Batch(this));
         }
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+
+        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default)
         {
             if (Projection)
                 Value += _pending;
@@ -63,10 +69,12 @@ public static partial class ProcessorOutcomeFixture
             Checkpoint = checkpoint;
             return ValueTask.CompletedTask;
         }
+
         sealed class Batch(State state) : IProjectionBatch
         {
             public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default) =>
                 state.SaveAsync(null!, checkpoint, ct);
+
             public ValueTask DisposeAsync()
             {
                 state.Disposals++;
@@ -78,15 +86,23 @@ public static partial class ProcessorOutcomeFixture
         }
     }
 
-    public sealed partial class SingleProjection(State state) : Projector(state, EventStreamPattern.ForPattern("outcome-source"), "outcomes"), IProjectorHandler<Changed>
+    public sealed partial class SingleProjection(State state)
+        : Projector(state, EventStreamPattern.ForPattern("outcome-source"), "outcomes"), IProjectorHandler<Changed>
     {
-        public ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, CancellationToken ct) => ValueTask.FromResult(state.Apply(context));
+        public ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, CancellationToken ct) =>
+            ValueTask.FromResult(state.Apply(context));
     }
-    public sealed partial class GroupedProjection(State state) : BatchProjector(state, EventStreamPattern.ForPattern("outcome-source"), "outcomes"), IProjectorHandler<Changed>
+
+    public sealed partial class GroupedProjection(State state)
+        : BatchProjector(state, EventStreamPattern.ForPattern("outcome-source"), "outcomes"), IProjectorHandler<Changed>
     {
-        public ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, CancellationToken ct) => ValueTask.FromResult(state.Apply(context));
+        public ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, CancellationToken ct) =>
+            ValueTask.FromResult(state.Apply(context));
     }
-    public sealed partial class BulkProjection(State state) : BatchProjector(state, EventStreamPattern.ForPattern("outcome-source"), "outcomes"), IBatchProjectorHandler<Changed>
+
+    public sealed partial class BulkProjection(State state)
+        : BatchProjector(state, EventStreamPattern.ForPattern("outcome-source"), "outcomes"),
+            IBatchProjectorHandler<Changed>
     {
         public ValueTask<Result> HandleAsync(IReadOnlyList<IProjectorContext<Changed>> contexts, CancellationToken ct)
         {
@@ -96,18 +112,28 @@ public static partial class ProcessorOutcomeFixture
                 if (!result.IsSuccess)
                     return ValueTask.FromResult(result);
             }
+
             return ValueTask.FromResult(Result.Success);
         }
     }
-    public sealed partial class SingleReaction(State state) : Reactor(state, EventStreamPattern.ForPattern("outcome-source"), "outcomes"), IReactorHandler<Changed>
+
+    public sealed partial class SingleReaction(State state)
+        : Reactor(state, EventStreamPattern.ForPattern("outcome-source"), "outcomes"), IReactorHandler<Changed>
     {
-        public ValueTask<Result> HandleAsync(IReactorContext<Changed> context, CancellationToken ct) => ValueTask.FromResult(state.Apply(context.Trigger.Value));
+        public ValueTask<Result> HandleAsync(IReactorContext<Changed> context, CancellationToken ct) =>
+            ValueTask.FromResult(state.Apply(context.Trigger.Value));
     }
-    public sealed partial class GroupedReaction(State state) : BatchReactor(state, EventStreamPattern.ForPattern("outcome-source"), "outcomes"), IReactorHandler<Changed>
+
+    public sealed partial class GroupedReaction(State state)
+        : BatchReactor(state, EventStreamPattern.ForPattern("outcome-source"), "outcomes"), IReactorHandler<Changed>
     {
-        public ValueTask<Result> HandleAsync(IReactorContext<Changed> context, CancellationToken ct) => ValueTask.FromResult(state.Apply(context.Trigger.Value));
+        public ValueTask<Result> HandleAsync(IReactorContext<Changed> context, CancellationToken ct) =>
+            ValueTask.FromResult(state.Apply(context.Trigger.Value));
     }
-    public sealed partial class BulkReaction(State state) : BatchReactor(state, EventStreamPattern.ForPattern("outcome-source"), "outcomes"), IBatchReactorHandler<Changed>
+
+    public sealed partial class BulkReaction(State state)
+        : BatchReactor(state, EventStreamPattern.ForPattern("outcome-source"), "outcomes"),
+            IBatchReactorHandler<Changed>
     {
         public ValueTask<Result> HandleAsync(IReadOnlyList<IReactorContext<Changed>> contexts, CancellationToken ct)
         {
@@ -117,10 +143,10 @@ public static partial class ProcessorOutcomeFixture
                 if (!result.IsSuccess)
                     return ValueTask.FromResult(result);
             }
+
             return ValueTask.FromResult(Result.Success);
         }
     }
-
 }
 
 [PortiaJsonContext]

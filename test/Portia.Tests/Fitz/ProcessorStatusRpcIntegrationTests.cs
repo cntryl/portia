@@ -69,6 +69,7 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
                 Assert.Equal(1UL, pending.Value.Progress.PendingEvents);
                 Assert.False(pending.Value.Progress.IsCaughtUp);
             }
+
             var denied = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName);
             Assert.False(denied.IsSuccess);
             Assert.Equal(RequestErrorKind.Unauthorized, denied.Error.Kind);
@@ -79,6 +80,7 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
                 Assert.False(outsideScope.IsSuccess);
                 Assert.Equal(RequestErrorKind.Forbidden, outsideScope.Error.Kind);
             }
+
             var member = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, "member");
             Assert.False(member.IsSuccess);
             Assert.Equal(RequestErrorKind.Forbidden, member.Error.Kind);
@@ -128,7 +130,10 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
                 return await client.GetAsync(processor, actorToken: actorToken, ct: deadline.Token);
             }
             catch (RpcException ex) when (ex is
-            { DomainCode: FitzErrorCodes.RpcBackpressure, Status: 1, ErrorClass: 5, ErrorEffect: 0 })
+            {
+                DomainCode: FitzErrorCodes.RpcBackpressure, Status: 1, ErrorClass: 5,
+                ErrorEffect: 0
+            })
             {
                 // A terminal response can precede worker scope cleanup. Only a native, not-applied
                 // backpressure response is retried; authorization results and all other failures escape.
@@ -141,7 +146,10 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
     {
         internal const string ProjectorName = "balances / \u03b1";
         internal const string ReactorName = "receipt delivery";
-        internal TaskCompletionSource ProjectorEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal TaskCompletionSource ProjectorEntered { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         internal TaskCompletionSource ReactorEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
@@ -174,13 +182,15 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
     {
         readonly ConcurrentDictionary<CheckpointIdentity, ProjectionCheckpoint> _checkpoints = new();
 
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default)
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
+            CancellationToken ct = default)
             => ValueTask.FromResult(_checkpoints.GetValueOrDefault(identity));
 
         public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
             => LoadCheckpointAsync(identity, ct);
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default)
         {
             _checkpoints[identity] = checkpoint;
             return ValueTask.CompletedTask;
@@ -203,7 +213,8 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
         public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(string? token, CancellationToken ct = default)
         {
             if (token is null)
-                return ValueTask.FromResult(Result<ClaimsPrincipal>.Failure(RequestError.Unauthorized("Missing credential.")));
+                return ValueTask.FromResult(
+                    Result<ClaimsPrincipal>.Failure(RequestError.Unauthorized("Missing credential.")));
             var actor = TestOperationalAuthorizer.Actor(scope: token == "member" ? "global" : token);
             if (token != "member")
                 ((ClaimsIdentity)actor.Identity!).AddClaim(new Claim(ClaimTypes.Role, "platform-operators"));

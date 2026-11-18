@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>AWS S3 object storage provider for Portia with tenant-scoped SSE-KMS encryption.</Description>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>

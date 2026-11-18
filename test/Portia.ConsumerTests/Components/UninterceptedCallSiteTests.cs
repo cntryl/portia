@@ -21,25 +21,25 @@ public sealed class UninterceptedCallSiteTests
     {
         // Arrange
         var source = $$"""
-                                 using Cntryl.Portia;
-                                 using Cntryl.Portia.Testing;
-                                 using Microsoft.AspNetCore.Builder;
-                                 using Microsoft.AspNetCore.Routing;
-                                 public sealed record Binding : IRequest, ICallable;
-                                 public static class Scenario
-                                 {
-                                     // A generic forwarder: there is no concrete request type at the call site the
-                                     // generator sees, so it cannot emit a binding for it.
-                                     static void Map<TRequest>(IEndpointRouteBuilder app, string pattern)
-                                         where TRequest : IRequest, ICallable
-                                         => PortiaEndpointRouteBuilderExtensions.MapPortiaPost<TRequest>(app, pattern);
-                                     public static void Run()
-                                     {
-                                         var app = WebApplication.CreateBuilder().Build();
-                                         _ = PortiaEndpointRouteBuilderExtensions.{{call}};
-                                     }
-                                 }
-                                 """;
+                       using Cntryl.Portia;
+                       using Cntryl.Portia.Testing;
+                       using Microsoft.AspNetCore.Builder;
+                       using Microsoft.AspNetCore.Routing;
+                       public sealed record Binding : IRequest, ICallable;
+                       public static class Scenario
+                       {
+                           // A generic forwarder: there is no concrete request type at the call site the
+                           // generator sees, so it cannot emit a binding for it.
+                           static void Map<TRequest>(IEndpointRouteBuilder app, string pattern)
+                               where TRequest : IRequest, ICallable
+                               => PortiaEndpointRouteBuilderExtensions.MapPortiaPost<TRequest>(app, pattern);
+                           public static void Run()
+                           {
+                               var app = WebApplication.CreateBuilder().Build();
+                               _ = PortiaEndpointRouteBuilderExtensions.{{call}};
+                           }
+                       }
+                       """;
 
         // Act
         var error = RunGeneric(source);
@@ -57,20 +57,20 @@ public sealed class UninterceptedCallSiteTests
     {
         // Arrange
         const string source = """
-                               using Cntryl.Portia;
-                               using Cntryl.Portia.Testing;
-                               using Microsoft.AspNetCore.Builder;
-                               using Microsoft.AspNetCore.Routing;
-                               public sealed record Feed : IStreamRequest<string>, ICallable;
-                               public static class Scenario
-                               {
-                                   public static void Run()
-                                   {
-                                       var app = WebApplication.CreateBuilder().Build();
-                                       _ = PortiaEndpointRouteBuilderExtensions.MapPortiaGetSse<Feed, string>(app, "/feed");
-                                   }
-                               }
-                               """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              using Microsoft.AspNetCore.Builder;
+                              using Microsoft.AspNetCore.Routing;
+                              public sealed record Feed : IStreamRequest<string>, ICallable;
+                              public static class Scenario
+                              {
+                                  public static void Run()
+                                  {
+                                      var app = WebApplication.CreateBuilder().Build();
+                                      _ = PortiaEndpointRouteBuilderExtensions.MapPortiaGetSse<Feed, string>(app, "/feed");
+                                  }
+                              }
+                              """;
 
         // Act
         var error = RunGeneric(source);
@@ -121,45 +121,45 @@ public sealed class UninterceptedCallSiteTests
     {
         // Arrange
         var source = $$"""
-                                 using System.Threading;
-                                 using System.Threading.Tasks;
-                                 using Cntryl.Portia;
-                                 using Cntryl.Portia.Testing;
-                                 using Microsoft.Extensions.DependencyInjection;
-                                 public sealed record Command : IRequest;
-                                 public sealed record Happened : DomainEvent;
-                                 public sealed class Handler : IRequestHandler<Command>
-                                 {
-                                     public ValueTask<Result> HandleAsync(IRequestContext<Command> c, CancellationToken ct)
-                                         => ValueTask.FromResult(Result.Success);
-                                 }
-                                 public sealed class Authorizer : IRequestAuthorizer<Command>
-                                 {
-                                     public ValueTask<Result> AuthorizeAsync(IRequestContext<Command> c, CancellationToken ct)
-                                         => ValueTask.FromResult(Result.Success);
-                                 }
-                                 public sealed class Behavior : IRequestPipelineBehavior<Command>
-                                 {
-                                     public ValueTask<Result> HandleAsync(IRequestContext<Command> c,
-                                         RequestPipelineNext next, CancellationToken ct) => next(ct);
-                                 }
-                                 public sealed class Guard : IRequestGuard<Command>
-                                 {
-                                     public ValueTask<Result> GuardAsync(IRequestContext<Command> c, CancellationToken ct)
-                                         => ValueTask.FromResult(Result.Success);
-                                 }
-                                 public static class Scenario
-                                 {
-                                     // Reflection reaches the uninterceptable body directly: the generator rewrites a
-                                     // direct call site, so this is the only way to reach what a consumer hits when
-                                     // interception did not happen at all.
-                                     public static void Run()
-                                     {
-                                         var builder = new ServiceCollection().AddPortia();
-                                         _ = builder.{{call}};
-                                     }
-                                 }
-                                 """;
+                       using System.Threading;
+                       using System.Threading.Tasks;
+                       using Cntryl.Portia;
+                       using Cntryl.Portia.Testing;
+                       using Microsoft.Extensions.DependencyInjection;
+                       public sealed record Command : IRequest;
+                       public sealed record Happened : DomainEvent;
+                       public sealed class Handler : IRequestHandler<Command>
+                       {
+                           public ValueTask<Result> HandleAsync(IRequestContext<Command> c, CancellationToken ct)
+                               => ValueTask.FromResult(Result.Success);
+                       }
+                       public sealed class Authorizer : IRequestAuthorizer<Command>
+                       {
+                           public ValueTask<Result> AuthorizeAsync(IRequestContext<Command> c, CancellationToken ct)
+                               => ValueTask.FromResult(Result.Success);
+                       }
+                       public sealed class Behavior : IRequestPipelineBehavior<Command>
+                       {
+                           public ValueTask<Result> HandleAsync(IRequestContext<Command> c,
+                               RequestPipelineNext next, CancellationToken ct) => next(ct);
+                       }
+                       public sealed class Guard : IRequestGuard<Command>
+                       {
+                           public ValueTask<Result> GuardAsync(IRequestContext<Command> c, CancellationToken ct)
+                               => ValueTask.FromResult(Result.Success);
+                       }
+                       public static class Scenario
+                       {
+                           // Reflection reaches the uninterceptable body directly: the generator rewrites a
+                           // direct call site, so this is the only way to reach what a consumer hits when
+                           // interception did not happen at all.
+                           public static void Run()
+                           {
+                               var builder = new ServiceCollection().AddPortia();
+                               _ = builder.{{call}};
+                           }
+                       }
+                       """;
 
         // Act
         var error = RunGeneric(source);

@@ -27,7 +27,8 @@ public sealed class OperationalTopologyTests
         Assert.Equal(["first", "tenant"], topology.Processors.Select(p => p.Name));
         var remote = Assert.Single(topology.Requests, request => request.Request == typeof(FeatureOneRequest).FullName);
         Assert.StartsWith("unknown:", remote.Handler, StringComparison.Ordinal);
-        Assert.DoesNotContain(topology.Processors, p => p.Component.Contains("SecondReactor", StringComparison.Ordinal));
+        Assert.DoesNotContain(topology.Processors,
+            p => p.Component.Contains("SecondReactor", StringComparison.Ordinal));
         var subscriptions = typeof(FirstReactor).GetCustomAttribute<ProcessorTopologyAttribute>()!.Subscriptions;
         Assert.Equal(2, subscriptions.Count);
         Assert.All(topology.Processors, p => Assert.Equal(subscriptions, p.Subscriptions));

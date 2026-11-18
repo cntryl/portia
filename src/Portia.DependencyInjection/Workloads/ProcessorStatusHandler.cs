@@ -25,6 +25,7 @@ sealed class ProcessorStatusHandler(
                 return RequestError.Validation("Processor status requires a valid tenant identity.");
             tenant = parsed;
         }
+
         if (registration.Scope == WorkloadScope.PerTenant && tenant is null ||
             registration.Scope == WorkloadScope.Global && tenant is not null)
             return RequestError.Validation("Processor status must match the registered tenant or global scope.");
@@ -47,7 +48,8 @@ sealed class ProcessorStatusHandler(
             {
                 var observation = await reader.GetProgressAsync(pattern, checkpoint.Cursor, ct).ConfigureAwait(false);
                 if (observation.Position != checkpoint.Cursor)
-                    throw new InvalidOperationException("Source progress must preserve the supplied committed checkpoint.");
+                    throw new InvalidOperationException(
+                        "Source progress must preserve the supplied committed checkpoint.");
                 progress = observation;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -80,6 +82,7 @@ sealed class ProcessorStatusHandler(
             {
                 failureError = exception.GetType().Name;
             }
+
             // The native checkpoint remains authoritative even if operational confirmation was lost.
             // Old failure evidence must not mark an already advanced projector as blocked.
             if (state is not null && state.Checkpoint == checkpoint.Cursor.Value &&

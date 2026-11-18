@@ -109,7 +109,8 @@ public sealed class FitzKvDirectoryProjectionTests(FitzBrokerFixture broker)
     }
 
     static FitzEventStore EventStore(FitzClient client) => new(client.Stream, TestJson.DomainSerializer(
-        new DomainEventTypeCatalog().Register<TeamCreated>(1, "team.created").Register<TeamRenamed>(1, "team.renamed")));
+        new DomainEventTypeCatalog().Register<TeamCreated>(1, "team.created")
+            .Register<TeamRenamed>(1, "team.renamed")));
 
     static async Task AppendAsync(FitzEventStore events, TenantId tenant, Uuid team, params DomainEvent[] changes)
     {
@@ -137,7 +138,7 @@ sealed class TeamRepository(IKvClient kv, string route)
     public async ValueTask RenameAsync(Uuid id, string name, CancellationToken ct)
     {
         var current = await Teams.GetAsync(Transaction, id, ct)
-            ?? throw new InvalidOperationException($"Team '{id}' was renamed before it was created.");
+                      ?? throw new InvalidOperationException($"Team '{id}' was renamed before it was created.");
         await Teams.ReplaceAsync(Transaction, current, current with { Name = name }, ct);
     }
 
@@ -147,7 +148,8 @@ sealed class TeamRepository(IKvClient kv, string route)
         return await Teams.GetAsync(tx, id, ct);
     }
 
-    public async ValueTask<KvDirectoryPage<Team>> ListAsync(TenantId tenant, int take, string? cursor, CancellationToken ct)
+    public async ValueTask<KvDirectoryPage<Team>> ListAsync(TenantId tenant, int take, string? cursor,
+        CancellationToken ct)
     {
         await using var tx = await BeginReadAsync(tenant.Value, ct);
         return await Teams.QueryAsync(tx, ByName.Query().Take(take).After(cursor), ct);
@@ -156,11 +158,20 @@ sealed class TeamRepository(IKvClient kv, string route)
 
 sealed partial class TeamProjector(TeamRepository teams)
     : BatchProjector(teams, EventStreamPattern.ForTenant("teams")),
-      IProjectorHandler<TeamCreated>, IProjectorHandler<TeamRenamed>
+        IProjectorHandler<TeamCreated>, IProjectorHandler<TeamRenamed>
 {
-    public async ValueTask<Result> HandleAsync(IProjectorContext<TeamCreated> context, CancellationToken ct) { await teams.AddAsync(new Team(context.Trigger.Metadata.AggregateId, context.Trigger.Name), ct).ConfigureAwait(false); return Result.Success; }
+    public async ValueTask<Result> HandleAsync(IProjectorContext<TeamCreated> context, CancellationToken ct)
+    {
+        await teams.AddAsync(new Team(context.Trigger.Metadata.AggregateId, context.Trigger.Name), ct)
+            .ConfigureAwait(false);
+        return Result.Success;
+    }
 
-    public async ValueTask<Result> HandleAsync(IProjectorContext<TeamRenamed> context, CancellationToken ct) { await teams.RenameAsync(context.Trigger.Metadata.AggregateId, context.Trigger.Name, ct).ConfigureAwait(false); return Result.Success; }
+    public async ValueTask<Result> HandleAsync(IProjectorContext<TeamRenamed> context, CancellationToken ct)
+    {
+        await teams.RenameAsync(context.Trigger.Metadata.AggregateId, context.Trigger.Name, ct).ConfigureAwait(false);
+        return Result.Success;
+    }
 }
 
 /// <summary>A team was created with a display name.</summary>

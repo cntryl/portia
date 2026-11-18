@@ -284,7 +284,8 @@ public sealed class InMemoryRpcDeadlineTests
 
         if (failWorker)
         {
-            var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => ConsumeAsync(call).WaitAsync(HangGuard));
+            var failure =
+                await Assert.ThrowsAsync<InvalidOperationException>(() => ConsumeAsync(call).WaitAsync(HangGuard));
             Assert.Equal("worker failed", failure.Message);
         }
         else
@@ -376,6 +377,7 @@ public sealed class InMemoryRpcDeadlineTests
         {
             Assert.Null(receivedBudget);
         }
+
         Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard));
     }
 
@@ -470,6 +472,7 @@ public sealed class InMemoryRpcDeadlineTests
                 nextMove = enumerator.MoveNextAsync().AsTask();
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() => nextMove.WaitAsync(HangGuard));
             }
+
             Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard));
             Assert.False(callbackExited.Task.IsCompleted);
             Assert.False(probe.Completed.Task.IsCompleted);
@@ -631,6 +634,7 @@ public sealed class InMemoryRpcDeadlineTests
             Assert.Empty(frames[1].Body.ToArray());
             Assert.Equal(new byte[] { 43 }, frames[2].Body.ToArray());
         }
+
         Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard));
     }
 
@@ -707,7 +711,9 @@ public sealed class InMemoryRpcDeadlineTests
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Completed { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public TaskCompletionSource CancellationObserved { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource CancellationObserved { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public ValueTask HandleAsync(RpcRequest request, IRpcResponseWriter writer, CancellationToken ct) =>
             HandleAsync(writer, null, ct);
@@ -715,7 +721,8 @@ public sealed class InMemoryRpcDeadlineTests
         public ValueTask HandleStreamingAsync(RpcRequest request, IRpcResponseWriter writer, CancellationToken ct) =>
             HandleAsync(writer, false, ct);
 
-        public ValueTask HandleFinalThenWaitAsync(RpcRequest request, IRpcResponseWriter writer, CancellationToken ct) =>
+        public ValueTask HandleFinalThenWaitAsync(RpcRequest request, IRpcResponseWriter writer,
+            CancellationToken ct) =>
             HandleAsync(writer, true, ct);
 
         async ValueTask HandleAsync(IRpcResponseWriter writer, bool? firstFrameFinal, CancellationToken ct)

@@ -25,7 +25,8 @@ public class FitzSerializationCpuBenchmarks
         var overhead = JsonSerializer.SerializeToUtf8Bytes(new FitzSerializationEvent(string.Empty),
             FitzSerializationJsonContext.Default.FitzSerializationEvent).Length;
         var ev = new FitzSerializationEvent(new string('a', PayloadBytes - overhead));
-        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), 1, DateTimeOffset.UnixEpoch));
+        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), 1,
+            DateTimeOffset.UnixEpoch));
         _event = ev;
         _encoded = _serializer.Serialize(_event);
         var decoded = (FitzSerializationEvent)_serializer.Deserialize(_encoded);

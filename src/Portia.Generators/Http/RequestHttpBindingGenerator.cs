@@ -50,7 +50,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
     {
         var calls = context.SyntaxProvider
             .CreateSyntaxProvider(
-                static (node, _) => node is GenericNameSyntax name && MappingMethodNames.Contains(name.Identifier.ValueText),
+                static (node, _) =>
+                    node is GenericNameSyntax name && MappingMethodNames.Contains(name.Identifier.ValueText),
                 static (syntaxContext, ct) => AnalyzeCall(syntaxContext, ct))
             .Where(static call => call is not null)
             .Select(static (call, _) => call!)
@@ -80,21 +81,24 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                         call.DiagnosticLocation.ToLocation(), duplicate.Key));
                 }
             }
-
         });
         var assemblyIdentity = context.CompilationProvider.Select(static (compilation, _) =>
             compilation.Assembly.Identity.ToString());
         var files = calls.Combine(assemblyIdentity).SelectMany(static (input, ct) => GeneratedSource.Capture(
-            output => Generate(output, [.. input.Left.Where(call => call.Model is not null).Select(call => call.Model!)], false, input.Right), ct))
+                output => Generate(output,
+                    [.. input.Left.Where(call => call.Model is not null).Select(call => call.Model!)], false,
+                    input.Right), ct))
             .WithTrackingName("PortiaHttpGeneratedFiles");
-        context.RegisterSourceOutput(files, static (output, file) => GeneratedSource.Add(output, file.HintName, file.Source));
+        context.RegisterSourceOutput(files,
+            static (output, file) => GeneratedSource.Add(output, file.HintName, file.Source));
         var shapes = calls.Select(static (models, _) => models.Where(call => call.Model is not null)
                 .Select(call => call.Model!).Distinct(BindingComparer.Instance).ToImmutableArray())
             .WithComparer(BindingArrayComparer.Instance)
             .WithTrackingName("PortiaHttpBindingShapes");
         var implementations = shapes.Combine(assemblyIdentity).SelectMany(static (input, ct) => GeneratedSource.Capture(
             output => Generate(output, input.Left, true, input.Right), ct));
-        context.RegisterSourceOutput(implementations, static (output, file) => GeneratedSource.Add(output, file.HintName, file.Source));
+        context.RegisterSourceOutput(implementations,
+            static (output, file) => GeneratedSource.Add(output, file.HintName, file.Source));
     }
 
     static CallAnalysis? AnalyzeCall(GeneratorSyntaxContext context, CancellationToken ct)
@@ -104,7 +108,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         if (name.Ancestors().OfType<CrefSyntax>().Any())
             return null;
         ExpressionSyntax expression = name.Parent is MemberAccessExpressionSyntax access && access.Name == name
-            ? access : name;
+            ? access
+            : name;
         if (context.SemanticModel.GetSymbolInfo(expression, ct).Symbol is not IMethodSymbol method
             || !SymbolNames.Is(method.ContainingType, "Cntryl.Portia.PortiaEndpointRouteBuilderExtensions")
             || method.TypeArguments.Length is not (1 or 2))
@@ -113,9 +118,12 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             return Invalid(expression, "mapping method groups are unsupported; use a concrete direct mapping call");
         foreach (var lambda in invocation.Ancestors().OfType<LambdaExpressionSyntax>())
             if (context.SemanticModel.GetTypeInfo(lambda, ct).ConvertedType is INamedTypeSymbol
-                { Name: "Expression", Arity: 1 } converted
+                {
+                    Name: "Expression", Arity: 1
+                } converted
                 && converted.ContainingNamespace.ToDisplayString() == "System.Linq.Expressions")
-                return Invalid(invocation, "expression-tree mappings are unsupported; use a concrete direct mapping call");
+                return Invalid(invocation,
+                    "expression-tree mappings are unsupported; use a concrete direct mapping call");
 
         if (method.TypeArguments[0] is not INamedTypeSymbol requestType || !GeneratedTypeShape.IsSupported(requestType))
             return Invalid(invocation, "use an accessible, concrete, non-generic request type");
@@ -185,7 +193,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     resultType, resultRuntimeType, resultIsNullable, kind, verb, parameters,
                     InterceptableLocationModel.From(location),
                     DiagnosticLocation.From(invocation.GetLocation()), ContainingScope(invocation),
-                    context.SemanticModel.GetEnclosingSymbol(invocation.SpanStart, ct)?.ContainingType?.ToDisplayString() ?? "TopLevel",
+                    context.SemanticModel.GetEnclosingSymbol(invocation.SpanStart, ct)?.ContainingType
+                        ?.ToDisplayString() ?? "TopLevel",
                     IsExcludedFromDescription(invocation), configured, hasDefaultBinder), null);
         }
 
@@ -227,7 +236,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 var property = requestType.GetMembers().OfType<IPropertySymbol>()
                     .FirstOrDefault(p => string.Equals(p.Name, parameter.Name, StringComparison.OrdinalIgnoreCase));
                 var jsonName = property?.GetAttributes().FirstOrDefault(a =>
-                        a.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, "System.Text.Json.Serialization.JsonPropertyNameAttribute"))
+                        a.AttributeClass is { } attributeType && SymbolNames.Is(attributeType,
+                            "System.Text.Json.Serialization.JsonPropertyNameAttribute"))
                     ?.ConstructorArguments.FirstOrDefault().Value as string;
                 var typeName = parameter.Type.ToDisplayString(NullableTypeDisplayFormat);
                 var runtimeTypeName = parameter.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -295,7 +305,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
     static bool IsExcludedFromDescription(InvocationExpressionSyntax invocation)
     {
         SyntaxNode current = invocation;
-        for (; current.Parent is MemberAccessExpressionSyntax { Parent: InvocationExpressionSyntax next } access;
+        for (;
+             current.Parent is MemberAccessExpressionSyntax { Parent: InvocationExpressionSyntax next } access;
              current = next)
         {
             if (access.Name.Identifier.ValueText == "ExcludeFromDescription")
@@ -358,7 +369,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         return new string(chars);
     }
 
-    static void Generate(GeneratedOutput context, ImmutableArray<CallModel> calls, bool implementationsOnly, string assemblyIdentity)
+    static void Generate(GeneratedOutput context, ImmutableArray<CallModel> calls, bool implementationsOnly,
+        string assemblyIdentity)
     {
         if (calls.IsDefaultOrEmpty)
             return;
@@ -369,12 +381,15 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             context.CancellationToken.ThrowIfCancellationRequested();
             if (implementations.ContainsKey(call))
                 continue;
-            implementations.Add(call, GeneratedSource.Label(call.RequestTypeName) + "_" + GeneratedSource.Identity(assemblyIdentity + "\n" + BindingIdentity(call)));
+            implementations.Add(call,
+                GeneratedSource.Label(call.RequestTypeName) + "_" +
+                GeneratedSource.Identity(assemblyIdentity + "\n" + BindingIdentity(call)));
         }
 
         if (implementationsOnly)
         {
-            foreach (var bucket in GeneratedSource.Buckets(implementations, entry => entry.Value, context.CancellationToken))
+            foreach (var bucket in GeneratedSource.Buckets(implementations, entry => entry.Value,
+                         context.CancellationToken))
             {
                 var source = Header().AppendLine("namespace Cntryl.Portia.Generated;").AppendLine();
                 foreach (var implementation in bucket.Items)
@@ -385,8 +400,11 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     AppendImplementation(source, implementation.Key);
                     source.AppendLine("}").AppendLine();
                 }
-                GeneratedSource.Add(context, "PortiaHttpBinding." + (bucket.Key.Length == 0 ? "Root" : bucket.Key) + ".g.cs", source.ToString());
+
+                GeneratedSource.Add(context,
+                    "PortiaHttpBinding." + (bucket.Key.Length == 0 ? "Root" : bucket.Key) + ".g.cs", source.ToString());
             }
+
             return;
         }
 
@@ -401,18 +419,25 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             {
                 foreach (var call in binding)
                     source.Append("        [global::System.Runtime.CompilerServices.InterceptsLocation(")
-                        .Append(call.Location.Version).Append(", ").Append(Literal(call.Location.Data)).AppendLine(")]");
+                        .Append(call.Location.Version).Append(", ").Append(Literal(call.Location.Data))
+                        .AppendLine(")]");
                 var callModel = binding.Key;
                 var implementation = implementations[callModel];
-                source.Append("        public static global::Microsoft.AspNetCore.Builder.IEndpointConventionBuilder Call_")
+                source.Append(
+                        "        public static global::Microsoft.AspNetCore.Builder.IEndpointConventionBuilder Call_")
                     .Append(implementation)
                     .Append("(this global::Microsoft.AspNetCore.Routing.IEndpointRouteBuilder app, string pattern")
-                    .Append(callModel.Configured ? ", global::System.Action<" + ConfigurationType(callModel) + "> configure" : string.Empty)
+                    .Append(callModel.Configured
+                        ? ", global::System.Action<" + ConfigurationType(callModel) + "> configure"
+                        : string.Empty)
                     .Append(") => PortiaHttpBinding_").Append(implementation).Append(".Map(app, pattern")
                     .Append(callModel.Configured ? ", configure" : string.Empty).AppendLine(");");
             }
+
             source.AppendLine("    }").AppendLine("}");
-            GeneratedSource.Add(context, "PortiaHttpInterceptors." + GeneratedSource.Label(group.Key) + "." + identity + ".g.cs", source.ToString());
+            GeneratedSource.Add(context,
+                "PortiaHttpInterceptors." + GeneratedSource.Label(group.Key) + "." + identity + ".g.cs",
+                source.ToString());
         }
     }
 
@@ -426,7 +451,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
     static string BindingIdentity(CallModel call)
     {
         var key = new StringBuilder();
-        void Add(string? value) => key.Append((value?.Length ?? -1).ToString(CultureInfo.InvariantCulture)).Append(':').Append(value);
+
+        void Add(string? value) => key.Append((value?.Length ?? -1).ToString(CultureInfo.InvariantCulture)).Append(':')
+            .Append(value);
+
         Add(call.RequestTypeFullName);
         Add(call.RequestTypeName);
         Add(call.ResultType);
@@ -451,6 +479,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             Add(parameter.ParseKind.ToString());
             Add(parameter.FormBindable.ToString());
         }
+
         return GeneratedSource.Identity(key.ToString());
     }
 
@@ -463,7 +492,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         var bodyParameters = call.Parameters.Where(p => p.Source == ParameterSource.Body).ToArray();
         var hasBody = bodyParameters.Length > 0;
         var checksRoutedBody = call.Verb is "Post" or "Put" or "Patch" or "Delete" &&
-            call.Parameters.Any(parameter => parameter.Source == ParameterSource.Route);
+                               call.Parameters.Any(parameter => parameter.Source == ParameterSource.Route);
         var formBindable = hasBody && bodyParameters.All(p => p.FormBindable);
         var readsForm = formBindable || checksRoutedBody && !hasBody;
         var configurationType = ConfigurationType(call);
@@ -735,7 +764,9 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 if (hasBody)
                     _ = source.Append("                ").AppendLine(jsonBody);
                 else if (checksRoutedBody)
-                    _ = source.Append("                using var body = httpContext.Request.HasJsonContentType() ? await global::Cntryl.Portia.PortiaHttpBinding.ReadJsonBodyAsync(httpContext, false, ct).ConfigureAwait(false) : global::System.Text.Json.JsonDocument.Parse(\"{}\");").AppendLine();
+                    _ = source.Append(
+                            "                using var body = httpContext.Request.HasJsonContentType() ? await global::Cntryl.Portia.PortiaHttpBinding.ReadJsonBodyAsync(httpContext, false, ct).ConfigureAwait(false) : global::System.Text.Json.JsonDocument.Parse(\"{}\");")
+                        .AppendLine();
                 AppendValues(false, "                ");
             }
 
@@ -863,18 +894,25 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                                     ? $"global::Cntryl.Portia.PortiaHttpBinding.TryParseFormBoolean(duplicate{i}, out var duplicateValue{i})"
                                     : $"{parameter.UnderlyingType}.TryParse(duplicate{i}, " +
                                       (parameter.ParseKind == HttpBindingShape.TextParseKind.FormatProvider
-                                          ? "global::System.Globalization.CultureInfo.InvariantCulture, " : "") +
+                                          ? "global::System.Globalization.CultureInfo.InvariantCulture, "
+                                          : "") +
                                       $"out var duplicateValue{i})";
                             _ = source.Append(pad).Append("    if (!").Append(parseDuplicate).AppendLine(")")
-                                .Append(pad).AppendLine("        throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Invalid duplicate route value.\");");
+                                .Append(pad)
+                                .AppendLine(
+                                    "        throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Invalid duplicate route value.\");");
                             duplicateValue = "duplicateValue" + i;
                         }
+
                         _ = source.Append(pad).Append("    if (!global::System.Collections.Generic.EqualityComparer<")
                             .Append(parameter.Type).Append(">.Default.Equals(value").Append(i).Append(", ")
                             .Append(duplicateValue).AppendLine("))")
-                            .Append(pad).AppendLine("        throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"A body value conflicts with its route value.\");")
+                            .Append(pad)
+                            .AppendLine(
+                                "        throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"A body value conflicts with its route value.\");")
                             .Append(pad).AppendLine("}");
                     }
+
                     if (cascade)
                         _ = source.Append(indent).AppendLine("}");
                 }
@@ -912,9 +950,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         // The actor is never inferred beyond this point — httpContext.User is where "ambient"
         // stops and an explicit value starts, exactly like every other transport's call site.
         _ = source.AppendLine(
-            "            var identityBinding = global::Cntryl.Portia.PortiaHttpBinding.CreateDispatchContext(httpContext).BindRequest(request);")
+                "            var identityBinding = global::Cntryl.Portia.PortiaHttpBinding.CreateDispatchContext(httpContext).BindRequest(request);")
             .AppendLine("            if (!identityBinding.IsSuccess)")
-            .AppendLine("                return global::Cntryl.Portia.Result.Failure(identityBinding.Error).ToHttpResult();")
+            .AppendLine(
+                "                return global::Cntryl.Portia.Result.Failure(identityBinding.Error).ToHttpResult();")
             .AppendLine("            var context = identityBinding.Value;");
 
         if (call.Kind == CallKind.Queue)
@@ -1111,7 +1150,9 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 var hash = StringComparer.Ordinal.GetHashCode(RequestTypeFullName);
                 hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(RequestTypeName);
                 hash = (hash * 397) ^ (ResultType is null ? 0 : StringComparer.Ordinal.GetHashCode(ResultType));
-                hash = (hash * 397) ^ (ResultRuntimeType is null ? 0 : StringComparer.Ordinal.GetHashCode(ResultRuntimeType));
+                hash = (hash * 397) ^ (ResultRuntimeType is null
+                    ? 0
+                    : StringComparer.Ordinal.GetHashCode(ResultRuntimeType));
                 hash = (hash * 397) ^ ResultIsNullable.GetHashCode();
                 hash = (hash * 397) ^ (int)Kind;
                 hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(Verb);
@@ -1132,13 +1173,18 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         public static readonly BindingComparer Instance = new();
 
         public bool Equals(CallModel? left, CallModel? right) => ReferenceEquals(left, right)
-            || left is not null && right is not null
-            && left.RequestTypeFullName == right.RequestTypeFullName
-            && left.RequestTypeName == right.RequestTypeName
-            && left.ResultType == right.ResultType && left.ResultRuntimeType == right.ResultRuntimeType
-            && left.ResultIsNullable == right.ResultIsNullable && left.Kind == right.Kind
-            && left.Verb == right.Verb && left.Configured == right.Configured
-            && left.HasDefaultBinder == right.HasDefaultBinder && left.Parameters.SequenceEqual(right.Parameters);
+                                                                 || left is not null && right is not null
+                                                                 && left.RequestTypeFullName ==
+                                                                 right.RequestTypeFullName
+                                                                 && left.RequestTypeName == right.RequestTypeName
+                                                                 && left.ResultType == right.ResultType &&
+                                                                 left.ResultRuntimeType == right.ResultRuntimeType
+                                                                 && left.ResultIsNullable == right.ResultIsNullable &&
+                                                                 left.Kind == right.Kind
+                                                                 && left.Verb == right.Verb &&
+                                                                 left.Configured == right.Configured
+                                                                 && left.HasDefaultBinder == right.HasDefaultBinder &&
+                                                                 left.Parameters.SequenceEqual(right.Parameters);
 
         public int GetHashCode(CallModel model) => StringComparer.Ordinal.GetHashCode(model.RequestTypeFullName);
     }
@@ -1146,8 +1192,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
     sealed class BindingArrayComparer : IEqualityComparer<ImmutableArray<CallModel>>
     {
         public static readonly BindingArrayComparer Instance = new();
+
         public bool Equals(ImmutableArray<CallModel> left, ImmutableArray<CallModel> right) =>
             left.Length == right.Length && left.SequenceEqual(right, BindingComparer.Instance);
+
         public int GetHashCode(ImmutableArray<CallModel> value) => value.Length;
     }
 

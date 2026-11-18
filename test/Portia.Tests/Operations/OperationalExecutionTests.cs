@@ -3,8 +3,11 @@ namespace Cntryl.Portia;
 /// <summary>Exercises at-least-once execution with durable evidence and explicit recovery.</summary>
 public sealed partial class OperationalExecutionTests
 {
-    static readonly OperationalTarget Target = new("operational-reactor", "stream://test/operational/*", OperationalScope.Global);
-    static readonly OperationalProcessingSettings Settings = new(512, 4096, 1, TimeSpan.TicksPerMillisecond, TimeSpan.TicksPerSecond);
+    static readonly OperationalTarget Target = new("operational-reactor", "stream://test/operational/*",
+        OperationalScope.Global);
+
+    static readonly OperationalProcessingSettings Settings = new(512, 4096, 1, TimeSpan.TicksPerMillisecond,
+        TimeSpan.TicksPerSecond);
 
     /// <summary>A restart preserves the block, and approved retry preserves effects and refreshes execution IDs.</summary>
     [Fact]
@@ -20,7 +23,8 @@ public sealed partial class OperationalExecutionTests
         var runner = new ReactorRunner(events);
 
         // Assert
-        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => runner.RunAsync(first, Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
+        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
+            runner.RunAsync(first, Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
         Assert.Single(effects.Ids);
         var failed = (await journal.ReadAsync(Target))!;
         Assert.NotNull(failed.Block);
@@ -86,7 +90,9 @@ public sealed partial class OperationalExecutionTests
         var first = await SessionAsync(journal);
 
         // Assert
-        _ = await Assert.ThrowsAsync<ProcessorFailureException>(async () => await new ReactorRunner(await EventsAsync()).RunAsync(first, Reactor(journal, new Effects { Fail = true }), ProjectionCheckpoint.Start).AsTask());
+        _ = await Assert.ThrowsAsync<ProcessorFailureException>(async () =>
+            await new ReactorRunner(await EventsAsync()).RunAsync(first, Reactor(journal, new Effects { Fail = true }),
+                ProjectionCheckpoint.Start).AsTask());
         var session = await SessionAsync(journal);
         var api = Api(journal);
         var actor = TestOperationalAuthorizer.AdministratorActor(true);
@@ -95,7 +101,9 @@ public sealed partial class OperationalExecutionTests
         _ = await api.ExecuteRepairAsync(actor, Target, plan.Id);
         Assert.True(await session.PrepareAsync(ProjectionCheckpoint.Start, default));
         var effects = new Effects();
-        _ = await Assert.ThrowsAsync<ProcessorFailureException>(async () => await new ReactorRunner(await EventsAsync()).RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
+        _ = await Assert.ThrowsAsync<ProcessorFailureException>(async () =>
+            await new ReactorRunner(await EventsAsync())
+                .RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
         Assert.Empty(effects.Executions);
         Assert.NotNull((await journal.ReadAsync(Target))!.Block);
     }
@@ -140,12 +148,13 @@ public sealed partial class OperationalExecutionTests
         var effects = new Effects
         {
             Before = () =>
-        {
-            Assert.Empty(client.WriteLocks);
-            Assert.All(client.Transactions.Where(t => t.Commits > 0), t => Assert.Equal(KvDurability.Sync, t.Durability));
-            Assert.Contains(client.Committed.Values, bytes => System.Text.Encoding.UTF8.GetString(bytes)
-                .Contains("\"outcome\":\"running\"", StringComparison.Ordinal));
-        }
+            {
+                Assert.Empty(client.WriteLocks);
+                Assert.All(client.Transactions.Where(t => t.Commits > 0),
+                    t => Assert.Equal(KvDurability.Sync, t.Durability));
+                Assert.Contains(client.Committed.Values, bytes => System.Text.Encoding.UTF8.GetString(bytes)
+                    .Contains("\"outcome\":\"running\"", StringComparison.Ordinal));
+            }
         };
         _ = await new ReactorRunner(await EventsAsync())
             .RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start);
@@ -220,12 +229,14 @@ public sealed partial class OperationalExecutionTests
         });
     }
 
-    static PortiaOperations Api(IOperationalStore store) => new(TestOperationalAuthorizer.Configuration(), store, new OperationalOptions(),
+    static PortiaOperations Api(IOperationalStore store) => new(TestOperationalAuthorizer.Configuration(), store,
+        new OperationalOptions(),
         new EmptyApplicationTopology(), new TestOperationalAuthorizer(), null);
 
     static async Task<OperationalSession> SessionAsync(IOperationalStore store)
     {
-        var session = new OperationalSession(store, new OperationalOptions { JournalRetryDelay = TimeSpan.FromMilliseconds(1) },
+        var session = new OperationalSession(store,
+            new OperationalOptions { JournalRetryDelay = TimeSpan.FromMilliseconds(1) },
             new EmptyApplicationTopology(), TimeProvider.System);
         var checkpoint = await ((IProjectionCheckpointStore)store).LoadAsync(Target.Identity);
         await session.AcquireAsync(Target, "reactor", Settings, checkpoint, default);
@@ -245,7 +256,8 @@ public sealed partial class OperationalExecutionTests
         var id = Uuid.CreateVersion4();
         DomainEvent[] changes = [new ValueChanged(1), new ValueChanged(2)];
         for (var i = 0; i < changes.Length; i++)
-            changes[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), id, (ulong)i + 1, DateTimeOffset.UtcNow));
+            changes[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), id, (ulong)i + 1,
+                DateTimeOffset.UtcNow));
         await events.AppendAsync(new EventStreamAddress("test", "operational", id.ToString()), 0, changes);
         return events;
     }
@@ -278,12 +290,19 @@ public sealed partial class OperationalExecutionTests
     sealed class LostAcknowledgement(MemoryOperationalStore store) : IOperationalReactionCheckpointStore
     {
         internal int Commits { get; private set; }
-        public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default) => store.LoadAsync(identity, ct);
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint, CancellationToken ct = default) => throw new NotSupportedException();
-        public async ValueTask<bool> CommitAsync(OperationalProcessorState replacement, long expectedRevision, Guid ownerSession,
+
+        public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default) =>
+            store.LoadAsync(identity, ct);
+
+        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default) => throw new NotSupportedException();
+
+        public async ValueTask<bool> CommitAsync(OperationalProcessorState replacement, long expectedRevision,
+            Guid ownerSession,
             Guid attemptId, string? expectedCheckpoint, string? nextCheckpoint, CancellationToken ct = default)
         {
-            var result = await store.CommitAsync(replacement, expectedRevision, ownerSession, attemptId, expectedCheckpoint, nextCheckpoint, ct);
+            var result = await store.CommitAsync(replacement, expectedRevision, ownerSession, attemptId,
+                expectedCheckpoint, nextCheckpoint, ct);
             Commits++;
             throw new IOException(result ? "acknowledgement lost" : "unexpected conflict");
         }

@@ -170,7 +170,8 @@ public sealed class GeneratorStabilityTests
         var run = Run(source);
         foreach (var generator in run.Generators.Results.Where(generator => generator.Exception is not null))
             yield return $"{generator.Generator.GetGeneratorType().Name} threw {generator.Exception}";
-        foreach (var diagnostic in run.Generators.Diagnostics.Where(diagnostic => diagnostic.Id is "CS8784" or "CS8785"))
+        foreach (var diagnostic in
+                 run.Generators.Diagnostics.Where(diagnostic => diagnostic.Id is "CS8784" or "CS8785"))
             yield return diagnostic.ToString();
         foreach (var exception in run.AnalyzerExceptions)
             yield return exception;
@@ -185,7 +186,8 @@ public sealed class GeneratorStabilityTests
         var compilation = CSharpCompilation.Create("Stability",
             [CSharpSyntaxTree.ParseText(source, parseOptions, "Stability.cs")], References(),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
-        var driver = CSharpGeneratorDriver.Create([.. AllGenerators().Select(generator => generator.AsSourceGenerator())],
+        var driver = CSharpGeneratorDriver.Create(
+                [.. AllGenerators().Select(generator => generator.AsSourceGenerator())],
                 parseOptions: parseOptions)
             .RunGeneratorsAndUpdateCompilation(compilation, out var generated, out _);
         var exceptions = new List<string>();
