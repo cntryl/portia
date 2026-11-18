@@ -96,8 +96,9 @@ administration remain available. Coordinator and bootstrap failures retain their
 Required journal outages pause handler invocation rather than running without durable start evidence.
 Completed failures and retry counts survive ownership changes. Pending plans become invalid when
 ownership changes, and interrupted attempts remain visible when automatic crash replay succeeds.
-A claimed source-read resume that loses its owner before verifying the read is `indeterminate`.
-The replacement owner keeps the workload blocked for a new recovery decision.
+If ownership changes after a retry or source-read resume is claimed but before a durable processing
+attempt starts, the repair becomes `indeterminate`. The replacement keeps the workload blocked for
+a new recovery decision. Once an attempt starts, replay remains bound to its original source events.
 
 The Fitz journal uses synchronous commits and short resource transactions. Attempt starts precede
 application invocation. If a start's commit acknowledgement is lost, the owner reloads and confirms

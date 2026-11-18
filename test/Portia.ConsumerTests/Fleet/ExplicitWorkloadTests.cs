@@ -7,6 +7,21 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ExplicitWorkloadTests
 {
     [Fact]
+    public void ShouldRejectSourceRegistrationImmediatelyGivenBaseClassProjector()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var portia = services.AddPortia();
+
+        // Act
+        var error = Record.Exception(() => portia.AddProjector<FirstProjector>("orders", ConsumerStreams.AccountsPattern));
+
+        // Assert
+        Assert.Contains("WorkloadScope", Assert.IsType<InvalidOperationException>(error).Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(FirstProjector));
+    }
+
+    [Fact]
     public void ShouldActivateDeclaredWorkloadsGivenApplicationWhenAddingWorkers()
     {
         // Arrange

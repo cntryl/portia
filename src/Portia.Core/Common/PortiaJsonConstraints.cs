@@ -85,10 +85,10 @@ static class PortiaJsonConstraints
                     break;
                 case RegularExpressionAttribute expression when HasType(schema, "string"):
                     schema["x-portia-dotnet-pattern"] = expression.Pattern;
-                    // Literal ASCII ranges, groups, alternations and quantifiers have matching
-                    // semantics. Character categories, options and dot/newline rules do not.
+                    // The BCL checks the length of its first match. An atomic lookahead captures
+                    // that match before the end check can backtrack into a longer alternative.
                     if (PortablePattern(expression.Pattern))
-                        schema["pattern"] = "^(?:(?:" + expression.Pattern + ")|)(?![\\s\\S])";
+                        schema["pattern"] = "^(?:(?=(" + expression.Pattern + "))\\1|)(?![\\s\\S])";
                     break;
                 case EmailAddressAttribute when HasType(schema, "string"):
                     schema["format"] = "email";
@@ -146,8 +146,23 @@ static class PortiaJsonConstraints
         for (var index = 0; index < pattern.Length; index++)
         {
             var character = pattern[index];
-            if (character > 127 || character is '\\' or '.' or '$' or '^' or ']')
+            if (character > 127 || character is '\\' or '.' or '$' or '^' or ']' or '}')
                 return false;
+            if (character == '{')
+            {
+                var end = pattern.IndexOf('}', index + 1);
+                if (end < 0)
+                    return false;
+                var bounds = pattern.AsSpan(index + 1, end - index - 1);
+                var comma = bounds.IndexOf(',');
+                var minimum = comma < 0 ? bounds : bounds[..comma];
+                if (minimum.IsEmpty || minimum.ContainsAnyExceptInRange('0', '9') ||
+                    comma >= 0 && bounds[(comma + 1)..].ContainsAnyExceptInRange('0', '9'))
+                    return false;
+                index = end;
+                continue;
+            }
+
             if (character != '[')
                 continue;
             // Only unambiguous ASCII literals/ranges are portable inside classes. In .NET,

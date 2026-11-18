@@ -11,9 +11,16 @@ public interface IProjector
 /// <typeparam name="T">The application projector type.</typeparam>
 public static class ProjectorDispatch<T> where T : class, IProjector
 {
-    static Func<T, string, EventStreamPattern, Projector>? _factory;
+    sealed record Dispatch(Func<T, string, EventStreamPattern, Projector> Factory, IReadOnlyList<string> Subscriptions);
 
-    internal static IReadOnlyList<string> Subscriptions { get; private set; } = [];
+    static Dispatch? Registered;
+
+    static Dispatch Required => Volatile.Read(ref Registered) ?? throw new InvalidOperationException(
+        typeof(Projector).IsAssignableFrom(typeof(T))
+            ? $"{typeof(T)} derives from Projector and declares its own source. Use the WorkloadScope registration overload or pass the constructed projector to the scenario."
+            : $"Missing generated dispatch for {typeof(T)}. Implement a typed projector handler and reference the Portia generator.");
+
+    internal static IReadOnlyList<string> Subscriptions => Required.Subscriptions;
 
     /// <summary>Installs the factory emitted by the Portia generator.</summary>
     /// <param name="factory">Constructs the scoped dispatch adapter.</param>
@@ -22,15 +29,14 @@ public static class ProjectorDispatch<T> where T : class, IProjector
     public static void Register(Func<T, string, EventStreamPattern, Projector> factory, params string[] subscriptions)
     {
         ArgumentNullException.ThrowIfNull(factory);
-        if (Interlocked.CompareExchange(ref _factory, factory, null) is not null)
+        var dispatch = new Dispatch(factory, Array.AsReadOnly(subscriptions));
+        if (Interlocked.CompareExchange(ref Registered, dispatch, null) is not null)
             throw new InvalidOperationException($"Dispatch already registered for {typeof(T)}.");
-        Subscriptions = Array.AsReadOnly(subscriptions);
     }
 
     internal static Projector Create(T projector, string name, EventStreamPattern source)
     {
-        var adapter = (_factory ?? throw new InvalidOperationException($"Missing generated dispatch for {typeof(T)}."))(
-            projector, name, source);
+        var adapter = Required.Factory(projector, name, source);
         adapter.ApplicationType = typeof(T);
         return adapter;
     }
