@@ -75,15 +75,15 @@ directly.
 ## Projectors
 
 A projector writes through your own repository and commits progress through its `IProjectionStore`. Construct
-it with `scenario.Store` for progress and a fake or in-memory repository for data, then assert on that data.
+a fake repository backed by `scenario.Store` for progress, inject it into the projector, and assert on its data.
 
 ```csharp
-var accounts = new InMemoryAccountRepository();
 var scenario = new ProjectorScenario().Given(
     DomainEventSeed.Attach(new MoneyDeposited(10), accountId, 1),
     DomainEventSeed.Attach(new MoneyDeposited(5), accountId, 2));
 
-await scenario.RunAsync(new AccountProjector(accounts, scenario.Store));
+var accounts = new InMemoryAccountRepository(scenario.Store);
+await scenario.RunAsync(new AccountProjector(accounts), "AccountProjector", EventStreamPattern.ForTenant("balances"));
 
 Assert.Equal(15, accounts.Balances[accountId]);
 ```
@@ -186,7 +186,7 @@ for this catch-up loop; no public pass-result API is needed.
 ## Fitz Portia and Cassie integration
 
 Run the `CassieIntegration` category with both Compose services available, following
-[the integration setup](../CONTRIBUTING.md). The tests use the published `Cntryl.Cassie` 0.2.0 client
+[the integration setup](../CONTRIBUTING.md). The tests use the published `Cntryl.Cassie` 0.2.1 client
 against the `cassie:latest` image from `compose.yaml`. An application-owned `AccountRepository` derives from the library's
 `CassieProjectionRepository`, implements the public `IProjectionStore` contract, and returns simple
 `AccountReadModel` data. Hosted cases use `AddCassie` and `AddCassieProjection`.

@@ -10,11 +10,17 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
 {
     readonly Func<IServiceProvider, Projector> _resolve;
 
-    ProjectorRegistration(Type projectorType, Func<IServiceProvider, Projector> resolve)
+    internal ProjectorRegistration(Type projectorType, Func<IServiceProvider, Projector> resolve)
     {
         ProjectorType = projectorType;
         _resolve = resolve;
     }
+
+    internal EventStreamPattern? Source { get; init; }
+    internal IReadOnlyList<string>? Subscriptions { get; init; }
+
+    bool IWorkloadDescriptor.Matches(IWorkloadDescriptor other) =>
+        other is ProjectorRegistration descriptor && Source == descriptor.Source;
 
     /// <summary>Gets the concrete projector type.</summary>
     public Type ProjectorType { get; }

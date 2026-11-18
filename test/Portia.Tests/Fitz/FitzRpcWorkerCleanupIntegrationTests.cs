@@ -23,8 +23,7 @@ public sealed class FitzRpcWorkerCleanupIntegrationTests(FitzBrokerFixture broke
         var endpoint = new Uri(Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT")
                                ?? "ws://127.0.0.1:4090/ws");
         // Keep domain dispatch parallel enough to expose the independent per-worker limit on any CPU count.
-        await using var workerClient = new FitzClient(new ClientConfig(endpoint,
-            AsyncHandlers: new AsyncHandlerOptions(MaxConcurrency: 4)));
+        await using var workerClient = new FitzClient(new ClientConfig(endpoint) { AsyncHandlers = new AsyncHandlerOptions(MaxConcurrency: 4) });
         await workerClient.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(TimeSpan.FromSeconds(15)));
         await using var callerClient = await broker.CreateClientAsync();
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -69,7 +68,7 @@ public sealed class FitzRpcWorkerCleanupIntegrationTests(FitzBrokerFixture broke
                     if (first)
                         await cleanup.WaitAsync();
                 }, new RpcWorkerOptions { MaxConcurrency = maxConcurrency }, deadline.Token);
-                call = () => ReadRawAsync(callerClient.Rpc.CallAsync(route, ReadOnlyMemory<byte>.Empty,
+                call = () => ReadRawAsync(callerClient.Rpc.CallStreamingAsync(route, ReadOnlyMemory<byte>.Empty,
                     deadline.Token), deadline.Token);
             }
 

@@ -401,7 +401,7 @@ public sealed class FitzRpcRoundTripTests
     sealed class ScriptedRpcClient(RpcCall call) : IRpcClient
     {
 #pragma warning disable RS0026
-        public RpcCall CallAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default)
+        public RpcCall CallStreamingAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default)
         {
             _ = route;
             _ = body;
@@ -409,11 +409,11 @@ public sealed class FitzRpcRoundTripTests
             return call;
         }
 
-        public RpcCall CallAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? timeout,
+        public RpcCall CallStreamingAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? timeout,
             CancellationToken ct = default)
         {
             _ = timeout;
-            return CallAsync(route, body, ct);
+            return CallStreamingAsync(route, body, ct);
         }
 #pragma warning restore RS0026
 

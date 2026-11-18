@@ -4,13 +4,17 @@ using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using System.Text;
 using Cntryl.Portia;
+using Cntryl.Portia.Testing;
 
 var generatedCatalog = new DomainEventTypeCatalog().AddPortiaGeneratedDomainEvents();
 if (!generatedCatalog.TryResolve("smoke.catalog.changed", 1, out var catalogEvent)
     || catalogEvent != typeof(SmokeCatalogChanged))
     throw new InvalidOperationException("The packed generated event catalog did not resolve its declared event.");
 
+var scenario = new ProjectorScenario().Given(new SmokeCatalogChanged(), new SmokeCatalogConfirmed());
+var source = EventStreamPattern.ForPattern("smoke", "catalog");
 var builder = WebApplication.CreateSlimBuilder(args);
+builder.Services.AddSingleton(scenario.Store);
 builder.WebHost.UseUrls("http://127.0.0.1:0");
 _ = builder.Services.AddSingleton<SmokeGuardProbe>();
 _ = builder.Services.AddSingleton<SmokeContinuationProbe>();
@@ -31,6 +35,7 @@ _ = builder.Services.AddPortia().ConfigureJson(options =>
             ? typeof(string[])
             : type == typeof(SmokeCount) ? typeof(int) : null;
     })
+    .AddProjector<SmokeProjector>("SmokeProjector", source)
     .AddRequestHandler<SmokeRequestHandler>()
     .AddRequestHandler<SmokeExternalHandler>()
     .AddRequestHandler<SmokeUploadHandler>()
@@ -39,6 +44,16 @@ _ = builder.Services.AddPortia().ConfigureJson(options =>
     .AddRequestGuard<SmokeRequestGuard>();
 _ = builder.Services.AddCors(options => options.AddPolicy("smoke", policy => policy.WithOrigins("https://trusted.example")));
 var app = builder.Build();
+using (var scope = app.Services.CreateScope())
+{
+    var registration = scope.ServiceProvider.GetRequiredService<ProjectorRegistration>();
+    var projector = registration.Resolve(scope.ServiceProvider);
+    if (registration.ProjectorType != typeof(SmokeProjector) || projector.Name != "SmokeProjector")
+        throw new InvalidOperationException("Native projector registration lost its application type or name.");
+    await scenario.RunAsync(projector);
+    if (scope.ServiceProvider.GetRequiredService<SmokeProjector>().Events != "OC")
+        throw new InvalidOperationException("Native typed dispatch lost event order.");
+}
 _ = app.UseCors("smoke");
 _ = app.MapPortiaOpenApi();
 _ = app.MapPortiaGet<SmokeExternalRequest, App_A.FirstPayload>("/external-contract");
@@ -362,10 +377,14 @@ sealed class SmokeGuardProbe
 [JsonSerializable(typeof(SmokeUpload))]
 [JsonSerializable(typeof(SmokeBinding))]
 [JsonSerializable(typeof(SmokeCatalogChanged))]
+[JsonSerializable(typeof(SmokeCatalogConfirmed))]
 sealed partial class SmokeJsonContext : JsonSerializerContext;
 
 [Discriminator("smoke.catalog.changed", 1)]
 sealed record SmokeCatalogChanged : DomainEvent;
+
+[Discriminator("smoke.catalog.confirmed", 1)]
+sealed record SmokeCatalogConfirmed : DomainEvent;
 
 [Discriminator("smoke.binding")]
 [RequestRoute("public", "smoke", "binding", "read")]
@@ -389,4 +408,22 @@ sealed class SmokeExternalHandler : IRequestHandler<SmokeExternalRequest, App_A.
 {
     public ValueTask<Result<App_A.FirstPayload>> HandleAsync(IRequestContext<SmokeExternalRequest> context, CancellationToken ct) =>
         ValueTask.FromResult(Result<App_A.FirstPayload>.Success(new App_A.FirstPayload("external")));
+}
+
+sealed class SmokeProjector(IProjectionStore store) : IProjectorHandler<SmokeCatalogChanged>, IProjectorHandler<SmokeCatalogConfirmed>
+{
+    public IProjectionStore Store => store;
+    public string Events { get; private set; } = "";
+
+    public ValueTask<Result> HandleAsync(IProjectorContext<SmokeCatalogChanged> context, CancellationToken ct)
+    {
+        Events += "O";
+        return ValueTask.FromResult(Result.Success);
+    }
+
+    public ValueTask<Result> HandleAsync(IProjectorContext<SmokeCatalogConfirmed> context, CancellationToken ct)
+    {
+        Events += "C";
+        return ValueTask.FromResult(Result.Success);
+    }
 }

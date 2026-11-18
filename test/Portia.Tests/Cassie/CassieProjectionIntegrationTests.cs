@@ -51,7 +51,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         await using (var repository = new AccountRepository(database))
         {
             var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ProjectorRunner(events)
-                .RunAsync(new AccountProjector(repository, identity.Pattern, new FailurePlan(expectedFailure)),
+                .RunAsync(Adapt(repository, identity, new FailurePlan(expectedFailure)),
                     ProjectionCheckpoint.Start).AsTask());
             Assert.Same(expectedFailure, failure.Error);
             Assert.Equal(ProjectionCheckpoint.Start, await repository.LoadCheckpointAsync(identity));
@@ -61,7 +61,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         ProjectionCheckpoint committed;
         await using (var repository = new AccountRepository(database))
         {
-            committed = await new ProjectorRunner(events).RunAsync(new AccountProjector(repository, identity.Pattern),
+            committed = await new ProjectorRunner(events).RunAsync(Adapt(repository, identity),
                 await repository.LoadCheckpointAsync(identity));
             Assert.Equal(new AccountReadModel(account.ToString(), 625),
                 await repository.GetAsync(identity, account.ToString()));
@@ -70,7 +70,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         await using (var repository = new AccountRepository(database))
         {
             Assert.Equal(committed, await repository.LoadCheckpointAsync(identity));
-            var resumed = await new ProjectorRunner(events).RunAsync(new AccountProjector(repository, identity.Pattern),
+            var resumed = await new ProjectorRunner(events).RunAsync(Adapt(repository, identity),
                 await repository.LoadCheckpointAsync(identity));
             Assert.Equal(committed, resumed);
             Assert.Equal(new AccountReadModel(account.ToString(), 625),
@@ -78,7 +78,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
             Assert.Null(await repository.GetAsync(Identity(otherRealm), account.ToString()));
 
             var candidate = new CheckpointIdentity(identity.ComponentName, identity.Pattern, "candidate");
-            _ = await new ProjectorRunner(events).RunAsync(new AccountProjector(repository, identity.Pattern),
+            _ = await new ProjectorRunner(events).RunAsync(Adapt(repository, identity),
                 await repository.LoadCheckpointAsync(candidate), new ProjectionRunOptions { RebuildId = "candidate" });
             Assert.Equal(new AccountReadModel(account.ToString(), 625),
                 await repository.GetAsync(candidate, account.ToString()));
@@ -88,10 +88,12 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
 
     /// <summary>Hosted retry and permanent-failure decisions preserve real model data and progress.</summary>
     /// <param name="transient">Whether the first returned failure permits a retry.</param>
+    /// <param name="batchSize">Source records committed together.</param>
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task ShouldApplyFrameworkRetryPolicyGivenFitzAndCassieFailures(bool transient)
+    [InlineData(true, 512)]
+    [InlineData(false, 512)]
+    [InlineData(false, 1)]
+    public async Task ShouldApplyFrameworkRetryPolicyGivenFitzAndCassieFailures(bool transient, int batchSize)
     {
         // Arrange
         await using var database = await Database.OpenAsync();
@@ -115,11 +117,13 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
             database.Accounts,
             () => committed.TrySetResult()));
         services.AddScoped(sp =>
-            new AccountProjector(sp.GetRequiredService<AccountRepository>(), identity.Pattern, failures));
+            new AccountProjector(sp.GetRequiredService<AccountRepository>(), failures));
+        services.AddScoped<IProjectionStore>(_ => throw new InvalidOperationException("Unexpected store resolution."));
         services.AddPortia().AddCassie(database.Source.ConnectionString, database.Checkpoints)
-            .AddCassieProjection<AccountProjector, AccountRepository>(identity.ComponentName, WorkloadScope.Global,
+            .AddProjector<AccountProjector>(identity.ComponentName, identity.Pattern,
                 options =>
                 {
+                    options.Processing = new ProjectionRunOptions { MaxBatchSize = batchSize };
                     options.PollInterval = TimeSpan.FromHours(1);
                     options.MaximumFailureDelay = TimeSpan.FromMilliseconds(20);
                     options.FailureAttemptLimit = 3;
@@ -157,6 +161,12 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
             {
                 Assert.NotEqual(ProjectionCheckpoint.Start, checkpoint);
                 Assert.Equal(new AccountReadModel(account.ToString(), 625),
+                    await repository.GetAsync(identity, account.ToString()));
+            }
+            else if (batchSize == 1)
+            {
+                Assert.NotEqual(ProjectionCheckpoint.Start, checkpoint);
+                Assert.Equal(new AccountReadModel(account.ToString(), 500),
                     await repository.GetAsync(identity, account.ToString()));
             }
             else
@@ -257,13 +267,18 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
 
     internal sealed record AccountReadModel(string AccountId, long BalanceCents);
 
-    internal sealed partial class AccountProjector(
+    static Projector Adapt(AccountRepository repository, CheckpointIdentity identity, FailurePlan? failures = null) =>
+        ProjectorDispatch<AccountProjector>.Create(new AccountProjector(repository, failures), identity.ComponentName,
+            identity.Pattern);
+
+    internal sealed class AccountProjector(
         AccountRepository accounts,
-        EventStreamPattern pattern,
         FailurePlan? failures = null)
-        : BatchProjector(accounts, pattern, "AccountProjector"), IProjectorHandler<ValueChanged>,
+        : IProjectorHandler<ValueChanged>,
             IProjectorHandler<ValueIncremented>
     {
+        public IProjectionStore Store => accounts;
+
         public async ValueTask<Result> HandleAsync(IProjectorContext<ValueChanged> context, CancellationToken ct)
         {
             await accounts.AddAsync(context.Trigger.Metadata.AggregateId.ToString(), context.Trigger.Value, ct);

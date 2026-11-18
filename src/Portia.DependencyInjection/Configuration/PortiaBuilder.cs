@@ -401,6 +401,35 @@ public sealed class PortiaBuilder
         return AddWorkload(registration);
     }
 
+    /// <summary>Registers a typed projector for one ordered source.</summary>
+    /// <typeparam name="TProjector">The application projector.</typeparam>
+    /// <param name="name">The workload and checkpoint name.</param>
+    /// <param name="source">The event streams to project.</param>
+    /// <param name="configure">Optional workload settings.</param>
+    /// <returns>This builder.</returns>
+    [SuppressMessage("ApiDesign", "RS0026", Justification = "The source and scope overloads have distinct required argument types.")]
+    public PortiaBuilder AddProjector<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+    TProjector>(string name, EventStreamPattern source, Action<WorkloadOptions>? configure = null)
+        where TProjector : class, IProjector
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var descriptor = new ProjectorRegistration(typeof(TProjector),
+            static services => services.GetRequiredService<ScopedDispatch<TProjector>>().Projector)
+        {
+            Source = source,
+            Subscriptions = ProjectorDispatch<TProjector>.Subscriptions
+        };
+        _ = AddWorkload(new WorkloadRegistration(descriptor, name,
+            source.IsTenantTemplate ? WorkloadScope.PerTenant : WorkloadScope.Global, configure));
+        Services.TryAddScoped<TProjector>();
+        Services.TryAddScoped<ScopedDispatch<TProjector>>(services => new(ProjectorDispatch<TProjector>.Create(
+            services.GetRequiredService<TProjector>(), name, source)));
+        return this;
+    }
+
+    sealed record ScopedDispatch<T>(Projector Projector);
+
     PortiaBuilder AddWorkload(WorkloadRegistration registration)
     {
         if (registration.ComponentType.IsAbstract || registration.ComponentType.ContainsGenericParameters)

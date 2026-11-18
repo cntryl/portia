@@ -20,10 +20,12 @@ public static class AccountProjection
 }
 
 /// <summary>Projects account events into the ordinary account read repository.</summary>
-public sealed partial class AccountProjector(IAccountProjectionRepository accounts)
-    : BatchProjector(accounts, EventStreamPattern.ForTenant("accounts"), AccountRepository.ProjectorName),
-        IProjectorHandler<AccountOpened>, IProjectorHandler<FundsDeposited>
+public sealed class AccountProjector(IAccountProjectionRepository accounts)
+    : IProjectorHandler<AccountOpened>, IProjectorHandler<FundsDeposited>
 {
+    /// <inheritdoc />
+    public IProjectionStore Store => accounts;
+
     /// <inheritdoc />
     public ValueTask<Result> HandleAsync(IProjectorContext<AccountOpened> context, CancellationToken ct) =>
         ApplyAsync(context.Trigger, ct);

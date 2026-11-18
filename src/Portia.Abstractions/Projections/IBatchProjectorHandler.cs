@@ -2,7 +2,7 @@ namespace Cntryl.Portia;
 
 /// <summary>Handles an ordered contiguous group of events inside a bounded projection batch.</summary>
 /// <typeparam name="TEvent">The event type.</typeparam>
-public interface IBatchProjectorHandler<in TEvent>
+public interface IBatchProjectorHandler<in TEvent> : IProjector
     where TEvent : DomainEvent
 {
     /// <summary>Applies events in source order through constructor-injected dependencies.</summary>

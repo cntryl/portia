@@ -4,7 +4,7 @@ namespace Cntryl.Portia;
 ///     Sends requests to an out-of-process handler over Fitz RPC.
 /// </summary>
 /// <remarks>
-///     This deliberately imposes no timeout of its own on <see cref="IRpcClient.CallAsync(string, ReadOnlyMemory{byte}, CancellationToken)" /> — how
+///     This deliberately imposes no timeout of its own on <see cref="IRpcClient.CallStreamingAsync(string, ReadOnlyMemory{byte}, CancellationToken)" /> — how
 ///     (or whether) a call to a route with no registered worker fails is entirely Fitz's contract to
 ///     honor, not Portia's to second-guess with an opinionated default. Confirmed against a real
 ///     broker (see <c>FitzBrokerIntegrationTests.ShouldFailFastWhenNoWorkerIsRegisteredForRoute</c>):
@@ -255,7 +255,7 @@ public sealed class FitzRemoteRequestSender(
     async ValueTask<FitzRpcCallOutcome> CallWithOutcomeAsync(string route, ReadOnlyMemory<byte> body,
         CancellationToken ct)
     {
-        var call = _rpc.CallAsync(route, body, ct);
+        var call = _rpc.CallStreamingAsync(route, body, ct);
         RpcResponseFrame? lastFrame = null;
         // A received frame is not necessarily terminal; only normal enumeration completion below
         // proves that the last frame is the complete response.
@@ -343,7 +343,7 @@ public sealed class FitzRemoteRequestSender(
     {
         RpcResponseFrame? lastFrame = null;
 
-        await foreach (var frame in _rpc.CallAsync(route, body, ct).WithCancellation(ct).ConfigureAwait(false))
+        await foreach (var frame in _rpc.CallStreamingAsync(route, body, ct).WithCancellation(ct).ConfigureAwait(false))
             lastFrame = frame;
 
         return lastFrame ?? throw new InvalidOperationException("The RPC call produced no response.");

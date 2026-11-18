@@ -50,6 +50,17 @@ public sealed class ProjectorScenario
         return this;
     }
 
+    /// <summary>Runs a constructed application projector through its generated dispatch.</summary>
+    /// <typeparam name="T">The application projector type.</typeparam>
+    /// <param name="projector">The projector and its repository.</param>
+    /// <param name="name">The checkpoint name.</param>
+    /// <param name="source">The source pattern.</param>
+    /// <param name="ct">A token that can cancel the run.</param>
+    /// <returns>The completed run.</returns>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026", Justification = "The plain projector overload requires its name and source.")]
+    public Task RunAsync<T>(T projector, string name, EventStreamPattern source, CancellationToken ct = default)
+        where T : class, IProjector => RunAsync(ProjectorDispatch<T>.Create(projector, name, source), ct);
+
     /// <summary>
     ///     Projects every given event not yet committed, resuming from <see cref="Store" />'s checkpoint as a hosted
     ///     projector does. A tenant-scoped projector runs bound to a test tenant.

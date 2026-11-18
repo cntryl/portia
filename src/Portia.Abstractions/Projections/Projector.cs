@@ -16,7 +16,7 @@ namespace Cntryl.Portia;
 ///         projector; do not expect to write an alternative runner.
 ///     </para>
 /// </summary>
-public abstract class Projector
+public abstract class Projector : IProjector
 {
     WorkloadIdentity? _boundIdentity;
 
@@ -50,7 +50,10 @@ public abstract class Projector
     /// </summary>
     public EventStreamPattern Pattern { get; private set; }
 
+    IProjectionStore IProjector.Store => Store;
+
     internal IProjectionStore Store { get; }
+    internal Type? ApplicationType { get; set; }
     internal virtual bool IsBatch => false;
 
     /// <summary>

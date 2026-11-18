@@ -912,7 +912,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         // an application's read model would: through the store's own read transaction for that realm.
         public async ValueTask<string?> ReadAsync(CheckpointIdentity identity, CancellationToken ct)
         {
-            await using var tx = await BeginReadAsync(identity.Pattern.Realm, ct);
+            await using var tx = await BeginReadAsync(identity, ct);
             var result = await tx.GetAsync(ValueKey(identity), ct);
             return result is KvFound { Value: var resultBytes } ? Encoding.UTF8.GetString(resultBytes.Span) : null;
         }

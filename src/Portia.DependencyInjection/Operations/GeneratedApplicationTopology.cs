@@ -16,6 +16,10 @@ sealed class GeneratedApplicationTopology(
                 return new ProcessorTopology(w.Name, component, w.Descriptor.Kind, w.Scope.ToString(),
                     [subscription], "typed dispatch; opaque dependencies unknown");
 
+            if (w.Descriptor is ProjectorRegistration { Subscriptions: { } subscriptions })
+                return new ProcessorTopology(w.Name, component, w.Descriptor.Kind, w.Scope.ToString(),
+                    subscriptions.ToArray(), "generated dispatch; opaque dependencies unknown");
+
             var generated = w.ComponentType.GetCustomAttribute<ProcessorTopologyAttribute>();
             return new ProcessorTopology(w.Name, component,
                 w.Descriptor.Kind, w.Scope.ToString(),

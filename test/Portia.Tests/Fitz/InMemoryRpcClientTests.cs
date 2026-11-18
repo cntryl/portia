@@ -24,7 +24,7 @@ public sealed class InMemoryRpcClientTests
         });
 
         // Act
-        var call = rpc.CallAsync("rpc://test", ReadOnlyMemory<byte>.Empty, TimeSpan.FromMinutes(1));
+        var call = rpc.CallStreamingAsync("rpc://test", ReadOnlyMemory<byte>.Empty, TimeSpan.FromMinutes(1));
 
         // Assert
         Assert.False(call.Cancellation.IsCompleted);
@@ -53,7 +53,7 @@ public sealed class InMemoryRpcClientTests
         });
 
         // Act
-        var call = rpc.CallAsync("rpc://test", ReadOnlyMemory<byte>.Empty, TimeSpan.FromSeconds(1));
+        var call = rpc.CallStreamingAsync("rpc://test", ReadOnlyMemory<byte>.Empty, TimeSpan.FromSeconds(1));
 
         // Assert
         var failure = Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
@@ -89,7 +89,7 @@ public sealed class InMemoryRpcClientTests
         });
 
         // Act
-        await foreach (var _ in rpc.CallAsync("rpc://tenant-a/orders/place/run", ReadOnlyMemory<byte>.Empty))
+        await foreach (var _ in rpc.CallStreamingAsync("rpc://tenant-a/orders/place/run", ReadOnlyMemory<byte>.Empty))
         {
         }
 
@@ -117,7 +117,7 @@ public sealed class InMemoryRpcClientTests
         // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await foreach (var _ in rpc.CallAsync("rpc://tenant-a/orders/place/run", ReadOnlyMemory<byte>.Empty))
+            await foreach (var _ in rpc.CallStreamingAsync("rpc://tenant-a/orders/place/run", ReadOnlyMemory<byte>.Empty))
             {
             }
         });
@@ -143,7 +143,7 @@ public sealed class InMemoryRpcClientTests
         await superseded.DisposeAsync();
 
         // Act
-        await foreach (var _ in rpc.CallAsync("rpc://tenant-a/orders/place/run", ReadOnlyMemory<byte>.Empty))
+        await foreach (var _ in rpc.CallStreamingAsync("rpc://tenant-a/orders/place/run", ReadOnlyMemory<byte>.Empty))
         {
         }
 
@@ -167,7 +167,7 @@ public sealed class InMemoryRpcClientTests
             var pattern = $"rpc://tenant/area/resource-{index}/run";
             var registration = await rpc.RegisterWorkerAsync(pattern, (_, _, _) => ValueTask.CompletedTask,
                 ct: ct);
-            await foreach (var _ in rpc.CallAsync($"rpc://tenant/area/resource-{index}/run",
+            await foreach (var _ in rpc.CallStreamingAsync($"rpc://tenant/area/resource-{index}/run",
                                ReadOnlyMemory<byte>.Empty, ct))
             {
             }

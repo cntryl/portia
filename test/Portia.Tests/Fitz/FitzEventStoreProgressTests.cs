@@ -361,15 +361,13 @@ public sealed class FitzEventStoreProgressTests
         return new StreamReadItem(route, StreamReadItemKind.Event, record);
     }
 
-    static StreamReadPage Page(bool hasMore, params StreamReadItem[] items)
+    static StreamReadBatch Page(bool hasMore, params StreamReadItem[] items)
     {
         var last = items.LastOrDefault()?.Record;
-        return new StreamReadPage(items, new StreamReadCursor(last?.Offset ?? 0, last?.AreaOffset,
-            last?.RealmOffset, null, null, null, hasMore));
+        return new StreamReadBatch(items, 0, (last?.AreaOffset ?? 0) + 1, !hasMore);
     }
 
-    static StreamReadPage EmptyPage(ulong coveredOffset) => new([], new StreamReadCursor(
-        coveredOffset, coveredOffset, coveredOffset, null, null, null, false));
+    static StreamReadBatch EmptyPage(ulong coveredOffset) => new([], 0, coveredOffset + 1, true);
 
     sealed class UnusedSerializer : IDomainEventSerializer
     {
@@ -381,22 +379,27 @@ public sealed class FitzEventStoreProgressTests
     }
 
     sealed class ProgressClient(
-        StreamReadPage page,
+        StreamReadBatch page,
         StreamMetadata? metadata = null,
-        StreamReadPage? previousPage = null) : IStreamClient
+        StreamReadBatch? previousPage = null) : IStreamClient
     {
         public List<(string Route, ulong Offset, ulong Limit)> Reads { get; } = [];
         public List<string> MetadataRoutes { get; } = [];
         public List<ulong?> ByteBudgets { get; } = [];
 
-        public Task<StreamReadPage> ReadPageAsync(string route, ulong startOffset, ulong limit = 100,
-            StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null,
-            ulong? capturedWatermark = null, CancellationToken ct = default)
+        public IAsyncEnumerable<StreamReadBatch> ReadAsync(string route, ulong startOffset, StreamReadMode mode,
+            StreamReadOptions? options = null, CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
-            Reads.Add((route, startOffset, limit));
-            ByteBudgets.Add(maxBytes);
-            return Task.FromResult(Reads.Count > 1 ? previousPage ?? page : page);
+            Reads.Add((route, startOffset, options!.BatchSize));
+            ByteBudgets.Add(options.MaxBytes);
+            var batch = Reads.Count > 1 ? previousPage ?? page : page;
+            var result = batch.Items.Count == 0 && batch.NextOffset == startOffset + 1
+                ? new StreamReadBatch([], startOffset, startOffset, batch.CaughtUp)
+                : batch;
+            if (route.EndsWith("/*/*", StringComparison.Ordinal) && batch.Items.Count > 0 && batch.Items[^1].Record?.RealmOffset is { } realm)
+                result = new StreamReadBatch(batch.Items, startOffset, realm + 1, batch.CaughtUp);
+            return new[] { result }.ToAsyncEnumerable();
         }
 
         public Task<StreamMetadata> MetadataAsync(string route, CancellationToken ct = default)
@@ -408,10 +411,6 @@ public sealed class FitzEventStoreProgressTests
 
         public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null,
             CancellationToken ct = default) => throw new NotSupportedException();
-
-        public IAsyncEnumerable<StreamRecord> ReadAsync(string route, ulong startOffset, ulong limit = 100,
-            StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null,
-            ulong? capturedWatermark = null, CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) =>
             throw new NotSupportedException();

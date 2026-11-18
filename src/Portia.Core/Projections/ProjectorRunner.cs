@@ -161,7 +161,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
             var diagnostic = ex as ProcessorFailureException
                              ?? new ProcessorFailureException(identity, checkpoint, stage, first, last,
                                  UninitializedResult.Is(ex)
-                                     ? UninitializedResult.ReturnedBy("projector", projector.GetType(), ex)
+                                     ? UninitializedResult.ReturnedBy("projector", projector.ApplicationType ?? projector.GetType(), ex)
                                      : ex);
             failure = diagnostic;
         }

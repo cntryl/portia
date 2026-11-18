@@ -15,7 +15,7 @@ public static class AccountFeature
         .AddRequestPipelineBehavior<AccountRequestBehavior>(order: 100)
         .AddRequestGuard<AccountTenantGuard>()
         .AddRequestGuard<AccountOperationsGuard>()
-        .AddProjector<AccountProjector>(AccountRepository.ProjectorName, WorkloadScope.PerTenant);
+        .AddProjector<AccountProjector>(AccountRepository.ProjectorName, EventStreamPattern.ForTenant("accounts"));
 }
 
 /// <summary>Central application setup reused by the API and worker hosts.</summary>

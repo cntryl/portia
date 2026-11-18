@@ -120,7 +120,7 @@ public sealed class FitzEventStoreReadTelemetryTests
         return (new FitzEventStore(pages, serializer), new EventStreamAddress("test", "events", "one"));
     }
 
-    static StreamReadPage CreatePage(int count, EventStreamAddress? metadataStream = null)
+    static StreamReadBatch CreatePage(int count, EventStreamAddress? metadataStream = null)
     {
         var stream = new EventStreamAddress("test", "events", "one");
         var serializer = TestJson.DomainSerializer(
@@ -136,9 +136,7 @@ public sealed class FitzEventStoreReadTelemetryTests
             return new StreamReadItem(stream.ToString(), 0, record, (ulong)index,
                 (ulong)index, (ulong)index);
         }).ToArray();
-        return new StreamReadPage(items,
-            new StreamReadCursor((ulong)(count - 1), (ulong)(count - 1), (ulong)(count - 1),
-                (ulong)(count - 1), null, null, false));
+        return new StreamReadBatch(items, 0, (ulong)count, true);
     }
 
     sealed class Measurements
@@ -174,26 +172,21 @@ public sealed class FitzEventStoreReadTelemetryTests
         }
     }
 
-    sealed class Pages(Exception? failure = null, StreamReadPage? page = null) : IStreamClient
+    sealed class Pages(Exception? failure = null, StreamReadBatch? page = null) : IStreamClient
     {
         readonly Exception? _failure = failure;
-        readonly StreamReadPage? _page = page;
+        readonly StreamReadBatch? _page = page;
 
-        public Pages(StreamReadPage page) : this(null, page)
+        public Pages(StreamReadBatch page) : this(null, page)
         {
         }
 
-        public Task<StreamReadPage> ReadPageAsync(string route, ulong startOffset, ulong limit = 100,
-            StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null,
-            ulong? capturedWatermark = null, CancellationToken ct = default) =>
-            _failure is null ? Task.FromResult(_page!) : Task.FromException<StreamReadPage>(_failure);
+        public IAsyncEnumerable<StreamReadBatch> ReadAsync(string route, ulong startOffset, StreamReadMode mode,
+            StreamReadOptions? options = null, CancellationToken ct = default) =>
+            _failure is null ? new[] { _page! }.ToAsyncEnumerable() : throw _failure;
 
         public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null,
             CancellationToken ct = default) => throw new NotSupportedException();
-
-        public IAsyncEnumerable<StreamRecord> ReadAsync(string route, ulong startOffset, ulong limit = 100,
-            StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null,
-            ulong? capturedWatermark = null, CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) =>
             throw new NotSupportedException();

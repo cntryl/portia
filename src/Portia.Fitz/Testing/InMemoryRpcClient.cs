@@ -6,7 +6,7 @@ namespace Cntryl.Portia.Testing;
 
 /// <summary>
 ///     Stands in for a real Fitz RPC broker for tests: routes a caller's
-///     <see cref="CallAsync(string, ReadOnlyMemory{byte}, CancellationToken)" />
+///     <see cref="CallStreamingAsync(string, ReadOnlyMemory{byte}, CancellationToken)" />
 ///     directly to a worker whose registration pattern matches the concrete route, in-process, with no
 ///     network hop. Patterns match as the broker matches them — <c>*</c> stands for exactly one whole
 ///     segment and <c>**</c> for zero or more — so a per-tenant request registered under
@@ -24,11 +24,11 @@ public sealed class InMemoryRpcClient : IRpcClient
     // Match IRpcClient's two overloads, including their optional cancellation tokens.
 #pragma warning disable RS0026
     /// <inheritdoc />
-    public RpcCall CallAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
-        CallAsync(route, body, null, ct);
+    public RpcCall CallStreamingAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
+        CallStreamingAsync(route, body, null, ct);
 
     /// <inheritdoc />
-    public RpcCall CallAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? timeout, CancellationToken ct = default)
+    public RpcCall CallStreamingAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? timeout, CancellationToken ct = default)
     {
         if (timeout < TimeSpan.Zero || timeout > TimeSpan.FromDays(1))
             throw new ArgumentOutOfRangeException(nameof(timeout), "RPC timeout must be between zero and one day.");

@@ -145,7 +145,7 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
 
     static void ReportProjectorEffects(List<Finding> findings, INamedTypeSymbol symbol, IParameterSymbol[] parameters)
     {
-        if (!DerivesFrom(symbol, "Cntryl.Portia.Projector"))
+        if (!ApplicationProject.IsProjector(symbol))
             return;
         // The projector's own projection store shares its commit, whatever else that repository derives from.
         foreach (var parameter in Parameters(parameters, EffectTypes)
@@ -357,7 +357,7 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
 
     static bool IsPortiaComponent(INamedTypeSymbol symbol) =>
         PortiaComponentRoles.IsComponent(symbol)
-        || DerivesFrom(symbol, "Cntryl.Portia.Projector")
+        || ApplicationProject.IsProjector(symbol)
         || DerivesFrom(symbol, "Cntryl.Portia.Reactor")
         || DerivesFrom(symbol, "Cntryl.Portia.Aggregate");
 

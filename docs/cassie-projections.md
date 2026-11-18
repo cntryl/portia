@@ -1,23 +1,24 @@
 # Cassie projection repositories
 
 `Cntryl.Portia.Cassie` connects Portia projectors to Cassie's native SQL transactions through
-`Cntryl.Cassie` 0.2.0. A repository owns persistence and queries. A read model is the simple data
+`Cntryl.Cassie` 0.2.1. A repository owns persistence and queries. A read model is the simple data
 contract returned by those queries. A projector applies committed events through the repository.
 
 ## Composition
 
 ```csharp
 services.AddSingleton<ITenantDirectory>(new FixedTenantDirectory(new TenantId("demo")));
+services.AddScoped<AccountRepository>();
 services.AddPortia()
     .AddCassie(connectionString)
-    .AddCassieProjection<AccountProjector, AccountRepository>(
-        AccountRepository.ProjectorName, WorkloadScope.PerTenant)
+    .AddProjector<AccountProjector>(
+        AccountRepository.ProjectorName, EventStreamPattern.ForTenant("accounts"))
     .AddFitz(configuration.GetSection("Fitz"))
     .AddWorkers();
 ```
 
 `AddCassie` registers one shared native data source and `CassieProjectionDatabase`.
-`AddCassieProjection` registers a scoped repository and the normal Portia projector workload.
+`AddProjector` resolves the scoped projector and opens its declared store.
 Queries can inject `AccountRepository` directly. Forward a query interface to that scoped instance
 when the application needs one; query interfaces need no checkpoint or transaction methods.
 
@@ -101,10 +102,11 @@ These handlers use the Account feature's `AccountOpened` and `FundsDeposited` ev
 their stable discriminators and source-generated JSON roots as for any other Portia events.
 
 ```csharp
-public sealed partial class AccountProjector(AccountRepository accounts)
-    : BatchProjector(accounts, EventStreamPattern.ForTenant("accounts"), AccountRepository.ProjectorName),
-      IProjectorHandler<AccountOpened>, IProjectorHandler<FundsDeposited>
+public sealed class AccountProjector(AccountRepository accounts)
+    : IProjectorHandler<AccountOpened>, IProjectorHandler<FundsDeposited>
 {
+    public IProjectionStore Store => accounts;
+
     public ValueTask<Result> HandleAsync(IProjectorContext<AccountOpened> context, CancellationToken ct) =>
         accounts.OpenAsync(context.Trigger.Metadata.AggregateId, context.Trigger.InitialBalanceCents, ct);
 

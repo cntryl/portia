@@ -19,7 +19,7 @@ public sealed class InMemoryRpcDeadlineTests
         // Act
         var exception = Record.Exception(() =>
         {
-            _ = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromMilliseconds(milliseconds));
+            _ = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromMilliseconds(milliseconds));
         });
 
         // Assert
@@ -38,7 +38,7 @@ public sealed class InMemoryRpcDeadlineTests
             Interlocked.Increment(ref dispatched);
             return ValueTask.CompletedTask;
         });
-        var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.Zero);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.Zero);
 
         // Act
         var failure = await Record.ExceptionAsync(() => ConsumeAsync(call).WaitAsync(HangGuard));
@@ -69,7 +69,7 @@ public sealed class InMemoryRpcDeadlineTests
         cancellation.Cancel();
 
         // Act
-        var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty,
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty,
             useConsumerToken ? CancellationToken.None : cancellation.Token);
 
         // Assert
@@ -91,7 +91,7 @@ public sealed class InMemoryRpcDeadlineTests
         var rpc = new InMemoryRpcClient();
         var probe = new IgnoringWorker();
         await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleAsync);
-        var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromSeconds(1));
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromSeconds(1));
 
         // Act
         var consumption = ConsumeAsync(call);
@@ -122,7 +122,7 @@ public sealed class InMemoryRpcDeadlineTests
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         await using var worker = await rpc.RegisterWorkerAsync(Route, (_, _, _) => new ValueTask(release.Task));
         var calls = Enumerable.Range(0, 64)
-            .Select(_ => rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromMilliseconds(1)))
+            .Select(_ => rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromMilliseconds(1)))
             .ToArray();
 
         // Act
@@ -162,7 +162,7 @@ public sealed class InMemoryRpcDeadlineTests
         var probe = new IgnoringWorker();
         await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleAsync);
         using var cancellation = new CancellationTokenSource();
-        var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty,
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty,
             useConsumerToken ? CancellationToken.None : cancellation.Token);
 
         // Act
@@ -198,7 +198,7 @@ public sealed class InMemoryRpcDeadlineTests
         await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleAsync);
         using var callerCancellation = new CancellationTokenSource();
         using var consumerCancellation = new CancellationTokenSource();
-        var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, callerCancellation.Token);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, callerCancellation.Token);
 
         // Act
         var consumption = ConsumeAsync(call, consumerCancellation.Token);
@@ -237,7 +237,7 @@ public sealed class InMemoryRpcDeadlineTests
         });
         await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleAsync);
         using var cancellation = new CancellationTokenSource();
-        var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, cancellation.Token);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, cancellation.Token);
         var consumption = ConsumeAsync(call);
 
         // Act
@@ -277,7 +277,7 @@ public sealed class InMemoryRpcDeadlineTests
             : writer.SendAsync(new byte[] { 42 }, true, ct));
 
         // Act
-        var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty);
 
         // Assert
         Assert.False(call.Cancellation.IsCompleted);
@@ -309,7 +309,7 @@ public sealed class InMemoryRpcDeadlineTests
             ValueTask.FromException(new OperationCanceledException(workerCancellation.Token)));
 
         // Act
-        var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, callerCancellation.Token);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, callerCancellation.Token);
 
         // Assert
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ConsumeAsync(call).WaitAsync(HangGuard));
@@ -326,7 +326,7 @@ public sealed class InMemoryRpcDeadlineTests
         var rpc = new InMemoryRpcClient();
 
         // Act
-        var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty);
 
         // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(() => ConsumeAsync(call).WaitAsync(HangGuard));
@@ -353,8 +353,8 @@ public sealed class InMemoryRpcDeadlineTests
 
         // Act
         var call = useMaximumBudget
-            ? rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromDays(1))
-            : rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty);
+            ? rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromDays(1))
+            : rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty);
 
         // Assert
         _ = Assert.IsType<RpcCall>(call);
@@ -389,7 +389,7 @@ public sealed class InMemoryRpcDeadlineTests
         var rpc = new InMemoryRpcClient();
         var probe = new IgnoringWorker();
         await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleStreamingAsync);
-        var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty);
         var enumerator = call.GetAsyncEnumerator();
         var firstMove = enumerator.MoveNextAsync().AsTask();
 
@@ -443,7 +443,7 @@ public sealed class InMemoryRpcDeadlineTests
         });
         await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleStreamingAsync);
         using var cancellation = new CancellationTokenSource();
-        var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, cancellation.Token);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, cancellation.Token);
         var enumerator = call.GetAsyncEnumerator();
         var firstMove = enumerator.MoveNextAsync().AsTask();
         Task<bool>? nextMove = null;
@@ -499,7 +499,7 @@ public sealed class InMemoryRpcDeadlineTests
         var rpc = new InMemoryRpcClient();
         var probe = new IgnoringWorker();
         await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleFinalThenWaitAsync);
-        var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty);
 
         // Act
         var consumption = ReadFramesAsync(call);
@@ -548,7 +548,7 @@ public sealed class InMemoryRpcDeadlineTests
                 completed.SetResult();
             }
         });
-        var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty, cancellation.Token);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, cancellation.Token);
 
         // Act
         var consumption = Task.Run(() => ConsumeAsync(call));
@@ -588,7 +588,7 @@ public sealed class InMemoryRpcDeadlineTests
             buffer[0] = 3;
             reused.SetResult();
         });
-        var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty);
 
         var frames = await ReadFramesAsync(call).WaitAsync(HangGuard);
 
@@ -617,7 +617,7 @@ public sealed class InMemoryRpcDeadlineTests
             if (!finishWithEmptyFrame)
                 await writer.SendAsync(new byte[] { 43 }, true, ct);
         });
-        var call = rpc.CallAsync(Route, ReadOnlyMemory<byte>.Empty);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty);
 
         // Act
         var frames = await ReadFramesAsync(call).WaitAsync(HangGuard);
@@ -663,7 +663,7 @@ public sealed class InMemoryRpcDeadlineTests
             }
         });
         var buffer = new byte[] { 1 };
-        var call = rpc.CallAsync(Route, buffer);
+        var call = rpc.CallStreamingAsync(Route, buffer);
         buffer[0] = 2;
 
         // Act

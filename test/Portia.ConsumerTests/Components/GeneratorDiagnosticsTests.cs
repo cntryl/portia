@@ -22,10 +22,11 @@ public sealed class GeneratorDiagnosticsTests
                               public sealed class AppDb : Microsoft.EntityFrameworkCore.DbContext;
                               public abstract class AppConnection : DbConnection;
                               public sealed class RpcClient : Grpc.Core.ClientBase<RpcClient>;
+                              public sealed record Updated : DomainEvent;
                               public sealed class Projection(
                                   IRequestBus bus, HttpClient http, IHttpClientFactory factory, SmtpClient smtp,
                                   Stripe.IStripeClient stripe, AppDb db, AppConnection connection, RpcClient rpc)
-                                  : Projector(null!, EventStreamPattern.ForPattern("events"));
+                                  : IProjectorHandler<Updated>;
                               """;
 
         // Act
@@ -261,9 +262,7 @@ public sealed class GeneratorDiagnosticsTests
         const string source = """
                               using Cntryl.Portia;
                               public sealed record Changed : DomainEvent;
-                              public sealed partial class Projection
-                                  : BatchProjector(null!, EventStreamPattern.ForPattern("events")),
-                                    IProjectorHandler<Changed>, IBatchProjectorHandler<Changed>;
+                              public sealed class Projection : IProjectorHandler<Changed>, IBatchProjectorHandler<Changed>;
                               """;
 
         // Act

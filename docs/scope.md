@@ -45,7 +45,7 @@ current, deliberate boundary.
   Portia reads, declared custom bodies included, is buffered before binding.
 - Portia never skips a poison projection or reaction event. Hosted passes retry with bounded
   exponential backoff and then fault the worker, leaving the last successful checkpoint intact.
-- `Cntryl.Portia.Cassie` supplies `CassieProjectionRepository` over `Cntryl.Cassie` 0.2.0 for native
+- `Cntryl.Portia.Cassie` supplies `CassieProjectionRepository` over `Cntryl.Cassie` 0.2.1 for native
   SQL model/checkpoint transactions, conditional checkpoint updates, isolated rebuild identities,
   and shared DI registration. Real Fitz/Cassie integration tests exercise the public projection
   conformance suite and hosted retries. Automatic promotion, freshness fences, crash/restart

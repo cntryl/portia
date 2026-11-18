@@ -20,9 +20,7 @@ namespace Cntryl.Portia;
 ///     Commits default to <see cref="KvDurability.Buffered" />. Data and checkpoint remain atomic,
 ///     but a crash can lose recent batches and cause replay. Derived repositories can explicitly
 ///     select <see cref="KvDurability.Sync" /> through the durability constructor.
-///     Rebuild generations share this workload resource. Portia separates their checkpoint keys;
-///     a derived repository must namespace its own data keys using <see cref="CheckpointIdentity.RebuildId" />
-///     to isolate candidate replay from live data before enabling rebuilds.
+///     Candidate generations use independent resources derived from their full checkpoint identities.
 /// </remarks>
 /// <param name="client">The Fitz KV client to open transactions against.</param>
 /// <param name="route">The Fitz KV base route this repository's per-workload resources derive from.</param>
@@ -68,9 +66,23 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
     ///     batch's staged writes, so a write computed from it would silently lose updates; reads during a
     ///     batch go through <see cref="Transaction" />.
     /// </exception>
-    protected async ValueTask<IKvTransaction> BeginReadAsync(string realm, CancellationToken ct = default)
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0027", Justification = "Realm and checkpoint identity select distinct read targets.")]
+    protected ValueTask<IKvTransaction> BeginReadAsync(string realm, CancellationToken ct = default) =>
+        OpenReadAsync(FitzKvCheckpoints.WorkloadRoute(_route, _componentName, realm), ct);
+
+    /// <summary>Opens the committed projection resource for a bound live or candidate identity.</summary>
+    /// <param name="identity">The checkpoint identity to query.</param>
+    /// <param name="ct">A token that can cancel the operation.</param>
+    /// <returns>A read-only transaction owned by the caller.</returns>
+    protected ValueTask<IKvTransaction> BeginReadAsync(CheckpointIdentity identity, CancellationToken ct)
     {
-        _ = IdentityText.Require(realm, nameof(realm));
+        ArgumentNullException.ThrowIfNull(identity);
+        EnsureOwnProjector(identity);
+        return OpenReadAsync(FitzKvCheckpoints.ProjectionRoute(_route, identity), ct);
+    }
+
+    async ValueTask<IKvTransaction> OpenReadAsync(string route, CancellationToken ct)
+    {
         if (Volatile.Read(ref _batchActive) != 0)
         {
             throw new InvalidOperationException(
@@ -79,8 +91,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
         }
 
         return await _client
-            .BeginAsync(FitzKvCheckpoints.WorkloadRoute(_route, _componentName, realm),
-                KvMode.ReadOnly, ct)
+            .BeginAsync(route, KvMode.ReadOnly, ct)
             .ConfigureAwait(false);
     }
 
@@ -120,7 +131,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
     {
         ArgumentNullException.ThrowIfNull(identity);
         EnsureOwnProjector(identity);
-        return FitzKvCheckpoints.LoadAsync(_client, FitzKvCheckpoints.WorkloadRoute(_route, identity), identity, ct);
+        return FitzKvCheckpoints.LoadAsync(_client, FitzKvCheckpoints.ProjectionRoute(_route, identity), identity, ct);
     }
 
     /// <inheritdoc />
@@ -141,7 +152,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
         try
         {
             transaction = await FitzKvCheckpoints
-                .BeginAsync(_client, FitzKvCheckpoints.WorkloadRoute(_route, context.Identity), KvMode.ReadWrite,
+                .BeginAsync(_client, FitzKvCheckpoints.ProjectionRoute(_route, context.Identity), KvMode.ReadWrite,
                     "Projection batch", context.Identity, ct)
                 .ConfigureAwait(false);
             _open = transaction;

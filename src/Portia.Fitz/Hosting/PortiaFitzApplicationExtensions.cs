@@ -57,7 +57,7 @@ public static class PortiaFitzApplicationExtensions
             timeout = TimeSpan.FromSeconds(seconds);
         }
 
-        var settings = new ClientConfig(uri, TokenProvider: token is null ? null : _ => ValueTask.FromResult(token));
+        var settings = new ClientConfig(uri) { TokenProvider = token is null ? null : _ => ValueTask.FromResult(token) };
         return Register(application, builder =>
         {
             if (configuration["ApplicationName"] is { } name)

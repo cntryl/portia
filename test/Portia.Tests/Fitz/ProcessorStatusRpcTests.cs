@@ -390,10 +390,10 @@ public sealed class ProcessorStatusRpcTests
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
 #pragma warning disable RS0026
-        public RpcCall CallAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
+        public RpcCall CallStreamingAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public RpcCall CallAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? timeout,
+        public RpcCall CallStreamingAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? timeout,
             CancellationToken ct = default) => throw new NotSupportedException();
 #pragma warning restore RS0026
 
@@ -440,12 +440,12 @@ public sealed class ProcessorStatusRpcTests
         internal TaskCompletionSource Withdrawn { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
 #pragma warning disable RS0026
-        public RpcCall CallAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default)
-            => _inner.CallAsync(route, body, ct);
+        public RpcCall CallStreamingAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default)
+            => _inner.CallStreamingAsync(route, body, ct);
 
-        public RpcCall CallAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? timeout,
+        public RpcCall CallStreamingAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? timeout,
             CancellationToken ct = default)
-            => _inner.CallAsync(route, body, timeout, ct);
+            => _inner.CallStreamingAsync(route, body, timeout, ct);
 #pragma warning restore RS0026
 
         public async Task<RpcWorkerRegistration> RegisterWorkerAsync(string pattern,

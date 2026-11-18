@@ -61,6 +61,13 @@ public sealed class AccountRepository : FitzKvProjectionStore, IAccountReadRepos
         return await ReadAsync(transaction, accountId, ct).ConfigureAwait(false);
     }
 
+    /// <summary>Reads the committed account in the specified live or candidate projection.</summary>
+    public async ValueTask<AccountReadModel?> GetAsync(CheckpointIdentity identity, Uuid accountId, CancellationToken ct)
+    {
+        await using var transaction = await BeginReadAsync(identity, ct).ConfigureAwait(false);
+        return await ReadAsync(transaction, accountId, ct).ConfigureAwait(false);
+    }
+
     /// <inheritdoc />
     public ValueTask<AccountReadModel?> GetForUpdateAsync(Uuid accountId, CancellationToken ct) =>
         ReadAsync(Transaction, accountId, ct);

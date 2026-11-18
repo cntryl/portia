@@ -51,6 +51,8 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         }
 
         var projector = InheritsFrom(symbol, "Cntryl.Portia.Projector");
+        var plain = !projector && symbol.AllInterfaces.Any(i => SymbolNames.Is(i, "Cntryl.Portia.IProjector"));
+        projector |= plain;
         if (!projector && !InheritsFrom(symbol, "Cntryl.Portia.Reactor"))
             return null;
 
@@ -86,12 +88,12 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
             ? null
             : new Processor(symbol.Name, symbol.ToDisplayString(),
                 symbol.ContainingNamespace.IsGlobalNamespace ? null : symbol.ContainingNamespace.ToDisplayString(),
-                GetParents(symbol), GeneratedTypeShape.HintName(symbol),
+                plain ? [] : GetParents(symbol), GeneratedTypeShape.HintName(symbol),
                 DiagnosticLocation.From(symbol.Locations.FirstOrDefault()),
-                GeneratedTypeShape.UnsupportedReason(symbol, true),
+                GeneratedTypeShape.UnsupportedReason(symbol, !plain),
                 GeneratedTypeShape.UnsupportedReason(symbol) is null,
-                declaration.Modifiers.Any(SyntaxKind.PartialKeyword), projector,
-                InheritsFrom(symbol, projector ? "Cntryl.Portia.BatchProjector" : "Cntryl.Portia.BatchReactor"),
+                plain || declaration.Modifiers.Any(SyntaxKind.PartialKeyword), projector, plain,
+                plain || InheritsFrom(symbol, projector ? "Cntryl.Portia.BatchProjector" : "Cntryl.Portia.BatchReactor"),
                 handlers);
     }
 
@@ -160,7 +162,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
                 .Append(SymbolDisplay.FormatLiteral(handler.InterfaceType, true))
                 .Append(", ((global::Cntryl.Portia.")
                 .Append(processor.Projector ? "IProjectorHandler<" : "IReactorHandler<").Append(handler.Type)
-                .Append(">)this), ")
+                .Append(processor.Plain ? ">)target), " : ">)this), ")
                 .Append(processor.Projector
                     ? "new global::Cntryl.Portia.ProjectorContext<" + handler.Type + ">(typed, record, context), ct);"
                     : "new global::Cntryl.Portia.ReactorContext<" + handler.Type + ">(typed, record, execution), ct);")
@@ -230,7 +232,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
                     .Append(SymbolDisplay.FormatLiteral(handler.InterfaceType, true))
                     .Append(", ((global::Cntryl.Portia.")
                     .Append(processor.Projector ? "IBatchProjectorHandler<" : "IBatchReactorHandler<")
-                    .Append(handler.Type).Append(">)this), batch, ")
+                    .Append(handler.Type).Append(processor.Plain ? ">)target), batch, " : ">)this), batch, ")
                     .Append("ct).ConfigureAwait(false);\n");
                 Line(source, depth + 4, "if (!result.IsSuccess)");
                 Line(source, depth + 5, "return result;");
@@ -287,9 +289,21 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
 
         _ = source.Append(' ', processor.Parents.Length * 4)
             .Append("[global::Cntryl.Portia.ProcessorTopologyAttribute(");
-        _ = source.Append(string.Join(", ", processor.Handlers.Select(h => SymbolDisplay.FormatLiteral(
-            h.DisplayType + (h.Batch ? " [batch]" : " [single]"), true))));
+        var subscriptions = string.Join(", ", processor.Handlers.Select(h => SymbolDisplay.FormatLiteral(
+            h.DisplayType + (h.Batch ? " [batch]" : " [single]"), true)));
+        _ = source.Append(subscriptions);
         _ = source.Append(")]\n");
+        if (processor.Plain)
+        {
+            var target = "global::" + processor.DisplayName;
+            var adapter = processor.HintName + "_PortiaDispatch";
+            Line(source, processor.Parents.Length, $"internal sealed class {adapter}({target} target, string name, global::Cntryl.Portia.EventStreamPattern source) : global::Cntryl.Portia.BatchProjector(((global::Cntryl.Portia.IProjector)target).Store, source, name)");
+            Line(source, processor.Parents.Length, "{");
+            Line(source, processor.Parents.Length + 1, "[global::System.Runtime.CompilerServices.ModuleInitializer]");
+            Line(source, processor.Parents.Length + 1, $"internal static void Register() => global::Cntryl.Portia.ProjectorDispatch<{target}>.Register(static (value, name, source) => new {adapter}(value, name, source), {subscriptions});");
+            return source;
+        }
+
         Line(source, processor.Parents.Length, "partial class @" + processor.Name);
         Line(source, processor.Parents.Length, "{");
         return source;
@@ -337,6 +351,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         bool onlyContainersUnsupported,
         bool partial,
         bool projector,
+        bool plain,
         bool batch,
         Handler[] handlers) : IEquatable<Processor>
     {
@@ -350,11 +365,12 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         public bool OnlyContainersUnsupported { get; } = onlyContainersUnsupported;
         public bool Partial { get; } = partial;
         public bool Projector { get; } = projector;
+        public bool Plain { get; } = plain;
         public bool Batch { get; } = batch;
         public Handler[] Handlers { get; } = handlers;
 
         public Processor WithoutLocation() => new(Name, DisplayName, Namespace, Parents, HintName,
-            default, UnsupportedReason, OnlyContainersUnsupported, Partial, Projector, Batch, Handlers);
+            default, UnsupportedReason, OnlyContainersUnsupported, Partial, Projector, Plain, Batch, Handlers);
 
         public bool Equals(Processor? other) => other is not null && Name == other.Name &&
                                                 DisplayName == other.DisplayName && Namespace == other.Namespace &&
@@ -363,7 +379,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
                                                 UnsupportedReason == other.UnsupportedReason &&
                                                 OnlyContainersUnsupported == other.OnlyContainersUnsupported &&
                                                 Partial == other.Partial &&
-                                                Projector == other.Projector && Batch == other.Batch &&
+                                                Plain == other.Plain && Projector == other.Projector && Batch == other.Batch &&
                                                 Parents.SequenceEqual(other.Parents) &&
                                                 Handlers.SequenceEqual(other.Handlers);
 

@@ -81,7 +81,6 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
                 DomainEventValidation.Validate(ev);
                 return new DomainEventRecord(stream, ev, record.Offset, Cursor(checked(record.Offset + 1)));
             },
-            pageCursor => checked(pageCursor.LastResourceOffset + 1),
             ct);
 
     /// <inheritdoc />
@@ -118,7 +117,6 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
                 DomainEventValidation.Validate(ev);
                 return new DomainEventRecord(stream, ev, record.Offset, Cursor(checked(scopeOffset + 1)));
             },
-            pageCursor => FitzEventStreamPatternOffsets.GetNextOffset(pattern, pageCursor),
             ct);
 
     /// <inheritdoc />
@@ -149,7 +147,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
             {
                 // Metadata gives the source position, but cannot establish whether retention has
                 // withheld an event inside those bounds. Verify a bounded range before counting it.
-                var resourcePage = await _streams.ReadPageAsync(pattern.ToString(), offset,
+                var resourcePage = await ReadBatchAsync(pattern.ToString(), offset,
                         Math.Min(head - offset, ReadPageSize), maxBytes: ProgressReadByteBudget, ct: ct)
                     .ConfigureAwait(false);
                 var observed = InspectProgressRecords(pattern, offset, resourcePage.Items, exclusiveHead: head);
@@ -165,17 +163,17 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
         // The published Fitz client exposes resource metadata, but not realm/area watermarks.
         // Inspect one bounded page without deserializing application payloads. An exhausted page
         // gives an exact backlog; a larger backlog stays unknown rather than scanning its history.
-        var page = await _streams.ReadPageAsync(pattern.ToString(), offset, ReadPageSize,
+        var page = await ReadBatchAsync(pattern.ToString(), offset, ReadPageSize,
                 maxBytes: ProgressReadByteBudget, ct: ct)
             .ConfigureAwait(false);
         var records = InspectProgressRecords(pattern, offset, page.Items);
-        if (page.Cursor.HasMore)
+        if (!page.CaughtUp)
             return new EventStreamProgress(position, null, null, page.Items.Count == 0 ? null : false,
                 DateTimeOffset.UtcNow, records.Count);
         if (page.Items.Count == 0)
-            return await ObserveEmptyPatternAsync(pattern, position, offset, page.Cursor, ct).ConfigureAwait(false);
+            return await ObserveEmptyPatternAsync(pattern, position, offset, page.NextOffset, ct).ConfigureAwait(false);
 
-        var sourcePosition = FitzEventStreamPatternOffsets.GetNextOffset(pattern, page.Cursor);
+        var sourcePosition = page.NextOffset;
         if (sourcePosition < records.NextOffset)
             throw new InvalidOperationException("Fitz returned a source cursor behind its records.");
         ulong? pendingEvents = records.Contiguous && sourcePosition == records.NextOffset ? records.Count : null;
@@ -184,11 +182,10 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
     }
 
     async ValueTask<EventStreamProgress> ObserveEmptyPatternAsync(EventStreamPattern pattern,
-        EventCursor position, ulong offset, StreamReadCursor cursor, CancellationToken ct)
+        EventCursor position, ulong offset, ulong nextOffset, CancellationToken ct)
     {
-        var covered = FitzEventStreamPatternOffsets.GetLastOffset(pattern, cursor);
-        if (covered > offset)
-            return new EventStreamProgress(position, Cursor(checked(covered + 1)), null, false,
+        if (nextOffset > offset)
+            return new EventStreamProgress(position, Cursor(nextOffset), null, false,
                 DateTimeOffset.UtcNow, 0);
         if (offset == 0)
             return new EventStreamProgress(position, null, 0, true, DateTimeOffset.UtcNow, 0);
@@ -196,17 +193,16 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
         // Empty reads initialize their cursor from the requested offset. Verify one preceding
         // position before calling a nonzero checkpoint caught up: the checkpoint may be ahead
         // of a restored or replaced source. This adds at most one source entry to the probe.
-        var preceding = await _streams.ReadPageAsync(pattern.ToString(), offset - 1, 1,
+        var preceding = await ReadBatchAsync(pattern.ToString(), offset - 1, 1,
             maxBytes: ProgressReadByteBudget, ct: ct).ConfigureAwait(false);
         var observed = InspectProgressRecords(pattern, offset - 1, preceding.Items, countFrom: offset);
-        if (preceding.Cursor.HasMore)
+        if (!preceding.CaughtUp)
             return new EventStreamProgress(position, null, null, observed.Count > 0 ? false : null,
                 DateTimeOffset.UtcNow, observed.Count);
-        var precedingCovered = FitzEventStreamPatternOffsets.GetLastOffset(pattern, preceding.Cursor);
-        if (preceding.Items.Count == 0 && precedingCovered <= offset - 1)
+        var head = preceding.NextOffset;
+        if (preceding.Items.Count == 0 && head <= offset - 1)
             return new EventStreamProgress(position, null, null, null, DateTimeOffset.UtcNow);
 
-        var head = checked(precedingCovered + 1);
         if (head < observed.NextOffset)
             throw new InvalidOperationException("Fitz returned a source cursor behind its records.");
         if (head == offset)
@@ -405,7 +401,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
             while (index < batch.Length)
             {
                 var limit = Math.Min(ReadPageSize, (ulong)(batch.Length - index));
-                var page = await _streams.ReadPageAsync(route, offset, limit, ct: ct).ConfigureAwait(false);
+                var page = await ReadBatchAsync(route, offset, limit, ct: ct).ConfigureAwait(false);
                 if (page.Items.Count == 0 || (ulong)page.Items.Count > limit)
                     return false;
 
@@ -420,7 +416,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
                     index++;
                 }
 
-                if (index < batch.Length && !page.Cursor.HasMore)
+                if (index < batch.Length && page.CaughtUp)
                     return false;
             }
 
@@ -441,7 +437,6 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
         string telemetryTarget,
         Func<(string Route, ulong StartOffset)> open,
         Func<StreamReadItem, ulong, DomainEventRecord> map,
-        Func<StreamReadCursor, ulong> nextStartOffset,
         [EnumeratorCancellation] CancellationToken ct)
     {
         var telemetryStarted = PortiaTelemetry.StartTimestamp();
@@ -457,13 +452,27 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
 
             var (route, startOffset) = open();
             var nextOffset = startOffset;
+            IAsyncEnumerator<StreamReadBatch> batches;
+            try
+            {
+                batches = _streams.ReadAsync(route, startOffset, StreamReadMode.Replay,
+                    new StreamReadOptions { BatchSize = ReadPageSize }, ct).GetAsyncEnumerator(ct);
+            }
+            catch (Exception ex)
+            {
+                telemetryOutcome = PortiaTelemetry.ExceptionOutcome(ex, ct);
+                throw;
+            }
+
+            await using var ownedBatches = batches.ConfigureAwait(false);
             while (true)
             {
-                StreamReadPage page;
+                StreamReadBatch page;
                 try
                 {
-                    page = await _streams.ReadPageAsync(route, startOffset, ReadPageSize, ct: ct)
-                        .ConfigureAwait(false);
+                    if (!await batches.MoveNextAsync().ConfigureAwait(false))
+                        yield break;
+                    page = batches.Current;
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
@@ -499,22 +508,13 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
                     nextOffset++;
                 }
 
-                if (!page.Cursor.HasMore)
+                if (page.CaughtUp)
                 {
                     yield break;
                 }
-                else
-                {
-                    try
-                    {
-                        startOffset = nextStartOffset(page.Cursor);
-                    }
-                    catch
-                    {
-                        telemetryOutcome = "fault";
-                        throw;
-                    }
-                }
+                if (page.NextOffset <= startOffset)
+                    throw new InvalidOperationException("Fitz returned a batch without advancing its position.");
+                startOffset = page.NextOffset;
             }
         }
         finally
@@ -522,6 +522,14 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
             PortiaTelemetry.EventStoreFinished(telemetryStarted, "read", telemetryTarget,
                 telemetryOutcome, telemetryCount);
         }
+    }
+
+    async ValueTask<StreamReadBatch> ReadBatchAsync(string route, ulong offset, ulong limit,
+        ulong? maxBytes = null, CancellationToken ct = default)
+    {
+        var options = new StreamReadOptions { BatchSize = limit, MaxBytes = maxBytes };
+        return await _streams.ReadAsync(route, offset, StreamReadMode.Replay, options, ct)
+            .FirstAsync(ct).ConfigureAwait(false);
     }
 
     static EventCursor Cursor(ulong offset) => new(offset.ToString(CultureInfo.InvariantCulture));

@@ -8,7 +8,7 @@ namespace Cntryl.Portia;
 ///     Runs the paged team directory from <c>docs/projectors-and-reactors.md</c> end to end against a
 ///     real broker: team events appended to Fitz streams, the documented registrations, Portia's own
 ///     projector pass per tenant, and the query side paging a <see cref="KvDirectory{T, TKey}" />
-///     through <see cref="FitzKvProjectionStore.BeginReadAsync" />. The event, repository, and
+///     through <see cref="FitzKvProjectionStore.BeginReadAsync(string, CancellationToken)" />. The event, repository, and
 ///     projector types here are the guide's, so the guide cannot drift from what actually works.
 /// </summary>
 [Collection(FitzBrokerCollectionDefinition.Name)]

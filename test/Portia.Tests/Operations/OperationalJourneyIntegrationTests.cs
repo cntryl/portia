@@ -97,7 +97,8 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         await using var database = await Database.OpenAsync();
         var identity = new CheckpointIdentity("AccountProjector", EventStreamPattern.ForPattern(realm, "accounts"));
         await using var accounts = new AccountRepository(database);
-        _ = await new ProjectorRunner(events).RunAsync(new AccountProjector(accounts, identity.Pattern),
+        _ = await new ProjectorRunner(events).RunAsync(ProjectorDispatch<AccountProjector>.Create(
+                new AccountProjector(accounts), identity.ComponentName, identity.Pattern),
             await accounts.LoadCheckpointAsync(identity));
         var committedEffects = await ReadEffectsAsync(events, realm);
         foreach (var effect in committedEffects)

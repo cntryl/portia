@@ -212,6 +212,30 @@ public sealed class AccountFeatureTests
         Assert.Empty(scenario.PendingEvents);
     }
 
+    /// <summary>A corrected registration resolves the accepted workload name and stream.</summary>
+    [Fact]
+    public void ShouldUseCorrectedSourceGivenRejectedProjectorRegistration()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddSingleton<IAccountProjectionRepository>(new InMemoryAccountRepository());
+        var builder = services.AddPortia();
+        var accepted = EventStreamPattern.ForTenant("accounts");
+
+        // Act
+        var error = Record.Exception(() => builder.AddProjector<AccountProjector>("rejected",
+            EventStreamPattern.ForPattern("wrong", "orders"), options => options.PollInterval = TimeSpan.Zero));
+        builder.AddProjector<AccountProjector>(AccountRepository.ProjectorName, accepted);
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+        var projector = provider.GetRequiredService<ProjectorRegistration>().Resolve(scope.ServiceProvider);
+
+        // Assert
+        Assert.IsType<ArgumentOutOfRangeException>(error);
+        Assert.Equal(AccountRepository.ProjectorName, projector.Name);
+        Assert.Equal(accepted, projector.Pattern);
+    }
+
     /// <summary>The projector folds account events through its pure reducer into the read repository.</summary>
     [Fact]
     public async Task ShouldProjectReadModelGivenOpeningAndDepositEvents()
@@ -223,7 +247,7 @@ public sealed class AccountFeatureTests
         var repository = new InMemoryAccountRepository(scenario.Store);
 
         // Act
-        await scenario.RunAsync(new AccountProjector(repository));
+        await scenario.RunAsync(new AccountProjector(repository), AccountRepository.ProjectorName, EventStreamPattern.ForTenant("accounts"));
         var projected = await repository.GetAsync(Tenant, AccountId, default);
 
         // Assert

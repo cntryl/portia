@@ -12,6 +12,8 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Portia.Json.Contracts/Portia.Json.Contracts.csproj"/>
+    <PackageReference Include="Cntryl.Portia.Testing" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <ProjectReference Include="../../src/Portia.Testing/Portia.Testing.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
     <PackageReference Include="Cntryl.Portia.AspNetCore" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
     <PackageReference Include="Cntryl.Portia.Analyzers" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
     <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />

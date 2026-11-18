@@ -816,13 +816,8 @@ public sealed class TelemetryCompletionTests
             : Task.FromResult<IStreamSession>(new FailingAppendSession(failureStage, cancellation,
                 cancelBeforeFailure));
 
-        public IAsyncEnumerable<StreamRecord> ReadAsync(string route, ulong startOffset, ulong limit = 100,
-            StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null,
-            ulong? capturedWatermark = null, CancellationToken ct = default) => throw new NotSupportedException();
-
-        public Task<StreamReadPage> ReadPageAsync(string route, ulong startOffset, ulong limit = 100,
-            StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null,
-            ulong? capturedWatermark = null, CancellationToken ct = default) => throw new NotSupportedException();
+        public IAsyncEnumerable<StreamReadBatch> ReadAsync(string route, ulong startOffset, StreamReadMode mode,
+            StreamReadOptions? options = null, CancellationToken ct = default) => throw new NotSupportedException();
 
         public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) =>
             throw new NotSupportedException();

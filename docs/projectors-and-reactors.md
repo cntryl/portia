@@ -3,8 +3,9 @@
 Persistence is an ordinary constructor dependency. The same repository implements
 application operations and the contract Portia needs to manage progress.
 
-| Base | Handling | Progress |
+| Authoring model | Handling | Progress |
 |---|---|---|
+| Plain typed projector | Ordered single or contiguous bulk handlers | One checkpoint and atomic commit per bounded batch |
 | `Projector` | One event | Atomic projection-data/checkpoint commit per event |
 | `BatchProjector` | Bounded batch | Atomic projection-data/checkpoint commit per batch |
 | `Reactor` | One event | Checkpoint after the reaction succeeds |
@@ -41,7 +42,7 @@ a projector applies committed events through the repository. For example, `Accou
 returned data, `AccountRepository` stores and retrieves it, and `AccountProjector` updates it.
 
 Keep query interfaces focused on application reads. The concrete repository also implements
-`IProjectionStore`, which lets the projector pass that same instance into its base constructor:
+`IProjectionStore`, which the projector exposes through its `Store` getter:
 
 ```csharp
 public sealed record AccountReadModel(Uuid AccountId, long Balance);
@@ -57,16 +58,16 @@ public sealed class AccountRepository : IAccountQueries, IProjectionStore
     // IProjectionStore supplies Portia's checkpoint and transaction lifecycle.
 }
 
-public sealed partial class AccountProjector(AccountRepository accounts)
-    : BatchProjector(accounts, EventStreamPattern.ForTenant("balances")),
-      IProjectorHandler<MoneyDeposited>
+public sealed class AccountProjector(AccountRepository accounts)
+    : IProjectorHandler<MoneyDeposited>
 {
+    public IProjectionStore Store => accounts;
+
     public async ValueTask<Result> HandleAsync(
         IProjectorContext<MoneyDeposited> context, CancellationToken ct)
     {
         var ev = context.Trigger;
-        await accounts.IncrementBalanceAsync(ev.Metadata.AggregateId, ev.Amount,
-            context.Batch.Identity.RebuildId, ct);
+        await accounts.IncrementBalanceAsync(ev.Metadata.AggregateId, ev.Amount, ct);
         return Result.Success;
     }
 }
@@ -76,7 +77,7 @@ public sealed partial class AccountProjector(AccountRepository accounts)
 services.AddScoped<AccountRepository>();
 services.AddScoped<IAccountQueries>(sp => sp.GetRequiredService<AccountRepository>());
 services.AddPortia()
-    .AddProjector<AccountProjector>("AccountProjector", WorkloadScope.PerTenant);
+    .AddProjector<AccountProjector>("AccountProjector", EventStreamPattern.ForTenant("balances"));
 ```
 
 The projector receives one repository instance for data writes and progress. Query callers receive
@@ -112,20 +113,20 @@ repositories may inject `WorkloadContext` to inspect the current workload identi
 
 ## Bulk handling
 
-A batch base accepts ordinary per-event handlers, applying them in source order inside
+A plain projector accepts ordinary per-event handlers, applying them in source order inside
 one unit of work. To issue bulk application operations, implement a batch handler:
 
 ```csharp
-public sealed partial class AccountProjector(AccountRepository accounts)
-    : BatchProjector(accounts, EventStreamPattern.ForTenant("balances")),
-      IBatchProjectorHandler<MoneyDeposited>
+public sealed class AccountProjector(AccountRepository accounts)
+    : IBatchProjectorHandler<MoneyDeposited>
 {
+    public IProjectionStore Store => accounts;
+
     public async ValueTask<Result> HandleAsync(
         IReadOnlyList<IProjectorContext<MoneyDeposited>> contexts, CancellationToken ct)
     {
         foreach (var context in contexts)
-            await accounts.IncrementBalanceAsync(context.Trigger.Metadata.AggregateId, context.Trigger.Amount,
-                context.Batch.Identity.RebuildId, ct);
+            await accounts.IncrementBalanceAsync(context.Trigger.Metadata.AggregateId, context.Trigger.Amount, ct);
         // A repository-specific bulk operation can replace this loop.
         return Result.Success;
     }
@@ -139,8 +140,9 @@ batch share one commit. Unhandled events still advance progress.
 
 Set `options.Processing.MaxBatchSize` through a new `ProjectionRunOptions` instance to
 bound a batch (default 512). This counts source events, not database write actions.
-Single-event bases always commit progress per event. Batch handler interfaces require
-a batch base (`PORTIA017`), and one event type cannot select both handler modes (`PORTIA028`).
+A short final batch commits at exhaustion. Set the batch size to one for per-event visibility.
+Failure rolls back the open batch. Earlier commits remain visible during retry. Each event type
+selects one handler mode (`PORTIA028`).
 [Performance and scaling](performance-and-scaling.md) measures both paths at 512 events and
 explains the semantic tradeoff; select batching for throughput only when one batch is the intended
 atomic boundary.
@@ -366,9 +368,9 @@ public sealed class AccountRepository(IKvClient kv)
     // Key and value encoding belong to the projection, not the framework: Portia stores only its
     // own checkpoint alongside them and never interprets the application's keys.
     public async ValueTask IncrementBalanceAsync(
-        Uuid accountId, int amount, string? rebuildId, CancellationToken ct)
+        Uuid accountId, int amount, CancellationToken ct)
     {
-        var key = BalanceKey(accountId, rebuildId);
+        var key = BalanceKey(accountId);
         var current = await Transaction.GetAsync(key, ct);
         var balance = current is KvFound { Value: var stored } ? BinaryPrimitives.ReadInt64BigEndian(stored.Span) : 0;
         var next = new byte[sizeof(long)];
@@ -381,16 +383,13 @@ public sealed class AccountRepository(IKvClient kv)
     public async ValueTask<AccountReadModel?> GetAsync(TenantId tenant, Uuid accountId, CancellationToken ct)
     {
         await using var tx = await BeginTenantReadAsync(tenant, ct);
-        var current = await tx.GetAsync(BalanceKey(accountId, rebuildId: null), ct);
+        var current = await tx.GetAsync(BalanceKey(accountId), ct);
         return current is KvFound { Value: var stored }
             ? new AccountReadModel(accountId, BinaryPrimitives.ReadInt64BigEndian(stored.Span))
             : null;
     }
 
-    // Keep live keys unchanged; candidate replays own a separate namespace in the same resource.
-    // Rebuild IDs supplied by the framework cannot contain the NUL field separator.
-    static byte[] BalanceKey(Uuid accountId, string? rebuildId) => Encoding.UTF8.GetBytes(
-        rebuildId is null ? $"balance\0{accountId}" : $"balance-rebuild\0{rebuildId}\0{accountId}");
+    static byte[] BalanceKey(Uuid accountId) => Encoding.UTF8.GetBytes($"balance\0{accountId}");
 }
 ```
 
@@ -399,15 +398,15 @@ services.AddScoped<AccountRepository>();
 services.AddScoped<IAccountQueries>(sp => sp.GetRequiredService<AccountRepository>());
 services.AddPortia()
     .AddFitz(configuration, fitz => fitz.UseKvCheckpoints("kv://accounts/progress/checkpoints"))
-    .AddProjector<AccountProjector>(AccountRepository.Projector, WorkloadScope.PerTenant)
+    .AddProjector<AccountProjector>(AccountRepository.Projector, EventStreamPattern.ForTenant("balances"))
     .AddReactor<WelcomeMailer>("WelcomeMailer", WorkloadScope.PerTenant);
 ```
 
-The projector passes `context.Batch.Identity.RebuildId` to each repository write, as shown in the
-constructor-injected example above. Portia separates checkpoint generations; application repositories
-must also separate their own data keys before enabling rebuilds. A candidate replay of a deposit of
-10 builds its own balance of 10 while the live query keeps returning 10. Querying or promoting a
-candidate is an explicit application decision; selecting a `RebuildId` does not redirect live reads.
+Each Fitz candidate owns a resource derived from its bound checkpoint identity. Open a read transaction
+with `BeginReadAsync(identity, ct)` and inspect its `Route` to identify the exact resource. Verify the
+checkpoint and representative queries before application-managed cutover. Once a candidate is retired,
+stop its workers and readers before deleting that resource. Rebuild candidates created under the old
+shared-resource layout. Ordinary tenant queries continue to open the live resource.
 
 The query interface forwards to the scoped repository; the projector receives that same concrete
 repository for its data and checkpoint transaction. One repository instance owns one open
@@ -464,9 +463,7 @@ A read model that callers list, sort, and page — teams, members, documents —
 `Cntryl.Fitz.Extensions`' `KvDirectory<T, TKey>`: its declared covering indexes make each page one
 bounded range scan with a keyset cursor. Every directory operation takes an open `IKvTransaction`,
 so it composes with both halves of the repository: the projector writes through `Transaction`, and
-queries read through `BeginTenantReadAsync`. The following directory uses a fixed live namespace;
-before enabling rebuilds, select separate directory names from `context.Batch.Identity.RebuildId`
-for every write, just as the balance example separates its data keys.
+queries read through `BeginTenantReadAsync`. The directory can use the same name in each isolated resource.
 
 ```csharp
 // Like every domain event, both are also [JsonSerializable] roots on the application's [PortiaJsonContext].

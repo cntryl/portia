@@ -16,6 +16,7 @@ public sealed class BatchDispatchTests
                               using System.Threading.Tasks;
                               using Cntryl.Portia;
                               using Cntryl.Portia.Testing;
+                              using Microsoft.Extensions.DependencyInjection;
                               public record Root(int Amount) : DomainEvent;
                               public sealed record Child(int Amount) : Root(Amount);
                               public sealed class Repository : IProjectionStore, IProjectionCheckpointStore
@@ -35,9 +36,10 @@ public sealed class BatchDispatchTests
                                       public ValueTask DisposeAsync() => ValueTask.CompletedTask;
                                   }
                               }
-                              public sealed partial class Projector(Repository repository)
-                                  : BatchProjector(repository, EventStreamPattern.ForPattern("batch")), IBatchProjectorHandler<Root>, IBatchProjectorHandler<Child>
+                              public sealed class Projector(Repository repository)
+                                  : IBatchProjectorHandler<Root>, IBatchProjectorHandler<Child>
                               {
+                                  public IProjectionStore Store => repository;
                                   public ValueTask<Result> HandleAsync(IReadOnlyList<IProjectorContext<Root>> contexts, CancellationToken ct)
                                   {
                                       if (contexts.Any(c => !c.IsRebuild) || ct != repository.Token
@@ -93,7 +95,16 @@ public sealed class BatchDispatchTests
                                       await store.AppendAsync(new EventStreamAddress("batch", "events", id.ToString()), 0, events);
                                       using var cancellation = new CancellationTokenSource();
                                       var repository = new Repository { Events = events, Token = cancellation.Token };
-                                      await new ProjectorRunner(store).RunAsync(new Projector(repository), ProjectionCheckpoint.Start, new ProjectionRunOptions { RebuildId = "new" }, cancellation.Token);
+                                      var services = new ServiceCollection();
+                                      services.AddSingleton(repository);
+                                      services.AddPortia().AddProjector<Projector>("Projector", EventStreamPattern.ForPattern("batch"))
+                                          .AddFitz(new Cntryl.Fitz.ClientConfig(new Uri("ws://127.0.0.1:1/ws")), fitz => fitz.UseOperations("kv://test/state/progress"));
+                                      using var provider = services.BuildServiceProvider();
+                                      using var scope = provider.CreateScope();
+                                      var topology = provider.GetRequiredService<IApplicationTopology>().Describe().Processors.Single();
+                                      if (topology.Component != "Projector" || !topology.Subscriptions.SequenceEqual(new[] { "Child [batch]", "Root [batch]" })) return false;
+                                      var projector = provider.GetRequiredService<ProjectorRegistration>().Resolve(scope.ServiceProvider);
+                                      await new ProjectorRunner(store).RunAsync(projector, ProjectionCheckpoint.Start, new ProjectionRunOptions { RebuildId = "new" }, cancellation.Token);
                                       await new ReactorRunner(store).RunAsync(new Reaction(repository), ProjectionCheckpoint.Start, ct: cancellation.Token);
                                       return string.Join("|", repository.Calls) == "root:1,2|child:3|root:4|root:1,2|child:3|root:4"
                                           && repository.Projections.Count == 4
@@ -111,15 +122,11 @@ public sealed class BatchDispatchTests
 
         // Act
         var passed = await assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<Task<bool>>>()();
-        var subscriptions = assembly.GetType("Projector")!.GetCustomAttribute<ProcessorTopologyAttribute>()!
-            .Subscriptions;
-
         var reactionSubscriptions = assembly.GetType("Reaction")!.GetCustomAttribute<ProcessorTopologyAttribute>()!
             .Subscriptions;
 
         // Assert
         Assert.True(passed);
-        Assert.Equal(["Child [batch]", "Root [batch]"], subscriptions);
         Assert.Equal(["Child [batch]", "Root [batch]"], reactionSubscriptions);
     }
 

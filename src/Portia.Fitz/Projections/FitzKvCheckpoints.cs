@@ -105,8 +105,13 @@ static class FitzKvCheckpoints
     {
         _ = IdentityText.Require(componentName, nameof(componentName));
         _ = IdentityText.Require(realm, nameof(realm));
+        return DerivedRoute(route, [componentName, realm]);
+    }
+
+    static string DerivedRoute(string route, string[] fields)
+    {
         var segments = route[5..].Split('/');
-        var identity = JsonSerializer.SerializeToUtf8Bytes([componentName, realm],
+        var identity = JsonSerializer.SerializeToUtf8Bytes(fields,
             FitzJsonContext.Default.StringArray);
         var suffix = Convert.ToHexStringLower(SHA256.HashData(identity))[..16];
         return $"kv://{segments[0]}/{segments[1]}/{segments[2]}-{suffix}";
@@ -114,12 +119,16 @@ static class FitzKvCheckpoints
 
     /// <summary>
     ///     Derives the resource for the workload a checkpoint belongs to. A bound per-tenant pattern's
-    ///     realm is its tenant, so each tenant resolves separately. Generations share the resource;
-    ///     their checkpoint keys are separate, and application repositories must also namespace their
-    ///     own data keys by generation before enabling rebuilds.
+    ///     realm is its tenant.
     /// </summary>
     public static string WorkloadRoute(string route, CheckpointIdentity identity) =>
         WorkloadRoute(route, identity.ComponentName, identity.Pattern.Realm);
+
+    /// <summary>Isolates a projection candidate by its complete bound checkpoint identity.</summary>
+    public static string ProjectionRoute(string route, CheckpointIdentity identity) =>
+        identity.RebuildId is { } candidate
+            ? DerivedRoute(route, [identity.ComponentName, identity.Pattern.ToString(), candidate])
+            : WorkloadRoute(route, identity);
 
     /// <summary>
     ///     Builds the shared conflict failure, so BEGIN and COMMIT conflicts read alike. It names the

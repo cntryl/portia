@@ -25,9 +25,7 @@ public sealed class FitzBrokerFixture
     /// <returns>A connected client owned by the caller.</returns>
     public async Task<FitzClient> CreateClientAsync()
     {
-        var client = new FitzClient(new ClientConfig(
-            _endpoint,
-            Timeout: TimeSpan.FromSeconds(10)));
+        var client = new FitzClient(new ClientConfig(_endpoint) { Timeout = TimeSpan.FromSeconds(10) });
 
         try
         {
