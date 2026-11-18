@@ -98,8 +98,8 @@ Select handlers, authorizers, guards, and pipeline behaviors through the stable 
 `AddRequestPipelineBehavior<T>(order)`.
 The generator replaces each call
 with its typed descriptor and reports a compile error when the type does not implement that role.
-Projectors and reactors are selected with
-`AddProjector<T>("T", ...)` and `AddReactor<T>("T", ...)`, which also choose their execution scope.
+Select projectors with `AddProjector<T>("T", ...)`. Select an ordinary single-event reactor with
+`AddReactor<THandler, TEvent>(name, source)`, where the source selects global or per-tenant execution.
 
 Registering a handler also registers its request's transport descriptor. A contract used only
 by a sending application is inferred from strongly typed `SendAsync`, `StreamAsync`,
@@ -583,9 +583,11 @@ receipt. The request's declared authorization runs before it is accepted, so a c
 receive 403 synchronously receives 403 here too and nothing reaches the queue. The worker
 re-validates the carried actor token and authorizes again when it runs the request, so only a
 caller with a Bearer credential is answered asynchronously; an anonymous caller's preference is
-declined and the request runs synchronously. The ID is correlation identity, not completion tracking. Portia has no status
-resource and therefore emits no `Location` header. Register `IRequestQueuePublisher`; supply wildcard route values
-explicitly on the endpoint:
+declined and the request runs synchronously. The receipt confirms enqueue acceptance and supplies a
+correlation ID. Crash recovery depends on the queue provider. Fitz can lose an accepted request on
+broker crash because it persists queue changes in the background. See [choosing Fitz queue
+delivery](fitz.md#queue-acceptance-and-crash-recovery). To publish, register `IRequestQueuePublisher`
+and supply wildcard route values explicitly on the endpoint:
 
 ```csharp
 app.MapPortiaPost<DepositAccount>("/accounts/{id}")
@@ -626,8 +628,8 @@ that calls `AddWorkers()` starts those workers:
 services.AddPortia()
     .AddRequestHandler<DepositAccountHandler>()
     .AddProjector<AccountProjector>("AccountProjector", WorkloadScope.PerTenant)
-    .AddReactor<AccountReactor>("AccountReactor", WorkloadScope.PerTenant)
-    .AddFitz(configuration.GetSection("Fitz"))
+    .AddReactor<AccountReactor, MoneyDeposited>("AccountReactor", EventStreamPattern.ForTenant("accounts"))
+    .AddFitz(configuration.GetSection("Fitz"), fitz => fitz.UseKvCheckpoints("kv://accounts/progress/reactors"))
     .AddWorkers();
 ```
 
@@ -721,7 +723,7 @@ Register workloads in shared application setup, then activate the worker deploym
 services.AddPortia()
     .AddProjector<AccountProjector>("AccountProjector", WorkloadScope.PerTenant)
     .AddProjector<PlatformSummaryProjector>("PlatformSummaryProjector", WorkloadScope.Global)
-    .AddReactor<AccountReactor>("AccountReactor", WorkloadScope.PerTenant)
+    .AddReactor<AccountReactor, MoneyDeposited>("AccountReactor", EventStreamPattern.ForTenant("accounts"))
     .UseSingleProcessWorkloads()
     .AddWorkers();
 ```
@@ -734,9 +736,10 @@ fails unless exactly one coordinator is registered. `WorkloadScope.PerTenant` re
 See [shared application setup](application-setup.md) for application identity and fleet coordination.
 
 Inject ordinary application repositories into your processors. Projectors pass a repository
-implementing `IProjectionStore` into `Projector` or `BatchProjector`; reactors pass
-a dependency implementing `IProjectionCheckpointStore` into `Reactor` or `BatchReactor`.
-The same repository implements framework persistence and application operations. Name the data
+implementing `IProjectionStore` into `Projector` or `BatchProjector`. That repository implements
+framework persistence and application operations. A single-event reactor registered with
+`AddReactor<THandler, TEvent>` uses the host's `IProjectionCheckpointStore` and injects the services
+it calls. Select one checkpoint store before activating workers. Name the data
 contract `AccountReadModel`, the persistence/query object `AccountRepository`, and the event consumer
 `AccountProjector`; the data contract carries values while the repository owns behavior.
 Typed projector and reactor handlers receive `IProjectorContext<TEvent>` and

@@ -74,11 +74,15 @@ See the [broker queue contract](https://github.com/cntryl/fitz/blob/main/docs/cl
 
 ## Queue acceptance and crash recovery
 
-Fitz queue persistence is best effort. Enqueue and acknowledgment responses do not
-guarantee recovery after a broker crash. Unpersisted work or acknowledgments can be lost, and
-redelivery can duplicate effects. Required work needs durable application intent and a recovery
-mechanism that regenerates missing deliveries; consumers must tolerate duplicates.
+Fitz acknowledges queue operations without waiting for background persistence. This keeps broker
+storage flushes off the response path and makes queue delivery best effort across crashes. A crash
+can lose an accepted request. Losing an acknowledgment can cause redelivery, so consumers must
+tolerate duplicates. Choose this path when the work can be dropped or regenerated. When an
+obligation must survive a crash, commit it as an application event and drive the required work from
+that stream with a reactor. If you also enqueue work for latency, keep recovery tied to the event
+and use the same business operation identity when regenerating a delivery.
 
-Portia's asynchronous HTTP receipt confirms enqueue acceptance. Authoritative business outcomes
-still determine completion, including explicit rejection, compensation, or intervention when a
+Portia's asynchronous HTTP `202` receipt confirms enqueue acceptance and gives callers a correlation
+ID. It carries the same crash-recovery tradeoff when Fitz is the queue provider. Authoritative
+business outcomes determine completion, including rejection, compensation, or intervention when a
 participant refuses work. See the [broker persistence contract](https://github.com/cntryl/fitz/blob/main/docs/clients/spec/queue-rpc.md#queue-domain-work-delivery-with-best-effort-persistence).

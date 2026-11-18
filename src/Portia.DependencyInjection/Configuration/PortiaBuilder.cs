@@ -329,6 +329,7 @@ public sealed class PortiaBuilder
     ///     everyone except the configured system-administrator role. It is served only once a transport
     ///     activates worker endpoints. See "Operator inspection of a projector or reactor" in the projectors and reactors guide.
     /// </remarks>
+    [SuppressMessage("ApiDesign", "RS0027", Justification = "The reactor overloads have distinct generic arities.")]
     public PortiaBuilder AddReactor<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     TReactor>(string name, WorkloadScope scope,
@@ -338,6 +339,40 @@ public sealed class PortiaBuilder
         var registration = new WorkloadRegistration(ReactorRegistration.Create<TReactor>(), name, scope, configure);
         Services.TryAddScoped<TReactor>();
         return AddWorkload(registration);
+    }
+
+    /// <summary>Registers a scoped handler for one event type using the host's reactor checkpoint store.</summary>
+    /// <typeparam name="THandler">The application handler for this reaction.</typeparam>
+    /// <typeparam name="TEvent">The event type selected for this reaction.</typeparam>
+    /// <param name="name">The stable hosted ownership and checkpoint identity.</param>
+    /// <param name="source">The watched stream pattern. Tenant templates run once per active tenant.</param>
+    /// <returns>This builder, for chaining.</returns>
+    public PortiaBuilder AddReactor<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler, TEvent>(
+        string name, EventStreamPattern source)
+        where THandler : class, IReactorHandler<TEvent>
+        where TEvent : DomainEvent => AddReactor<THandler, TEvent>(name, source, null);
+
+    /// <summary>Registers a scoped handler for one event type and configures its workload.</summary>
+    /// <typeparam name="THandler">The application handler for this reaction.</typeparam>
+    /// <typeparam name="TEvent">The event type selected for this reaction.</typeparam>
+    /// <param name="name">The stable hosted ownership and checkpoint identity.</param>
+    /// <param name="source">The watched stream pattern. Tenant templates run once per active tenant.</param>
+    /// <param name="configure">Workload polling and failure settings.</param>
+    /// <returns>This builder, for chaining.</returns>
+    public PortiaBuilder AddReactor<
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler, TEvent>(
+        string name, EventStreamPattern source, Action<WorkloadOptions>? configure)
+        where THandler : class, IReactorHandler<TEvent>
+        where TEvent : DomainEvent
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        var scope = source.IsTenantTemplate ? WorkloadScope.PerTenant : WorkloadScope.Global;
+        var registration = new WorkloadRegistration(ReactorRegistration.Create<THandler, TEvent>(source), name, scope,
+            configure);
+        _ = AddWorkload(registration);
+        Services.TryAddScoped<THandler>();
+        return this;
     }
 
     /// <summary>Registers one projector with an explicitly selected execution scope.</summary>
@@ -404,6 +439,7 @@ public sealed class PortiaBuilder
         static bool Equivalent(WorkloadRegistration left, WorkloadRegistration right)
         {
             return left.ComponentType == right.ComponentType && left.Scope == right.Scope && left.Name == right.Name
+                   && left.Descriptor.Matches(right.Descriptor)
                    && left.PollInterval == right.PollInterval
                    && left.FailureAttemptLimit == right.FailureAttemptLimit
                    && left.MaximumFailureDelay == right.MaximumFailureDelay

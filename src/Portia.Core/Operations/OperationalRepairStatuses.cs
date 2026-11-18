@@ -19,6 +19,9 @@ public static class OperationalRepairStatuses
     /// <summary>The repair completed and progress was committed.</summary>
     public const string Committed = "committed";
 
+    /// <summary>A source read succeeded and found no further work at the confirmed checkpoint.</summary>
+    public const string Resumed = "resumed";
+
     /// <summary>The repair ran and failed.</summary>
     public const string Failed = "failed";
 }

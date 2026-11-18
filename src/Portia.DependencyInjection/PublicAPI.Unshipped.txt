@@ -1,1 +1,3 @@
 #nullable enable
+Cntryl.Portia.PortiaBuilder.AddReactor<THandler, TEvent>(string! name, Cntryl.Portia.EventStreamPattern! source) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddReactor<THandler, TEvent>(string! name, Cntryl.Portia.EventStreamPattern! source, System.Action<Cntryl.Portia.WorkloadOptions!>? configure) -> Cntryl.Portia.PortiaBuilder!

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using Microsoft.Extensions.Logging;
 
@@ -283,10 +284,16 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
                 return;
             }
 
+            var route = stream.ToString();
+            var streamMetadata = Encoding.UTF8.GetBytes(route);
+            var batch = new ReadOnlyMemory<byte>[events.Count];
+            for (var index = 0; index < batch.Length; index++)
+                batch[index] = _serializer.Serialize(events[index]);
+
             IStreamSession session;
             try
             {
-                session = await _streams.BeginAsync(stream.ToString(), ct: ct).ConfigureAwait(false);
+                session = await _streams.BeginAsync(route, ct: ct).ConfigureAwait(false);
             }
             catch (StreamException ex) when (
                 ex.DomainCode == FitzErrorCodes.StreamSessionAlreadyActive)
@@ -295,51 +302,27 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
                     $"A stream in area '{stream.Area}' already has an active append session.", ex);
             }
 
-            var failed = false;
-            var committed = false;
+            Exception? writeFailure = null;
+            var commitRequested = false;
             try
             {
-                var streamMetadata = Encoding.UTF8.GetBytes(stream.ToString());
-                for (var index = 0; index < events.Count; index++)
+                for (var index = 0; index < batch.Length; index++)
                 {
-                    var ev = events[index];
                     var expectedOffset = checked(expectedStreamPosition + (ulong)index);
                     _ = await session.AppendAsync(
                         expectedOffset,
-                        _serializer.Serialize(ev),
+                        batch[index],
                         streamMetadata,
                         ct: ct).ConfigureAwait(false);
                 }
 
+                commitRequested = true;
                 await session.CommitAsync(StreamCommitMode.Sync, ct).ConfigureAwait(false);
-                committed = true;
-                telemetryCount = events.Count;
-                telemetryOutcome = "success";
-                if (ProcessingObservation.IsEnabled)
-                    foreach (var ev in events)
-                        ProcessingObservation.Record("event", stream.ToString(), ev.Metadata.EventId.ToString(),
-                            ev.Metadata.ExecutionId?.ToString(), "committed");
-            }
-            catch (Exception exception) when (committed)
-            {
-                // The durable outcome is already known. A post-commit observation failure must not
-                // make callers retry an append that Fitz has confirmed.
-                PortiaTelemetry.RecordRunnerFault(nameof(FitzEventStore), RunnerFaultStage.Cleanup, exception,
-                    _logger);
             }
             catch (Exception ex)
             {
-                failed = true;
+                writeFailure = ex;
                 await RollbackAsync(session).ConfigureAwait(false);
-
-                if (ex is StreamException { DomainCode: FitzErrorCodes.StreamConcurrencyConflict })
-                {
-                    throw new EventStreamConcurrencyException(
-                        $"A stream in area '{stream.Area}' is not at the expected physical stream position "
-                        + $"'{expectedStreamPosition}'.", ex);
-                }
-
-                throw;
             }
             finally
             {
@@ -347,11 +330,11 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
                 {
                     await session.DisposeAsync().ConfigureAwait(false);
                 }
-                catch when (failed)
+                catch when (writeFailure is not null)
                 {
                     // Cleanup must not replace the append/commit failure seen by the caller.
                 }
-                catch (Exception exception) when (committed)
+                catch (Exception exception)
                 {
                     // Fitz confirmed the commit. Report cleanup failure separately so callers can
                     // clear their pending batch instead of retrying an append that already exists.
@@ -359,16 +342,94 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
                         exception, _logger);
                 }
             }
+
+            if (writeFailure is not null)
+            {
+                var conflict = writeFailure is StreamException { DomainCode: FitzErrorCodes.StreamConcurrencyConflict };
+                var confirmed = !ct.IsCancellationRequested && (conflict || commitRequested) &&
+                                await ConfirmsBatchAsync(route, streamMetadata, expectedStreamPosition, batch, ct)
+                                    .ConfigureAwait(false);
+                if (!confirmed)
+                {
+                    if (conflict)
+                        throw new EventStreamConcurrencyException(
+                            $"A stream in area '{stream.Area}' is not at the expected physical stream position "
+                            + $"'{expectedStreamPosition}'.", writeFailure);
+                    if (commitRequested && (writeFailure is not OperationCanceledException || !ct.IsCancellationRequested))
+                        throw new EventStreamCommitUnknownException(
+                            $"The commit outcome for a stream in area '{stream.Area}' could not be confirmed.",
+                            writeFailure);
+                    ExceptionDispatchInfo.Throw(writeFailure);
+                }
+            }
+
+            telemetryCount = events.Count;
+            telemetryOutcome = "success";
+            if (ProcessingObservation.IsEnabled)
+            {
+                try
+                {
+                    foreach (var ev in events)
+                        ProcessingObservation.Record("event", route, ev.Metadata.EventId.ToString(),
+                            ev.Metadata.ExecutionId?.ToString(), "committed");
+                }
+                catch (Exception exception)
+                {
+                    PortiaTelemetry.RecordRunnerFault(nameof(FitzEventStore), RunnerFaultStage.Cleanup, exception,
+                        _logger);
+                }
+            }
         }
         catch (Exception exception)
         {
-            telemetryOutcome = PortiaTelemetry.ExceptionOutcome(exception, ct);
+            telemetryOutcome = exception is EventStreamCommitUnknownException
+                ? "unknown"
+                : PortiaTelemetry.ExceptionOutcome(exception, ct);
             throw;
         }
         finally
         {
             PortiaTelemetry.EventStoreFinished(telemetryStarted, "append", "stream",
                 telemetryOutcome, telemetryCount);
+        }
+    }
+
+    // Read the occupied offsets after releasing the append session. Only the complete encoded
+    // batch at those offsets confirms a prior commit. A matching prefix cannot settle the save.
+    async ValueTask<bool> ConfirmsBatchAsync(string route, byte[] streamMetadata, ulong offset,
+        ReadOnlyMemory<byte>[] batch, CancellationToken ct)
+    {
+        try
+        {
+            var index = 0;
+            while (index < batch.Length)
+            {
+                var limit = Math.Min(ReadPageSize, (ulong)(batch.Length - index));
+                var page = await _streams.ReadPageAsync(route, offset, limit, ct: ct).ConfigureAwait(false);
+                if (page.Items.Count == 0 || (ulong)page.Items.Count > limit)
+                    return false;
+
+                foreach (var item in page.Items)
+                {
+                    if (item.Kind != StreamReadItemKind.Event || item.Record is not { } record ||
+                        record.Offset != offset || record.Route != route ||
+                        record.Metadata is not { } metadata || !metadata.Span.SequenceEqual(streamMetadata) ||
+                        !record.Body.Span.SequenceEqual(batch[index].Span))
+                        return false;
+                    offset = checked(offset + 1);
+                    index++;
+                }
+
+                if (index < batch.Length && !page.Cursor.HasMore)
+                    return false;
+            }
+
+            return true;
+        }
+        catch (Exception) when (!ct.IsCancellationRequested)
+        {
+            // A confirmation read failure leaves the original write outcome unresolved.
+            return false;
         }
     }
 

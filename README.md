@@ -4,8 +4,8 @@ Portia is a cohesive application framework for .NET 11. It carries an operation 
 authorization and domain decisions, then runs the durable work that follows.
 
 ASP.NET Core already does HTTP well. Portia is the application model behind HTTP—and behind RPC, queues, notices,
-schedules, and local calls. A request keeps the same handler, actor, authorization, causation, result, and telemetry
-semantics regardless of how it arrives.
+schedules, and local calls. Entry points share the handler, authorization, causation, and telemetry model. Each
+transport has its own acceptance and delivery guarantees.
 
 ```text
 HTTP / RPC / queue / schedule / local
@@ -78,13 +78,15 @@ The application registers the behavior and the durable work caused by its events
 services.AddPortia()
     .AddRequestHandler<DepositHandler>()
     .AddProjector<AccountBalanceProjector>("AccountBalanceProjector", WorkloadScope.PerTenant)
-    .AddReactor<DepositReceiptReactor>("DepositReceiptReactor", WorkloadScope.PerTenant)
-    .AddFitz(configuration.GetSection("Fitz"));
+    .AddReactor<DepositReceiptReactor, MoneyDeposited>("DepositReceiptReactor",
+        EventStreamPattern.ForTenant("accounts"))
+    .AddFitz(configuration.GetSection("Fitz"), fitz => fitz.UseKvCheckpoints("kv://banking/progress/reactors"));
 ```
 
-Per-tenant projectors and reactors declare their source with
-`EventStreamPattern.ForTenant(area, resource)`; Portia binds the actual tenant realm before reading. Global workloads
-use an exact `EventStreamPattern.ForPattern(realm, area, resource)`.
+A single-event reactor is an ordinary class that implements `IReactorHandler<TEvent>` and injects
+the services it calls. Its registration declares a stable name and source. `ForTenant(...)` runs one
+workload per active tenant, while `ForPattern(...)` selects a global workload with a fixed realm.
+The host chooses the checkpoint store once. See [writing a reactor](docs/projectors-and-reactors.md#reactions).
 
 An API host explicitly maps HTTP endpoints. A worker host calls the same application setup and adds `.AddWorkers()`. The
 handler and domain model do not change when the operation is sent over RPC, placed on a queue, or invoked in-process.
@@ -116,7 +118,7 @@ is modeled honestly as an at-least-once reactor effect instead.
 |-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Event streams** | Record ordered, authoritative aggregate decisions that must be rehydrated or replayed. Each append is atomic for one aggregate stream.                                                                                                          |
 | **KV**            | Store keyed current or derived state, such as projection data and processor checkpoints. KV is not the aggregate event history.                                                                                                                 |
-| **Queues**        | Send work to one competing consumer, with optional initial delay, message TTL, and retry delay. Consumers must tolerate duplicates. Critical work needs durable intent and recovery because queue acceptance does not guarantee crash recovery. |
+| **Queues**        | Send work to one competing consumer, with optional initial delay, message TTL, and retry delay. Fitz persists queue changes in the background for lower acknowledgment latency. A crash can lose an accepted request or cause redelivery. Use a committed event as the source of work when it must survive a crash. |
 | **Notices**       | Fan out notifications to subscribers, such as waking interested workers. Each replica receives the notice; it is not competing queue work.                                                                                                      |
 | **Schedules**     | Trigger work by time or recurrence. Choose the provider's delivery policy deliberately; a received Fitz firing can be lost on process failure.                                                                                                  |
 
@@ -134,6 +136,7 @@ details.
 - **Process
   events:** [projectors and reactors](docs/projectors-and-reactors.md), [processor operations](docs/operations.md),
   [Fitz integration](docs/fitz.md), and [Cassie repositories](docs/cassie-projections.md).
+- **Coordinate business outcomes:** [choreograph a reservation](docs/validation-authority.md#implementing-the-order-and-inventory-workflow).
 - **Connect services:** [object storage](docs/object-storage.md), [mail and SMS](docs/communications.md),
   and [MCP tools, resources, and prompts](docs/mcp.md).
 - **Qualify and operate:** [testing](docs/testing.md), [observability](docs/observability.md),

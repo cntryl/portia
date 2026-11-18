@@ -3,6 +3,7 @@ namespace Cntryl.Portia;
 /// <summary>
 ///     Enqueues no-result requests onto a Fitz queue for later dispatch.
 /// </summary>
+/// <remarks>Fitz accepts enqueues before background persistence. Use committed events as the source of required work.</remarks>
 /// <param name="queue">The Fitz queue client.</param>
 /// <param name="serializer">The request serializer.</param>
 /// <param name="catalog">Provides generated request routes.</param>

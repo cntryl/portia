@@ -11,8 +11,13 @@ sealed class GeneratedApplicationTopology(
         DescribeRequests(),
         workloads.Select(w =>
         {
+            var component = w.ComponentType.FullName ?? w.ComponentType.Name;
+            if (w.Descriptor is ReactorRegistration { TypedSubscription: { } subscription })
+                return new ProcessorTopology(w.Name, component, w.Descriptor.Kind, w.Scope.ToString(),
+                    [subscription], "typed dispatch; opaque dependencies unknown");
+
             var generated = w.ComponentType.GetCustomAttribute<ProcessorTopologyAttribute>();
-            return new ProcessorTopology(w.Name, w.ComponentType.FullName ?? w.ComponentType.Name,
+            return new ProcessorTopology(w.Name, component,
                 w.Descriptor.Kind, w.Scope.ToString(),
                 generated?.Subscriptions.ToArray() ?? [], generated is null
                     ? "unknown: manual dispatch"

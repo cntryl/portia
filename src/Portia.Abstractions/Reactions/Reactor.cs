@@ -48,6 +48,7 @@ public abstract class Reactor
 
     internal IProjectionCheckpointStore Checkpoints { get; }
     internal virtual bool IsBatch => false;
+    internal virtual Type ComponentType => GetType();
 
     /// <summary>
     ///     Applies the running workload's tenant and, when the workload is hosted, its name.

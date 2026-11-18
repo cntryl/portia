@@ -13,6 +13,9 @@ public interface IAggregateWriter
     ///     The stream position changed or another append session is active. Reload and re-evaluate the
     ///     operation; Portia does not retry it automatically.
     /// </exception>
+    /// <exception cref="EventStreamCommitUnknownException">
+    ///     The store could not confirm the commit. Reconcile the attempted save before rerunning the business decision.
+    /// </exception>
     ValueTask SaveAsync<TAggregate>(TAggregate aggregate, IExecutionContext context, CancellationToken ct = default)
         where TAggregate : Aggregate;
 }

@@ -145,8 +145,15 @@ retry the same aggregate with the same context. Additional emissions are rejecte
 until that save succeeds. Cancellation before an append attempt does not freeze the
 batch. Changing the execution context of an unconfirmed save is rejected.
 
-This is not exactly-once command execution. A redelivered command or a reactor
-replayed after checkpoint failure can execute application logic again. Use an explicit
+If Fitz loses the commit reply, Portia checks the expected stream positions for the complete
+encoded batch. An exact match confirms the save, including on an identical retry after readback
+was unavailable. A different batch at the expected position still yields a concurrency conflict.
+`EventStreamCommitUnknownException` means Portia could not confirm the requested commit. Retry
+the frozen save or reconcile the recorded business outcome before deciding whether to run the
+operation again.
+
+A redelivered command or a reactor replayed after checkpoint failure can execute application
+logic again. Use an explicit
 business idempotency key where duplicate effects matter, and persist its receipt with
 the affected state. On an optimistic concurrency conflict, reload a fresh aggregate
 and decide whether the business operation is still valid; Portia does not rerun it.

@@ -1,1 +1,3 @@
 #nullable enable
+Cntryl.Portia.EventStreamCommitUnknownException
+Cntryl.Portia.EventStreamCommitUnknownException.EventStreamCommitUnknownException(string! message, System.Exception! innerException) -> void

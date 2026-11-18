@@ -11,6 +11,9 @@ interface IWorkloadDescriptor
 {
     Type ComponentType { get; }
 
+    /// <summary>Checks registration-specific settings for an already selected component type.</summary>
+    bool Matches(IWorkloadDescriptor other) => Kind == other.Kind;
+
     /// <summary>Gets whether this kind of component can run a separate rebuild generation.</summary>
     bool SupportsRebuild { get; }
 

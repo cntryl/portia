@@ -6,11 +6,18 @@ namespace Cntryl.Portia;
 public sealed class ReactorRegistration : IWorkloadDescriptor
 {
     readonly Func<IServiceProvider, Reactor> _resolve;
+    readonly EventStreamPattern? _source;
+    readonly Type? _eventType;
+    readonly Action<IServiceCollection>? _registerHandler;
 
-    ReactorRegistration(Type reactorType, Func<IServiceProvider, Reactor> resolve)
+    ReactorRegistration(Type reactorType, Func<IServiceProvider, Reactor> resolve,
+        EventStreamPattern? source = null, Type? eventType = null, Action<IServiceCollection>? registerHandler = null)
     {
         ReactorType = reactorType;
         _resolve = resolve;
+        _source = source;
+        _eventType = eventType;
+        _registerHandler = registerHandler;
     }
 
     /// <summary>Gets the concrete reactor type.</summary>
@@ -18,12 +25,21 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
 
     Type IWorkloadDescriptor.ComponentType => ReactorType;
 
+    internal string? TypedSubscription { get; private init; }
+
+    bool IWorkloadDescriptor.Matches(IWorkloadDescriptor other) =>
+        other is ReactorRegistration registration && _source == registration._source && _eventType == registration._eventType;
+
     // Reaction effects are not transactional with progress, so a reactor has no separate
     // generation to build into; a rebuild would re-fire every effect.
     bool IWorkloadDescriptor.SupportsRebuild => false;
 
     string IWorkloadDescriptor.Kind => ProcessorKinds.Reactor;
-    void IWorkloadDescriptor.Register(IServiceCollection services) => _ = services.AddSingleton(this);
+    void IWorkloadDescriptor.Register(IServiceCollection services)
+    {
+        _ = services.AddSingleton(this);
+        _registerHandler?.Invoke(services);
+    }
 
     void IWorkloadDescriptor.Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName)
         => _resolve(services).BindWorkload(identity, componentName);
@@ -76,4 +92,32 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
     /// <returns>The component descriptor.</returns>
     public static ReactorRegistration Create<TReactor>() where TReactor : Reactor => new(
         typeof(TReactor), static services => services.GetRequiredService<TReactor>());
+
+    internal static ReactorRegistration Create<THandler, TEvent>(EventStreamPattern source)
+        where THandler : class, IReactorHandler<TEvent>
+        where TEvent : DomainEvent
+    {
+        return new ReactorRegistration(typeof(THandler),
+            static services => services.GetRequiredService<HandlerReactor<THandler, TEvent>>(), source, typeof(TEvent),
+            services => services.AddScoped(provider => new HandlerReactor<THandler, TEvent>(
+                provider.GetRequiredService<THandler>(), provider.GetRequiredService<IProjectionCheckpointStore>(), source)))
+        {
+            TypedSubscription = HandlerReactor<THandler, TEvent>.Subscription
+        };
+    }
+
+    sealed class HandlerReactor<THandler, TEvent>(THandler handler, IProjectionCheckpointStore checkpoints,
+        EventStreamPattern source) : Reactor(checkpoints, source)
+        where THandler : class, IReactorHandler<TEvent>
+        where TEvent : DomainEvent
+    {
+        internal static string Subscription { get; } = $"Cntryl.Portia.IReactorHandler<{typeof(TEvent).FullName ?? typeof(TEvent).Name}>";
+
+        internal override Type ComponentType => typeof(THandler);
+
+        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
+            CancellationToken ct) => record.Event is TEvent trigger
+            ? ProcessingObservation.InvokeAsync(Subscription, handler, new ReactorContext<TEvent>(trigger, record, context), ct)
+            : ValueTask.FromResult(Result.Success);
+    }
 }

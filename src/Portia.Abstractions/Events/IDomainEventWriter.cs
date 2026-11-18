@@ -16,6 +16,9 @@ public interface IDomainEventWriter
     /// <param name="events">The homogeneous batch of state-changing events or audits to append.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the append operation.</returns>
+    /// <exception cref="EventStreamCommitUnknownException">
+    ///     The provider could not establish the outcome of a requested commit.
+    /// </exception>
     ValueTask AppendAsync(
         EventStreamAddress stream,
         ulong expectedStreamPosition,

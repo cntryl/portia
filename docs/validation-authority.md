@@ -47,6 +47,32 @@ A timeout or missing response is an unknown outcome, rather than proof that the 
 Reconcile the recorded participant outcome using the stable business operation identity. Replayed
 commands and events must preserve the same reservation/effect identity and tolerate duplicates.
 
+## Implementing the Order and Inventory workflow
+
+Give each step a durable trigger and a single owner. The Order owns the business operation ID and
+its lifecycle. Inventory uses a stable reservation ID to recognize repeated requests for the same
+reservation and return its recorded outcome.
+
+| Trigger | Application step | Committed evidence |
+| --- | --- | --- |
+| `PlaceOrder` | Run advisory preflight if it helps. Accept the order as pending. | `OrderPlaced` with the inventory and operation IDs. |
+| `OrderPlaced` | A reactor sends `ReserveInventory` with the same reservation ID on each replay. The Inventory handler rechecks stock inside the aggregate. | `InventoryReserved` or `InventoryReservationRejected`, both tied to the reservation ID. |
+| Either Inventory outcome | A reactor sends an Order command carrying the reservation ID. Order matches it to its pending reservation before transitioning. | `OrderConfirmed`, `OrderRejected`, or an explicit request for compensation or intervention. |
+| Compensation requested | A reactor asks the owning participant to reverse the effect and the Order consumes its recorded outcome. | Compensation completed or intervention required. |
+
+Use `IIdentifiedRequest` to carry the stable command ID in a typed request and `SendReactionAsync`
+to inherit the system actor and event causation. A step's ID can be derived from the business
+operation, participant, and action, or from `CreateEffectId` when a single source event defines the
+step. Keep one identity across alternate delivery and reconciliation paths. Each owner recognizes
+already committed outcomes from its own state. Return `Result.Success` after a participant has
+durably recorded an expected refusal so the next reactor can consume it. If a required write is
+unresolved, leave processing incomplete and reconcile or retry with the same identity.
+
+Project the Order's state for a status query. The query can show pending, rejection, and intervention
+using recorded facts while the owning aggregates remain authoritative. Start with the
+[reservation race and replay test](../test/Portia.Tests/Operations/OperationalValidationAuthorityTests.cs)
+and the [reaction dispatch example](projectors-and-reactors.md#reactions).
+
 ## Explicit resolution
 
 Every workflow that relies on cross-aggregate assumptions defines the consequences of failed

@@ -90,6 +90,9 @@ dimensions.
 | `portia.worker.restart` | Counter | `{restart}` | `portia.runner.name`, `portia.stage` |
 | `portia.fleet.assignment.active` | UpDownCounter | `{assignment}` | `portia.scope` |
 
+Fitz append duration uses `portia.outcome=unknown` when Portia cannot confirm a requested commit.
+An append confirmed by readback contributes to the successful duration and event count.
+
 Delivery outcomes are closed by transport. RPC records `completed` only after the response is
 written. Queue records exactly one of `completed`, `abandoned`, `terminal`, `canceled`, or `fault`
 per reservation. Notice and schedule record exactly one of `completed` or `lost`; malformed
