@@ -23,8 +23,4 @@
     <Compile Include="../Portia.Generators/Infrastructure/IsExternalInit.cs" Link="Infrastructure/IsExternalInit.cs"/>
     <Compile Include="../Portia.Generators/Http/RequestHttpBindingGenerator.cs" Link="Http/RequestHttpBindingGenerator.cs"/>
   </ItemGroup>
-  <ItemGroup>
-    <AdditionalFiles Include="AnalyzerReleases.Shipped.md"/>
-    <AdditionalFiles Include="AnalyzerReleases.Unshipped.md"/>
-  </ItemGroup>
 </Project>

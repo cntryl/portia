@@ -103,7 +103,7 @@ jobs:
         run: dotnet run --project eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj --configuration Release -- verify-stable-dependencies --root .
 
       - name: Check formatting
-        run: dotnet format Portia.slnx --verify-no-changes --no-restore
+        run: dotnet format Portia.slnx --verify-no-changes --no-restore --verbosity diagnostic
 
       - name: Build solution
         run: dotnet build Portia.slnx --configuration Release --no-restore
