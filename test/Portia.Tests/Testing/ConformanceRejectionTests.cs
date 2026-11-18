@@ -114,14 +114,19 @@ public sealed class ConformanceRejectionTests
 
         /// <summary>Replaces original business data with a constant.</summary>
         CorruptsPayload,
+
         /// <summary>Substitutes a different event type.</summary>
         SubstitutesType,
+
         /// <summary>Rewrites original occurrence times consistently across reads.</summary>
         RewritesMetadata,
+
         /// <summary>Rewrites business data only on pattern reads.</summary>
         CorruptsPatternPayload,
+
         /// <summary>Rewrites business data only on stream offset resumes.</summary>
         CorruptsOffsetPayload,
+
         /// <summary>Rewrites business data only on issued cursor resumes.</summary>
         CorruptsCursorPayload,
 
@@ -215,7 +220,8 @@ public sealed class ConformanceRejectionTests
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(error);
-        Assert.Contains(member == "AggregateVersion" ? "aggregate version" : "metadata", error.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(member == "AggregateVersion" ? "aggregate version" : "metadata", error.Message,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -273,7 +279,8 @@ public sealed class ConformanceRejectionTests
         var probe = new DefectiveDeduplicationProbe(DeduplicationDefect.None);
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await ReactionDeduplicationConformance.VerifyAsync(probe));
+        var exception =
+            await Record.ExceptionAsync(async () => await ReactionDeduplicationConformance.VerifyAsync(probe));
 
         // Assert
         Assert.Null(exception);
@@ -331,10 +338,12 @@ public sealed class ConformanceRejectionTests
     [Theory]
     [InlineData(0)]
     [InlineData(500)]
-    public async Task ShouldRejectProjectionProbeGivenCheckpointComparedOnlyWhenBatchOpens(int staleOpenDelayMilliseconds)
+    public async Task ShouldRejectProjectionProbeGivenCheckpointComparedOnlyWhenBatchOpens(
+        int staleOpenDelayMilliseconds)
     {
         // Arrange
-        using var probe = new ShapedProjectionProbe(ProjectionStoreShape.ChecksCheckpointOnlyAtBegin, staleOpenDelayMilliseconds);
+        using var probe = new ShapedProjectionProbe(ProjectionStoreShape.ChecksCheckpointOnlyAtBegin,
+            staleOpenDelayMilliseconds);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         // Act
@@ -402,7 +411,8 @@ public sealed class ConformanceRejectionTests
         Assert.Contains("independent identity", exception.Message, StringComparison.Ordinal);
     }
 
-    sealed class DefectiveEventStoreProbe(StoreDefect defect, string? metadataMember = null) : IEventStoreConformanceProbe
+    sealed class DefectiveEventStoreProbe(StoreDefect defect, string? metadataMember = null)
+        : IEventStoreConformanceProbe
     {
         readonly ConcurrentDictionary<EventStreamAddress, byte> _written = new();
         InMemoryEventStore _store = new();
@@ -431,9 +441,9 @@ public sealed class ConformanceRejectionTests
         StoreDefect defect,
         string realm,
         string area,
-        ConcurrentDictionary<EventStreamAddress, byte> written, string? metadataMember) : IEventStore
+        ConcurrentDictionary<EventStreamAddress, byte> written,
+        string? metadataMember) : IEventStore
     {
-
         public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
             [EnumeratorCancellation] CancellationToken ct = default)
         {
@@ -520,11 +530,14 @@ public sealed class ConformanceRejectionTests
 
             if (defect == StoreDefect.PatternReadResumesWithForeignIdentity && cursor != EventCursor.Start)
             {
-                records = [.. records.Select(record => record with
-                {
-                    Event = DomainEventSeed.Attach(new ConformanceEvent(((ConformanceEvent)record.Event).Sequence),
-                        record.Event.Metadata.AggregateId, record.Event.Metadata.AggregateVersion)
-                })];
+                records =
+                [
+                    .. records.Select(record => record with
+                    {
+                        Event = DomainEventSeed.Attach(new ConformanceEvent(((ConformanceEvent)record.Event).Sequence),
+                            record.Event.Metadata.AggregateId, record.Event.Metadata.AggregateVersion)
+                    })
+                ];
             }
 
             foreach (var record in records)
@@ -532,30 +545,41 @@ public sealed class ConformanceRejectionTests
                 yield return defect == StoreDefect.PatternReadOmitsAreaOffset
                     ? record with { NextCursor = EventCursor.Start }
                     : Corrupt(record, defect == StoreDefect.CorruptsPatternPayload ||
-                        defect == StoreDefect.CorruptsCursorPayload && cursor != EventCursor.Start);
+                                      defect == StoreDefect.CorruptsCursorPayload && cursor != EventCursor.Start);
             }
         }
 
         DomainEventRecord Corrupt(DomainEventRecord record, bool corruptPayload)
         {
-            if (!corruptPayload && defect is not (StoreDefect.CorruptsPayload or StoreDefect.SubstitutesType or StoreDefect.RewritesMetadata))
+            if (!corruptPayload && defect is not (StoreDefect.CorruptsPayload or StoreDefect.SubstitutesType
+                    or StoreDefect.RewritesMetadata))
                 return record;
-            DomainEvent replacement = defect == StoreDefect.SubstitutesType ? new ValueChanged(0)
-                : new ConformanceEvent(defect == StoreDefect.RewritesMetadata ? ((ConformanceEvent)record.Event).Sequence : 0);
+            DomainEvent replacement = defect == StoreDefect.SubstitutesType
+                ? new ValueChanged(0)
+                : new ConformanceEvent(defect == StoreDefect.RewritesMetadata
+                    ? ((ConformanceEvent)record.Event).Sequence
+                    : 0);
             replacement.AttachMetadata(defect == StoreDefect.RewritesMetadata
                 ? metadataMember switch
                 {
-                    "OccurredOnOffset" => record.Event.Metadata with { OccurredOn = record.Event.Metadata.OccurredOn.ToOffset(TimeSpan.FromHours(1)) },
+                    "OccurredOnOffset" => record.Event.Metadata with
+                    {
+                        OccurredOn = record.Event.Metadata.OccurredOn.ToOffset(TimeSpan.FromHours(1))
+                    },
                     "EventId" => record.Event.Metadata with { EventId = Uuid.CreateVersion4() },
                     "AggregateId" => record.Event.Metadata with { AggregateId = Uuid.CreateVersion4() },
                     "AggregateVersion" => record.Event.Metadata with { AggregateVersion = 99 },
                     "CorrelationId" => record.Event.Metadata with { CorrelationId = Uuid.CreateVersion4() },
                     "CausationId" => record.Event.Metadata with { CausationId = Uuid.CreateVersion4() },
                     "ExecutionId" => record.Event.Metadata with { ExecutionId = Uuid.CreateVersion4() },
-                    "Actor" => record.Event.Metadata with { Actor = new ActorAttribution("rewritten", "conformance-issuer") },
+                    "Actor" => record.Event.Metadata with
+                    {
+                        Actor = new ActorAttribution("rewritten", "conformance-issuer")
+                    },
                     "IsAudit" => record.Event.Metadata with { IsAudit = !record.Event.Metadata.IsAudit },
                     _ => record.Event.Metadata with { OccurredOn = DateTimeOffset.UnixEpoch }
-                } : record.Event.Metadata);
+                }
+                : record.Event.Metadata);
             return record with { Event = replacement };
         }
 
@@ -784,7 +808,8 @@ public sealed class ConformanceRejectionTests
             public async ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context,
                 CancellationToken ct = default)
             {
-                var overlapping = _probe.Shape == ProjectionStoreShape.ChecksCheckpointOnlyAtBegin && _probe._winnerStaged;
+                var overlapping = _probe.Shape == ProjectionStoreShape.ChecksCheckpointOnlyAtBegin &&
+                                  _probe._winnerStaged;
                 if (overlapping)
                     await Task.Delay(_probe.StaleOpenDelay, ct);
                 var locked = false;
@@ -808,6 +833,7 @@ public sealed class ConformanceRejectionTests
                     _probe._winnerStaged = false;
                     _ = _probe._overlappingBatchOpened.TrySetResult();
                 }
+
                 return _batch;
             }
 
@@ -850,7 +876,8 @@ public sealed class ConformanceRejectionTests
                     {
                         // Inject the defective overlap explicitly: a delayed or unscheduled stale
                         // opener must still observe the pre-commit checkpoint before the winner commits.
-                        if (session._probe.Shape == ProjectionStoreShape.ChecksCheckpointOnlyAtBegin && Value == "winner")
+                        if (session._probe.Shape == ProjectionStoreShape.ChecksCheckpointOnlyAtBegin &&
+                            Value == "winner")
                             await session._probe._overlappingBatchOpened.Task.WaitAsync(ct);
                         Commit(checkpoint);
                     }

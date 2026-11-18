@@ -29,51 +29,51 @@ public sealed class ExplicitRegistrationConsumerTests
     {
         // Arrange
         const string source = """
-                                                    using System.Linq;
-                                                    using System.Threading.Tasks;
-                                                    using Cntryl.Portia;
-                                                    using Cntryl.Portia.Testing;
-                                                    using Microsoft.Extensions.DependencyInjection;
-                                                    [RequestRoute("app", "accounts", "*", "deposit")]
-                                                    [Discriminator("app.accounts.call")]
-                                                    public sealed record CallAccount(int Amount) : IRequest, ICallable;
-                                                    [RequestRoute("app", "accounts", "*", "queue")]
-                                                    [Discriminator("app.accounts.queue")]
-                                                    public sealed record QueueAccount(int Amount) : IRequest, IQueuable;
-                                                    [RequestRoute("app", "accounts", "*", "notice")]
-                                                    [Discriminator("app.accounts.notice")]
-                                                    public sealed record NoticeAccount(int Amount) : IRequest, INotifiable;
-                                                    [RequestRoute("app", "accounts", "*", "schedule")]
-                                                    [Discriminator("app.accounts.schedule")]
-                                                    public sealed record ScheduleAccount(int Amount) : IRequest, ISchedulable;
-                                                    public static class Scenario
-                                                    {
-                                                        public static ValueTask<Result> Call(IRemoteRequestSender sender)
-                                                            => sender.SendAsync(new CallAccount(10), new RequestRouteValues(), null);
-                                                        public static ValueTask Queue(IRequestQueuePublisher sender)
-                                                            => sender.EnqueueAsync(new QueueAccount(10), new RequestRouteValues(), null);
-                                                        public static ValueTask Notice(INoticeRequestSender sender)
-                                                            => sender.PublishAsync(new NoticeAccount(10), new RequestRouteValues(), null);
-                                                        public static ValueTask<string> Schedule(IRequestScheduler sender, RequestScheduleSpec spec)
-                                                            => sender.ScheduleAsync(new ScheduleAccount(10), spec, new RequestRouteValues(), RequestActor.System);
+                              using System.Linq;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              using Microsoft.Extensions.DependencyInjection;
+                              [RequestRoute("app", "accounts", "*", "deposit")]
+                              [Discriminator("app.accounts.call")]
+                              public sealed record CallAccount(int Amount) : IRequest, ICallable;
+                              [RequestRoute("app", "accounts", "*", "queue")]
+                              [Discriminator("app.accounts.queue")]
+                              public sealed record QueueAccount(int Amount) : IRequest, IQueuable;
+                              [RequestRoute("app", "accounts", "*", "notice")]
+                              [Discriminator("app.accounts.notice")]
+                              public sealed record NoticeAccount(int Amount) : IRequest, INotifiable;
+                              [RequestRoute("app", "accounts", "*", "schedule")]
+                              [Discriminator("app.accounts.schedule")]
+                              public sealed record ScheduleAccount(int Amount) : IRequest, ISchedulable;
+                              public static class Scenario
+                              {
+                                  public static ValueTask<Result> Call(IRemoteRequestSender sender)
+                                      => sender.SendAsync(new CallAccount(10), new RequestRouteValues(), null);
+                                  public static ValueTask Queue(IRequestQueuePublisher sender)
+                                      => sender.EnqueueAsync(new QueueAccount(10), new RequestRouteValues(), null);
+                                  public static ValueTask Notice(INoticeRequestSender sender)
+                                      => sender.PublishAsync(new NoticeAccount(10), new RequestRouteValues(), null);
+                                  public static ValueTask<string> Schedule(IRequestScheduler sender, RequestScheduleSpec spec)
+                                      => sender.ScheduleAsync(new ScheduleAccount(10), spec, new RequestRouteValues(), RequestActor.System);
 
-                                                        public static bool Run()
-                                                        {
-                                                            var services = new ServiceCollection();
-                                                            services.AddPortia();
-                                                            var requests = services.OfType<ServiceDescriptor>()
-                                                                .Select(descriptor => descriptor.ImplementationInstance)
-                                                                .OfType<RequestTransportRegistration>()
-                                                                .Select(registration => registration.RequestType)
-                                                                .ToArray();
-                                                            return requests.Length == 4
-                                                                && requests.Contains(typeof(CallAccount))
-                                                                && requests.Contains(typeof(QueueAccount))
-                                                                && requests.Contains(typeof(NoticeAccount))
-                                                                && requests.Contains(typeof(ScheduleAccount));
-                                                        }
-                                                    }
-                                                    """;
+                                  public static bool Run()
+                                  {
+                                      var services = new ServiceCollection();
+                                      services.AddPortia();
+                                      var requests = services.OfType<ServiceDescriptor>()
+                                          .Select(descriptor => descriptor.ImplementationInstance)
+                                          .OfType<RequestTransportRegistration>()
+                                          .Select(registration => registration.RequestType)
+                                          .ToArray();
+                                      return requests.Length == 4
+                                          && requests.Contains(typeof(CallAccount))
+                                          && requests.Contains(typeof(QueueAccount))
+                                          && requests.Contains(typeof(NoticeAccount))
+                                          && requests.Contains(typeof(ScheduleAccount));
+                                  }
+                              }
+                              """;
         var assembly = GeneratorCompilation.Compile(source, new RegistrationCallInterceptorGenerator());
 
         // Act
@@ -88,42 +88,42 @@ public sealed class ExplicitRegistrationConsumerTests
     {
         // Arrange
         const string source = """
-                                                    using System;
-                                                    using System.Linq;
-                                                    using System.Security.Claims;
-                                                    using System.Threading;
-                                                    using System.Threading.Tasks;
-                                                    using Cntryl.Portia;
-                                                    using Cntryl.Portia.Testing;
-                                                    using Microsoft.Extensions.DependencyInjection;
-                                                    public sealed record Request : IRequest;
-                                                    public class Selected : IRequestHandler<Request>, IRequestAuthorizer<Request>
-                                                    {
-                                                        public ValueTask<Result> HandleAsync(IRequestContext<Request> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
-                                                        public ValueTask<Result> AuthorizeAsync(IRequestContext<Request> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
-                                                    }
-                                                    public class Unselected : IRequestHandler<Request>, IRequestAuthorizer<Request>
-                                                    {
-                                                        public ValueTask<Result> HandleAsync(IRequestContext<Request> c, CancellationToken ct) => throw new Exception();
-                                                        public ValueTask<Result> AuthorizeAsync(IRequestContext<Request> c, CancellationToken ct) => throw new Exception();
-                                                    }
-                                                    public static class Scenario
-                                                    {
-                                                        public static bool Run()
-                                                        {
-                                                            var services = new ServiceCollection();
-                                                            var portia = services.AddPortia().AddRequestHandler<Selected>();
-                                                            if (services.Any(s => s.ServiceType == typeof(RequestAuthorizerRegistration))) return false;
-                                                            portia.AddRequestHandler<Selected>();
-                                                            portia.AddRequestAuthorizer<Selected>();
-                                                            if (!services.Any(s => s.ServiceType == typeof(RequestAuthorizerRegistration))) return false;
-                                                            var count = services.Count;
-                                                            try { portia.AddRequestHandler<Unselected>(); return false; }
-                                                            catch (InvalidOperationException) { }
-                                                            return services.Count == count && !services.Any(s => s.ServiceType == typeof(Unselected));
-                                                        }
-                                                    }
-                                                    """;
+                              using System;
+                              using System.Linq;
+                              using System.Security.Claims;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              using Microsoft.Extensions.DependencyInjection;
+                              public sealed record Request : IRequest;
+                              public class Selected : IRequestHandler<Request>, IRequestAuthorizer<Request>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<Request> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                                  public ValueTask<Result> AuthorizeAsync(IRequestContext<Request> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                              }
+                              public class Unselected : IRequestHandler<Request>, IRequestAuthorizer<Request>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<Request> c, CancellationToken ct) => throw new Exception();
+                                  public ValueTask<Result> AuthorizeAsync(IRequestContext<Request> c, CancellationToken ct) => throw new Exception();
+                              }
+                              public static class Scenario
+                              {
+                                  public static bool Run()
+                                  {
+                                      var services = new ServiceCollection();
+                                      var portia = services.AddPortia().AddRequestHandler<Selected>();
+                                      if (services.Any(s => s.ServiceType == typeof(RequestAuthorizerRegistration))) return false;
+                                      portia.AddRequestHandler<Selected>();
+                                      portia.AddRequestAuthorizer<Selected>();
+                                      if (!services.Any(s => s.ServiceType == typeof(RequestAuthorizerRegistration))) return false;
+                                      var count = services.Count;
+                                      try { portia.AddRequestHandler<Unselected>(); return false; }
+                                      catch (InvalidOperationException) { }
+                                      return services.Count == count && !services.Any(s => s.ServiceType == typeof(Unselected));
+                                  }
+                              }
+                              """;
         var assembly = GeneratorCompilation.Compile(source, new RegistrationCallInterceptorGenerator());
 
         // Act

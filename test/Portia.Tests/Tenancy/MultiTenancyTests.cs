@@ -283,7 +283,8 @@ public sealed class MultiTenancyTests
         // Arrange
         var store = new InMemoryEventStore();
         await RegisterTenantAsync(store, "blocked");
-        var runner = new MultiTenantRunner(CreateDirectory(store), new MultiTenantRunnerOptions { ShutdownGrace = TimeSpan.FromMilliseconds(50) });
+        var runner = new MultiTenantRunner(CreateDirectory(store),
+            new MultiTenantRunnerOptions { ShutdownGrace = TimeSpan.FromMilliseconds(50) });
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stopEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var cts = new CancellationTokenSource();
@@ -320,7 +321,8 @@ public sealed class MultiTenancyTests
         // Arrange
         var store = new InMemoryEventStore();
         await RegisterTenantAsync(store, "cooperative");
-        var runner = new MultiTenantRunner(CreateDirectory(store), new MultiTenantRunnerOptions { ShutdownGrace = TimeSpan.FromSeconds(1) });
+        var runner = new MultiTenantRunner(CreateDirectory(store),
+            new MultiTenantRunnerOptions { ShutdownGrace = TimeSpan.FromSeconds(1) });
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var cleanupCompleted = false;
         using var cts = new CancellationTokenSource();
@@ -610,7 +612,8 @@ public sealed class MultiTenancyTests
         using var cancellation = new CancellationTokenSource();
 
         // Act
-        await using var reader = (useCursor ? cursor.ReadAsync(cancellation.Token) : directory.WatchAsync(cancellation.Token))
+        await using var reader =
+            (useCursor ? cursor.ReadAsync(cancellation.Token) : directory.WatchAsync(cancellation.Token))
             .GetAsyncEnumerator();
 
         // Assert

@@ -65,7 +65,8 @@ public sealed partial class CassieProjectionMisuseTests
         // Arrange
         var services = new ServiceCollection();
         _ = services.AddSingleton<IDomainEventReader>(new InMemoryEventStore());
-        _ = services.AddScoped(sp => new ProbeRepository(sp.GetRequiredService<CassieProjectionDatabase>(), "SomethingElse"));
+        _ = services.AddScoped(sp =>
+            new ProbeRepository(sp.GetRequiredService<CassieProjectionDatabase>(), "SomethingElse"));
         _ = services.AddPortia().AddCassie(UnreachableServer)
             .AddCassieProjection<ProbeProjector, ProbeRepository>("Probe", WorkloadScope.Global)
             .AddWorkers().UseSingleProcessWorkloads();

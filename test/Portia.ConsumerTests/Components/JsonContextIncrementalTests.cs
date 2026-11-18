@@ -6,13 +6,13 @@ namespace Cntryl.Portia.Consumer;
 public sealed class JsonContextIncrementalTests
 {
     const string Composition = """
-        using Cntryl.Portia;
-        using Microsoft.Extensions.DependencyInjection;
-        public static class Composition
-        {
-            public static PortiaBuilder Configure(IServiceCollection services) => services.AddPortia();
-        }
-        """;
+                               using Cntryl.Portia;
+                               using Microsoft.Extensions.DependencyInjection;
+                               public static class Composition
+                               {
+                                   public static PortiaBuilder Configure(IServiceCollection services) => services.AddPortia();
+                               }
+                               """;
 
     [Fact]
     public void ShouldReuseSharedRegistrationsGivenUnchangedReferencedContexts()
@@ -69,40 +69,42 @@ public sealed class JsonContextIncrementalTests
     static CSharpParseOptions Options() => new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
         [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
 
-    static CSharpCompilation Compilation(CSharpParseOptions options, SyntaxTree unrelated, MetadataReference reference) =>
+    static CSharpCompilation Compilation(CSharpParseOptions options, SyntaxTree unrelated,
+        MetadataReference reference) =>
         CSharpCompilation.Create("ContextIncremental",
             [CSharpSyntaxTree.ParseText(Composition, options, "Composition.cs"), unrelated],
             ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
-                .Append(typeof(Aggregate).Assembly.Location)
-                .Append(typeof(IRemoteRequestSender).Assembly.Location)
-                .Append(typeof(PortiaBuilder).Assembly.Location)
-                .Distinct(StringComparer.Ordinal)
-                .Select(path => (MetadataReference)MetadataReference.CreateFromFile(path))
-                .Append(reference),
+            .Append(typeof(Aggregate).Assembly.Location)
+            .Append(typeof(IRemoteRequestSender).Assembly.Location)
+            .Append(typeof(PortiaBuilder).Assembly.Location)
+            .Distinct(StringComparer.Ordinal)
+            .Select(path => (MetadataReference)MetadataReference.CreateFromFile(path))
+            .Append(reference),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
     static CSharpGeneratorDriver Driver(CSharpParseOptions options) => CSharpGeneratorDriver.Create(
         [new RegistrationCallInterceptorGenerator().AsSourceGenerator()], parseOptions: options,
         driverOptions: new GeneratorDriverOptions(default, true));
 
-    static MetadataReference ContextReference(string factory) => GeneratorCompilation.ReferenceNamed("JsonContracts", $$"""
-        using System;
-        using System.Text.Json;
-        using System.Text.Json.Serialization;
-        using System.Text.Json.Serialization.Metadata;
-        using Cntryl.Portia;
-        [assembly: PortiaJsonRoot(typeof(string), typeof(Contracts.Context), typeof(Contracts.{{factory}}))]
-        namespace Contracts;
-        public sealed class Context(JsonSerializerOptions options) : JsonSerializerContext(options)
-        {
-            protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
-            public override JsonTypeInfo? GetTypeInfo(Type type) => null;
-        }
-        public static class {{factory}}
-        {
-            public static JsonSerializerContext Create(JsonSerializerOptions options) => new Context(options);
-        }
-        """);
+    static MetadataReference ContextReference(string factory) => GeneratorCompilation.ReferenceNamed("JsonContracts",
+        $$"""
+          using System;
+          using System.Text.Json;
+          using System.Text.Json.Serialization;
+          using System.Text.Json.Serialization.Metadata;
+          using Cntryl.Portia;
+          [assembly: PortiaJsonRoot(typeof(string), typeof(Contracts.Context), typeof(Contracts.{{factory}}))]
+          namespace Contracts;
+          public sealed class Context(JsonSerializerOptions options) : JsonSerializerContext(options)
+          {
+              protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+              public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+          }
+          public static class {{factory}}
+          {
+              public static JsonSerializerContext Create(JsonSerializerOptions options) => new Context(options);
+          }
+          """);
 
     static string Generated(GeneratorDriver driver)
     {

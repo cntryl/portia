@@ -13,7 +13,8 @@ public sealed class WorkloadCoordinatorConformanceTests
         var probe = new SharedProbe(false);
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await WorkloadCoordinatorConformance.VerifyAsync(probe));
+        var exception =
+            await Record.ExceptionAsync(async () => await WorkloadCoordinatorConformance.VerifyAsync(probe));
 
         // Assert
         Assert.Null(exception);

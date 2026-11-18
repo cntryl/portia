@@ -43,7 +43,9 @@ public sealed class RequiredPresenceTests
 
         // Assert
         Assert.Empty(parsed.Diagnostic!.Errors);
-        var schema = parsed.Document!.Paths["/presence"].Operations![HttpMethod.Post].RequestBody!.Content!["application/json"].Schema!;
+        var schema =
+            parsed.Document!.Paths["/presence"].Operations![HttpMethod.Post].RequestBody!.Content!["application/json"]
+                .Schema!;
         Assert.Contains("marker", schema.Required!);
         Assert.DoesNotContain("name", schema.Required!);
         Assert.True(schema.Properties!["marker"].Type!.Value.HasFlag(JsonSchemaType.Null));

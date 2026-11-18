@@ -79,7 +79,8 @@ public sealed class QueueConsumerContractTests
         Assert.Equal(0, implicitItem.Completions);
 
         Assert.True(await reader.MoveNextAsync());
-        _ = await Assert.ThrowsAsync<NotSupportedException>(() => reader.Current.RetryAsync(TimeSpan.FromSeconds(7)).AsTask());
+        _ = await Assert.ThrowsAsync<NotSupportedException>(() =>
+            reader.Current.RetryAsync(TimeSpan.FromSeconds(7)).AsTask());
         Assert.Equal(1, explicitItem.NackCalls);
         Assert.Equal(0, explicitItem.Nacks);
         Assert.Equal(0, explicitItem.Completions);
@@ -137,7 +138,8 @@ public sealed class QueueConsumerContractTests
         Assert.True(await reader.MoveNextAsync());
         _ = await Assert.ThrowsAsync<IOException>(() => reader.Current.CompleteAsync().AsTask());
 
-        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => reader.Current.RetryAsync(TimeSpan.Zero).AsTask());
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            reader.Current.RetryAsync(TimeSpan.Zero).AsTask());
 
         Assert.Equal(0, item.NackCalls);
         Assert.Equal(0, item.Completions);
@@ -165,7 +167,8 @@ public sealed class QueueConsumerContractTests
         clock.Advance(TimeSpan.FromSeconds(2));
         await lost.Task.WaitAsync(TimeSpan.FromSeconds(3));
 
-        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => reader.Current.RetryAsync(TimeSpan.Zero).AsTask());
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            reader.Current.RetryAsync(TimeSpan.Zero).AsTask());
 
         Assert.Equal(0, item.NackCalls);
         Assert.Equal(0, item.Completions);
@@ -189,7 +192,8 @@ public sealed class QueueConsumerContractTests
         Assert.Equal(1, queue.Enqueues);
         Assert.Equal(delay, queue.EnqueueDelay);
         await Assert.ThrowsAsync<NotSupportedException>(() => queue.EnqueueAsync(
-            "queue://consumer/scopes/delivery", ReadOnlyMemory<byte>.Empty, new QueueEnqueueOptions(TimeToLive: TimeSpan.FromHours(1))));
+            "queue://consumer/scopes/delivery", ReadOnlyMemory<byte>.Empty,
+            new QueueEnqueueOptions(TimeToLive: TimeSpan.FromHours(1))));
         Assert.Equal(1, queue.Enqueues);
     }
 
@@ -647,7 +651,8 @@ public sealed class QueueConsumerContractTests
             ArgumentNullException.ThrowIfNull(options);
             ct.ThrowIfCancellationRequested();
             return options.TimeToLive is not null
-                ? Task.FromException<ulong>(new NotSupportedException("This fixture does not implement message lifetime."))
+                ? Task.FromException<ulong>(
+                    new NotSupportedException("This fixture does not implement message lifetime."))
                 : EnqueueAsync(route, body, options.Delay, ct);
         }
 
@@ -733,7 +738,8 @@ public sealed class QueueConsumerContractTests
             QueueEnqueueOptions options, CancellationToken ct = default)
         {
             ArgumentNullException.ThrowIfNull(options);
-            return Task.FromException<ulong>(new NotSupportedException("This fixture accepts already reserved items only."));
+            return Task.FromException<ulong>(
+                new NotSupportedException("This fixture accepts already reserved items only."));
         }
 
         public Task<IQueueReservedItem[]> ReserveAsync(string route, TimeSpan lease, int batchSize = 1,
@@ -759,7 +765,8 @@ public sealed class QueueConsumerContractTests
             lock (_gate)
                 _notifications = notifications;
             _ = Interlocked.Increment(ref _subscriptions);
-            return Task.FromResult(new QueueSubscription(pattern, notifications.Reader.ReadAllAsync(CancellationToken.None),
+            return Task.FromResult(new QueueSubscription(pattern,
+                notifications.Reader.ReadAllAsync(CancellationToken.None),
                 _ => ValueTask.CompletedTask));
         }
     }

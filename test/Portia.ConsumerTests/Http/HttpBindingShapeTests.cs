@@ -12,17 +12,17 @@ public sealed class HttpBindingShapeTests
     {
         // Arrange
         const string source = """
-                                                             #nullable enable
-                                                             using Cntryl.Portia;
-                                                             using Microsoft.AspNetCore.Routing;
-                                                             public sealed record NullableResult(string Value);
-                                                             public sealed record Query : IRequest<NullableResult?>, ICallable;
-                                                             public static class Scenario
-                                                             {
-                                                                 public static void Map(IEndpointRouteBuilder app)
-                                                                     => app.MapPortiaPost<Query, NullableResult?>("/query");
-                                                             }
-                                                             """;
+                              #nullable enable
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              public sealed record NullableResult(string Value);
+                              public sealed record Query : IRequest<NullableResult?>, ICallable;
+                              public static class Scenario
+                              {
+                                  public static void Map(IEndpointRouteBuilder app)
+                                      => app.MapPortiaPost<Query, NullableResult?>("/query");
+                              }
+                              """;
 
         // Act
         var generated = GeneratorCompilation.GeneratedSource(source, new RequestHttpBindingGenerator());
@@ -36,34 +36,34 @@ public sealed class HttpBindingShapeTests
     {
         // Arrange
         const string source = """
-                            #nullable enable
-                            using System.Collections.Generic;
-                            using Cntryl.Portia;
-                            using Microsoft.AspNetCore.Routing;
+                              #nullable enable
+                              using System.Collections.Generic;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
 
-                            public sealed record @class(string Value);
-                            public sealed record NullableUnaryRequest(List<@class?[]?>? Items)
-                                : IRequest<List<@class?[]?>?>, ICallable;
-                            public sealed record NullableValueRequest : IRequest<int?>, ICallable;
-                            public sealed record NullableStreamRequest : IStreamRequest<string?>, ICallable;
+                              public sealed record @class(string Value);
+                              public sealed record NullableUnaryRequest(List<@class?[]?>? Items)
+                                  : IRequest<List<@class?[]?>?>, ICallable;
+                              public sealed record NullableValueRequest : IRequest<int?>, ICallable;
+                              public sealed record NullableStreamRequest : IStreamRequest<string?>, ICallable;
 
-                            public static class Scenario
-                            {
-                                static void Configure(
-                                    PortiaEndpointConfiguration<NullableUnaryRequest, List<@class?[]?>?> endpoint)
-                                {
-                                    endpoint.NoInput();
-                                    endpoint.OnResult((_, result) => null);
-                                }
+                              public static class Scenario
+                              {
+                                  static void Configure(
+                                      PortiaEndpointConfiguration<NullableUnaryRequest, List<@class?[]?>?> endpoint)
+                                  {
+                                      endpoint.NoInput();
+                                      endpoint.OnResult((_, result) => null);
+                                  }
 
-                                public static void Map(IEndpointRouteBuilder app)
-                                {
-                                    app.MapPortiaPost<NullableUnaryRequest, List<@class?[]?>?>("/nullable", Configure);
-                                    app.MapPortiaPost<NullableValueRequest, int?>("/nullable-value");
-                                    app.MapPortiaGetStream<NullableStreamRequest, string?>("/stream");
-                                }
-                            }
-                            """;
+                                  public static void Map(IEndpointRouteBuilder app)
+                                  {
+                                      app.MapPortiaPost<NullableUnaryRequest, List<@class?[]?>?>("/nullable", Configure);
+                                      app.MapPortiaPost<NullableValueRequest, int?>("/nullable-value");
+                                      app.MapPortiaGetStream<NullableStreamRequest, string?>("/stream");
+                                  }
+                              }
+                              """;
 
         var generated = GeneratorCompilation.GeneratedSource(source, new RequestHttpBindingGenerator());
 
@@ -71,7 +71,8 @@ public sealed class HttpBindingShapeTests
 
         // Act
         var metadata = CSharpSyntaxTree.ParseText(generated).GetRoot().DescendantNodes()
-            .OfType<ObjectCreationExpressionSyntax>().Single(node => node.Type.ToString().EndsWith("PortiaOpenApiOperation", StringComparison.Ordinal)
+            .OfType<ObjectCreationExpressionSyntax>().Single(node =>
+                node.Type.ToString().EndsWith("PortiaOpenApiOperation", StringComparison.Ordinal)
                 && node.ArgumentList?.Arguments[0].Expression is LiteralExpressionSyntax literal
                 && literal.Token.ValueText == "nullableValueRequest");
 
@@ -375,7 +376,8 @@ public sealed class HttpBindingShapeTests
     }
 
     [Fact]
-    public void ShouldInterceptMappingsGivenConfiguredUnaryAndStreamingEndpoints() => _ = GeneratorCompilation.Compile("""
+    public void ShouldInterceptMappingsGivenConfiguredUnaryAndStreamingEndpoints() => _ = GeneratorCompilation.Compile(
+        """
         using Cntryl.Portia;
         using Cntryl.Portia.Testing;
         using Microsoft.AspNetCore.Http;
@@ -480,24 +482,24 @@ public sealed class HttpBindingShapeTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Microsoft.AspNetCore.Routing;
-                                                           public enum SomeStyle { Default }
-                                                           public sealed record Scalar(string Text)
-                                                           {
-                                                               public static bool TryParse(string value, SomeStyle style, out Scalar result)
-                                                               {
-                                                                   result = new Scalar(value);
-                                                                   return true;
-                                                               }
-                                                           }
-                                                           public sealed record Binding(Scalar Value) : IRequest<string>, ICallable;
-                                                           public static class Scenario
-                                                           {
-                                                               public static void Map(IEndpointRouteBuilder app)
-                                                                   => app.MapPortiaGet<Binding, string>("/binding");
-                                                           }
-                                                           """;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              public enum SomeStyle { Default }
+                              public sealed record Scalar(string Text)
+                              {
+                                  public static bool TryParse(string value, SomeStyle style, out Scalar result)
+                                  {
+                                      result = new Scalar(value);
+                                      return true;
+                                  }
+                              }
+                              public sealed record Binding(Scalar Value) : IRequest<string>, ICallable;
+                              public static class Scenario
+                              {
+                                  public static void Map(IEndpointRouteBuilder app)
+                                      => app.MapPortiaGet<Binding, string>("/binding");
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new RequestHttpBindingGenerator());
@@ -540,15 +542,15 @@ public sealed class HttpBindingShapeTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           using Microsoft.AspNetCore.Routing;
-                                                           public sealed record Binding(int? Id) : IRequest<string>, ICallable;
-                                                           public static class Scenario
-                                                           {
-                                                               public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Binding, string>("/binding/{id?}");
-                                                           }
-                                                           """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              using Microsoft.AspNetCore.Routing;
+                              public sealed record Binding(int? Id) : IRequest<string>, ICallable;
+                              public static class Scenario
+                              {
+                                  public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Binding, string>("/binding/{id?}");
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new RequestHttpBindingGenerator());
@@ -628,20 +630,20 @@ public sealed class HttpBindingShapeTests
         // on the mapping made a hard compile error depend on formatting.
         // Arrange
         var source = $$"""
-                                                             using Cntryl.Portia;
-                                                             using Cntryl.Portia.Testing;
-                                                             using Microsoft.AspNetCore.Builder;
-                                                             using Microsoft.AspNetCore.Routing;
-                                                             public sealed record RefreshOrder : IRequest, ICallable;
-                                                             public static class Scenario
-                                                             {
-                                                                 public static void Map(IEndpointRouteBuilder app)
-                                                                 {
-                                                                     app.MapPortiaGet<RefreshOrder>("/orders/refresh");
-                                                                     app.MapPortiaPost<RefreshOrder>("/orders/refresh"){{conventions}};
-                                                                 }
-                                                             }
-                                                             """;
+                       using Cntryl.Portia;
+                       using Cntryl.Portia.Testing;
+                       using Microsoft.AspNetCore.Builder;
+                       using Microsoft.AspNetCore.Routing;
+                       public sealed record RefreshOrder : IRequest, ICallable;
+                       public static class Scenario
+                       {
+                           public static void Map(IEndpointRouteBuilder app)
+                           {
+                               app.MapPortiaGet<RefreshOrder>("/orders/refresh");
+                               app.MapPortiaPost<RefreshOrder>("/orders/refresh"){{conventions}};
+                           }
+                       }
+                       """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new RequestHttpBindingGenerator());
@@ -655,18 +657,18 @@ public sealed class HttpBindingShapeTests
     {
         // Arrange
         const string source = """
-                                                    using Cntryl.Portia;
-                                                    using Cntryl.Portia.Testing;
-                                                    public sealed record Binding(int Value) : IRequest<string>, ICallable;
-                                                    public sealed class Unrelated
-                                                    {
-                                                        public int MapPortiaGet<TRequest, TOut>(string route) => 321;
-                                                    }
-                                                    public static class Scenario
-                                                    {
-                                                        public static int Run() => new Unrelated().MapPortiaGet<Binding, string>("/binding");
-                                                    }
-                                                    """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              public sealed record Binding(int Value) : IRequest<string>, ICallable;
+                              public sealed class Unrelated
+                              {
+                                  public int MapPortiaGet<TRequest, TOut>(string route) => 321;
+                              }
+                              public static class Scenario
+                              {
+                                  public static int Run() => new Unrelated().MapPortiaGet<Binding, string>("/binding");
+                              }
+                              """;
 
         // Act
         var assembly = GeneratorCompilation.Compile(source, new RequestHttpBindingGenerator());

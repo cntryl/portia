@@ -14,9 +14,9 @@ public sealed class OpenApiJsonMemberMetadataTests
             "public sealed record Binding(int Value) : IRequest<string>, ICallable;",
             "request.Value.ToString(CultureInfo.InvariantCulture)",
             $$"""
-            app.MapPortiaPost<Binding, string>("/binding"){{(acceptsForm ? ".DisableAntiforgery()" : "")}};
-            app.MapPortiaOpenApi();
-            """,
+              app.MapPortiaPost<Binding, string>("/binding"){{(acceptsForm ? ".DisableAntiforgery()" : "")}};
+              app.MapPortiaOpenApi();
+              """,
             """
             builder.Services.AddPortia().ConfigureJson(options => options.TypeInfoResolver =
                 new System.Text.Json.Serialization.Metadata.DefaultJsonTypeInfoResolver
@@ -39,7 +39,8 @@ public sealed class OpenApiJsonMemberMetadataTests
         var schema = document.RootElement.GetProperty("paths").GetProperty("/binding").GetProperty("post")
             .GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("schema");
         Assert.True(schema.GetProperty("properties").TryGetProperty("custom", out _));
-        Assert.DoesNotContain("value", schema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
+        Assert.DoesNotContain("value",
+            schema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
         if (acceptsForm)
         {
             var formSchema = document.RootElement.GetProperty("paths").GetProperty("/binding").GetProperty("post")
@@ -99,10 +100,10 @@ public sealed class OpenApiJsonMemberMetadataTests
                 : "public sealed record Binding(int Value) : IRequest<string>, ICallable;",
             "request.Value.ToString(CultureInfo.InvariantCulture)",
             """
-            app.MapPortiaPost<Binding, string>("/binding", c => c
-                .Accepts<Binding>("application/json").OnBind(_ => new Binding {{VALUE}})).WithSummary("Bind input.");
-            app.MapPortiaOpenApi();
-            """.Replace("{{VALUE}}", parameterless ? "{ Value = 1 }" : "(1)"),
+                app.MapPortiaPost<Binding, string>("/binding", c => c
+                    .Accepts<Binding>("application/json").OnBind(_ => new Binding {{VALUE}})).WithSummary("Bind input.");
+                app.MapPortiaOpenApi();
+                """.Replace("{{VALUE}}", parameterless ? "{ Value = 1 }" : "(1)"),
             """
             builder.Services.AddPortia().ConfigureJson(options => options.TypeInfoResolver =
                 new DefaultJsonTypeInfoResolver
@@ -122,9 +123,11 @@ public sealed class OpenApiJsonMemberMetadataTests
         Assert.Equal(200, status);
         using var document = JsonDocument.Parse(body);
         var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
-        var schema = Assert.Single(schemas.EnumerateObject(), item => item.Name.StartsWith("Portia_", StringComparison.Ordinal)).Value;
+        var schema = Assert.Single(schemas.EnumerateObject(),
+            item => item.Name.StartsWith("Portia_", StringComparison.Ordinal)).Value;
         Assert.Equal("Input.", schema.GetProperty("description").GetString());
-        Assert.Equal("Declared value.", schema.GetProperty("properties").GetProperty("custom").GetProperty("description").GetString());
+        Assert.Equal("Declared value.",
+            schema.GetProperty("properties").GetProperty("custom").GetProperty("description").GetString());
     }
 
     [Fact]
@@ -149,7 +152,8 @@ public sealed class OpenApiJsonMemberMetadataTests
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(exception);
-        Assert.True(failure.Message.Contains("not present in its JSON contract", StringComparison.Ordinal), failure.ToString());
+        Assert.True(failure.Message.Contains("not present in its JSON contract", StringComparison.Ordinal),
+            failure.ToString());
     }
 
     [Fact]
@@ -184,7 +188,8 @@ public sealed class OpenApiJsonMemberMetadataTests
         var properties = document.RootElement.GetProperty("paths").GetProperty("/binding").GetProperty("post")
             .GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("schema")
             .GetProperty("properties");
-        Assert.Contains("\"string\"", properties.GetProperty("first").GetProperty("type").GetRawText(), StringComparison.Ordinal);
+        Assert.Contains("\"string\"", properties.GetProperty("first").GetProperty("type").GetRawText(),
+            StringComparison.Ordinal);
         Assert.Equal("integer", properties.GetProperty("second").GetProperty("type").GetString());
     }
 }

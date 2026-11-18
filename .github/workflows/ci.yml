@@ -108,6 +108,12 @@ jobs:
       - name: Build solution
         run: dotnet build Portia.slnx --configuration Release --no-restore
 
+      - name: Verify compiler benchmark fixtures
+        run: dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll verify --size minimal
+
+      - name: Verify editor benchmark policies
+        run: node --test bench/Portia.CompilerBenchmarks/vscode/state.test.cjs
+
       - name: Test solution
         run: >-
           dotnet test Portia.slnx

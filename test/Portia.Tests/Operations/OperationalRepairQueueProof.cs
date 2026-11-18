@@ -15,7 +15,9 @@ public sealed partial class OperationalExecutionTests
         var session = await SessionAsync(journal);
 
         // Assert
-        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ReactorRunner(events).RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
+        _ = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
+            new ReactorRunner(events).RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start)
+                .AsTask());
         var api = Api(journal);
         var administrator = TestOperationalAuthorizer.AdministratorActor(true);
         var first = await api.PreviewRepairAsync(administrator, Target);

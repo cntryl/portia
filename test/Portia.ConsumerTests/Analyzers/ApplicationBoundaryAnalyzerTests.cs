@@ -92,7 +92,8 @@ public sealed class ApplicationBoundaryAnalyzerTests
                               """;
 
         // Act
-        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationBoundaryAnalyzer(), [(path, source)]);
+        var diagnostics =
+            ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationBoundaryAnalyzer(), [(path, source)]);
 
         // Assert
         Assert.Equal(forbidden ? 1 : 0, diagnostics.Length);
@@ -129,7 +130,8 @@ public sealed class ApplicationBoundaryAnalyzerTests
 
         // Assert
         var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA207");
-        Assert.Contains("2 feature", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        Assert.Contains("2 feature", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
+            StringComparison.Ordinal);
         Assert.Single(diagnostic.AdditionalLocations);
         Assert.True(diagnostic.Location.SourceSpan.Start < diagnostic.AdditionalLocations[0].SourceSpan.Start);
     }
@@ -141,7 +143,8 @@ public sealed class ApplicationBoundaryAnalyzerTests
     public void ShouldReportCommandStubGivenUnimplementedOperation(string requestFolder, string body, bool forbidden)
     {
         // Arrange
-        var request = $"namespace Shop.Common.Features.Orders.{requestFolder}; public record PlaceOrder : Cntryl.Portia.IRequest;";
+        var request =
+            $"namespace Shop.Common.Features.Orders.{requestFolder}; public record PlaceOrder : Cntryl.Portia.IRequest;";
         var handler = $$"""
                         using Cntryl.Portia;
                         using System.Threading;
@@ -170,7 +173,8 @@ public sealed class ApplicationBoundaryAnalyzerTests
     public void ShouldRestrictHydrationGivenRequestRole(string requestFolder, bool forbidden)
     {
         // Arrange
-        var request = $"namespace Shop.Common.Features.Orders.{requestFolder}; public record FindOrder : Cntryl.Portia.IRequest;";
+        var request =
+            $"namespace Shop.Common.Features.Orders.{requestFolder}; public record FindOrder : Cntryl.Portia.IRequest;";
         var handler = $$"""
                         using Cntryl.Portia;
                         using System.Threading;
@@ -232,10 +236,11 @@ public sealed class ApplicationBoundaryAnalyzerTests
     {
         // Arrange
         var reference = GeneratorCompilation.ReferenceNamed("Portia.Cassie", """
-            namespace Cntryl.Portia;
-            public static class CassiePortiaBuilderExtensions { public static void AddCassie() { } }
-            """);
-        const string source = "public static class Setup { public static void Configure() => Cntryl.Portia.CassiePortiaBuilderExtensions.AddCassie(); }";
+                                                                             namespace Cntryl.Portia;
+                                                                             public static class CassiePortiaBuilderExtensions { public static void AddCassie() { } }
+                                                                             """);
+        const string source =
+            "public static class Setup { public static void Configure() => Cntryl.Portia.CassiePortiaBuilderExtensions.AddCassie(); }";
 
         // Act
         var diagnostics = ApplicationAnalyzerCompilation.Analyze(project, new ApplicationBoundaryAnalyzer(),
@@ -255,7 +260,8 @@ public sealed class ApplicationBoundaryAnalyzerTests
 
         // Act
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationBoundaryAnalyzer(),
-            [("Repositories/OrderRepository.cs", "public class OrderRepository;")], references: [repositoryApi, client]);
+            [("Repositories/OrderRepository.cs", "public class OrderRepository;")],
+            references: [repositoryApi, client]);
 
         // Assert
         Assert.Empty(diagnostics);
@@ -265,7 +271,8 @@ public sealed class ApplicationBoundaryAnalyzerTests
     public void ShouldIgnoreMethodNameGivenUnrelatedHydrationApi()
     {
         // Arrange
-        var reference = GeneratorCompilation.ReferenceNamed("Shop.Common", "namespace Shop.Common.Features.Orders.Queries; public record FindOrder : Cntryl.Portia.IRequest;");
+        var reference = GeneratorCompilation.ReferenceNamed("Shop.Common",
+            "namespace Shop.Common.Features.Orders.Queries; public record FindOrder : Cntryl.Portia.IRequest;");
         const string source = """
                               using Cntryl.Portia;
                               using System.Threading;
@@ -297,10 +304,11 @@ public sealed class ApplicationBoundaryAnalyzerTests
     {
         // Arrange
         var reference = GeneratorCompilation.ReferenceNamed("Portia.Cassie", """
-            namespace Cntryl.Portia;
-            public static class CassiePortiaBuilderExtensions { public static void AddCassie() { } }
-            """);
-        const string source = "public static class Setup { public static void Configure() => Cntryl.Portia.CassiePortiaBuilderExtensions.AddCassie(); }";
+                                                                             namespace Cntryl.Portia;
+                                                                             public static class CassiePortiaBuilderExtensions { public static void AddCassie() { } }
+                                                                             """);
+        const string source =
+            "public static class Setup { public static void Configure() => Cntryl.Portia.CassiePortiaBuilderExtensions.AddCassie(); }";
 
         // Act
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationBoundaryAnalyzer(),

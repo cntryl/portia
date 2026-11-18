@@ -124,7 +124,8 @@ public sealed class McpScenarioTests
                 if (childProcessId == 0)
                     childProcessId = Volatile.Read(ref observedProcessId);
                 if (childProcessId == 0 && File.Exists(processIdFile)
-                    && int.TryParse(await File.ReadAllTextAsync(processIdFile), out var persistedProcessId))
+                                        && int.TryParse(await File.ReadAllTextAsync(processIdFile),
+                                            out var persistedProcessId))
                     childProcessId = persistedProcessId;
                 if (childProcessId > 0)
                 {
@@ -211,7 +212,8 @@ public sealed class McpScenarioTests
             Name = "Portia stdio prompt test"
         }, timeout.Token);
         _ = await promptScenario.ListPrompts().ExpectExactly("stdio-greeting");
-        var prompt = await promptScenario.GetPrompt("stdio-greeting", new Dictionary<string, object?> { ["name"] = "Portia" });
+        var prompt =
+            await promptScenario.GetPrompt("stdio-greeting", new Dictionary<string, object?> { ["name"] = "Portia" });
         Assert.Contains("stdio-test-actor", Assert.Single(prompt).Text, StringComparison.Ordinal);
     }
 
@@ -231,7 +233,11 @@ public sealed class McpScenarioTests
             .AddMcpTool<McpRegistrationTests.ReadActor>()
             .AddMcpResource<McpRegistrationTests.ReadGreeting, string>("greetings://scenario/{name}",
                 values => new McpRegistrationTests.ReadGreeting(values["name"]),
-                resource => { resource.Authenticated(); resource.AsText("text/plain", value => value); })
+                resource =>
+                {
+                    resource.Authenticated();
+                    resource.AsText("text/plain", value => value);
+                })
             .AddMcpResource<McpRegistrationTests.ReadActor, string>("greetings://local/fixed",
                 _ => new McpRegistrationTests.ReadActor(),
                 resource =>
@@ -242,7 +248,11 @@ public sealed class McpScenarioTests
                 })
             .AddMcpPrompt<McpRegistrationTests.ReadGreeting, string>("scenario-greeting",
                 values => new McpRegistrationTests.ReadGreeting(values["name"]),
-                value => [new("user", value)], prompt => { prompt.Authenticated(); prompt.Required("name"); })
+                value => [new("user", value)], prompt =>
+                {
+                    prompt.Authenticated();
+                    prompt.Required("name");
+                })
             .AddMcpHttp();
         await using var app = builder.Build();
         app.Use(async (context, next) =>
@@ -294,7 +304,7 @@ public sealed class McpScenarioTests
             var prompts = await scenario.ListPrompts().ExpectExactly("scenario-greeting");
             Assert.True(Assert.Single(prompts).Arguments["name"]);
             var messages = await scenario.GetPrompt("scenario-greeting",
-                new Dictionary<string, object?> { ["name"] = "Portia" })
+                    new Dictionary<string, object?> { ["name"] = "Portia" })
                 .Inspect(snapshots => Assert.Equal("Hello, Portia.", Assert.Single(snapshots).Text));
             Assert.Equal("User", Assert.Single(messages).Role);
 

@@ -29,7 +29,8 @@ public sealed class NestedNamespaceConstructorTests
             .AddMetadataReferences(references);
         var source = form switch
         {
-            "nested_generic" => "namespace Old; public class Price<T> { public class Key<TItem> { } public class Tag { } }",
+            "nested_generic" =>
+                "namespace Old; public class Price<T> { public class Key<TItem> { } public class Tag { } }",
             "nested" or "global_nested" => "namespace Old; public class Price { public class Key { } }",
             _ => "namespace Old; public class Price { }"
         };
@@ -45,7 +46,8 @@ public sealed class NestedNamespaceConstructorTests
 
         // Act
         var dependent = document.Project.AddDocument("Use.cs",
-            "namespace Client; public class Use { public " + qualifiedType + " Make() => new " + qualifiedType + "(); }");
+            "namespace Client; public class Use { public " + qualifiedType + " Make() => new " + qualifiedType +
+            "(); }");
 
         // Assert
         Assert.True(workspace.TryApplyChanges(dependent.Project.Solution));
@@ -68,6 +70,6 @@ public sealed class NestedNamespaceConstructorTests
         var changedUse = (await changed.GetDocument(dependent.Id)!.GetTextAsync()).ToString();
 
         Assert.True(errors.Length == 0, string.Join(Environment.NewLine, errors.Select(item => item.ToString()))
-            + Environment.NewLine + changedUse);
+                                        + Environment.NewLine + changedUse);
     }
 }

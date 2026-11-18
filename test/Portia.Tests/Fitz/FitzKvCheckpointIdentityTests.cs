@@ -177,10 +177,12 @@ public sealed class FitzKvCheckpointIdentityTests
     public async Task ShouldKeepProgressIndependentGivenOrdinaryCheckpointsWithAmbiguousNames()
     {
         // Arrange
-        var first = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "events", "order-part"), "v2");
+        var first = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "events", "order-part"),
+            "v2");
 
         // Act
-        var second = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "events", "order"), "part-v2");
+        var second = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "events", "order"),
+            "part-v2");
 
         // Assert
         Assert.NotEqual(FitzKvCheckpoints.Key(first).ToArray(), FitzKvCheckpoints.Key(second).ToArray());

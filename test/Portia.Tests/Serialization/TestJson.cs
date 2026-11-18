@@ -24,13 +24,14 @@ static class TestJson
         ? new RequestRouteAttribute("test", "shared", "action", "run")
         : type == typeof(RequestIdentityTests.IdentifiedCommand)
             ? new RequestRouteAttribute("test", "identity", "command", "apply")
-        : type == typeof(RpcGetValue)
-            ? new RequestRouteAttribute("test", "rpc", "value", "get")
-            : type == typeof(RpcChangeValue)
-                ? new RequestRouteAttribute("test", "rpc", "value", "change")
-                : type == typeof(NoWorkerRegisteredPing)
-                    ? new RequestRouteAttribute("portia-integration", "rpc", "no-worker-registered", "ping")
-                    : new RequestRouteAttribute("test", "test", index.ToString(CultureInfo.InvariantCulture), "run");
+            : type == typeof(RpcGetValue)
+                ? new RequestRouteAttribute("test", "rpc", "value", "get")
+                : type == typeof(RpcChangeValue)
+                    ? new RequestRouteAttribute("test", "rpc", "value", "change")
+                    : type == typeof(NoWorkerRegisteredPing)
+                        ? new RequestRouteAttribute("portia-integration", "rpc", "no-worker-registered", "ping")
+                        : new RequestRouteAttribute("test", "test", index.ToString(CultureInfo.InvariantCulture),
+                            "run");
 
     static string Name(Type type) => type == typeof(UniversalAction) ? "test.shared.universal-action"
         : type == typeof(RpcGetValue) ? "test.rpc.get-value"

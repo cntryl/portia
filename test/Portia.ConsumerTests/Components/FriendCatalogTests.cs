@@ -22,31 +22,32 @@ public sealed class FriendCatalogTests
         var consumerAssembly = "Catalog.Consumer." + identity;
         var declaration = friend ? "[assembly: InternalsVisibleTo(\"" + consumerAssembly + "\")]" : string.Empty;
         var first = Compile(sourceAssembly, $$"""
-            using System.Runtime.CompilerServices;
-            using Cntryl.Portia;
-            {{declaration}}
-            namespace Shared;
-            [Discriminator("catalog.shared.changed", 1)] public sealed record SharedChanged : DomainEvent;
-            public static class SourceComposition
-            {
-                public static DomainEventTypeCatalog Catalog(DomainEventTypeCatalog catalog)
-                    => catalog.AddPortiaGeneratedDomainEvents();
-            }
-            """, []);
+                                              using System.Runtime.CompilerServices;
+                                              using Cntryl.Portia;
+                                              {{declaration}}
+                                              namespace Shared;
+                                              [Discriminator("catalog.shared.changed", 1)] public sealed record SharedChanged : DomainEvent;
+                                              public static class SourceComposition
+                                              {
+                                                  public static DomainEventTypeCatalog Catalog(DomainEventTypeCatalog catalog)
+                                                      => catalog.AddPortiaGeneratedDomainEvents();
+                                              }
+                                              """, []);
         var space = sharedNamespace ? "Shared" : "Consumer";
         var reference = referencesSharedEvent
-            ? "public static System.Type ReferencedEvent => typeof(Shared.SharedChanged);" : string.Empty;
+            ? "public static System.Type ReferencedEvent => typeof(Shared.SharedChanged);"
+            : string.Empty;
         var second = Compile(consumerAssembly, $$"""
-            using Cntryl.Portia;
-            namespace {{space}};
-            [Discriminator("catalog.consumer.changed", 1)] public sealed record ConsumerChanged : DomainEvent;
-            public static class ConsumerComposition
-            {
-                {{reference}}
-                public static DomainEventTypeCatalog Catalog(DomainEventTypeCatalog catalog)
-                    => catalog.AddPortiaGeneratedDomainEvents();
-            }
-            """, [MetadataReference.CreateFromImage(first.Image)]);
+                                                 using Cntryl.Portia;
+                                                 namespace {{space}};
+                                                 [Discriminator("catalog.consumer.changed", 1)] public sealed record ConsumerChanged : DomainEvent;
+                                                 public static class ConsumerComposition
+                                                 {
+                                                     {{reference}}
+                                                     public static DomainEventTypeCatalog Catalog(DomainEventTypeCatalog catalog)
+                                                         => catalog.AddPortiaGeneratedDomainEvents();
+                                                 }
+                                                 """, [MetadataReference.CreateFromImage(first.Image)]);
         var local = new DomainEventTypeCatalog();
 
         // Act
@@ -70,17 +71,17 @@ public sealed class FriendCatalogTests
     {
         // Arrange
         var assembly = GeneratorCompilation.Compile("""
-            #nullable enable
-            using Cntryl.Portia;
-            public static class Scenario
-            {
-                public static DomainEventTypeCatalog? Run(bool create)
-                {
-                    DomainEventTypeCatalog? catalog = create ? new() : null;
-                    return catalog?.AddPortiaGeneratedDomainEvents();
-                }
-            }
-            """, new DomainEventCatalogGenerator());
+                                                    #nullable enable
+                                                    using Cntryl.Portia;
+                                                    public static class Scenario
+                                                    {
+                                                        public static DomainEventTypeCatalog? Run(bool create)
+                                                        {
+                                                            DomainEventTypeCatalog? catalog = create ? new() : null;
+                                                            return catalog?.AddPortiaGeneratedDomainEvents();
+                                                        }
+                                                    }
+                                                    """, new DomainEventCatalogGenerator());
 
         // Act
         var result = assembly.GetType("Scenario")!.GetMethod("Run")!.Invoke(null, [create]);
@@ -98,37 +99,37 @@ public sealed class FriendCatalogTests
         // This is the extension shape emitted by earlier generators. Its explicit static call
         // preserves the compiled legacy call even though the framework now owns an instance entry.
         var first = Compile("Catalog.Legacy.Source." + identity, $$"""
-            using System.Runtime.CompilerServices;
-            using Cntryl.Portia;
-            [assembly: InternalsVisibleTo("{{consumerAssembly}}")]
-            namespace Shared
-            {
-                [Discriminator("catalog.legacy.changed", 1)] public sealed record LegacyChanged : DomainEvent;
-                public static class LegacyComposition
-                {
-                    public static DomainEventTypeCatalog Catalog(DomainEventTypeCatalog catalog)
-                        => DomainEventTypeCatalogGeneratedExtensions.AddPortiaGeneratedDomainEvents(catalog);
-                }
-            }
-            namespace Cntryl.Portia
-            {
-                internal static class DomainEventTypeCatalogGeneratedExtensions
-                {
-                    public static DomainEventTypeCatalog AddPortiaGeneratedDomainEvents(this DomainEventTypeCatalog catalog)
-                        => catalog.Register<Shared.LegacyChanged>(1, "catalog.legacy.changed");
-                }
-            }
-            """, []);
+                                                                   using System.Runtime.CompilerServices;
+                                                                   using Cntryl.Portia;
+                                                                   [assembly: InternalsVisibleTo("{{consumerAssembly}}")]
+                                                                   namespace Shared
+                                                                   {
+                                                                       [Discriminator("catalog.legacy.changed", 1)] public sealed record LegacyChanged : DomainEvent;
+                                                                       public static class LegacyComposition
+                                                                       {
+                                                                           public static DomainEventTypeCatalog Catalog(DomainEventTypeCatalog catalog)
+                                                                               => DomainEventTypeCatalogGeneratedExtensions.AddPortiaGeneratedDomainEvents(catalog);
+                                                                       }
+                                                                   }
+                                                                   namespace Cntryl.Portia
+                                                                   {
+                                                                       internal static class DomainEventTypeCatalogGeneratedExtensions
+                                                                       {
+                                                                           public static DomainEventTypeCatalog AddPortiaGeneratedDomainEvents(this DomainEventTypeCatalog catalog)
+                                                                               => catalog.Register<Shared.LegacyChanged>(1, "catalog.legacy.changed");
+                                                                       }
+                                                                   }
+                                                                   """, []);
         var second = Compile(consumerAssembly, """
-            using Cntryl.Portia;
-            namespace Consumer;
-            [Discriminator("catalog.current.changed", 1)] public sealed record CurrentChanged : DomainEvent;
-            public static class ConsumerComposition
-            {
-                public static DomainEventTypeCatalog Catalog(DomainEventTypeCatalog catalog)
-                    => catalog.AddPortiaGeneratedDomainEvents();
-            }
-            """, [MetadataReference.CreateFromImage(first.Image)]);
+                                               using Cntryl.Portia;
+                                               namespace Consumer;
+                                               [Discriminator("catalog.current.changed", 1)] public sealed record CurrentChanged : DomainEvent;
+                                               public static class ConsumerComposition
+                                               {
+                                                   public static DomainEventTypeCatalog Catalog(DomainEventTypeCatalog catalog)
+                                                       => catalog.AddPortiaGeneratedDomainEvents();
+                                               }
+                                               """, [MetadataReference.CreateFromImage(first.Image)]);
         var catalog = new DomainEventTypeCatalog();
 
         Register(first.Assembly, "Shared.LegacyComposition", catalog);
@@ -147,14 +148,14 @@ public sealed class FriendCatalogTests
     {
         // Arrange
         const string source = """
-            using System;
-            using Cntryl.Portia;
-            public static class Scenario
-            {
-                public static Func<DomainEventTypeCatalog> Bind(DomainEventTypeCatalog catalog)
-                    => catalog.AddPortiaGeneratedDomainEvents;
-            }
-            """;
+                              using System;
+                              using Cntryl.Portia;
+                              public static class Scenario
+                              {
+                                  public static Func<DomainEventTypeCatalog> Bind(DomainEventTypeCatalog catalog)
+                                      => catalog.AddPortiaGeneratedDomainEvents;
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new DomainEventCatalogGenerator());
@@ -170,12 +171,12 @@ public sealed class FriendCatalogTests
     {
         // Arrange
         var source = $$"""
-            using Cntryl.Portia;
-            public static class Scenario
-            {
-                public static string Name(DomainEventTypeCatalog catalog) => nameof({{member}});
-            }
-            """;
+                       using Cntryl.Portia;
+                       public static class Scenario
+                       {
+                           public static string Name(DomainEventTypeCatalog catalog) => nameof({{member}});
+                       }
+                       """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new DomainEventCatalogGenerator());

@@ -18,19 +18,26 @@ public sealed class RegistrationInterceptorSizeTests
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location).Append(typeof(PortiaBuilder).Assembly.Location)
             .Distinct(StringComparer.Ordinal).Select(path => MetadataReference.CreateFromFile(path));
-        var compilation = CSharpCompilation.Create("BoundedCatalog", [CSharpSyntaxTree.ParseText(Source(3, 1000), options)],
+        var compilation = CSharpCompilation.Create("BoundedCatalog",
+            [CSharpSyntaxTree.ParseText(Source(3, 1000), options)],
             references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
-            [new RegistrationCallInterceptorGenerator().AsSourceGenerator(), new DomainEventCatalogGenerator().AsSourceGenerator()],
+            [
+                new RegistrationCallInterceptorGenerator().AsSourceGenerator(),
+                new DomainEventCatalogGenerator().AsSourceGenerator()
+            ],
             parseOptions: options);
 
         // Act
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
 
         // Assert
-        Assert.DoesNotContain(diagnostics.Concat(output.GetDiagnostics()), item => item.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(diagnostics.Concat(output.GetDiagnostics()),
+            item => item.Severity == DiagnosticSeverity.Error);
         var files = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
-        var methods = files.SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
+        var methods = files
+            .SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+            .ToArray();
         Assert.NotEmpty(methods);
         Assert.All(methods, method => Assert.InRange(method.Body?.Statements.Count ?? 0, 0, 128));
         var text = string.Join("\n", files.Select(file => file.SourceText.ToString()));
@@ -49,7 +56,9 @@ public sealed class RegistrationInterceptorSizeTests
 
         // Assert
         Assert.Equal(32, generated.Split("builder.AddGeneratedEvent<", StringSplitOptions.None).Length - 1);
-        Assert.Equal(129, generated.Split("[global::System.Runtime.CompilerServices.InterceptsLocation(", StringSplitOptions.None).Length - 1);
+        Assert.Equal(129,
+            generated.Split("[global::System.Runtime.CompilerServices.InterceptsLocation(", StringSplitOptions.None)
+                .Length - 1);
     }
 
     [Fact]
@@ -94,22 +103,27 @@ public sealed class RegistrationInterceptorSizeTests
     static string Source(int callSites, int events)
     {
         var source = new StringBuilder("""
-            using System;
-            using System.Threading;
-            using System.Threading.Tasks;
-            using Cntryl.Portia;
-            using Microsoft.Extensions.DependencyInjection;
-            public sealed record Request : IRequest;
-            public sealed class Handler : IRequestHandler<Request>
-            {
-                public ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
-            }
-            """);
+                                       using System;
+                                       using System.Threading;
+                                       using System.Threading.Tasks;
+                                       using Cntryl.Portia;
+                                       using Microsoft.Extensions.DependencyInjection;
+                                       public sealed record Request : IRequest;
+                                       public sealed class Handler : IRequestHandler<Request>
+                                       {
+                                           public ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                                       }
+                                       """);
         for (var index = 0; index < events; index++)
-            _ = source.Append(CultureInfo.InvariantCulture, $"\n[Discriminator(\"size.event_{index}\", 1)] public sealed record Changed{index} : DomainEvent;");
+            _ = source.Append(CultureInfo.InvariantCulture,
+                $"\n[Discriminator(\"size.event_{index}\", 1)] public sealed record Changed{index} : DomainEvent;");
         _ = source.AppendLine("public static class Composition {");
         for (var index = 0; index < callSites; index++)
-            _ = source.AppendLine(CultureInfo.InvariantCulture, $"public static PortiaBuilder Compose{index}(IServiceCollection services) => services.AddPortia().AddRequestHandler<Handler>();");
-        return source.AppendLine("public static PortiaBuilder Feature(PortiaBuilder builder) => builder.AddRequestHandler<Handler>(); }").ToString();
+            _ = source.AppendLine(CultureInfo.InvariantCulture,
+                $"public static PortiaBuilder Compose{index}(IServiceCollection services) => services.AddPortia().AddRequestHandler<Handler>();");
+        return source
+            .AppendLine(
+                "public static PortiaBuilder Feature(PortiaBuilder builder) => builder.AddRequestHandler<Handler>(); }")
+            .ToString();
     }
 }

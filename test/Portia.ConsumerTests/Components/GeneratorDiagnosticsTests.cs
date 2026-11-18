@@ -88,7 +88,8 @@ public sealed class GeneratorDiagnosticsTests
     [InlineData("PORTIA106", "IRequestAuthorizer<Command>",
         "public ValueTask<Result> AuthorizeAsync(IRequestContext<Command> context, CancellationToken ct) => default;",
         "Request authorizer 'Component' takes effect-capable dependency '")]
-    public void ShouldReportPortia105And106GivenPreflightEffectCapableDependencies(string id, string role, string member,
+    public void ShouldReportPortia105And106GivenPreflightEffectCapableDependencies(string id, string role,
+        string member,
         string messagePrefix)
     {
         // Arrange
@@ -153,9 +154,9 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           public sealed class ApplicationService(IRequestBus bus, IAggregateWriter writer);
-                                                           """;
+                              using Cntryl.Portia;
+                              public sealed class ApplicationService(IRequestBus bus, IAggregateWriter writer);
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
@@ -209,18 +210,18 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           public sealed class ApplicationGateway;
-                                                           public static class ActivatorUtilities
-                                                           {
-                                                               public static object CreateInstance() => new();
-                                                           }
-                                                           public sealed class Projection(ApplicationGateway gateway)
-                                                               : Projector(null!, EventStreamPattern.ForPattern("events"))
-                                                           {
-                                                               public object Call() => ActivatorUtilities.CreateInstance();
-                                                           }
-                                                           """;
+                              using Cntryl.Portia;
+                              public sealed class ApplicationGateway;
+                              public static class ActivatorUtilities
+                              {
+                                  public static object CreateInstance() => new();
+                              }
+                              public sealed class Projection(ApplicationGateway gateway)
+                                  : Projector(null!, EventStreamPattern.ForPattern("events"))
+                              {
+                                  public object Call() => ActivatorUtilities.CreateInstance();
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
@@ -485,16 +486,16 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           using System.Threading;
-                                                           using System.Threading.Tasks;
-                                                           public sealed record Request : IRequest;
-                                                           public class Handler<T> : IRequestHandler<Request>
-                                                           {
-                                                               public ValueTask<Result> HandleAsync(IRequestContext<Request> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
-                                                           }
-                                                           """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              public sealed record Request : IRequest;
+                              public class Handler<T> : IRequestHandler<Request>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<Request> c, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new RequestShapeDiagnosticsGenerator());
@@ -554,11 +555,11 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           [RequestRoute("*", "orders", "order", "create")]
-                                                           public sealed record CreateOrder : IRequest, IQueuable;
-                                                           """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              [RequestRoute("*", "orders", "order", "create")]
+                              public sealed record CreateOrder : IRequest, IQueuable;
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new PortiaServiceRegistrationGenerator());
@@ -578,11 +579,11 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         var source = $$"""
-                                                             using Cntryl.Portia;
-                                                             #pragma warning disable {{id}}
-                                                             {{declaration}}
-                                                             #pragma warning restore {{id}}
-                                                             """;
+                       using Cntryl.Portia;
+                       #pragma warning disable {{id}}
+                       {{declaration}}
+                       #pragma warning restore {{id}}
+                       """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new PortiaServiceRegistrationGenerator());
@@ -602,12 +603,12 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         var source = $$"""
-                                                             using Cntryl.Portia;
-                                                             #if false
-                                                             #pragma warning disable {{id}}
-                                                             #endif
-                                                             {{declaration}}
-                                                             """;
+                       using Cntryl.Portia;
+                       #if false
+                       #pragma warning disable {{id}}
+                       #endif
+                       {{declaration}}
+                       """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new PortiaServiceRegistrationGenerator());
@@ -627,13 +628,13 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         var source = $$"""
-                                                             using Cntryl.Portia;
-                                                             #pragma warning disable {{id}}
-                                                             #if false
-                                                             #pragma warning restore {{id}}
-                                                             #endif
-                                                             {{declaration}}
-                                                             """;
+                       using Cntryl.Portia;
+                       #pragma warning disable {{id}}
+                       #if false
+                       #pragma warning restore {{id}}
+                       #endif
+                       {{declaration}}
+                       """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new PortiaServiceRegistrationGenerator());
@@ -653,11 +654,11 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         var source = $$"""
-                                                             using Cntryl.Portia;
-                                                             using System.Diagnostics.CodeAnalysis;
-                                                             [SuppressMessage("Portia", "{{id}}")]
-                                                             {{declaration}}
-                                                             """;
+                       using Cntryl.Portia;
+                       using System.Diagnostics.CodeAnalysis;
+                       [SuppressMessage("Portia", "{{id}}")]
+                       {{declaration}}
+                       """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new PortiaServiceRegistrationGenerator());
@@ -671,10 +672,10 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           public sealed record OrderCreated : DomainEvent;
-                                                           """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              public sealed record OrderCreated : DomainEvent;
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new DomainEventCatalogGenerator());
@@ -688,12 +689,12 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           [RequestRoute("tenant/escape", "orders", "order", "create")]
-                                                           [Discriminator("orders.create")]
-                                                           public sealed record CreateOrder : IRequest, IQueuable;
-                                                           """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              [RequestRoute("tenant/escape", "orders", "order", "create")]
+                              [Discriminator("orders.create")]
+                              public sealed record CreateOrder : IRequest, IQueuable;
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new PortiaServiceRegistrationGenerator());
@@ -709,12 +710,12 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         var source = $$"""
-                                                             using Cntryl.Portia;
-                                                             [RequestTransport("{{id}}")] public interface IBadTransport;
-                                                             [RequestRoute("*", "orders", "order", "create")]
-                                                             [Discriminator("orders.create")]
-                                                             public sealed record CreateOrder : IRequest, IBadTransport;
-                                                             """;
+                       using Cntryl.Portia;
+                       [RequestTransport("{{id}}")] public interface IBadTransport;
+                       [RequestRoute("*", "orders", "order", "create")]
+                       [Discriminator("orders.create")]
+                       public sealed record CreateOrder : IRequest, IBadTransport;
+                       """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new PortiaServiceRegistrationGenerator());
@@ -728,21 +729,21 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           using System;
-                                                           using System.Threading;
-                                                           using System.Threading.Tasks;
-                                                           public sealed record Request : IRequest;
-                                                           public sealed class Handler : IRequestHandler<Request>
-                                                           {
-                                                               public async ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct)
-                                                               {
-                                                                   try { await Task.Yield(); return Result.Success; }
-                                                                   catch (Exception) { return Result.Failure(new(RequestErrorKind.Internal, "failed")); }
-                                                               }
-                                                           }
-                                                           """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              using System;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              public sealed record Request : IRequest;
+                              public sealed class Handler : IRequestHandler<Request>
+                              {
+                                  public async ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct)
+                                  {
+                                      try { await Task.Yield(); return Result.Success; }
+                                      catch (Exception) { return Result.Failure(new(RequestErrorKind.Internal, "failed")); }
+                                  }
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
@@ -756,38 +757,38 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           using System;
-                                                           using System.Threading;
-                                                           using System.Threading.Tasks;
-                                                           public sealed record FilteredRequest : IRequest;
-                                                           public sealed class FilteredHandler : IRequestHandler<FilteredRequest>
-                                                           {
-                                                               public async ValueTask<Result> HandleAsync(IRequestContext<FilteredRequest> context, CancellationToken ct)
-                                                               {
-                                                                   try { await Task.Yield(); return Result.Success; }
-                                                                   catch (Exception ex) when (ex is InvalidOperationException)
-                                                                   {
-                                                                       return Result.Failure(new(RequestErrorKind.Validation, "expected"));
-                                                                   }
-                                                               }
-                                                           }
-                                                           public sealed record RethrowingRequest : IRequest;
-                                                           public sealed class RethrowingHandler : IRequestHandler<RethrowingRequest>
-                                                           {
-                                                               public async ValueTask<Result> HandleAsync(IRequestContext<RethrowingRequest> context, CancellationToken ct)
-                                                               {
-                                                                   try { await Task.Yield(); return Result.Success; }
-                                                                   catch (Exception ex)
-                                                                   {
-                                                                       if (ex is InvalidOperationException)
-                                                                           return Result.Failure(new(RequestErrorKind.Validation, "expected"));
-                                                                       throw;
-                                                                   }
-                                                               }
-                                                           }
-                                                           """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              using System;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              public sealed record FilteredRequest : IRequest;
+                              public sealed class FilteredHandler : IRequestHandler<FilteredRequest>
+                              {
+                                  public async ValueTask<Result> HandleAsync(IRequestContext<FilteredRequest> context, CancellationToken ct)
+                                  {
+                                      try { await Task.Yield(); return Result.Success; }
+                                      catch (Exception ex) when (ex is InvalidOperationException)
+                                      {
+                                          return Result.Failure(new(RequestErrorKind.Validation, "expected"));
+                                      }
+                                  }
+                              }
+                              public sealed record RethrowingRequest : IRequest;
+                              public sealed class RethrowingHandler : IRequestHandler<RethrowingRequest>
+                              {
+                                  public async ValueTask<Result> HandleAsync(IRequestContext<RethrowingRequest> context, CancellationToken ct)
+                                  {
+                                      try { await Task.Yield(); return Result.Success; }
+                                      catch (Exception ex)
+                                      {
+                                          if (ex is InvalidOperationException)
+                                              return Result.Failure(new(RequestErrorKind.Validation, "expected"));
+                                          throw;
+                                      }
+                                  }
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
@@ -801,25 +802,25 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           using System;
-                                                           using System.Threading;
-                                                           using System.Threading.Tasks;
-                                                           public sealed record Request : IRequest;
-                                                           public sealed class Handler : IRequestHandler<Request>
-                                                           {
-                                                               public async ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct)
-                                                               {
-                                                                   try { await Task.Yield(); return Result.Success; }
-                                                                   catch (Exception)
-                                                                   {
-                                                                       _ = Result.Failure(new(RequestErrorKind.Internal, "telemetry value"));
-                                                                       throw;
-                                                                   }
-                                                               }
-                                                           }
-                                                           """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              using System;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              public sealed record Request : IRequest;
+                              public sealed class Handler : IRequestHandler<Request>
+                              {
+                                  public async ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct)
+                                  {
+                                      try { await Task.Yield(); return Result.Success; }
+                                      catch (Exception)
+                                      {
+                                          _ = Result.Failure(new(RequestErrorKind.Internal, "telemetry value"));
+                                          throw;
+                                      }
+                                  }
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
@@ -833,33 +834,33 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           using System;
-                                                           using System.Threading;
-                                                           using System.Threading.Tasks;
-                                                           public sealed record Request : IRequest;
-                                                           public sealed class Handler : IRequestHandler<Request>
-                                                           {
-                                                               public ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct) =>
-                                                                   ValueTask.FromResult(Result.Success);
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              using System;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              public sealed record Request : IRequest;
+                              public sealed class Handler : IRequestHandler<Request>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct) =>
+                                      ValueTask.FromResult(Result.Success);
 
-                                                               public Result Helper()
-                                                               {
-                                                                   try { throw new InvalidOperationException(); }
-                                                                   catch (Exception) { return Result.Failure(new(RequestErrorKind.Internal, "failed")); }
-                                                               }
+                                  public Result Helper()
+                                  {
+                                      try { throw new InvalidOperationException(); }
+                                      catch (Exception) { return Result.Failure(new(RequestErrorKind.Internal, "failed")); }
+                                  }
 
-                                                               private sealed class Nested
-                                                               {
-                                                                   public Result Helper()
-                                                                   {
-                                                                       try { throw new InvalidOperationException(); }
-                                                                       catch (Exception) { return Result.Failure(new(RequestErrorKind.Internal, "failed")); }
-                                                                   }
-                                                               }
-                                                           }
-                                                           """;
+                                  private sealed class Nested
+                                  {
+                                      public Result Helper()
+                                      {
+                                          try { throw new InvalidOperationException(); }
+                                          catch (Exception) { return Result.Failure(new(RequestErrorKind.Internal, "failed")); }
+                                      }
+                                  }
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
@@ -873,24 +874,24 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using System;
-                                                           using System.Threading;
-                                                           using System.Threading.Tasks;
-                                                           using Cntryl.Portia;
-                                                           public sealed record First : IRequest;
-                                                           public sealed record Second : IRequest;
-                                                           public sealed partial class Handler(IServiceProvider services) : IRequestHandler<First>
-                                                           {
-                                                               public IServiceProvider Services { get; } = services;
-                                                               public ValueTask<Result> HandleAsync(IRequestContext<First> context, CancellationToken ct) =>
-                                                                   ValueTask.FromResult(Result.Success);
-                                                           }
-                                                           public sealed partial class Handler : IRequestHandler<Second>
-                                                           {
-                                                               public ValueTask<Result> HandleAsync(IRequestContext<Second> context, CancellationToken ct) =>
-                                                                   ValueTask.FromResult(Result.Success);
-                                                           }
-                                                           """;
+                              using System;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              public sealed record First : IRequest;
+                              public sealed record Second : IRequest;
+                              public sealed partial class Handler(IServiceProvider services) : IRequestHandler<First>
+                              {
+                                  public IServiceProvider Services { get; } = services;
+                                  public ValueTask<Result> HandleAsync(IRequestContext<First> context, CancellationToken ct) =>
+                                      ValueTask.FromResult(Result.Success);
+                              }
+                              public sealed partial class Handler : IRequestHandler<Second>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<Second> context, CancellationToken ct) =>
+                                      ValueTask.FromResult(Result.Success);
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
@@ -953,17 +954,17 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using System;
-                                                           using System.Threading;
-                                                           using System.Threading.Tasks;
-                                                           using Cntryl.Portia;
-                                                           public sealed record Ping : IRequest;
-                                                           public record struct StructHandler(IServiceProvider Services) : IRequestHandler<Ping>
-                                                           {
-                                                               public ValueTask<Result> HandleAsync(IRequestContext<Ping> context, CancellationToken ct) =>
-                                                                   ValueTask.FromResult(Result.Success);
-                                                           }
-                                                           """;
+                              using System;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              public sealed record Ping : IRequest;
+                              public record struct StructHandler(IServiceProvider Services) : IRequestHandler<Ping>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<Ping> context, CancellationToken ct) =>
+                                      ValueTask.FromResult(Result.Success);
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
@@ -977,34 +978,34 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           using System.Threading;
-                                                           using System.Threading.Tasks;
-                                                           public sealed record Request : IRequest;
-                                                           public sealed class Exception : System.Exception;
-                                                           public static class ResultFactory
-                                                           {
-                                                               public static Result Failure(RequestError error) => Result.Failure(error);
-                                                           }
-                                                           public sealed class Handler : IRequestHandler<Request>
-                                                           {
-                                                               public ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct)
-                                                               {
-                                                                   try { throw new Exception(); }
-                                                                   catch (Exception) { return ValueTask.FromResult(Result.Failure(new(RequestErrorKind.Internal, "expected"))); }
-                                                               }
-                                                           }
-                                                           public sealed record OtherRequest : IRequest;
-                                                           public sealed class OtherHandler : IRequestHandler<OtherRequest>
-                                                           {
-                                                               public ValueTask<Result> HandleAsync(IRequestContext<OtherRequest> context, CancellationToken ct)
-                                                               {
-                                                                   try { throw new System.Exception(); }
-                                                                   catch (System.Exception) { return ValueTask.FromResult(ResultFactory.Failure(new(RequestErrorKind.Internal, "failed"))); }
-                                                               }
-                                                           }
-                                                           """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              public sealed record Request : IRequest;
+                              public sealed class Exception : System.Exception;
+                              public static class ResultFactory
+                              {
+                                  public static Result Failure(RequestError error) => Result.Failure(error);
+                              }
+                              public sealed class Handler : IRequestHandler<Request>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct)
+                                  {
+                                      try { throw new Exception(); }
+                                      catch (Exception) { return ValueTask.FromResult(Result.Failure(new(RequestErrorKind.Internal, "expected"))); }
+                                  }
+                              }
+                              public sealed record OtherRequest : IRequest;
+                              public sealed class OtherHandler : IRequestHandler<OtherRequest>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<OtherRequest> context, CancellationToken ct)
+                                  {
+                                      try { throw new System.Exception(); }
+                                      catch (System.Exception) { return ValueTask.FromResult(ResultFactory.Failure(new(RequestErrorKind.Internal, "failed"))); }
+                                  }
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
@@ -1018,16 +1019,16 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using System;
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           public sealed record Request : IRequest;
-                                                           public static class Tests
-                                                           {
-                                                               public static void Forgotten(IServiceProvider services) =>
-                                                                   RequestScenario.For(services).When(new Request()).ExpectDenied();
-                                                           }
-                                                           """;
+                              using System;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              public sealed record Request : IRequest;
+                              public static class Tests
+                              {
+                                  public static void Forgotten(IServiceProvider services) =>
+                                      RequestScenario.For(services).When(new Request()).ExpectDenied();
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ScenarioObservationAnalyzer());
@@ -1041,22 +1042,22 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using System;
-                                                           using System.Threading.Tasks;
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           public sealed record Request : IRequest;
-                                                           public static class Tests
-                                                           {
-                                                               public static async Task Observed(IServiceProvider services)
-                                                               {
-                                                                   await RequestScenario.For(services).When(new Request()).ExpectDenied();
-                                                                   var kept = RequestScenario.For(services).When(new Request());
-                                                                   kept = kept.ExpectHandled();
-                                                                   await kept;
-                                                               }
-                                                           }
-                                                           """;
+                              using System;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              public sealed record Request : IRequest;
+                              public static class Tests
+                              {
+                                  public static async Task Observed(IServiceProvider services)
+                                  {
+                                      await RequestScenario.For(services).When(new Request()).ExpectDenied();
+                                      var kept = RequestScenario.For(services).When(new Request());
+                                      kept = kept.ExpectHandled();
+                                      await kept;
+                                  }
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ScenarioObservationAnalyzer());
@@ -1070,29 +1071,29 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using System.Data.Common;
-                                                           using System.Net.Http;
-                                                           using System.Threading;
-                                                           using System.Threading.Tasks;
-                                                           using Cntryl.Portia;
-                                                           public sealed record Req : IRequest;
-                                                           public sealed class PolicyAuthorizer(HttpClient policy) : IRequestAuthorizer<Req>
-                                                           {
-                                                               public ValueTask<Result> AuthorizeAsync(IRequestContext<Req> context, CancellationToken ct) => default;
-                                                           }
-                                                           public sealed class UniqueGuard(DbConnection readModel) : IRequestGuard<Req>
-                                                           {
-                                                               public ValueTask<Result> GuardAsync(IRequestContext<Req> context, CancellationToken ct) => default;
-                                                           }
-                                                           public interface IAccountRepository : IProjectionStore
-                                                           {
-                                                               ValueTask<int> GetBalanceAsync(CancellationToken ct);
-                                                           }
-                                                           public sealed class BalanceGuard(IAccountRepository accounts) : IRequestGuard<Req>
-                                                           {
-                                                               public ValueTask<Result> GuardAsync(IRequestContext<Req> context, CancellationToken ct) => default;
-                                                           }
-                                                           """;
+                              using System.Data.Common;
+                              using System.Net.Http;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              public sealed record Req : IRequest;
+                              public sealed class PolicyAuthorizer(HttpClient policy) : IRequestAuthorizer<Req>
+                              {
+                                  public ValueTask<Result> AuthorizeAsync(IRequestContext<Req> context, CancellationToken ct) => default;
+                              }
+                              public sealed class UniqueGuard(DbConnection readModel) : IRequestGuard<Req>
+                              {
+                                  public ValueTask<Result> GuardAsync(IRequestContext<Req> context, CancellationToken ct) => default;
+                              }
+                              public interface IAccountRepository : IProjectionStore
+                              {
+                                  ValueTask<int> GetBalanceAsync(CancellationToken ct);
+                              }
+                              public sealed class BalanceGuard(IAccountRepository accounts) : IRequestGuard<Req>
+                              {
+                                  public ValueTask<Result> GuardAsync(IRequestContext<Req> context, CancellationToken ct) => default;
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
@@ -1106,15 +1107,15 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using System.Threading;
-                                                           using System.Threading.Tasks;
-                                                           using Cntryl.Portia;
-                                                           public sealed record Req : IRequest;
-                                                           public sealed class DispatchingGuard(IRequestBus bus, IProjectionStore store) : IRequestGuard<Req>
-                                                           {
-                                                               public ValueTask<Result> GuardAsync(IRequestContext<Req> context, CancellationToken ct) => default;
-                                                           }
-                                                           """;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              public sealed record Req : IRequest;
+                              public sealed class DispatchingGuard(IRequestBus bus, IProjectionStore store) : IRequestGuard<Req>
+                              {
+                                  public ValueTask<Result> GuardAsync(IRequestContext<Req> context, CancellationToken ct) => default;
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
@@ -1133,16 +1134,16 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         var source = $$"""
-                                                            using System.Threading;
-                                                            using System.Threading.Tasks;
-                                                            using Cntryl.Portia;
-                                                            public sealed record Req : IRequest;
-                                                            public sealed class Preflight({{dependencyType}} store) : {{role}}
-                                                            {
-                                                                public ValueTask<Result> {{method}}(
-                                                                    IRequestContext<Req> context, CancellationToken ct) => default;
-                                                            }
-                                                            """;
+                       using System.Threading;
+                       using System.Threading.Tasks;
+                       using Cntryl.Portia;
+                       public sealed record Req : IRequest;
+                       public sealed class Preflight({{dependencyType}} store) : {{role}}
+                       {
+                           public ValueTask<Result> {{method}}(
+                               IRequestContext<Req> context, CancellationToken ct) => default;
+                       }
+                       """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
@@ -1158,17 +1159,17 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using System.Threading;
-                                                           using System.Threading.Tasks;
-                                                           using Cntryl.Portia;
-                                                           namespace Microsoft.EntityFrameworkCore { public abstract class DbContext; }
-                                                           public abstract class AccountsDb : Microsoft.EntityFrameworkCore.DbContext, IProjectionStore
-                                                           {
-                                                               public abstract ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default);
-                                                               public abstract ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default);
-                                                           }
-                                                           public sealed class AccountProjector(AccountsDb db) : Projector(db, EventStreamPattern.ForPattern("events"));
-                                                           """;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              namespace Microsoft.EntityFrameworkCore { public abstract class DbContext; }
+                              public abstract class AccountsDb : Microsoft.EntityFrameworkCore.DbContext, IProjectionStore
+                              {
+                                  public abstract ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default);
+                                  public abstract ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default);
+                              }
+                              public sealed class AccountProjector(AccountsDb db) : Projector(db, EventStreamPattern.ForPattern("events"));
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
@@ -1182,21 +1183,21 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using System;
-                                                           using System.Threading;
-                                                           using System.Threading.Tasks;
-                                                           using Cntryl.Portia;
-                                                           public sealed record Req : IRequest;
-                                                           public sealed class Handler : IRequestHandler<Req>
-                                                           {
-                                                               public async ValueTask<Result> HandleAsync(IRequestContext<Req> context, CancellationToken ct)
-                                                               {
-                                                                   try { await Task.Yield(); return Result.Success; }
-                                                                   catch (Exception ex) { return Fallback(() => Result.Failure(new(RequestErrorKind.Internal, "failed")), ex); }
-                                                               }
-                                                               static Result Fallback(Func<Result> fallback, Exception ex) => throw ex;
-                                                           }
-                                                           """;
+                              using System;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              public sealed record Req : IRequest;
+                              public sealed class Handler : IRequestHandler<Req>
+                              {
+                                  public async ValueTask<Result> HandleAsync(IRequestContext<Req> context, CancellationToken ct)
+                                  {
+                                      try { await Task.Yield(); return Result.Success; }
+                                      catch (Exception ex) { return Fallback(() => Result.Failure(new(RequestErrorKind.Internal, "failed")), ex); }
+                                  }
+                                  static Result Fallback(Func<Result> fallback, Exception ex) => throw ex;
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
@@ -1210,11 +1211,11 @@ public sealed class GeneratorDiagnosticsTests
     {
         // Arrange
         const string source = """
-                                                           using System;
-                                                           using Cntryl.Portia;
-                                                           public sealed class Account(Uuid id, IServiceProvider services)
-                                                               : Aggregate(id, new EventStreamAddress("r", "a", id.ToString()));
-                                                           """;
+                              using System;
+                              using Cntryl.Portia;
+                              public sealed class Account(Uuid id, IServiceProvider services)
+                                  : Aggregate(id, new EventStreamAddress("r", "a", id.ToString()));
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());

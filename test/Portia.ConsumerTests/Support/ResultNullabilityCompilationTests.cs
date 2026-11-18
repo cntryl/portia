@@ -29,28 +29,28 @@ public sealed class ResultNullabilityCompilationTests
     {
         // Arrange
         const string source = """
-                                                                           #nullable enable
-                                                                           using Cntryl.Portia;
+                              #nullable enable
+                              using Cntryl.Portia;
 
-                                                                           public static class Consumer
-                                                                           {
-                                                                               public static string Read(Result<string> result)
-                                                                               {
-                                                                                   if (!result.IsSuccess)
-                                                                                       throw new System.InvalidOperationException();
+                              public static class Consumer
+                              {
+                                  public static string Read(Result<string> result)
+                                  {
+                                      if (!result.IsSuccess)
+                                          throw new System.InvalidOperationException();
 
-                                                                                   return result.Value;
-                                                                               }
+                                      return result.Value;
+                                  }
 
-                                                                               public static string? ReadNullable(Result<string?> result)
-                                                                               {
-                                                                                   if (!result.IsSuccess)
-                                                                                       throw new System.InvalidOperationException();
+                                  public static string? ReadNullable(Result<string?> result)
+                                  {
+                                      if (!result.IsSuccess)
+                                          throw new System.InvalidOperationException();
 
-                                                                                   return result.Value;
-                                                                               }
-                                                                           }
-                                                                           """;
+                                      return result.Value;
+                                  }
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.WarningsAsErrorsDiagnostics(source);
@@ -65,20 +65,20 @@ public sealed class ResultNullabilityCompilationTests
     {
         // Arrange
         const string source = """
-                                                                           #nullable enable
-                                                                           using Cntryl.Portia;
+                              #nullable enable
+                              using Cntryl.Portia;
 
-                                                                           public static class Consumer
-                                                                           {
-                                                                               public static int Read(Result<string?> result)
-                                                                               {
-                                                                                   if (!result.IsSuccess)
-                                                                                       throw new System.InvalidOperationException();
+                              public static class Consumer
+                              {
+                                  public static int Read(Result<string?> result)
+                                  {
+                                      if (!result.IsSuccess)
+                                          throw new System.InvalidOperationException();
 
-                                                                                   return result.Value.Length;
-                                                                               }
-                                                                           }
-                                                                           """;
+                                      return result.Value.Length;
+                                  }
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.WarningsAsErrorsDiagnostics(source);

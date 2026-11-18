@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Cntryl.Portia.CompilerBenchmarks</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>15</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces"/>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Features"/>
+    <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj"/>
+    <ProjectReference Include="../../src/Portia.AspNetCore.Generators/Portia.AspNetCore.Generators.csproj"/>
+    <ProjectReference Include="../../src/Portia.CodeFixes/Portia.CodeFixes.csproj"/>
+    <ProjectReference Include="../../src/Portia.AspNetCore/Portia.AspNetCore.csproj"/>
+    <ProjectReference Include="../../src/Portia.Testing/Portia.Testing.csproj"/>
+  </ItemGroup>
+</Project>

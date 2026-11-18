@@ -13,7 +13,8 @@ public sealed class ScenarioDrainTests
     {
         // Arrange
         var events = Enumerable.Range(0, count).Select(index => index % 2 == 0
-            ? (DomainEvent)new UserCreated(Uuid.CreateVersion4()) : new ValueChanged(index)).ToArray();
+            ? (DomainEvent)new UserCreated(Uuid.CreateVersion4())
+            : new ValueChanged(index)).ToArray();
         var expected = events.OfType<UserCreated>().Select(ev => ev.UserId).ToArray();
 
         // Act
@@ -50,7 +51,8 @@ public sealed class ScenarioDrainTests
     public async Task ShouldPropagateFailureAndKeepCommittedProgressGivenSuffixFailure(bool reaction)
     {
         // Arrange
-        var events = Enumerable.Range(0, 4097).Select(_ => (DomainEvent)new UserCreated(Uuid.CreateVersion4())).ToArray();
+        var events = Enumerable.Range(0, 4097).Select(_ => (DomainEvent)new UserCreated(Uuid.CreateVersion4()))
+            .ToArray();
         var failure = new InvalidOperationException("suffix failed");
 
         // Act
@@ -73,9 +75,11 @@ public sealed class ScenarioDrainTests
             var projector = new DrainProjector(scenario.Store, seen, failure);
             var diagnostic = await Assert.ThrowsAsync<ProcessorFailureException>(() => scenario.RunAsync(projector));
             Assert.Same(failure, diagnostic.InnerException);
-            var checkpoint = await scenario.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern));
+            var checkpoint =
+                await scenario.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern));
             Assert.Equal("4096", checkpoint.Cursor.ToString());
         }
+
         Assert.Equal(events.Take(4096).OfType<UserCreated>().Select(ev => ev.UserId), seen);
     }
 
@@ -99,7 +103,8 @@ public sealed class ScenarioDrainTests
             var scenario = new ReactorScenario().Given(events);
             var store = new CancelAfterPassCheckpointStore(new InMemoryProjectionCheckpointStore(), cancellation);
             var reactor = new DrainReactor(store, seen);
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => scenario.RunAsync(reactor, cancellation.Token));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                scenario.RunAsync(reactor, cancellation.Token));
             Assert.Equal(ids.Take(4096), seen);
             await scenario.RunAsync(reactor);
             Assert.Equal(ids, seen.Skip(4096));
@@ -109,7 +114,8 @@ public sealed class ScenarioDrainTests
             var scenario = new ProjectorScenario().Given(events);
             var store = new CancelAfterPassStore(scenario.Store, cancellation);
             var projector = new DrainProjector(store, seen);
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => scenario.RunAsync(projector, cancellation.Token));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                scenario.RunAsync(projector, cancellation.Token));
             Assert.Equal(ids.Take(4096), seen);
             await scenario.RunAsync(projector);
             Assert.Equal(ids, seen);
@@ -121,7 +127,9 @@ public sealed class ScenarioDrainTests
     {
         public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
             => inner.LoadAsync(identity, ct);
-        public async ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+
+        public async ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default)
         {
             await inner.SaveAsync(identity, checkpoint, ct);
             if (checkpoint.Cursor.ToString() == "4096")
@@ -136,7 +144,8 @@ public sealed class ScenarioDrainTests
     public async Task ShouldObserveCancellationGivenCancellationWithinPass(bool reaction)
     {
         // Arrange
-        var events = Enumerable.Range(0, 600).Select(_ => (DomainEvent)new UserCreated(Uuid.CreateVersion4())).ToArray();
+        var events = Enumerable.Range(0, 600).Select(_ => (DomainEvent)new UserCreated(Uuid.CreateVersion4()))
+            .ToArray();
         using var cancellation = new CancellationTokenSource();
 
         // Act
@@ -148,22 +157,31 @@ public sealed class ScenarioDrainTests
             var scenario = new ReactorScenario().Given(events);
             var store = new InMemoryProjectionCheckpointStore();
             var reactor = new DrainReactor(store, seen, cancellation: cancellation);
-            var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => scenario.RunAsync(reactor, cancellation.Token));
+            var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                scenario.RunAsync(reactor, cancellation.Token));
             Assert.Equal(cancellation.Token, error.CancellationToken);
-            Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern)));
+            Assert.Equal(ProjectionCheckpoint.Start,
+                await store.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern)));
         }
         else
         {
             var scenario = new ProjectorScenario().Given(events);
             var projector = new DrainProjector(scenario.Store, seen, cancellation: cancellation);
-            var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => scenario.RunAsync(projector, cancellation.Token));
+            var error = await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+                scenario.RunAsync(projector, cancellation.Token));
             Assert.Equal(cancellation.Token, error.CancellationToken);
-            Assert.Equal(ProjectionCheckpoint.Start, await scenario.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern)));
+            Assert.Equal(ProjectionCheckpoint.Start,
+                await scenario.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern)));
         }
+
         Assert.Equal(300, seen.Count);
     }
 
-    sealed class DrainProjector(IProjectionStore store, List<Uuid> seen, Exception? failure = null, CancellationTokenSource? cancellation = null)
+    sealed class DrainProjector(
+        IProjectionStore store,
+        List<Uuid> seen,
+        Exception? failure = null,
+        CancellationTokenSource? cancellation = null)
         : BatchProjector(store, EventStreamPattern.ForPattern("test", "users"))
     {
         protected override ValueTask<Result> ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records,
@@ -179,14 +197,20 @@ public sealed class ScenarioDrainTests
                 if (seen.Count == 300)
                     cancellation?.Cancel();
             }
+
             return ValueTask.FromResult(Result.Success);
         }
     }
 
-    sealed class DrainReactor(IProjectionCheckpointStore store, List<Uuid> seen, Exception? failure = null, CancellationTokenSource? cancellation = null)
+    sealed class DrainReactor(
+        IProjectionCheckpointStore store,
+        List<Uuid> seen,
+        Exception? failure = null,
+        CancellationTokenSource? cancellation = null)
         : BatchReactor(store, EventStreamPattern.ForPattern("test", "users"))
     {
-        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
+        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts,
+            CancellationToken ct)
         {
             foreach (var context in contexts)
             {
@@ -198,16 +222,21 @@ public sealed class ScenarioDrainTests
                 if (seen.Count == 300)
                     cancellation?.Cancel();
             }
+
             return ValueTask.FromResult(Result.Success);
         }
     }
 
     sealed class CancelAfterPassStore(IProjectionStore inner, CancellationTokenSource cancellation) : IProjectionStore
     {
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default)
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
+            CancellationToken ct = default)
             => inner.LoadCheckpointAsync(identity, ct);
-        public async ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
+
+        public async ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context,
+            CancellationToken ct = default)
             => new Batch(await inner.BeginAsync(context, ct), cancellation);
+
         sealed class Batch(IProjectionBatch innerBatch, CancellationTokenSource cancellation) : IProjectionBatch
         {
             public async ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
@@ -216,6 +245,7 @@ public sealed class ScenarioDrainTests
                 if (checkpoint.Cursor.ToString() == "4096")
                     cancellation.Cancel();
             }
+
             public ValueTask DisposeAsync() => innerBatch.DisposeAsync();
         }
     }

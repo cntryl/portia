@@ -3,9 +3,12 @@ namespace Cntryl.Portia.Consumer;
 public sealed class GeneratorShapeTests
 {
     [Theory]
-    [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, new RequestQueueOptions(TtlHours: 1))")]
-    [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, RequestMetadata.Create(), new RequestQueueOptions(TtlHours: 1), default)")]
-    [InlineData("publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, parent, new RequestQueueOptions(TtlHours: 1))")]
+    [InlineData(
+        "publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, new RequestQueueOptions(TtlHours: 1))")]
+    [InlineData(
+        "publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, RequestMetadata.Create(), new RequestQueueOptions(TtlHours: 1), default)")]
+    [InlineData(
+        "publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, parent, new RequestQueueOptions(TtlHours: 1))")]
     public void ShouldRegisterOutboundQueueRequestGivenOptionsPublication(string invocation)
     {
         // Arrange
@@ -102,24 +105,24 @@ public sealed class GeneratorShapeTests
     {
         // Arrange
         const string source = """
-                                                           using System;
-                                                           using System.Threading;
-                                                           using System.Threading.Tasks;
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           using Microsoft.Extensions.DependencyInjection;
-                                                           public sealed record Request : IRequest;
-                                                           public sealed class Handler : IRequestHandler<Request>
-                                                           {
-                                                               public ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct) =>
-                                                                   ValueTask.FromResult(Result.Success);
-                                                           }
-                                                           public static class Scenario
-                                                           {
-                                                               public static Func<PortiaBuilder> Registration(PortiaBuilder portia) =>
-                                                                   portia.AddRequestHandler<Handler>;
-                                                           }
-                                                           """;
+                              using System;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              using Microsoft.Extensions.DependencyInjection;
+                              public sealed record Request : IRequest;
+                              public sealed class Handler : IRequestHandler<Request>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct) =>
+                                      ValueTask.FromResult(Result.Success);
+                              }
+                              public static class Scenario
+                              {
+                                  public static Func<PortiaBuilder> Registration(PortiaBuilder portia) =>
+                                      portia.AddRequestHandler<Handler>;
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new RegistrationCallInterceptorGenerator());
@@ -209,23 +212,23 @@ public sealed class GeneratorShapeTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           using Microsoft.Extensions.DependencyInjection;
-                                                           public abstract class AccountRequest { public string? AccountId { get; init; } }
-                                                           [RequiresPermission("accounts:{AccountId}:read")]
-                                                           public sealed class ReadAccount : AccountRequest, IRequest;
-                                                           public sealed class Handler : IRequestHandler<ReadAccount>
-                                                           {
-                                                               public ValueTask<Result> HandleAsync(IRequestContext<ReadAccount> context, CancellationToken ct) =>
-                                                                   ValueTask.FromResult(Result.Success);
-                                                           }
-                                                           public static class Scenario
-                                                           {
-                                                               public static void Register(IServiceCollection services) =>
-                                                                   services.AddPortia().AddRequestHandler<Handler>();
-                                                           }
-                                                           """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              using Microsoft.Extensions.DependencyInjection;
+                              public abstract class AccountRequest { public string? AccountId { get; init; } }
+                              [RequiresPermission("accounts:{AccountId}:read")]
+                              public sealed class ReadAccount : AccountRequest, IRequest;
+                              public sealed class Handler : IRequestHandler<ReadAccount>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<ReadAccount> context, CancellationToken ct) =>
+                                      ValueTask.FromResult(Result.Success);
+                              }
+                              public static class Scenario
+                              {
+                                  public static void Register(IServiceCollection services) =>
+                                      services.AddPortia().AddRequestHandler<Handler>();
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new RegistrationCallInterceptorGenerator());
@@ -239,16 +242,16 @@ public sealed class GeneratorShapeTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           using Cntryl.Portia.Testing;
-                                                           [RequiresPermission("accounts:{Missing}:read")]
-                                                           public sealed record ReadAccount(string AccountId) : IRequest;
-                                                           public sealed class Handler : IRequestHandler<ReadAccount>
-                                                           {
-                                                               public ValueTask<Result> HandleAsync(IRequestContext<ReadAccount> context, CancellationToken ct) =>
-                                                                   ValueTask.FromResult(Result.Success);
-                                                           }
-                                                           """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              [RequiresPermission("accounts:{Missing}:read")]
+                              public sealed record ReadAccount(string AccountId) : IRequest;
+                              public sealed class Handler : IRequestHandler<ReadAccount>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<ReadAccount> context, CancellationToken ct) =>
+                                      ValueTask.FromResult(Result.Success);
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new RegistrationCallInterceptorGenerator());
@@ -265,22 +268,22 @@ public sealed class GeneratorShapeTests
     {
         // Arrange
         var source = $$"""
-                                                             using Cntryl.Portia;
-                                                             using Cntryl.Portia.Testing;
-                                                             using Microsoft.Extensions.DependencyInjection;
-                                                             [RequiresPermission("{{permission}}")]
-                                                             public sealed record ReadAccount(string? AccountId) : IRequest;
-                                                             public sealed class Handler : IRequestHandler<ReadAccount>
-                                                             {
-                                                                 public ValueTask<Result> HandleAsync(IRequestContext<ReadAccount> context, CancellationToken ct) =>
-                                                                     ValueTask.FromResult(Result.Success);
-                                                             }
-                                                             public static class Scenario
-                                                             {
-                                                                 public static void Register(IServiceCollection services) =>
-                                                                     services.AddPortia().AddRequestHandler<Handler>();
-                                                             }
-                                                             """;
+                       using Cntryl.Portia;
+                       using Cntryl.Portia.Testing;
+                       using Microsoft.Extensions.DependencyInjection;
+                       [RequiresPermission("{{permission}}")]
+                       public sealed record ReadAccount(string? AccountId) : IRequest;
+                       public sealed class Handler : IRequestHandler<ReadAccount>
+                       {
+                           public ValueTask<Result> HandleAsync(IRequestContext<ReadAccount> context, CancellationToken ct) =>
+                               ValueTask.FromResult(Result.Success);
+                       }
+                       public static class Scenario
+                       {
+                           public static void Register(IServiceCollection services) =>
+                               services.AddPortia().AddRequestHandler<Handler>();
+                       }
+                       """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new RegistrationCallInterceptorGenerator());
@@ -294,11 +297,11 @@ public sealed class GeneratorShapeTests
     {
         // Arrange
         const string source = """
-                                                             using Cntryl.Portia;
-                                                             using Cntryl.Portia.Testing;
-                                                             [Discriminator("AccountOpened")]
-                                                             public sealed record AccountOpened : DomainEvent;
-                                                             """;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              [Discriminator("AccountOpened")]
+                              public sealed record AccountOpened : DomainEvent;
+                              """;
 
         // Act
         var generated = GeneratorCompilation.GeneratedSource(source, new DomainEventCatalogGenerator());
@@ -381,23 +384,23 @@ public sealed class GeneratorShapeTests
     {
         // Arrange
         const string source = """
-                                                             using System.Threading;
-                                                             using System.Threading.Tasks;
-                                                             using Cntryl.Portia;
-                                                             using Cntryl.Portia.Testing;
-                                                             using Microsoft.Extensions.DependencyInjection;
-                                                             public sealed record Request : IRequest;
-                                                             public sealed class Handler : IRequestHandler<Request>
-                                                             {
-                                                                 public ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct) =>
-                                                                     ValueTask.FromResult(Result.Success);
-                                                             }
-                                                             public static class Scenario
-                                                             {
-                                                                 public static void Register(IServiceCollection services) =>
-                                                                     services.AddPortia().AddRequestHandler<Handler>();
-                                                             }
-                                                             """;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              using Microsoft.Extensions.DependencyInjection;
+                              public sealed record Request : IRequest;
+                              public sealed class Handler : IRequestHandler<Request>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct) =>
+                                      ValueTask.FromResult(Result.Success);
+                              }
+                              public static class Scenario
+                              {
+                                  public static void Register(IServiceCollection services) =>
+                                      services.AddPortia().AddRequestHandler<Handler>();
+                              }
+                              """;
 
         // Act
         var generated = GeneratorCompilation.GeneratedSource(source, new RegistrationCallInterceptorGenerator());

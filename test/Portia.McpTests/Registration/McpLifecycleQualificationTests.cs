@@ -28,17 +28,22 @@ public sealed class McpLifecycleQualificationTests
     [InlineData("tool", "2025-11-25", true)]
     [InlineData("resource", "2025-11-25", true)]
     [InlineData("prompt", "2025-11-25", true)]
-    public async Task ShouldCancelHandlerGivenMinimalSdkStdioHost(string primitive, string revision, bool explicitNotification)
+    public async Task ShouldCancelHandlerGivenMinimalSdkStdioHost(string primitive, string revision,
+        bool explicitNotification)
     {
         // Arrange
         // A failure bound only: the waits below poll conditions that become true, and a cold child on a
         // loaded runner can take seconds to start.
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-        var evidence = Path.Combine(Path.GetTempPath(), $"portia-sdk-cancellation-{primitive}-{revision}-{explicitNotification}-" + Guid.NewGuid().ToString("N"));
+        var evidence = Path.Combine(Path.GetTempPath(),
+            $"portia-sdk-cancellation-{primitive}-{revision}-{explicitNotification}-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(evidence);
-        using var logs = LoggerFactory.Create(logging => logging.SetMinimumLevel(LogLevel.Trace).AddProvider(new ProtocolEvidenceLogger(evidence)));
+        using var logs = LoggerFactory.Create(logging =>
+            logging.SetMinimumLevel(LogLevel.Trace).AddProvider(new ProtocolEvidenceLogger(evidence)));
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
-        var host = Path.GetFullPath($"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net11.0/Portia.McpStdioHost.dll", AppContext.BaseDirectory);
+        var host = Path.GetFullPath(
+            $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net11.0/Portia.McpStdioHost.dll",
+            AppContext.BaseDirectory);
         await using var client = await McpClient.CreateAsync(new StdioClientTransport(new StdioClientTransportOptions
         {
             Command = "dotnet",
@@ -61,7 +66,8 @@ public sealed class McpLifecycleQualificationTests
             await client.SendMessageAsync(new JsonRpcNotification
             {
                 Method = NotificationMethods.CancelledNotification,
-                Params = new System.Text.Json.Nodes.JsonObject { ["requestId"] = long.Parse(request[1], System.Globalization.CultureInfo.InvariantCulture) }
+                Params = new System.Text.Json.Nodes.JsonObject
+                { ["requestId"] = long.Parse(request[1], System.Globalization.CultureInfo.InvariantCulture) }
             }, timeout.Token);
         await PollAsync("disposed");
         // Scope disposal can finish before the canceled handler records its marker.
@@ -70,7 +76,8 @@ public sealed class McpLifecycleQualificationTests
             .Select(line => line.Split('\t')).First(fields => fields.Length == 3 && fields[0] == "notification"
                 && fields[1] == NotificationMethods.CancelledNotification);
         using var parameters = JsonDocument.Parse(notification[2]);
-        Assert.Equal(long.Parse(request[1], System.Globalization.CultureInfo.InvariantCulture), parameters.RootElement.GetProperty("requestId").GetInt64());
+        Assert.Equal(long.Parse(request[1], System.Globalization.CultureInfo.InvariantCulture),
+            parameters.RootElement.GetProperty("requestId").GetInt64());
 
         async Task PollAsync(string marker)
         {
@@ -119,7 +126,9 @@ public sealed class McpLifecycleQualificationTests
                 return Task.CompletedTask;
             });
         await using var provider = services.BuildServiceProvider();
-        var transport = provider.GetRequiredService<Microsoft.Extensions.Options.IOptions<ModelContextProtocol.AspNetCore.HttpServerTransportOptions>>().Value;
+        var transport = provider
+            .GetRequiredService<Microsoft.Extensions.Options.IOptions<
+                ModelContextProtocol.AspNetCore.HttpServerTransportOptions>>().Value;
         var configured = new ModelContextProtocol.Server.McpServerOptions { ScopeRequests = false };
         await transport.ConfigureSessionOptions!(context, configured, cancellation.Token);
         Assert.Equal(1, calls);
@@ -128,6 +137,7 @@ public sealed class McpLifecycleQualificationTests
     }
 
     static readonly string[] EvidenceFiles = ["spans.tsv", "metrics.tsv", "logs.tsv"];
+
     [Theory]
     [InlineData("http", "tool", false, false, "2026-07-28")]
     [InlineData("http", "resource", false, false, "2026-07-28")]
@@ -170,23 +180,37 @@ public sealed class McpLifecycleQualificationTests
         builder.Services.AddSingleton<IEventStore, InMemoryEventStore>();
         var application = QualifiedApplication.Add(builder.Services).AddMcpTool<QualifiedRead>()
             .AddMcpResource<QualifiedRead, QualifiedState>("qualification://wait/{tenant}",
-                values => new QualifiedRead(values["tenant"], Wait: true), options => { options.Authenticated(); options.AsJson(); })
-            .AddMcpPrompt<QualifiedRead, QualifiedState>("qualification-wait", values => new QualifiedRead(values["tenant"], Wait: true),
-                _ => [new McpPromptMessage("user", "completed")], options => { options.Authenticated(); options.Required("tenant"); })
+                values => new QualifiedRead(values["tenant"], Wait: true), options =>
+                {
+                    options.Authenticated();
+                    options.AsJson();
+                })
+            .AddMcpPrompt<QualifiedRead, QualifiedState>("qualification-wait",
+                values => new QualifiedRead(values["tenant"], Wait: true),
+                _ => [new McpPromptMessage("user", "completed")], options =>
+                {
+                    options.Authenticated();
+                    options.Required("tenant");
+                })
             .AddMcpHttp();
         if (deadline)
             _ = application.ConfigureMcpLimits(limits => limits.OperationDeadline = TimeSpan.FromMilliseconds(250));
         await using var app = builder.Build();
         app.Use((context, next) =>
         {
-            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, QualifiedObservations.Tenant)], "test"));
+            context.User =
+                new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, QualifiedObservations.Tenant)],
+                    "test"));
             return next(context);
         });
         _ = app.MapPortiaMcp().AllowAnonymous();
         await app.StartAsync(token);
-        var evidence = Path.Combine(Path.GetTempPath(), $"portia-lifecycle-{transportName}-{primitive}-{deadline}-{explicitNotification}-" + Guid.NewGuid().ToString("N"));
+        var evidence = Path.Combine(Path.GetTempPath(),
+            $"portia-lifecycle-{transportName}-{primitive}-{deadline}-{explicitNotification}-" +
+            Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(evidence);
-        using var protocolLogs = LoggerFactory.Create(logging => logging.SetMinimumLevel(LogLevel.Trace).AddProvider(new ProtocolEvidenceLogger(evidence)));
+        using var protocolLogs = LoggerFactory.Create(logging =>
+            logging.SetMinimumLevel(LogLevel.Trace).AddProvider(new ProtocolEvidenceLogger(evidence)));
         await using var client = await ConnectAsync();
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
 
@@ -211,21 +235,26 @@ public sealed class McpLifecycleQualificationTests
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await operation);
             if (explicitNotification)
             {
-                var method = primitive == "tool" ? RequestMethods.ToolsCall : primitive == "resource" ? RequestMethods.ResourcesRead : RequestMethods.PromptsGet;
+                var method = primitive == "tool" ? RequestMethods.ToolsCall :
+                    primitive == "resource" ? RequestMethods.ResourcesRead : RequestMethods.PromptsGet;
                 var request = File.ReadAllLines(Path.Combine(evidence, "ingress.tsv"))
-                    .Select(line => line.Split('\t')).First(fields => fields.Length == 4 && fields[0] == "request" && fields[2] == method
+                    .Select(line => line.Split('\t')).First(fields =>
+                        fields.Length == 4 && fields[0] == "request" && fields[2] == method
                         && (primitive != "tool" || IsWaitRequest(fields[3])));
                 await client.SendMessageAsync(new JsonRpcNotification
                 {
                     Method = NotificationMethods.CancelledNotification,
-                    Params = new System.Text.Json.Nodes.JsonObject { ["requestId"] = long.Parse(request[1], System.Globalization.CultureInfo.InvariantCulture) }
+                    Params = new System.Text.Json.Nodes.JsonObject
+                    { ["requestId"] = long.Parse(request[1], System.Globalization.CultureInfo.InvariantCulture) }
                 }, token);
             }
         }
+
         await PollAsync(async () =>
         {
             var observed = await StateAsync();
-            return observed.WaitCanceled == 1 && observed.Scopes.Any(scope => scope.Stages.Contains("wait", StringComparer.Ordinal)
+            return observed.WaitCanceled == 1 && observed.Scopes.Any(scope =>
+                scope.Stages.Contains("wait", StringComparer.Ordinal)
                 && scope.Stages.Contains("disposed", StringComparer.Ordinal));
         });
         var state = await StateAsync();
@@ -239,14 +268,16 @@ public sealed class McpLifecycleQualificationTests
             if (!deadline)
                 await InvokeFaultAsync();
             await PollAsync(() => Task.FromResult(HasExportedEvidence()));
-            var spans = File.ReadAllLines(Path.Combine(evidence, "spans.tsv")).Select(line => line.Split('\t')).ToArray();
+            var spans = File.ReadAllLines(Path.Combine(evidence, "spans.tsv")).Select(line => line.Split('\t'))
+                .ToArray();
             var logs = File.ReadAllLines(Path.Combine(evidence, "logs.tsv")).Select(line => line.Split('\t')).ToArray();
             var executes = spans.Where(span => span[0] == PortiaTelemetry.ExecuteActivityName).ToArray();
             Assert.Contains(executes, execute => execute[4] == "canceled");
             foreach (var execute in executes)
                 Assert.Contains(spans, process => process[0] == PortiaTelemetry.ProcessActivityName
-                    && process[1] == execute[1] && process[2] == execute[3]);
-            Assert.Equal(executes.Length, executes.Select(execute => execute[3]).Distinct(StringComparer.Ordinal).Count());
+                                                  && process[1] == execute[1] && process[2] == execute[3]);
+            Assert.Equal(executes.Length,
+                executes.Select(execute => execute[3]).Distinct(StringComparer.Ordinal).Count());
             if (deadline)
                 // An expired deadline is sanitized, never reported as a runner fault.
                 Assert.Empty(logs);
@@ -265,7 +296,8 @@ public sealed class McpLifecycleQualificationTests
         static bool IsWaitRequest(string parameters)
         {
             using var parsed = JsonDocument.Parse(parameters);
-            return parsed.RootElement.GetProperty("arguments").TryGetProperty("wait", out var wait) && wait.GetBoolean();
+            return parsed.RootElement.GetProperty("arguments").TryGetProperty("wait", out var wait) &&
+                   wait.GetBoolean();
         }
 
         async Task<McpClient> ConnectAsync()
@@ -273,15 +305,22 @@ public sealed class McpLifecycleQualificationTests
             if (transportName == "http")
                 return await McpClient.CreateAsync(new HttpClientTransport(new HttpClientTransportOptions
                 { Endpoint = new Uri("http://localhost/mcp") }, app.GetTestClient()),
-                    new McpClientOptions { ProtocolVersion = revision }, loggerFactory: protocolLogs, cancellationToken: token);
+                    new McpClientOptions { ProtocolVersion = revision }, loggerFactory: protocolLogs,
+                    cancellationToken: token);
             var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
             var host = Path.GetFullPath(
-                $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net11.0/Portia.McpStdioHost.dll", AppContext.BaseDirectory);
+                $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net11.0/Portia.McpStdioHost.dll",
+                AppContext.BaseDirectory);
             var arguments = new List<string> { host, "--qualification", "--evidence-dir", evidence };
             if (deadline)
                 arguments.Add("--short-deadline");
             return await McpClient.CreateAsync(new StdioClientTransport(new StdioClientTransportOptions
-            { Command = "dotnet", Arguments = arguments, Name = "MCP lifecycle qualification", ShutdownTimeout = TimeSpan.FromSeconds(1) }),
+            {
+                Command = "dotnet",
+                Arguments = arguments,
+                Name = "MCP lifecycle qualification",
+                ShutdownTimeout = TimeSpan.FromSeconds(1)
+            }),
                 StdioClientOptions.Create(revision), loggerFactory: protocolLogs, cancellationToken: token);
         }
 
@@ -309,7 +348,8 @@ public sealed class McpLifecycleQualificationTests
                 Assert.Null(result.StructuredContent);
             }
             else if (primitive == "resource")
-                _ = await client.ReadResourceAsync($"qualification://wait/{QualifiedObservations.Tenant}", cancellationToken: ct);
+                _ = await client.ReadResourceAsync($"qualification://wait/{QualifiedObservations.Tenant}",
+                    cancellationToken: ct);
             else
                 _ = await client.GetPromptAsync("qualification-wait", new Dictionary<string, object?>
                 { ["tenant"] = QualifiedObservations.Tenant }, cancellationToken: ct);
@@ -328,8 +368,10 @@ public sealed class McpLifecycleQualificationTests
                 _ = await Assert.ThrowsAnyAsync<Exception>(async () => await client.ReadResourceAsync(
                     $"qualification://failure/{QualifiedObservations.Tenant}", cancellationToken: token));
             else
-                _ = await Assert.ThrowsAnyAsync<Exception>(async () => await client.GetPromptAsync("qualification-failure",
-                    new Dictionary<string, object?> { ["tenant"] = QualifiedObservations.Tenant }, cancellationToken: token));
+                _ = await Assert.ThrowsAnyAsync<Exception>(async () => await client.GetPromptAsync(
+                    "qualification-failure",
+                    new Dictionary<string, object?> { ["tenant"] = QualifiedObservations.Tenant },
+                    cancellationToken: token));
         }
 
         async Task<QualifiedState> StateAsync()
@@ -375,11 +417,13 @@ public sealed class McpLifecycleQualificationTests
             var logs = File.ReadAllLines(paths[2]).Select(line => line.Split('\t')).ToArray();
             var operations = File.ReadAllLines(Path.Combine(evidence, "ingress.tsv")).Select(line => line.Split('\t'))
                 .Count(fields => fields.Length == 4 && fields[0] == "request"
-                    && fields[2] is RequestMethods.ToolsCall or RequestMethods.ResourcesRead or RequestMethods.PromptsGet);
+                                                    && fields[2] is RequestMethods.ToolsCall
+                                                        or RequestMethods.ResourcesRead or RequestMethods.PromptsGet);
             return spans.Count(span => span[0] == PortiaTelemetry.ProcessActivityName) == operations
-                && metrics.Any(line => line.Contains("portia.outcome=canceled", StringComparison.Ordinal))
-                && (deadline || (logs.Length == 1
-                    && metrics.Any(line => line.StartsWith("portia.worker.failure\t", StringComparison.Ordinal))));
+                   && metrics.Any(line => line.Contains("portia.outcome=canceled", StringComparison.Ordinal))
+                   && (deadline || (logs.Length == 1
+                                    && metrics.Any(line =>
+                                        line.StartsWith("portia.worker.failure\t", StringComparison.Ordinal))));
         }
     }
 }
@@ -388,17 +432,24 @@ file sealed class ProtocolEvidenceLogger(string directory) : ILoggerProvider
 {
     readonly object _gate = new();
     public ILogger CreateLogger(string categoryName) => new EvidenceLogger(this, categoryName);
-    public void Dispose() { }
+
+    public void Dispose()
+    {
+    }
+
     sealed class EvidenceLogger(ProtocolEvidenceLogger owner, string category) : ILogger
     {
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
         public bool IsEnabled(LogLevel level) => true;
+
         public void Log<TState>(LogLevel level, EventId eventId, TState state, Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
             lock (owner._gate)
-                File.AppendAllText(Path.Combine(owner.Directory, "client.log"), category + " " + formatter(state, exception) + "\n");
+                File.AppendAllText(Path.Combine(owner.Directory, "client.log"),
+                    category + " " + formatter(state, exception) + "\n");
         }
     }
+
     internal string Directory => directory;
 }

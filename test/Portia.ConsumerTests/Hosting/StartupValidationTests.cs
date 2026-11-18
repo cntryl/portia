@@ -56,8 +56,10 @@ public sealed class StartupValidationTests
         var builder = Host.CreateApplicationBuilder();
         _ = builder.Services.AddPortia()
             .AddGeneratedHandler(new RequestRegistration<MissingJsonMetadataRequest, MissingJsonMetadataHandler>())
-            .AddGeneratedRequest(new RequestTransportRegistration(typeof(MissingJsonMetadataRequest), [RequestTransportId.Queue],
-                new RequestRouteAttribute("test", "startup", "requests", "missing"), new DiscriminatorAttribute("startup.missing")));
+            .AddGeneratedRequest(new RequestTransportRegistration(typeof(MissingJsonMetadataRequest),
+                [RequestTransportId.Queue],
+                new RequestRouteAttribute("test", "startup", "requests", "missing"),
+                new DiscriminatorAttribute("startup.missing")));
 
         using var host = builder.Build();
 

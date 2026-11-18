@@ -292,7 +292,8 @@ public sealed class TelemetryCompletionTests
     [InlineData("query", false, true)]
     [InlineData("stream", true, true)]
     [InlineData("dispose", true, true)]
-    public async Task ShouldClassifyActualDispatchFailureGivenDispatchFailure(string shape, bool cancel, bool cancellationException)
+    public async Task ShouldClassifyActualDispatchFailureGivenDispatchFailure(string shape, bool cancel,
+        bool cancellationException)
     {
         // Arrange
         using var measurements = new OutcomeMeasurements();
@@ -303,9 +304,11 @@ public sealed class TelemetryCompletionTests
             .AddSingleton<FailureCommandHandler>().AddSingleton<FailureQueryHandler>()
             .AddSingleton<FailureStreamHandler>().AddSingleton<FailureStreamAuthorizer>().BuildServiceProvider();
         var bus = new RequestBus(services, new RequestRegistry(
-            [new RequestRegistration<FailureCommand, FailureCommandHandler>(),
+            [
+                new RequestRegistration<FailureCommand, FailureCommandHandler>(),
                 new RequestRegistration<FailureQuery, FailureQueryHandler, int>(),
-                new StreamRequestRegistration<FailureStream, FailureStreamHandler, int>()],
+                new StreamRequestRegistration<FailureStream, FailureStreamHandler, int>()
+            ],
             shape == "preflight" ? [new RequestAuthorizerRegistration<FailureStream, FailureStreamAuthorizer>()] : [],
             [], [], []));
 
@@ -342,16 +345,23 @@ public sealed class TelemetryCompletionTests
     }
 
     internal sealed record FailureCommand : IRequest;
+
     internal sealed record FailureQuery : IRequest<int>;
+
     internal sealed record FailureStream : IStreamRequest<int>;
 
-    internal sealed class DispatchFailure(CancellationTokenSource source, bool cancel, bool cancellationException,
+    internal sealed class DispatchFailure(
+        CancellationTokenSource source,
+        bool cancel,
+        bool cancellationException,
         string shape)
     {
         public string Shape { get; } = shape;
+
         public Exception Exception { get; } = cancellationException
             ? new OperationCanceledException("unrelated or requested cancellation")
             : new IOException("sensitive fault detail");
+
         public Exception Fail()
         {
             if (cancel)
@@ -387,12 +397,17 @@ public sealed class TelemetryCompletionTests
     sealed class FailureEnumerator(DispatchFailure failure) : IAsyncEnumerable<int>, IAsyncEnumerator<int>
     {
         public int Current => 1;
+
         public IAsyncEnumerator<int> GetAsyncEnumerator(CancellationToken cancellationToken = default) =>
             failure.Shape == "enumerator" ? throw failure.Fail() : this;
+
         public ValueTask<bool> MoveNextAsync() => failure.Shape == "dispose"
-            ? ValueTask.FromResult(true) : ValueTask.FromException<bool>(failure.Fail());
+            ? ValueTask.FromResult(true)
+            : ValueTask.FromException<bool>(failure.Fail());
+
         public ValueTask DisposeAsync() => failure.Shape == "dispose"
-            ? ValueTask.FromException(failure.Fail()) : ValueTask.CompletedTask;
+            ? ValueTask.FromException(failure.Fail())
+            : ValueTask.CompletedTask;
     }
 
     static RequestBus GuardBus(GuardBehavior behavior, params RequestGuardRegistration[] guards)

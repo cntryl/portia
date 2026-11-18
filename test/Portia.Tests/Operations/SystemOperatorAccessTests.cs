@@ -47,7 +47,8 @@ public sealed class SystemOperatorAccessTests
     [Theory]
     [InlineData(ClaimTypes.Role)]
     [InlineData("roles")]
-    public async Task ShouldAllowAdministratorGivenAuthenticatedSecondaryIdentityWithCustomRoleClaims(string roleClaimType)
+    public async Task ShouldAllowAdministratorGivenAuthenticatedSecondaryIdentityWithCustomRoleClaims(
+        string roleClaimType)
     {
         // Arrange
         var topology = new ObservedTopology();
@@ -133,8 +134,11 @@ public sealed class SystemOperatorAccessTests
         var policy = new PermissivePolicy();
         var operations = new PortiaOperations(store, new OperationalOptions(), topology, policy);
         var actor = new ClaimsPrincipal(new ClaimsIdentity(
-            [new Claim(ClaimTypes.NameIdentifier, "application-user"),
-                new Claim(ClaimTypes.Role, "application-user-" + Environment.GetEnvironmentVariable("PORTIA_SYSTEM_ADMIN_ROLE"))], "test"));
+        [
+            new Claim(ClaimTypes.NameIdentifier, "application-user"),
+            new Claim(ClaimTypes.Role,
+                "application-user-" + Environment.GetEnvironmentVariable("PORTIA_SYSTEM_ADMIN_ROLE"))
+        ], "test"));
         var target = new OperationalTarget("processor", "stream://realm/events/*", OperationalScope.Global);
 
         // Act

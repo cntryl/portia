@@ -40,7 +40,8 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         var identity = Identity(realm);
         DomainEvent[] changes = [new ValueChanged(500), new ValueIncremented(125)];
         for (var i = 0; i < changes.Length; i++)
-            changes[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), account, (ulong)i + 1, DateTimeOffset.UtcNow));
+            changes[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), account, (ulong)i + 1,
+                DateTimeOffset.UtcNow));
         await events.AppendAsync(new EventStreamAddress(realm, "accounts", account.ToString()), 0, changes);
 
         // Act
@@ -50,7 +51,8 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         await using (var repository = new AccountRepository(database))
         {
             var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ProjectorRunner(events)
-                .RunAsync(new AccountProjector(repository, identity.Pattern, new FailurePlan(expectedFailure)), ProjectionCheckpoint.Start).AsTask());
+                .RunAsync(new AccountProjector(repository, identity.Pattern, new FailurePlan(expectedFailure)),
+                    ProjectionCheckpoint.Start).AsTask());
             Assert.Same(expectedFailure, failure.Error);
             Assert.Equal(ProjectionCheckpoint.Start, await repository.LoadCheckpointAsync(identity));
             Assert.Null(await repository.GetAsync(identity, account.ToString()));
@@ -61,21 +63,25 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         {
             committed = await new ProjectorRunner(events).RunAsync(new AccountProjector(repository, identity.Pattern),
                 await repository.LoadCheckpointAsync(identity));
-            Assert.Equal(new AccountReadModel(account.ToString(), 625), await repository.GetAsync(identity, account.ToString()));
+            Assert.Equal(new AccountReadModel(account.ToString(), 625),
+                await repository.GetAsync(identity, account.ToString()));
         }
+
         await using (var repository = new AccountRepository(database))
         {
             Assert.Equal(committed, await repository.LoadCheckpointAsync(identity));
             var resumed = await new ProjectorRunner(events).RunAsync(new AccountProjector(repository, identity.Pattern),
                 await repository.LoadCheckpointAsync(identity));
             Assert.Equal(committed, resumed);
-            Assert.Equal(new AccountReadModel(account.ToString(), 625), await repository.GetAsync(identity, account.ToString()));
+            Assert.Equal(new AccountReadModel(account.ToString(), 625),
+                await repository.GetAsync(identity, account.ToString()));
             Assert.Null(await repository.GetAsync(Identity(otherRealm), account.ToString()));
 
             var candidate = new CheckpointIdentity(identity.ComponentName, identity.Pattern, "candidate");
             _ = await new ProjectorRunner(events).RunAsync(new AccountProjector(repository, identity.Pattern),
                 await repository.LoadCheckpointAsync(candidate), new ProjectionRunOptions { RebuildId = "candidate" });
-            Assert.Equal(new AccountReadModel(account.ToString(), 625), await repository.GetAsync(candidate, account.ToString()));
+            Assert.Equal(new AccountReadModel(account.ToString(), 625),
+                await repository.GetAsync(candidate, account.ToString()));
             Assert.Equal(committed, await repository.LoadCheckpointAsync(identity));
         }
     }
@@ -96,23 +102,28 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         var account = Uuid.CreateVersion4();
         DomainEvent[] changes = [new ValueChanged(500), new ValueIncremented(125)];
         for (var i = 0; i < changes.Length; i++)
-            changes[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), account, (ulong)i + 1, DateTimeOffset.UtcNow));
-        await events.AppendAsync(new EventStreamAddress(identity.Pattern.Realm, "accounts", account.ToString()), 0, changes);
+            changes[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), account, (ulong)i + 1,
+                DateTimeOffset.UtcNow));
+        await events.AppendAsync(new EventStreamAddress(identity.Pattern.Realm, "accounts", account.ToString()), 0,
+            changes);
         var error = RequestError.Conflict("injected handler failure", transient);
         var failures = new FailurePlan(error);
         var committed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var services = new ServiceCollection();
         services.AddSingleton<IDomainEventReader>(events);
-        services.AddScoped(sp => new AccountRepository(sp.GetRequiredService<CassieProjectionDatabase>(), database.Accounts,
+        services.AddScoped(sp => new AccountRepository(sp.GetRequiredService<CassieProjectionDatabase>(),
+            database.Accounts,
             () => committed.TrySetResult()));
-        services.AddScoped(sp => new AccountProjector(sp.GetRequiredService<AccountRepository>(), identity.Pattern, failures));
+        services.AddScoped(sp =>
+            new AccountProjector(sp.GetRequiredService<AccountRepository>(), identity.Pattern, failures));
         services.AddPortia().AddCassie(database.Source.ConnectionString, database.Checkpoints)
-            .AddCassieProjection<AccountProjector, AccountRepository>(identity.ComponentName, WorkloadScope.Global, options =>
-        {
-            options.PollInterval = TimeSpan.FromHours(1);
-            options.MaximumFailureDelay = TimeSpan.FromMilliseconds(20);
-            options.FailureAttemptLimit = 3;
-        }).AddWorkers().UseSingleProcessWorkloads();
+            .AddCassieProjection<AccountProjector, AccountRepository>(identity.ComponentName, WorkloadScope.Global,
+                options =>
+                {
+                    options.PollInterval = TimeSpan.FromHours(1);
+                    options.MaximumFailureDelay = TimeSpan.FromMilliseconds(20);
+                    options.FailureAttemptLimit = 3;
+                }).AddWorkers().UseSingleProcessWorkloads();
 
         // Act
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
@@ -130,7 +141,8 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
             }
             else
             {
-                var terminal = await Assert.ThrowsAsync<WorkloadFailureException>(() => worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(15)));
+                var terminal = await Assert.ThrowsAsync<WorkloadFailureException>(() =>
+                    worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(15)));
                 Assert.Equal(1, terminal.Attempts);
                 var diagnostic = Assert.IsType<ProcessorFailureException>(terminal.InnerException);
                 Assert.Same(error, diagnostic.Error);
@@ -144,7 +156,8 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
             if (transient)
             {
                 Assert.NotEqual(ProjectionCheckpoint.Start, checkpoint);
-                Assert.Equal(new AccountReadModel(account.ToString(), 625), await repository.GetAsync(identity, account.ToString()));
+                Assert.Equal(new AccountReadModel(account.ToString(), 625),
+                    await repository.GetAsync(identity, account.ToString()));
             }
             else
             {
@@ -179,6 +192,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
             command.CommandText = $"CREATE TABLE {table} {schema}";
             _ = await command.ExecuteNonQueryAsync();
         }
+
         // Assert
         try
         {
@@ -238,18 +252,24 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         public RequestError? TakeError() => Interlocked.Increment(ref _attempts) == 1 ? error : null;
     }
 
-    static CheckpointIdentity Identity(string realm) => new("AccountProjector", EventStreamPattern.ForPattern(realm, "accounts"));
+    static CheckpointIdentity Identity(string realm) =>
+        new("AccountProjector", EventStreamPattern.ForPattern(realm, "accounts"));
 
     internal sealed record AccountReadModel(string AccountId, long BalanceCents);
 
-    internal sealed partial class AccountProjector(AccountRepository accounts, EventStreamPattern pattern, FailurePlan? failures = null)
-        : BatchProjector(accounts, pattern, "AccountProjector"), IProjectorHandler<ValueChanged>, IProjectorHandler<ValueIncremented>
+    internal sealed partial class AccountProjector(
+        AccountRepository accounts,
+        EventStreamPattern pattern,
+        FailurePlan? failures = null)
+        : BatchProjector(accounts, pattern, "AccountProjector"), IProjectorHandler<ValueChanged>,
+            IProjectorHandler<ValueIncremented>
     {
         public async ValueTask<Result> HandleAsync(IProjectorContext<ValueChanged> context, CancellationToken ct)
         {
             await accounts.AddAsync(context.Trigger.Metadata.AggregateId.ToString(), context.Trigger.Value, ct);
             return Result.Success;
         }
+
         public async ValueTask<Result> HandleAsync(IProjectorContext<ValueIncremented> context, CancellationToken ct)
         {
             await accounts.AddAsync(context.Trigger.Metadata.AggregateId.ToString(), context.Trigger.Amount, ct);
@@ -264,18 +284,23 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         public string Checkpoints { get; } = prefix + "_checkpoints";
         public string Accounts { get; } = prefix + "_accounts";
         public CassieProjectionDatabase Persistence { get; } = new(source, prefix + "_checkpoints");
+
         public static async Task<Database> OpenAsync()
         {
             var connectionString = Environment.GetEnvironmentVariable("PORTIA_CASSIE_TEST_CONNECTION_STRING")
-                ?? throw new InvalidOperationException("Start Compose's cassie and fitz services and set PORTIA_CASSIE_TEST_CONNECTION_STRING.");
-            var database = new Database(new CassieDataSource(connectionString), "portia_" + Guid.NewGuid().ToString("N"));
+                                   ?? throw new InvalidOperationException(
+                                       "Start Compose's cassie and fitz services and set PORTIA_CASSIE_TEST_CONNECTION_STRING.");
+            var database = new Database(new CassieDataSource(connectionString),
+                "portia_" + Guid.NewGuid().ToString("N"));
             await using var connection = await database.Source.OpenConnectionAsync();
             await using var command = connection.CreateCommand();
             await database.Persistence.InitializeAsync();
-            command.CommandText = $"CREATE TABLE {database.Accounts} (identity TEXT PRIMARY KEY, balance BIGINT NOT NULL, label TEXT NOT NULL)";
+            command.CommandText =
+                $"CREATE TABLE {database.Accounts} (identity TEXT PRIMARY KEY, balance BIGINT NOT NULL, label TEXT NOT NULL)";
             _ = await command.ExecuteNonQueryAsync();
             return database;
         }
+
         public async ValueTask DisposeAsync()
         {
             try
@@ -296,47 +321,66 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
     }
 
     // Native application schema and operations; the library owns transaction and checkpoint plumbing.
-    internal sealed class AccountRepository(CassieProjectionDatabase persistence, string accountsTable, Action? onCommitted = null)
+    internal sealed class AccountRepository(
+        CassieProjectionDatabase persistence,
+        string accountsTable,
+        Action? onCommitted = null)
         : CassieProjectionRepository(persistence, "AccountProjector"),
             IProjectionStoreConformanceSession, IProjectionStore
     {
         public AccountRepository(Database database, Action? onCommitted = null)
-            : this(database.Persistence, database.Accounts, onCommitted) { }
+            : this(database.Persistence, database.Accounts, onCommitted)
+        {
+        }
 
         bool _failCommit;
         readonly Action? _onCommitted = onCommitted;
         public IProjectionStore Store => this;
 
-        async ValueTask<IProjectionBatch> IProjectionStore.BeginAsync(ProjectionBatchContext context, CancellationToken ct)
+        async ValueTask<IProjectionBatch> IProjectionStore.BeginAsync(ProjectionBatchContext context,
+            CancellationToken ct)
             => new ObservedBatch(await base.BeginAsync(context, ct), this);
 
         public async ValueTask AddAsync(string accountId, long amount, CancellationToken ct)
         {
-            await using var command = CreateCommand($"INSERT INTO {accountsTable} (identity, balance, label) VALUES (@identity, @amount, '') ON CONFLICT (identity) DO UPDATE SET balance = {accountsTable}.balance + EXCLUDED.balance");
+            await using var command =
+                CreateCommand(
+                    $"INSERT INTO {accountsTable} (identity, balance, label) VALUES (@identity, @amount, '') ON CONFLICT (identity) DO UPDATE SET balance = {accountsTable}.balance + EXCLUDED.balance");
             Bind(command, ("identity", CurrentProjectionKey + accountId), ("amount", amount));
             _ = await command.ExecuteNonQueryAsync(ct);
         }
-        public async ValueTask<AccountReadModel?> GetAsync(CheckpointIdentity identity, string accountId, CancellationToken ct = default)
+
+        public async ValueTask<AccountReadModel?> GetAsync(CheckpointIdentity identity, string accountId,
+            CancellationToken ct = default)
         {
             await using var read = await OpenReadAsync(ct);
-            await using var command = read.CreateCommand($"SELECT balance FROM {accountsTable} WHERE identity = @identity");
+            await using var command =
+                read.CreateCommand($"SELECT balance FROM {accountsTable} WHERE identity = @identity");
             Bind(command, ("identity", GetProjectionKey(identity) + accountId));
             var value = await command.ExecuteScalarAsync(ct);
-            return value is null or DBNull ? null : new AccountReadModel(accountId, Convert.ToInt64(value, CultureInfo.InvariantCulture));
+            return value is null or DBNull
+                ? null
+                : new AccountReadModel(accountId, Convert.ToInt64(value, CultureInfo.InvariantCulture));
         }
+
         public async ValueTask StageValueAsync(string value, CancellationToken ct = default)
         {
-            await using var command = CreateCommand($"INSERT INTO {accountsTable} (identity, balance, label) VALUES (@identity, 0, @label) ON CONFLICT (identity) DO UPDATE SET label = EXCLUDED.label");
+            await using var command =
+                CreateCommand(
+                    $"INSERT INTO {accountsTable} (identity, balance, label) VALUES (@identity, 0, @label) ON CONFLICT (identity) DO UPDATE SET label = EXCLUDED.label");
             Bind(command, ("identity", CurrentProjectionKey + "probe"), ("label", value));
             _ = await command.ExecuteNonQueryAsync(ct);
         }
+
         public async ValueTask<string?> ReadValueAsync(CheckpointIdentity identity, CancellationToken ct = default)
         {
             await using var read = await OpenReadAsync(ct);
-            await using var command = read.CreateCommand($"SELECT label FROM {accountsTable} WHERE identity = @identity");
+            await using var command =
+                read.CreateCommand($"SELECT label FROM {accountsTable} WHERE identity = @identity");
             Bind(command, ("identity", GetProjectionKey(identity) + "probe"));
             return await command.ExecuteScalarAsync(ct) as string;
         }
+
         public async ValueTask<IAsyncDisposable> OpenReopenedReadAsync()
         {
             var read = await OpenReadAsync();
@@ -345,12 +389,20 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
             await command.Connection.OpenAsync();
             return read;
         }
-        public ValueTask FailNextCommitAsync(CancellationToken ct = default) { _failCommit = true; return ValueTask.CompletedTask; }
+
+        public ValueTask FailNextCommitAsync(CancellationToken ct = default)
+        {
+            _failCommit = true;
+            return ValueTask.CompletedTask;
+        }
+
         static void Bind(System.Data.Common.DbCommand command, params (string Name, object Value)[] parameters)
         {
             foreach (var parameter in parameters)
-                _ = command.Parameters.Add(new CassieParameter { ParameterName = parameter.Name, Value = parameter.Value });
+                _ = command.Parameters.Add(new CassieParameter
+                { ParameterName = parameter.Name, Value = parameter.Value });
         }
+
         sealed class ObservedBatch(IProjectionBatch batch, AccountRepository repository) : IProjectionBatch
         {
             public async ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
@@ -360,6 +412,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
                 await batch.CommitAsync(checkpoint, ct);
                 repository._onCommitted?.Invoke();
             }
+
             public ValueTask DisposeAsync() => batch.DisposeAsync();
         }
     }
@@ -367,8 +420,12 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
     sealed class Probe(Database database) : IProjectionStoreConformanceProbe
     {
         public CheckpointIdentity LiveIdentity { get; } = Identity("conformance");
-        public CheckpointIdentity RebuildIdentity { get; } = new("AccountProjector", EventStreamPattern.ForPattern("conformance", "accounts"), "candidate");
+
+        public CheckpointIdentity RebuildIdentity { get; } = new("AccountProjector",
+            EventStreamPattern.ForPattern("conformance", "accounts"), "candidate");
+
         public ValueTask ResetAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
+
         public ValueTask<IProjectionStoreConformanceSession> OpenSessionAsync(CancellationToken ct = default) =>
             ValueTask.FromResult<IProjectionStoreConformanceSession>(new AccountRepository(database));
     }

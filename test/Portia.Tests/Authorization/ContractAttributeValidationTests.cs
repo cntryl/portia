@@ -54,6 +54,7 @@ public sealed class ContractAttributeValidationTests
         Assert.Equal("name", result.Value);
         Assert.Equal(1, probe.Invocations);
     }
+
     /// <summary>A purely local handler does not need a serializer root at host startup.</summary>
     [Fact]
     public async Task ShouldStartHostGivenLocalContractWithoutJsonRoot()
@@ -106,7 +107,8 @@ public sealed class ContractAttributeValidationTests
         await using var provider = services.BuildServiceProvider();
 
         // Act
-        var result = await provider.GetRequiredService<IRequestBus>().SendAsync(new ContractMetadataInputRequest(model), RequestActor.System);
+        var result = await provider.GetRequiredService<IRequestBus>()
+            .SendAsync(new ContractMetadataInputRequest(model), RequestActor.System);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -120,11 +122,13 @@ public sealed class ContractAttributeValidationTests
     {
         // Arrange
         var services = new ServiceCollection();
-        _ = services.AddPortia().AddRequestHandler<ContractDeniedHandler>().AddRequestAuthorizer<ContractDeniedAuthorizer>();
+        _ = services.AddPortia().AddRequestHandler<ContractDeniedHandler>()
+            .AddRequestAuthorizer<ContractDeniedAuthorizer>();
         await using var provider = services.BuildServiceProvider();
 
         // Act
-        var result = await provider.GetRequiredService<IRequestBus>().SendAsync(new ContractDeniedRequest(), RequestActor.Anonymous);
+        var result = await provider.GetRequiredService<IRequestBus>()
+            .SendAsync(new ContractDeniedRequest(), RequestActor.Anonymous);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -137,6 +141,7 @@ public sealed class ContractAttributeValidationTests
     {
         // Arrange
         var consumed = 0;
+
         IEnumerable<ContractValidatedItem> Items()
         {
             for (var index = 0; index < 100_010; index++)
@@ -145,12 +150,14 @@ public sealed class ContractAttributeValidationTests
                 yield return new ContractValidatedItem("valid");
             }
         }
+
         var services = new ServiceCollection();
         _ = services.AddPortia().AddRequestHandler<ContractEnumerableValidatedHandler>();
         await using var provider = services.BuildServiceProvider();
 
         // Act
-        var result = await provider.GetRequiredService<IRequestBus>().SendAsync(new ContractEnumerableValidatedRequest(Items()), RequestActor.System);
+        var result = await provider.GetRequiredService<IRequestBus>()
+            .SendAsync(new ContractEnumerableValidatedRequest(Items()), RequestActor.System);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -167,6 +174,7 @@ public sealed class ContractAttributeValidationTests
         // Arrange
         var consumed = 0;
         var repeated = new ContractValidatedItem("valid");
+
         IEnumerable<ContractValidatedItem> Items()
         {
             for (var index = 0; index < 100_010; index++)
@@ -175,12 +183,14 @@ public sealed class ContractAttributeValidationTests
                 yield return nullElements ? null! : repeated;
             }
         }
+
         var services = new ServiceCollection();
         _ = services.AddPortia().AddRequestHandler<ContractEnumerableValidatedHandler>();
         await using var provider = services.BuildServiceProvider();
 
         // Act
-        var result = await provider.GetRequiredService<IRequestBus>().SendAsync(new ContractEnumerableValidatedRequest(Items()), RequestActor.System);
+        var result = await provider.GetRequiredService<IRequestBus>()
+            .SendAsync(new ContractEnumerableValidatedRequest(Items()), RequestActor.System);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -217,7 +227,8 @@ public sealed class ContractAttributeValidationTests
         _ = services.AddPortia().AddRequestHandler<ContractNestedValidatedHandler>();
         await using var provider = services.BuildServiceProvider();
         var request = dictionary
-            ? new ContractNestedValidatedRequest([], new Dictionary<string, ContractValidatedItem> { ["first"] = new("") })
+            ? new ContractNestedValidatedRequest([],
+                new Dictionary<string, ContractValidatedItem> { ["first"] = new("") })
             : new ContractNestedValidatedRequest([new("")], []);
 
         // Act
@@ -228,19 +239,21 @@ public sealed class ContractAttributeValidationTests
         Assert.Equal(RequestErrorKind.Validation, result.Error!.Kind);
         Assert.Contains("Name", result.Error.Message, StringComparison.Ordinal);
     }
-
 }
 
-sealed record ContractLocalValidatedRequest([property: Required] string? Name, [property: Range(1, 100)] int Limit) : IRequest<string>;
+sealed record ContractLocalValidatedRequest([property: Required] string? Name, [property: Range(1, 100)] int Limit)
+    : IRequest<string>;
 
 sealed class ContractValidationProbe
 {
     public int Invocations { get; set; }
 }
 
-sealed class ContractLocalValidatedHandler(ContractValidationProbe probe) : IRequestHandler<ContractLocalValidatedRequest, string>
+sealed class ContractLocalValidatedHandler(ContractValidationProbe probe)
+    : IRequestHandler<ContractLocalValidatedRequest, string>
 {
-    public ValueTask<Result<string>> HandleAsync(IRequestContext<ContractLocalValidatedRequest> context, CancellationToken ct)
+    public ValueTask<Result<string>> HandleAsync(IRequestContext<ContractLocalValidatedRequest> context,
+        CancellationToken ct)
     {
         probe.Invocations++;
         return ValueTask.FromResult(Result<string>.Success(context.Request.Name!));
@@ -249,29 +262,36 @@ sealed class ContractLocalValidatedHandler(ContractValidationProbe probe) : IReq
 
 sealed record ContractValidatedItem([property: Required] string Name);
 
-sealed record ContractNestedValidatedRequest(ContractValidatedItem[] Items, Dictionary<string, ContractValidatedItem> Lookup) : IRequest;
+sealed record ContractNestedValidatedRequest(
+    ContractValidatedItem[] Items,
+    Dictionary<string, ContractValidatedItem> Lookup) : IRequest;
 
 sealed class ContractNestedValidatedHandler : IRequestHandler<ContractNestedValidatedRequest>
 {
-    public ValueTask<Result> HandleAsync(IRequestContext<ContractNestedValidatedRequest> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+    public ValueTask<Result>
+        HandleAsync(IRequestContext<ContractNestedValidatedRequest> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result.Success);
 }
 
 sealed record ContractInterfaceValidatedRequest(IReadOnlyList<ContractValidatedItem> Items) : IRequest;
 
 sealed class ContractInterfaceValidatedHandler : IRequestHandler<ContractInterfaceValidatedRequest>
 {
-    public ValueTask<Result> HandleAsync(IRequestContext<ContractInterfaceValidatedRequest> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+    public ValueTask<Result> HandleAsync(IRequestContext<ContractInterfaceValidatedRequest> context,
+        CancellationToken ct) => ValueTask.FromResult(Result.Success);
 }
 
 sealed record ContractDeniedRequest : IRequest
 {
     [Required]
-    public string Name => throw new InvalidOperationException(GetType().Name + ": validation must not read a denied request.");
+    public string Name =>
+        throw new InvalidOperationException(GetType().Name + ": validation must not read a denied request.");
 }
 
 sealed class ContractDeniedHandler : IRequestHandler<ContractDeniedRequest>
 {
-    public ValueTask<Result> HandleAsync(IRequestContext<ContractDeniedRequest> context, CancellationToken ct) => throw new InvalidOperationException("Handler must not run.");
+    public ValueTask<Result> HandleAsync(IRequestContext<ContractDeniedRequest> context, CancellationToken ct) =>
+        throw new InvalidOperationException("Handler must not run.");
 }
 
 sealed class ContractDeniedAuthorizer : IRequestAuthorizer<ContractDeniedRequest>
@@ -284,5 +304,6 @@ sealed record ContractEnumerableValidatedRequest(IEnumerable<ContractValidatedIt
 
 sealed class ContractEnumerableValidatedHandler : IRequestHandler<ContractEnumerableValidatedRequest>
 {
-    public ValueTask<Result> HandleAsync(IRequestContext<ContractEnumerableValidatedRequest> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+    public ValueTask<Result> HandleAsync(IRequestContext<ContractEnumerableValidatedRequest> context,
+        CancellationToken ct) => ValueTask.FromResult(Result.Success);
 }

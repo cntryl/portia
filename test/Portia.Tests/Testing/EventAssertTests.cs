@@ -68,7 +68,8 @@ public sealed class EventAssertTests
         var actual = new CriteriaRevised(["two"], new RevisionDetails(["c"]));
 
         // Assert
-        var error = Assert.Throws<InvalidOperationException>(() => EventAssert.Equal([first, expected], [first, actual]));
+        var error =
+            Assert.Throws<InvalidOperationException>(() => EventAssert.Equal([first, expected], [first, actual]));
 
         Assert.Contains("[1].CriteriaRevised.Details.Tags[0]", error.Message, StringComparison.Ordinal);
     }
@@ -95,7 +96,8 @@ public sealed class EventAssertTests
     public void ShouldReportMismatchGivenPublicFieldDifference(bool nested)
     {
         // Arrange
-        DomainEvent expected = nested ? new NestedFields(new FieldValue { Extra = 2 }) : new MixedFields(1) { Extra = 2 };
+        DomainEvent expected =
+            nested ? new NestedFields(new FieldValue { Extra = 2 }) : new MixedFields(1) { Extra = 2 };
 
         // Act
         DomainEvent actual = nested ? new NestedFields(new FieldValue { Extra = 3 }) : new MixedFields(1) { Extra = 3 };
@@ -134,7 +136,12 @@ public sealed class EventAssertTests
     sealed class FieldValue
     {
         public int Extra;
-        public int HiddenRead { private get => throw new InvalidOperationException("Non-public getter read."); set => Extra = value; }
+
+        public int HiddenRead
+        {
+            private get => throw new InvalidOperationException("Non-public getter read.");
+            set => Extra = value;
+        }
     }
 
     sealed record NestedFields(FieldValue Details) : DomainEvent;

@@ -157,7 +157,8 @@ public sealed class HttpStreamingConsumerTests
     [InlineData(true, 2)]
     [InlineData(false, 3)]
     [InlineData(true, 3)]
-    public async Task ShouldEnumerateOnceAndDisposeGivenStreamEndingByCompletionCancellationOrFailure(bool sse, int mode)
+    public async Task ShouldEnumerateOnceAndDisposeGivenStreamEndingByCompletionCancellationOrFailure(bool sse,
+        int mode)
     {
         // Arrange
         var expectedFailure = mode != 0;

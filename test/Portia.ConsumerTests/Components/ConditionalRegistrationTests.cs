@@ -12,20 +12,20 @@ public sealed class ConditionalRegistrationTests
     {
         // Arrange
         var source = $$"""
-            using System.Threading;
-            using System.Threading.Tasks;
-            using Cntryl.Portia;
-            public sealed record Command : IRequest;
-            public sealed class Handler : IRequestHandler<Command>
-            {
-                public ValueTask<Result> HandleAsync(IRequestContext<Command> context, CancellationToken ct)
-                    => ValueTask.FromResult(Result.Success);
-            }
-            public static class Scenario
-            {
-                public static string Name(PortiaBuilder app) => nameof({{member}});
-            }
-            """;
+                       using System.Threading;
+                       using System.Threading.Tasks;
+                       using Cntryl.Portia;
+                       public sealed record Command : IRequest;
+                       public sealed class Handler : IRequestHandler<Command>
+                       {
+                           public ValueTask<Result> HandleAsync(IRequestContext<Command> context, CancellationToken ct)
+                               => ValueTask.FromResult(Result.Success);
+                       }
+                       public static class Scenario
+                       {
+                           public static string Name(PortiaBuilder app) => nameof({{member}});
+                       }
+                       """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RegistrationCallInterceptorGenerator());
@@ -44,26 +44,26 @@ public sealed class ConditionalRegistrationTests
         var call = form == "ordinary" ? "app!.AddRequestHandler<Handler>();" : "app?.AddRequestHandler<Handler>();";
         var receiver = form == "null_receiver" ? "null" : "new ServiceCollection().AddPortia()";
         var source = $$"""
-            #nullable enable
-            using System.Threading;
-            using System.Threading.Tasks;
-            using Cntryl.Portia;
-            using Microsoft.Extensions.DependencyInjection;
-            public sealed record Command : IRequest;
-            public sealed class Handler : IRequestHandler<Command>
-            {
-                public ValueTask<Result> HandleAsync(IRequestContext<Command> context, CancellationToken ct)
-                    => ValueTask.FromResult(Result.Success);
-            }
-            public static class Scenario
-            {
-                public static void Run()
-                {
-                    PortiaBuilder? app = {{receiver}};
-                    {{call}}
-                }
-            }
-            """;
+                       #nullable enable
+                       using System.Threading;
+                       using System.Threading.Tasks;
+                       using Cntryl.Portia;
+                       using Microsoft.Extensions.DependencyInjection;
+                       public sealed record Command : IRequest;
+                       public sealed class Handler : IRequestHandler<Command>
+                       {
+                           public ValueTask<Result> HandleAsync(IRequestContext<Command> context, CancellationToken ct)
+                               => ValueTask.FromResult(Result.Success);
+                       }
+                       public static class Scenario
+                       {
+                           public static void Run()
+                           {
+                               PortiaBuilder? app = {{receiver}};
+                               {{call}}
+                           }
+                       }
+                       """;
         var assembly = GeneratorCompilation.Compile(source, new RegistrationCallInterceptorGenerator());
         var run = assembly.GetType("Scenario")!.GetMethod("Run")!;
 

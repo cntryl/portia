@@ -59,7 +59,8 @@ public sealed class ApplicationContractAnalyzerTests
 
         // Assert
         var behavior = Assert.Single(diagnostics, item => item.Id == "PORTIA209");
-        Assert.Contains("Total", behavior.GetMessage(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        Assert.Contains("Total", behavior.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -92,7 +93,8 @@ public sealed class ApplicationContractAnalyzerTests
         var source = $"{declaration} {{ public Price() {{ }} }}";
 
         // Act
-        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationContractAnalyzer(), [(path, source)]);
+        var diagnostics =
+            ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationContractAnalyzer(), [(path, source)]);
 
         // Assert
         _ = Assert.Single(diagnostics, item => item.Id == "PORTIA209");
@@ -109,10 +111,12 @@ public sealed class ApplicationContractAnalyzerTests
     [InlineData("[Discriminator(\"orders.place__order\", 1)]", "Commands", "IRequest")]
     [InlineData("", "Queries", "IStreamRequest<int>")]
     [InlineData("", "Events", "DomainEvent")]
-    public void ShouldReportWireIdentityGivenMissingOrInvalidDiscriminator(string attribute, string folder, string contract)
+    public void ShouldReportWireIdentityGivenMissingOrInvalidDiscriminator(string attribute, string folder,
+        string contract)
     {
         // Arrange
-        var source = $"using Cntryl.Portia; namespace Shop.Common.Features.Orders.{folder}; {attribute} public record PlaceOrder : {contract};";
+        var source =
+            $"using Cntryl.Portia; namespace Shop.Common.Features.Orders.{folder}; {attribute} public record PlaceOrder : {contract};";
 
         // Act
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationContractAnalyzer(),
@@ -130,7 +134,8 @@ public sealed class ApplicationContractAnalyzerTests
     public void ShouldAllowWireIdentityGivenExplicitFeatureAndVersion(string attribute, string feature)
     {
         // Arrange
-        var source = $"using Cntryl.Portia; namespace Shop.Common.Features.{feature}.Commands; {attribute} public record PlaceOrder : IRequest;";
+        var source =
+            $"using Cntryl.Portia; namespace Shop.Common.Features.{feature}.Commands; {attribute} public record PlaceOrder : IRequest;";
 
         // Act
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationContractAnalyzer(),

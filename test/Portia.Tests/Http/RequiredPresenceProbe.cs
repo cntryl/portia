@@ -10,6 +10,7 @@ sealed record RequiredPresenceRequest(
 
 sealed class RequiredPresenceHandler : IRequestHandler<RequiredPresenceRequest, string>
 {
-    public ValueTask<Result<string>> HandleAsync(IRequestContext<RequiredPresenceRequest> context, CancellationToken ct) =>
+    public ValueTask<Result<string>>
+        HandleAsync(IRequestContext<RequiredPresenceRequest> context, CancellationToken ct) =>
         ValueTask.FromResult(Result<string>.Success(context.Request.Name!));
 }

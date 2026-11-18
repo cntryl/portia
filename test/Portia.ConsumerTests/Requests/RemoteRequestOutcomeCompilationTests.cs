@@ -89,20 +89,20 @@ public sealed class RemoteRequestOutcomeCompilationTests
             ? $"{outcome}.OutcomeUnknown unknown => unknown.Kind.ToString(),"
             : string.Empty;
         var source = $$"""
-            using Cntryl.Portia;
+                       using Cntryl.Portia;
 
-            public static class Consumer
-            {
-                public static string Describe({{outcome}} outcome) => outcome switch
-                {
-                    {{outcome}}.Completed completed => completed.Result.IsSuccess
-                        ? {{completed}} : "rejected:" + completed.Result.Error!.Message,
-                    {{outcome}}.NotDispatched rejected => rejected.Kind.ToString(),
-                    {{outcome}}.CancellationForwarded cancellation => cancellation.Kind.ToString(),
-                    {{unknown}}
-                };
-            }
-            """;
+                       public static class Consumer
+                       {
+                           public static string Describe({{outcome}} outcome) => outcome switch
+                           {
+                               {{outcome}}.Completed completed => completed.Result.IsSuccess
+                                   ? {{completed}} : "rejected:" + completed.Result.Error!.Message,
+                               {{outcome}}.NotDispatched rejected => rejected.Kind.ToString(),
+                               {{outcome}}.CancellationForwarded cancellation => cancellation.Kind.ToString(),
+                               {{unknown}}
+                           };
+                       }
+                       """;
         var directory = Path.Combine(Path.GetTempPath(), "portia-outcome-consumer-" + Guid.NewGuid().ToString("N"));
         _ = Directory.CreateDirectory(directory);
         try

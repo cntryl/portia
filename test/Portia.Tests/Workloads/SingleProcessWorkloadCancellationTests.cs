@@ -74,7 +74,9 @@ public sealed class SingleProcessWorkloadCancellationTests
                 {
                 }
                 catch (AggregateException error) when (throwOnCancellation && error.Flatten().InnerExceptions
-                    .Any(exception => exception.Message == "application cancellation callback failed"))
+                                                           .Any(exception =>
+                                                               exception.Message ==
+                                                               "application cancellation callback failed"))
                 {
                 }
             }
@@ -124,6 +126,7 @@ public sealed class SingleProcessWorkloadCancellationTests
                     throw new IOException("asynchronous workload cleanup failed");
 #pragma warning restore CA2219
                 }
+
                 siblingStopped.TrySetResult();
             }
         }, lifetime.Token);
@@ -151,9 +154,10 @@ public sealed class SingleProcessWorkloadCancellationTests
                     await lifetime.CancelAsync();
                 }
                 catch (AggregateException error) when (error.Flatten().InnerExceptions.Any(failure =>
-                    failure.Message == "cancellation callback failed"))
+                                                           failure.Message == "cancellation callback failed"))
                 {
                 }
+
                 try
                 {
                     await run.WaitAsync(TimeSpan.FromSeconds(5));

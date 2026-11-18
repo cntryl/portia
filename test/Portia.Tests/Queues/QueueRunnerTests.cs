@@ -59,7 +59,8 @@ public sealed class QueueRunnerTests
 
         // Act
         var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
-            busHost.Bus, new TestRequestActorValidator(), options: new QueueRunnerOptions { RetryDelay = TimeSpan.Zero }));
+            busHost.Bus, new TestRequestActorValidator(),
+            options: new QueueRunnerOptions { RetryDelay = TimeSpan.Zero }));
 
         // Assert
         _ = await Assert.ThrowsAsync<IOException>(() => runner.RunAsync());
@@ -108,7 +109,8 @@ public sealed class QueueRunnerTests
         var queued = new FakeQueuedRequest(new ChangeValue(1), throwOnAcknowledge: !lost,
             reservation: reservation.Token);
         var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
-            busHost.Bus, new TestRequestActorValidator(), options: new QueueRunnerOptions { RetryDelay = TimeSpan.Zero }));
+            busHost.Bus, new TestRequestActorValidator(),
+            options: new QueueRunnerOptions { RetryDelay = TimeSpan.Zero }));
 
         // Act
         await runner.RunAsync();
@@ -131,8 +133,11 @@ public sealed class QueueRunnerTests
         var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
         var request = new RequestIdentityTests.IdentifiedCommand(Uuid.CreateVersion4());
         var metadata = RequestMetadata.FromRequest(request);
-        var items = new[] { new FakeQueuedRequest(request, metadata: metadata),
-            new FakeQueuedRequest(request, attempt: 2, metadata: metadata) };
+        var items = new[]
+        {
+            new FakeQueuedRequest(request, metadata: metadata),
+            new FakeQueuedRequest(request, attempt: 2, metadata: metadata)
+        };
         var runner = new QueueRunner(new FakeQueueConsumer(items), RequestDeliveryScopes.FixedQueue(
             bus, new TestRequestActorValidator(), terminalHandler: new RecordingTerminalHandler()));
 
@@ -162,14 +167,16 @@ public sealed class QueueRunnerTests
         using var capture = new RunnerExportCapture();
         using var caller = ambient ? new Activity("unrelated-caller").Start() : null;
         using var busHost = TestRequestBus.Create(telemetryFailureActionHandler:
-            mode == "fault" ? new TelemetryFailureActionHandler(new InvalidOperationException("Controlled handler fault.")) : null);
+            mode == "fault"
+                ? new TelemetryFailureActionHandler(new InvalidOperationException("Controlled handler fault."))
+                : null);
         var items = Enumerable.Range(1, 2).Select(value => (IQueuedRequest)new FakeQueuedRequest(
             mode is "terminal" or "terminal-ack" ? new InvalidChangeValue(value)
-                : mode == "fault" ? new TelemetryFailureAction() : new ChangeValue(value),
+            : mode == "fault" ? new TelemetryFailureAction() : new ChangeValue(value),
             throwOnAcknowledge: mode is "ack" or "terminal-ack",
             traceContext: ambient ? new RequestTraceContext(RunnerExportCapture.Parent) : null)).ToArray();
         var runner = new QueueRunner(new FakeQueueConsumer(items), RequestDeliveryScopes.FixedQueue(
-            busHost.Bus, new TestRequestActorValidator(), terminalHandler: new RecordingTerminalHandler()),
+                busHost.Bus, new TestRequestActorValidator(), terminalHandler: new RecordingTerminalHandler()),
             capture.Logger<QueueRunner>());
 
         // Act
@@ -181,7 +188,8 @@ public sealed class QueueRunnerTests
         capture.AssertCorrelated(terminal ? 1005 : 1002,
             terminal ? LogLevel.Warning : LogLevel.Error, 2);
         if (ambient)
-            Assert.All(capture.Activities.Where(activity => activity.OperationName == PortiaTelemetry.ProcessActivityName),
+            Assert.All(
+                capture.Activities.Where(activity => activity.OperationName == PortiaTelemetry.ProcessActivityName),
                 process => Assert.True(Assert.Single(process.Links).Context.IsRemote));
     }
 
@@ -194,8 +202,10 @@ public sealed class QueueRunnerTests
         using var caller = new Activity("unrelated-concurrent-caller").Start();
         using var busHost = TestRequestBus.Create(telemetryFailureActionHandler:
             new TelemetryFailureActionHandler(new InvalidOperationException("Controlled concurrent fault.")));
+
         Task RunAsync() => new QueueRunner(new FakeQueueConsumer([new FakeQueuedRequest(new TelemetryFailureAction())]),
-            RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator(), terminalHandler: new RecordingTerminalHandler()),
+            RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator(),
+                terminalHandler: new RecordingTerminalHandler()),
             capture.Logger<QueueRunner>()).RunAsync();
 
         // Act

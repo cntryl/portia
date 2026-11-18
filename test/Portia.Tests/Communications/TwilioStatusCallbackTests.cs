@@ -30,7 +30,8 @@ public sealed class TwilioStatusCallbackTests
         using var client = app.GetTestClient();
         var path = await CallbackPathAsync();
         var form = Form(status);
-        using var request = Request(path, form, Sign(PublicAddress.GetLeftPart(UriPartial.Authority) + path, form, AuthToken));
+        using var request = Request(path, form,
+            Sign(PublicAddress.GetLeftPart(UriPartial.Authority) + path, form, AuthToken));
 
         // Act
         using var response = await client.SendAsync(request);
@@ -103,7 +104,8 @@ public sealed class TwilioStatusCallbackTests
         using var client = app.GetTestClient();
         var path = await CallbackPathAsync();
         var form = Form("delivered");
-        using var request = Request(path, form, Sign(PublicAddress.GetLeftPart(UriPartial.Authority) + path, form, AuthToken));
+        using var request = Request(path, form,
+            Sign(PublicAddress.GetLeftPart(UriPartial.Authority) + path, form, AuthToken));
 
         // Act
         var exception = await Record.ExceptionAsync(async () => await client.SendAsync(request));
@@ -136,7 +138,8 @@ public sealed class TwilioStatusCallbackTests
         foreach (var (key, value) in form.OrderBy(pair => pair.Key, StringComparer.Ordinal))
             _ = text.Append(key).Append(value);
 #pragma warning disable CA5350 // Twilio defines the callback signature as HMAC-SHA1.
-        return Convert.ToBase64String(HMACSHA1.HashData(Encoding.UTF8.GetBytes(token), Encoding.UTF8.GetBytes(text.ToString())));
+        return Convert.ToBase64String(HMACSHA1.HashData(Encoding.UTF8.GetBytes(token),
+            Encoding.UTF8.GetBytes(text.ToString())));
 #pragma warning restore CA5350
     }
 
@@ -165,7 +168,8 @@ public sealed class TwilioStatusCallbackTests
     sealed class Resolver : ITwilioTenantResolver
     {
         public ValueTask<TwilioTenant> ResolveAsync(TenantId tenantId, CancellationToken ct = default) =>
-            ValueTask.FromResult(new TwilioTenant(AccountSid, "SKkey", "secret", "MGservice") { AuthToken = AuthToken });
+            ValueTask.FromResult(new TwilioTenant(AccountSid, "SKkey", "secret", "MGservice")
+            { AuthToken = AuthToken });
     }
 
     sealed class CaptureHandler : HttpMessageHandler
@@ -177,7 +181,8 @@ public sealed class TwilioStatusCallbackTests
             var form = await request.Content!.ReadAsStringAsync(ct);
             StatusCallback = form.Split('&').Select(pair => pair.Split('=', 2))
                 .Where(pair => pair[0] == "StatusCallback").Select(pair => WebUtility.UrlDecode(pair[1])).Single();
-            return new HttpResponseMessage(HttpStatusCode.Created) { Content = new StringContent("""{"sid":"SM123"}""") };
+            return new HttpResponseMessage(HttpStatusCode.Created)
+            { Content = new StringContent("""{"sid":"SM123"}""") };
         }
     }
 

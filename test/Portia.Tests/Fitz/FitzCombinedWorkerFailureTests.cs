@@ -68,6 +68,7 @@ public sealed class FitzCombinedWorkerFailureTests(FitzBrokerFixture broker)
             catch (TerminalHandlerFailureException)
             {
             }
+
             worker.Dispose();
         }
     }

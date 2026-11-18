@@ -39,7 +39,8 @@ public sealed class AwsObjectStorageTests
         var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
         var proxy = (TestS3ClientProxy)(object)client;
         proxy.Content = content;
-        var storage = new AwsObjectStorage(client, resolver, new EphemeralDataProtectionProvider().CreateProtector("layout"));
+        var storage = new AwsObjectStorage(client, resolver,
+            new EphemeralDataProtectionProvider().CreateProtector("layout"));
         var session = await storage.CreateUploadAsync(tenant, digest);
         resolver.ContentRoot = "moved";
         resolver.UploadRoot = "new-uploads";
@@ -94,7 +95,8 @@ public sealed class AwsObjectStorageTests
         Assert.Equal(ServerSideEncryptionMethod.AWSKMS, proxy.CopyRequest?.ServerSideEncryptionMethod);
         Assert.Equal("alias/tenant-one-key", proxy.CopyRequest?.ServerSideEncryptionKeyManagementServiceKeyId);
         Assert.Equal(digest.Sha256, proxy.CopyRequest?.Metadata["portia-sha256"]);
-        Assert.Equal(digest.Length.ToString(System.Globalization.CultureInfo.InvariantCulture), proxy.CopyRequest?.Metadata["portia-length"]);
+        Assert.Equal(digest.Length.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            proxy.CopyRequest?.Metadata["portia-length"]);
         Assert.Equal(1, proxy.AbortCount);
         Assert.Equal(1, proxy.StagingDeleteCount);
     }
@@ -161,7 +163,8 @@ public sealed class AwsObjectStorageTests
         var storage = new AwsObjectStorage(
             client,
             new TestTenantResolver(),
-            provider.GetRequiredService<IDataProtectionProvider>().CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1"));
+            provider.GetRequiredService<IDataProtectionProvider>()
+                .CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1"));
 
         // Act
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
@@ -192,7 +195,8 @@ public sealed class AwsObjectStorageTests
         var storage = new AwsObjectStorage(
             client,
             new TestTenantResolver(),
-            provider.GetRequiredService<IDataProtectionProvider>().CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1"));
+            provider.GetRequiredService<IDataProtectionProvider>()
+                .CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1"));
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
         var parts = new[] { new ObjectPartReceipt(1, "etag") };
 
@@ -226,7 +230,8 @@ public sealed class AwsObjectStorageTests
         var storage = new AwsObjectStorage(
             client,
             new TestTenantResolver(),
-            provider.GetRequiredService<IDataProtectionProvider>().CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1"));
+            provider.GetRequiredService<IDataProtectionProvider>()
+                .CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1"));
 
         // Act
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
@@ -621,7 +626,8 @@ public sealed class AwsObjectStorageTests
         return new AwsObjectStorage(
             client,
             new TestTenantResolver(),
-            provider.GetRequiredService<IDataProtectionProvider>().CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1"));
+            provider.GetRequiredService<IDataProtectionProvider>()
+                .CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1"));
     }
 
     /// <summary>A tenant-to-bucket and KMS mapping used by the request-boundary tests.</summary>
@@ -752,7 +758,8 @@ public sealed class AwsObjectStorageTests
 
             return responseType is null
                 ? response
-                : typeof(Task).GetMethod(nameof(Task.FromResult))!.MakeGenericMethod(responseType).Invoke(null, [response]);
+                : typeof(Task).GetMethod(nameof(Task.FromResult))!.MakeGenericMethod(responseType)
+                    .Invoke(null, [response]);
         }
 
         static object Box<T>(T value) where T : notnull => value;
@@ -774,15 +781,18 @@ public sealed class AwsObjectStorageTests
             var key = args[0] is GetObjectRequest request ? request.Key : args.ElementAtOrDefault(1) as string;
             if (MissingPromotedObjectOnGet && key?.StartsWith("content/", StringComparison.Ordinal) == true)
             {
-                throw new AmazonS3Exception("The promoted object was deleted.") { StatusCode = System.Net.HttpStatusCode.NotFound };
+                throw new AmazonS3Exception("The promoted object was deleted.")
+                { StatusCode = System.Net.HttpStatusCode.NotFound };
             }
 
             if (StagingObjectMissing)
             {
-                throw new AmazonS3Exception("The staging object does not exist.") { StatusCode = System.Net.HttpStatusCode.NotFound };
+                throw new AmazonS3Exception("The staging object does not exist.")
+                { StatusCode = System.Net.HttpStatusCode.NotFound };
             }
 
-            return new GetObjectResponse { ETag = "\"staged-etag\"", ResponseStream = new MemoryStream(Content, writable: false) };
+            return new GetObjectResponse
+            { ETag = "\"staged-etag\"", ResponseStream = new MemoryStream(Content, writable: false) };
         }
 
         CopyObjectResponse CaptureCopy(object?[] args)
@@ -853,13 +863,15 @@ public sealed class AwsObjectStorageTests
         {
             if (MissingObject)
             {
-                throw new AmazonS3Exception("The object does not exist.") { StatusCode = System.Net.HttpStatusCode.NotFound };
+                throw new AmazonS3Exception("The object does not exist.")
+                { StatusCode = System.Net.HttpStatusCode.NotFound };
             }
 
             var response = new GetObjectMetadataResponse { ContentLength = Content.LongLength };
             if (PromotedObjectExists || ExistingObject)
             {
-                response.Metadata["portia-sha256"] = MetadataDigest ?? Convert.ToHexString(SHA256.HashData(Content)).ToLowerInvariant();
+                response.Metadata["portia-sha256"] =
+                    MetadataDigest ?? Convert.ToHexString(SHA256.HashData(Content)).ToLowerInvariant();
             }
 
             return response;
@@ -888,7 +900,9 @@ public sealed class AwsObjectStorageTests
 
         DeleteObjectResponse CountDelete(object?[] args)
         {
-            var key = args[0] is DeleteObjectRequest deleteRequest ? deleteRequest.Key : args.ElementAtOrDefault(1) as string;
+            var key = args[0] is DeleteObjectRequest deleteRequest
+                ? deleteRequest.Key
+                : args.ElementAtOrDefault(1) as string;
             if (FailStagingDelete && key?.StartsWith("staging/", StringComparison.Ordinal) == true)
             {
                 throw new AmazonS3Exception("We encountered an internal error. Please try again.")
@@ -903,7 +917,8 @@ public sealed class AwsObjectStorageTests
                 StagingDeleteCount++;
                 StagingObjectMissing = true;
             }
-            else if (args[0] is string && args.Length > 1 && ((string)args[1]!).StartsWith("staging/", StringComparison.Ordinal))
+            else if (args[0] is string && args.Length > 1 &&
+                     ((string)args[1]!).StartsWith("staging/", StringComparison.Ordinal))
             {
                 StagingDeleteCount++;
                 StagingObjectMissing = true;

@@ -97,7 +97,8 @@ public sealed class FakeObjectStorageTests
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await store.SignPartAsync(session, 1, ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromTicks(1)));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
-            await store.CreateDownloadAsync(new TenantId("tenant-a"), expected, ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromTicks(1)));
+            await store.CreateDownloadAsync(new TenantId("tenant-a"), expected,
+                ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromTicks(1)));
 
         await store.AbortUploadAsync(session);
         Assert.Equal(0, store.ActiveUploadCount);
@@ -271,7 +272,8 @@ public sealed class FakeObjectStorageTests
 
         public void Resume() => _resume.TrySetResult();
 
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
         {
             _readStarted.TrySetResult();
             await _resume.Task.WaitAsync(cancellationToken);

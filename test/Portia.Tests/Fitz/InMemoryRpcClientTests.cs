@@ -31,6 +31,7 @@ public sealed class InMemoryRpcClientTests
         await foreach (var _ in call)
         {
         }
+
         Assert.NotNull(receivedBudget);
         Assert.InRange(receivedBudget.Value, TimeSpan.Zero, TimeSpan.FromMinutes(1) - TimeSpan.FromTicks(1));
         Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation);

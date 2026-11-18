@@ -21,6 +21,7 @@ public sealed class TransportParityTests
     static readonly string[] SuccessfulStages = ["authorized", "before", "guarded", "handled", "after"];
     static readonly string[] DeniedStages = ["authorized", "disposed"];
     static readonly int[] CommittedValues = [1, 2];
+
     [Theory]
     [InlineData("direct")]
     [InlineData("rest")]
@@ -37,10 +38,19 @@ public sealed class TransportParityTests
             .AddMcpTool<QualifiedChange>(tool => tool.ReadOnly().Idempotent())
             .AddMcpTool<QualifiedRead>()
             .AddMcpResource<QualifiedRead, QualifiedState>("qualification://values/{tenant}",
-                values => new QualifiedRead(values["tenant"]), options => { options.Authenticated(); options.AsJson(); })
-            .AddMcpPrompt<QualifiedRead, QualifiedState>("qualification-read", values => new QualifiedRead(values["tenant"]),
+                values => new QualifiedRead(values["tenant"]), options =>
+                {
+                    options.Authenticated();
+                    options.AsJson();
+                })
+            .AddMcpPrompt<QualifiedRead, QualifiedState>("qualification-read",
+                values => new QualifiedRead(values["tenant"]),
                 value => [new McpPromptMessage("user", string.Join(',', value.Values))],
-                options => { options.Authenticated(); options.Required("tenant"); })
+                options =>
+                {
+                    options.Authenticated();
+                    options.Required("tenant");
+                })
             .AddMcpHttp();
         await using var app = builder.Build();
         app.UseExceptionHandler(error => error.Run(context =>
@@ -73,6 +83,7 @@ public sealed class TransportParityTests
             { Command = "dotnet", Arguments = [host, "--qualification"], Name = "Application parity" }),
                 StdioClientOptions.Create());
         }
+
         await using var ownedClient = client;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var token = timeout.Token;
@@ -115,9 +126,11 @@ public sealed class TransportParityTests
             _ = await Assert.ThrowsAnyAsync<Exception>(async () => await client.ReadResourceAsync(
                 $"qualification://values/{QualifiedObservations.OtherTenant}", cancellationToken: token));
             _ = await Assert.ThrowsAnyAsync<Exception>(async () => await client.GetPromptAsync("qualification-read",
-                new Dictionary<string, object?> { ["tenant"] = QualifiedObservations.OtherTenant }, cancellationToken: token));
+                new Dictionary<string, object?> { ["tenant"] = QualifiedObservations.OtherTenant },
+                cancellationToken: token));
             var malformed = await client.CallToolAsync("qualification.change",
-                new Dictionary<string, object?> { ["tenant"] = QualifiedObservations.Tenant }, cancellationToken: token);
+                new Dictionary<string, object?> { ["tenant"] = QualifiedObservations.Tenant },
+                cancellationToken: token);
             Assert.True(malformed.IsError);
             Assert.Equal(6, (await ReadAsync()).Scopes.Length);
         }
@@ -161,8 +174,12 @@ public sealed class TransportParityTests
                     var result = await bus.DispatchAsync(request, bus.CreateContext(Actor()), token);
                     return result.IsSuccess ? (200, result.Value) : (Status(result.Error.Kind.ToString()), null);
                 }
-                catch (IOException) { return (500, null); }
+                catch (IOException)
+                {
+                    return (500, null);
+                }
             }
+
             if (transportName == "rest")
             {
                 using var content = new StringContent(JsonSerializer.Serialize(request, TypeInfo<QualifiedChange>()),
@@ -171,14 +188,18 @@ public sealed class TransportParityTests
                 var body = await response.Content.ReadAsStringAsync(token);
                 Assert.DoesNotContain("sensitive", body, StringComparison.Ordinal);
                 return response.StatusCode == HttpStatusCode.OK
-                    ? (200, JsonSerializer.Deserialize(body, TypeInfo<QualifiedReply>())) : ((int)response.StatusCode, null);
+                    ? (200, JsonSerializer.Deserialize(body, TypeInfo<QualifiedReply>()))
+                    : ((int)response.StatusCode, null);
             }
+
             var input = JsonSerializer.SerializeToElement(request, TypeInfo<QualifiedChange>()).EnumerateObject()
                 .ToDictionary(property => property.Name, property => (object?)property.Value.Clone());
             var call = await client!.CallToolAsync("qualification.change", input, cancellationToken: token);
             if (call.IsError != true)
-                return (200, call.StructuredContent!.Value.GetProperty("result").Deserialize(TypeInfo<QualifiedReply>()));
-            Assert.DoesNotContain(call.Content.OfType<TextContentBlock>(), content => content.Text.Contains("sensitive", StringComparison.Ordinal));
+                return (200,
+                    call.StructuredContent!.Value.GetProperty("result").Deserialize(TypeInfo<QualifiedReply>()));
+            Assert.DoesNotContain(call.Content.OfType<TextContentBlock>(),
+                content => content.Text.Contains("sensitive", StringComparison.Ordinal));
             var failure = JsonSerializer.SerializeToElement(call.Meta!["portia/error"]);
             return (Status(failure.GetProperty("kind").GetString()!), null);
         }
@@ -189,10 +210,14 @@ public sealed class TransportParityTests
             {
                 await using var scope = app.Services.CreateAsyncScope();
                 var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
-                return (await bus.DispatchAsync(new QualifiedRead(QualifiedObservations.Tenant), bus.CreateContext(Actor()), token)).Value;
+                return (await bus.DispatchAsync(new QualifiedRead(QualifiedObservations.Tenant),
+                    bus.CreateContext(Actor()), token)).Value;
             }
+
             if (transportName == "rest")
-                return JsonSerializer.Deserialize(await http.GetStringAsync($"/qualification?tenant={QualifiedObservations.Tenant}", token), TypeInfo<QualifiedState>())!;
+                return JsonSerializer.Deserialize(
+                    await http.GetStringAsync($"/qualification?tenant={QualifiedObservations.Tenant}", token),
+                    TypeInfo<QualifiedState>())!;
             var result = await client!.CallToolAsync("qualification.read", new Dictionary<string, object?>
             { ["tenant"] = QualifiedObservations.Tenant }, cancellationToken: token);
             Assert.False(result.IsError);
@@ -201,8 +226,10 @@ public sealed class TransportParityTests
     }
 
     static ClaimsPrincipal Actor() => new(new ClaimsIdentity(
-        [new Claim(ClaimTypes.Name, QualifiedObservations.Tenant),
-            new Claim(ClaimTypes.NameIdentifier, QualifiedObservations.Tenant, ClaimValueTypes.String, "qualification")], "qualification"));
+    [
+        new Claim(ClaimTypes.Name, QualifiedObservations.Tenant),
+        new Claim(ClaimTypes.NameIdentifier, QualifiedObservations.Tenant, ClaimValueTypes.String, "qualification")
+    ], "qualification"));
 
     static int Status(string kind) => kind switch
     {

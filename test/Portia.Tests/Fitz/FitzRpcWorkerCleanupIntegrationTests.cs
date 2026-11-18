@@ -21,7 +21,7 @@ public sealed class FitzRpcWorkerCleanupIntegrationTests(FitzBrokerFixture broke
     {
         // Arrange
         var endpoint = new Uri(Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT")
-            ?? "ws://127.0.0.1:4090/ws");
+                               ?? "ws://127.0.0.1:4090/ws");
         // Keep domain dispatch parallel enough to expose the independent per-worker limit on any CPU count.
         await using var workerClient = new FitzClient(new ClientConfig(endpoint,
             AsyncHandlers: new AsyncHandlerOptions(MaxConcurrency: 4)));

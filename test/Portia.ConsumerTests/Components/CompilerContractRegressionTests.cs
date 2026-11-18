@@ -16,23 +16,23 @@ public sealed class CompilerContractRegressionTests
     {
         // Arrange
         var source = $$"""
-            using System;
-            using System.Threading.Tasks;
-            using Cntryl.Portia;
-            using Cntryl.Portia.Testing;
-            public sealed record Command : IRequest;
-            public sealed record Query : IRequest<string>;
-            public sealed record Feed : IStreamRequest<string>;
-            public static class Tests
-            {
-                public static async Task Run(IServiceProvider services)
-                {
-                    var value = RequestScenario.For(services).When(new {{request}}());
-                    {{discard}}
-                    await value;
-                }
-            }
-            """;
+                       using System;
+                       using System.Threading.Tasks;
+                       using Cntryl.Portia;
+                       using Cntryl.Portia.Testing;
+                       public sealed record Command : IRequest;
+                       public sealed record Query : IRequest<string>;
+                       public sealed record Feed : IStreamRequest<string>;
+                       public static class Tests
+                       {
+                           public static async Task Run(IServiceProvider services)
+                           {
+                               var value = RequestScenario.For(services).When(new {{request}}());
+                               {{discard}}
+                               await value;
+                           }
+                       }
+                       """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ScenarioObservationAnalyzer());
@@ -47,12 +47,13 @@ public sealed class CompilerContractRegressionTests
     [InlineData("namespace App_A {", "}", "namespace App {", "A_Context")]
     [InlineData("public class App_A {", "}", "public class App {", "A_Context")]
     [InlineData("namespace @App_A {", "}", "namespace @App {", "@A_Context")]
-    public void ShouldCompileGivenDistinctContextIdentities(string firstContainer, string end, string secondContainer, string secondName)
+    public void ShouldCompileGivenDistinctContextIdentities(string firstContainer, string end, string secondContainer,
+        string secondName)
     {
         // Arrange
         var source = ContextUsings + "public sealed record Payload;" +
-            firstContainer + ManualContext("Context") + end +
-            secondContainer + ManualContext(secondName) + end;
+                     firstContainer + ManualContext("Context") + end +
+                     secondContainer + ManualContext(secondName) + end;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new JsonRootMarkerGenerator());
@@ -71,24 +72,33 @@ public sealed class CompilerContractRegressionTests
     [InlineData("", "public", "Context", "private", "", "", "constructor")]
     [InlineData("", "public", "Context", "protected", "", "", "constructor")]
     [InlineData("", "public", "Context", "public", "missing", "", "constructor")]
-    public void ShouldDiagnoseContextWithoutInvalidGeneratedReferencesGivenInvalidContextDeclaration(string prefix, string visibility, string name,
+    public void ShouldDiagnoseContextWithoutInvalidGeneratedReferencesGivenInvalidContextDeclaration(string prefix,
+        string visibility, string name,
         string constructorVisibility, string variant, string suffix, string requirement)
     {
         // A private container is nested so the application declaration itself is legal.
         // Arrange
         if (prefix.StartsWith("private", StringComparison.Ordinal))
-        { prefix = "public class Enclosing { " + prefix; suffix += "}"; }
+        {
+            prefix = "public class Enclosing { " + prefix;
+            suffix += "}";
+        }
+
         var source = ContextUsings + "public sealed record Payload;" + prefix +
-            ManualContext(name, visibility, constructorVisibility, variant == "missing") + suffix;
+                     ManualContext(name, visibility, constructorVisibility, variant == "missing") + suffix;
 
         // Act
-        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new JsonRootMarkerGenerator(), new RegistrationCallInterceptorGenerator());
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new JsonRootMarkerGenerator(),
+            new RegistrationCallInterceptorGenerator());
 
         // Assert
         var diagnostic = Assert.Single(diagnostics, d => d.Id == "PORTIA030");
-        Assert.Contains(requirement, diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(requirement, diagnostic.GetMessage(CultureInfo.InvariantCulture),
+            StringComparison.OrdinalIgnoreCase);
         Assert.Equal("OutputDiagnosticScenario.cs", diagnostic.Location.GetLineSpan().Path);
-        Assert.DoesNotContain(diagnostics, d => d.Location.GetLineSpan().Path.EndsWith(".g.cs", StringComparison.Ordinal) && d.Severity == DiagnosticSeverity.Error);
+        Assert.DoesNotContain(diagnostics,
+            d => d.Location.GetLineSpan().Path.EndsWith(".g.cs", StringComparison.Ordinal) &&
+                 d.Severity == DiagnosticSeverity.Error);
     }
 
     [Fact]
@@ -96,42 +106,52 @@ public sealed class CompilerContractRegressionTests
     {
         // Arrange
         const string source = """
-            public sealed record Payload;
-            [PortiaJsonContext, JsonSerializable(typeof(Payload))]
-            public class Context { public Context(JsonSerializerOptions options) { } }
-            """;
+                              public sealed record Payload;
+                              [PortiaJsonContext, JsonSerializable(typeof(Payload))]
+                              public class Context { public Context(JsonSerializerOptions options) { } }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(ContextUsings + source, new JsonRootMarkerGenerator());
 
         // Assert
-        Assert.Single(diagnostics, d => d.Id == "PORTIA030" && d.GetMessage(CultureInfo.InvariantCulture).Contains("JsonSerializerContext", StringComparison.Ordinal));
+        Assert.Single(diagnostics,
+            d => d.Id == "PORTIA030" && d.GetMessage(CultureInfo.InvariantCulture)
+                .Contains("JsonSerializerContext", StringComparison.Ordinal));
         Assert.DoesNotContain(diagnostics, d => d.Id == "CS0029");
     }
 
     [Theory]
-    [InlineData("Func<IEndpointRouteBuilder, string, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaGet<Command>;")]
-    [InlineData("Func<IEndpointRouteBuilder, string, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaPost<Query, string>;")]
-    [InlineData("Func<IEndpointRouteBuilder, string, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaGetStream<Feed, string>;")]
-    [InlineData("Func<IEndpointRouteBuilder, string, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaGetSse<Feed, string>;")]
-    [InlineData("Func<IEndpointRouteBuilder, string, Action<PortiaEndpointConfiguration<Command>>, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaPost<Command>;")]
-    [InlineData("Func<IEndpointRouteBuilder, string, Action<PortiaEndpointConfiguration<Query, string>>, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaPost<Query, string>;")]
-    [InlineData("Func<IEndpointRouteBuilder, string, Action<PortiaStreamingEndpointConfiguration<Feed>>, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaGetSse<Feed, string>;")]
-    [InlineData("System.Linq.Expressions.Expression<Func<IEndpointRouteBuilder, IEndpointConventionBuilder>> map = routes => routes.MapPortiaGet<Command>(\"/query\");")]
+    [InlineData(
+        "Func<IEndpointRouteBuilder, string, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaGet<Command>;")]
+    [InlineData(
+        "Func<IEndpointRouteBuilder, string, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaPost<Query, string>;")]
+    [InlineData(
+        "Func<IEndpointRouteBuilder, string, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaGetStream<Feed, string>;")]
+    [InlineData(
+        "Func<IEndpointRouteBuilder, string, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaGetSse<Feed, string>;")]
+    [InlineData(
+        "Func<IEndpointRouteBuilder, string, Action<PortiaEndpointConfiguration<Command>>, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaPost<Command>;")]
+    [InlineData(
+        "Func<IEndpointRouteBuilder, string, Action<PortiaEndpointConfiguration<Query, string>>, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaPost<Query, string>;")]
+    [InlineData(
+        "Func<IEndpointRouteBuilder, string, Action<PortiaStreamingEndpointConfiguration<Feed>>, IEndpointConventionBuilder> map = PortiaEndpointRouteBuilderExtensions.MapPortiaGetSse<Feed, string>;")]
+    [InlineData(
+        "System.Linq.Expressions.Expression<Func<IEndpointRouteBuilder, IEndpointConventionBuilder>> map = routes => routes.MapPortiaGet<Command>(\"/query\");")]
     public void ShouldDiagnoseMappingGivenUnsupportedHttpMappingForm(string statement)
     {
         // Arrange
         var source = $$"""
-            using System;
-            using Cntryl.Portia;
-            using Microsoft.AspNetCore.Builder;
-            using Microsoft.AspNetCore.Routing;
-            using static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions;
-            public sealed record Command : IRequest, ICallable;
-            public sealed record Query : IRequest<string>, ICallable;
-            public sealed record Feed : IStreamRequest<string>, ICallable;
-            public static class Endpoints { public static void Configure() { {{statement}} } }
-            """;
+                       using System;
+                       using Cntryl.Portia;
+                       using Microsoft.AspNetCore.Builder;
+                       using Microsoft.AspNetCore.Routing;
+                       using static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions;
+                       public sealed record Command : IRequest, ICallable;
+                       public sealed record Query : IRequest<string>, ICallable;
+                       public sealed record Feed : IStreamRequest<string>, ICallable;
+                       public static class Endpoints { public static void Configure() { {{statement}} } }
+                       """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
@@ -139,7 +159,8 @@ public sealed class CompilerContractRegressionTests
         // Assert
         var diagnostic = Assert.Single(diagnostics, d => d.Id == "PORTIA016");
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error && d.Id != "PORTIA016");
-        Assert.Contains("direct", diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("direct", diagnostic.GetMessage(CultureInfo.InvariantCulture),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -147,12 +168,13 @@ public sealed class CompilerContractRegressionTests
     {
         // Arrange
         const string endpoints = """
-            public static class Endpoints { public static void Configure(IEndpointRouteBuilder routes) =>
-                routes.MapPortiaGet<Command>("/query"); }
-            """;
+                                 public static class Endpoints { public static void Configure(IEndpointRouteBuilder routes) =>
+                                     routes.MapPortiaGet<Command>("/query"); }
+                                 """;
 
         // Act
-        var valid = GeneratorCompilation.OutputDiagnostics(StaticImportPrefix + endpoints, new RequestHttpBindingGenerator());
+        var valid = GeneratorCompilation.OutputDiagnostics(StaticImportPrefix + endpoints,
+            new RequestHttpBindingGenerator());
 
         // Assert
         Assert.DoesNotContain(valid, d => d.Severity == DiagnosticSeverity.Error);
@@ -163,49 +185,54 @@ public sealed class CompilerContractRegressionTests
     {
         // Arrange
         const string endpoints = """
-            public static class Endpoints { public static void Configure() {
-                Func<IEndpointRouteBuilder, string, IEndpointConventionBuilder> map = MapPortiaGet<Command>;
-            } }
-            """;
+                                 public static class Endpoints { public static void Configure() {
+                                     Func<IEndpointRouteBuilder, string, IEndpointConventionBuilder> map = MapPortiaGet<Command>;
+                                 } }
+                                 """;
 
         // Act
-        var invalid = GeneratorCompilation.OutputDiagnostics(StaticImportPrefix + endpoints, new RequestHttpBindingGenerator());
+        var invalid =
+            GeneratorCompilation.OutputDiagnostics(StaticImportPrefix + endpoints, new RequestHttpBindingGenerator());
 
         // Assert
         Assert.Single(invalid, d => d.Id == "CS0103");
     }
 
     const string StaticImportPrefix = """
-        using System;
-        using Cntryl.Portia;
-        using Microsoft.AspNetCore.Builder;
-        using Microsoft.AspNetCore.Routing;
-        using static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions;
-        public sealed record Command : IRequest, ICallable;
-        """;
+                                      using System;
+                                      using Cntryl.Portia;
+                                      using Microsoft.AspNetCore.Builder;
+                                      using Microsoft.AspNetCore.Routing;
+                                      using static Cntryl.Portia.PortiaEndpointRouteBuilderExtensions;
+                                      public sealed record Command : IRequest, ICallable;
+                                      """;
 
     [Fact]
     public void ShouldComposeFactoriesGivenAssembliesWhoseNamesSanitizeIdentically()
     {
         // Arrange
-        var source = ContextUsings + ManualContext("Context").Replace("typeof(Payload)", "typeof(string)", StringComparison.Ordinal);
+        var source = ContextUsings + ManualContext("Context")
+            .Replace("typeof(Payload)", "typeof(string)", StringComparison.Ordinal);
         var first = GeneratorCompilation.ReferenceNamed("Contracts_A", source, new JsonRootMarkerGenerator());
         var second = GeneratorCompilation.ReferenceNamed("Contracts.A", source, new JsonRootMarkerGenerator());
         const string consumer = """
-            using Cntryl.Portia;
-            using Microsoft.Extensions.DependencyInjection;
-            public static class App { public static void Configure(IServiceCollection services) => services.AddPortia(); }
-            """;
+                                using Cntryl.Portia;
+                                using Microsoft.Extensions.DependencyInjection;
+                                public static class App { public static void Configure(IServiceCollection services) => services.AddPortia(); }
+                                """;
 
         // Act
-        var diagnostics = GeneratorCompilation.OutputDiagnostics(consumer, [first, second], new RegistrationCallInterceptorGenerator());
+        var diagnostics =
+            GeneratorCompilation.OutputDiagnostics(consumer, [first, second],
+                new RegistrationCallInterceptorGenerator());
 
         // Assert
         Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error);
-        var output = GeneratorCompilation.GeneratedSource(consumer, [first, second], new RegistrationCallInterceptorGenerator());
+        var output =
+            GeneratorCompilation.GeneratedSource(consumer, [first, second], new RegistrationCallInterceptorGenerator());
         var control = GeneratorCompilation.GeneratedSource(consumer, new RegistrationCallInterceptorGenerator());
         Assert.Equal(2, output.Split(".Create(options)", StringSplitOptions.None).Length
-            - control.Split(".Create(options)", StringSplitOptions.None).Length);
+                        - control.Split(".Create(options)", StringSplitOptions.None).Length);
     }
 
     [Fact]
@@ -217,8 +244,10 @@ public sealed class CompilerContractRegressionTests
         var prefix = ContextUsings + "public sealed record Payload;";
 
         // Act
-        var firstThenSecond = GeneratorCompilation.GeneratedSource(prefix + first + second, new JsonRootMarkerGenerator());
-        var secondThenFirst = GeneratorCompilation.GeneratedSource(prefix + second + first, new JsonRootMarkerGenerator());
+        var firstThenSecond =
+            GeneratorCompilation.GeneratedSource(prefix + first + second, new JsonRootMarkerGenerator());
+        var secondThenFirst =
+            GeneratorCompilation.GeneratedSource(prefix + second + first, new JsonRootMarkerGenerator());
 
         // Assert
         Assert.Equal(firstThenSecond, secondThenFirst);
@@ -229,27 +258,29 @@ public sealed class CompilerContractRegressionTests
     {
         // Arrange
         var reference = GeneratorCompilation.Reference(ContextUsings + """
-            [assembly: PortiaJsonRootAttribute(typeof(string), typeof(Context), typeof(LegacyFactory))]
-            internal class Context : JsonSerializerContext
-            {
-                public Context(JsonSerializerOptions options) : base(options) { }
-                protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
-                public override JsonTypeInfo? GetTypeInfo(Type type) => null;
-            }
-            public static class LegacyFactory
-            {
-                public static JsonSerializerContext Create(JsonSerializerOptions options) => new Context(options);
-            }
-            """);
+                                                                       [assembly: PortiaJsonRootAttribute(typeof(string), typeof(Context), typeof(LegacyFactory))]
+                                                                       internal class Context : JsonSerializerContext
+                                                                       {
+                                                                           public Context(JsonSerializerOptions options) : base(options) { }
+                                                                           protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                                                                           public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                                                                       }
+                                                                       public static class LegacyFactory
+                                                                       {
+                                                                           public static JsonSerializerContext Create(JsonSerializerOptions options) => new Context(options);
+                                                                       }
+                                                                       """);
         var consumer = """
-            using Cntryl.Portia;
-            using Microsoft.Extensions.DependencyInjection;
-            public static class App { public static void Configure(IServiceCollection services) => services.AddPortia(); }
-            """;
+                       using Cntryl.Portia;
+                       using Microsoft.Extensions.DependencyInjection;
+                       public static class App { public static void Configure(IServiceCollection services) => services.AddPortia(); }
+                       """;
 
         // Act
-        var output = GeneratorCompilation.GeneratedSource(consumer, [reference], new RegistrationCallInterceptorGenerator());
-        var diagnostics = GeneratorCompilation.OutputDiagnostics(consumer, [reference], new RegistrationCallInterceptorGenerator());
+        var output =
+            GeneratorCompilation.GeneratedSource(consumer, [reference], new RegistrationCallInterceptorGenerator());
+        var diagnostics =
+            GeneratorCompilation.OutputDiagnostics(consumer, [reference], new RegistrationCallInterceptorGenerator());
 
         // Assert
         Assert.Contains("global::LegacyFactory.Create(options)", output, StringComparison.Ordinal);
@@ -261,29 +292,29 @@ public sealed class CompilerContractRegressionTests
     {
         // Arrange
         const string source = """
-            using System;
-            using System.Threading.Tasks;
-            using Cntryl.Portia;
-            using Cntryl.Portia.Testing;
-            public sealed record Command : IRequest;
-            public static class Tests
-            {
-                public static async Task Run(IServiceProvider services)
-                {
-                    var value = RequestScenario.For(services).When(new Command());
-                    Func<RequestExpectations> callback = () => value.ExpectDenied();
-                    RequestExpectations _;
-                    _ = value.ExpectDenied();
-                    await _.AsTask();
-                    await callback();
-            #pragma warning disable PORTIA107
-                    _ = RequestScenario.For(services).When(new Command()).ExpectDenied();
-            #pragma warning restore PORTIA107
-                    Action executed = () => value.ExpectDenied().AsTask();
-                    executed();
-                }
-            }
-            """;
+                              using System;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              using Cntryl.Portia.Testing;
+                              public sealed record Command : IRequest;
+                              public static class Tests
+                              {
+                                  public static async Task Run(IServiceProvider services)
+                                  {
+                                      var value = RequestScenario.For(services).When(new Command());
+                                      Func<RequestExpectations> callback = () => value.ExpectDenied();
+                                      RequestExpectations _;
+                                      _ = value.ExpectDenied();
+                                      await _.AsTask();
+                                      await callback();
+                              #pragma warning disable PORTIA107
+                                      _ = RequestScenario.For(services).When(new Command()).ExpectDenied();
+                              #pragma warning restore PORTIA107
+                                      Action executed = () => value.ExpectDenied().AsTask();
+                                      executed();
+                                  }
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new ScenarioObservationAnalyzer());
@@ -297,9 +328,9 @@ public sealed class CompilerContractRegressionTests
     {
         // Arrange
         var source = ContextUsings + """
-            using Microsoft.Extensions.DependencyInjection;
-            public sealed record Payload;
-            """ + ManualContext("InvalidContext", missingConstructor: true) + """
+                                     using Microsoft.Extensions.DependencyInjection;
+                                     public sealed record Payload;
+                                     """ + ManualContext("InvalidContext", missingConstructor: true) + """
             public static class App { public static void Configure(IServiceCollection services) => services.AddPortia(); }
             """;
 
@@ -320,15 +351,16 @@ public sealed class CompilerContractRegressionTests
     {
         // Arrange
         const string source = """
-            [PortiaJsonContext] internal partial class EmptyContext : JsonSerializerContext;
-            """;
+                              [PortiaJsonContext] internal partial class EmptyContext : JsonSerializerContext;
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(ContextUsings + source, new JsonRootMarkerGenerator());
 
         // Assert
         Assert.Single(diagnostics, d => d.Id == "PORTIA030"
-            && d.GetMessage(CultureInfo.InvariantCulture).Contains("JsonSerializable", StringComparison.Ordinal));
+                                        && d.GetMessage(CultureInfo.InvariantCulture)
+                                            .Contains("JsonSerializable", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -336,7 +368,8 @@ public sealed class CompilerContractRegressionTests
     {
         // Arrange
         var source = ContextUsings + "public sealed record Payload;" +
-            ManualContext("Context").Replace("Context(JsonSerializerOptions options)", "Context(JsonSerializerOptions options, bool unused = false)", StringComparison.Ordinal);
+                     ManualContext("Context").Replace("Context(JsonSerializerOptions options)",
+                         "Context(JsonSerializerOptions options, bool unused = false)", StringComparison.Ordinal);
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new JsonRootMarkerGenerator());
@@ -347,24 +380,32 @@ public sealed class CompilerContractRegressionTests
 
     [Theory]
     [InlineData("public required int Value { get; init; }", "required members")]
-    [InlineData("public Context(JsonSerializerOptions options, bool other = false) : base(options) { } public Context(JsonSerializerOptions options, int other = 0) : base(options) { }", "ambiguous")]
-    public void ShouldDiagnoseContextBeforeFactoryEmissionGivenUnusableOptionsConstructor(string member, string expected)
+    [InlineData(
+        "public Context(JsonSerializerOptions options, bool other = false) : base(options) { } public Context(JsonSerializerOptions options, int other = 0) : base(options) { }",
+        "ambiguous")]
+    public void ShouldDiagnoseContextBeforeFactoryEmissionGivenUnusableOptionsConstructor(string member,
+        string expected)
     {
         // Arrange
         var context = ManualContext("Context");
         if (expected == "ambiguous")
-            context = context.Replace("public Context(JsonSerializerOptions options) : base(options) { }", member, StringComparison.Ordinal);
+            context = context.Replace("public Context(JsonSerializerOptions options) : base(options) { }", member,
+                StringComparison.Ordinal);
         else
             context = context.Replace("protected override", member + " protected override", StringComparison.Ordinal);
 
         // Act
-        var diagnostics = GeneratorCompilation.OutputDiagnostics(ContextUsings + "public sealed record Payload;" + context,
+        var diagnostics = GeneratorCompilation.OutputDiagnostics(
+            ContextUsings + "public sealed record Payload;" + context,
             new JsonRootMarkerGenerator());
 
         // Assert
         Assert.Single(diagnostics, d => d.Id == "PORTIA030"
-            && d.GetMessage(CultureInfo.InvariantCulture).Contains(expected, StringComparison.Ordinal));
-        Assert.DoesNotContain(diagnostics, d => d.Severity == DiagnosticSeverity.Error && d.Location.GetLineSpan().Path.EndsWith(".g.cs", StringComparison.Ordinal));
+                                        && d.GetMessage(CultureInfo.InvariantCulture)
+                                            .Contains(expected, StringComparison.Ordinal));
+        Assert.DoesNotContain(diagnostics,
+            d => d.Severity == DiagnosticSeverity.Error &&
+                 d.Location.GetLineSpan().Path.EndsWith(".g.cs", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -372,12 +413,12 @@ public sealed class CompilerContractRegressionTests
     {
         // Arrange
         const string source = """
-            using Cntryl.Portia;
-            using Microsoft.AspNetCore.Routing;
-            public sealed record Command : IRequest, ICallable;
-            /// <summary>See <see cref="PortiaEndpointRouteBuilderExtensions.MapPortiaGet{Command}(IEndpointRouteBuilder, string)"/>.</summary>
-            public static class Documentation { }
-            """;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              public sealed record Command : IRequest, ICallable;
+                              /// <summary>See <see cref="PortiaEndpointRouteBuilderExtensions.MapPortiaGet{Command}(IEndpointRouteBuilder, string)"/>.</summary>
+                              public static class Documentation { }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
@@ -387,26 +428,28 @@ public sealed class CompilerContractRegressionTests
     }
 
     const string ContextUsings = """
-        using System;
-        using System.Text.Json;
-        using System.Text.Json.Serialization;
-        using System.Text.Json.Serialization.Metadata;
-        using Cntryl.Portia;
-        """;
+                                 using System;
+                                 using System.Text.Json;
+                                 using System.Text.Json.Serialization;
+                                 using System.Text.Json.Serialization.Metadata;
+                                 using Cntryl.Portia;
+                                 """;
 
-    static string ManualContext(string name, string visibility = "internal", string constructorVisibility = "public", bool missingConstructor = false)
+    static string ManualContext(string name, string visibility = "internal", string constructorVisibility = "public",
+        bool missingConstructor = false)
     {
         var simple = name.Split('<')[0];
-        var constructor = missingConstructor ? $"public {simple}() : base(null) {{ }}" :
-            $"{constructorVisibility} {simple}(JsonSerializerOptions options) : base(options) {{ }}";
+        var constructor = missingConstructor
+            ? $"public {simple}() : base(null) {{ }}"
+            : $"{constructorVisibility} {simple}(JsonSerializerOptions options) : base(options) {{ }}";
         return $$"""
-            [PortiaJsonContext, JsonSerializable(typeof(Payload))]
-            {{visibility}} class {{name}} : JsonSerializerContext
-            {
-                {{constructor}}
-                protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
-                public override JsonTypeInfo? GetTypeInfo(Type type) => null;
-            }
-            """;
+                 [PortiaJsonContext, JsonSerializable(typeof(Payload))]
+                 {{visibility}} class {{name}} : JsonSerializerContext
+                 {
+                     {{constructor}}
+                     protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
+                     public override JsonTypeInfo? GetTypeInfo(Type type) => null;
+                 }
+                 """;
     }
 }

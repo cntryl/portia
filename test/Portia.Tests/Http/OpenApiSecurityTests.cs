@@ -24,7 +24,8 @@ public sealed class OpenApiSecurityTests
         _ = builder.Services.AddPortia().AddHttp(options =>
         {
             foreach (var name in (string[])["a", "b", "c"])
-                options.OpenApi.SecuritySchemes.Add(name, new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
+                options.OpenApi.SecuritySchemes.Add(name,
+                    new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
             _ = options.OpenApi.SecurityPolicy("either", new Dictionary<string, string[]> { ["a"] = [] },
                 new Dictionary<string, string[]> { ["b"] = [] });
             _ = options.OpenApi.SecurityFor<ContractMetadataRequest>("c");
@@ -64,11 +65,13 @@ public sealed class OpenApiSecurityTests
             _ = options.OpenApi.SecurityPolicy("a", "a");
             _ = options.OpenApi.SecurityPolicy("b", "b");
             foreach (var name in (string[])["a", "b"])
-                options.OpenApi.SecuritySchemes.Add(name, new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
+                options.OpenApi.SecuritySchemes.Add(name,
+                    new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
         }).AddRequestHandler<ContractMetadataHandler>();
         await using var app = builder.Build();
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
-        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/composed").RequireAuthorization("a", "b");
+        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/composed")
+            .RequireAuthorization("a", "b");
         await app.StartAsync();
 
         // Act
@@ -87,16 +90,20 @@ public sealed class OpenApiSecurityTests
         // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
-        _ = builder.Services.AddAuthorization(options => options.AddPolicy("composite", policy => policy.RequireClaim("a").RequireClaim("b")));
+        _ = builder.Services.AddAuthorization(options =>
+            options.AddPolicy("composite", policy => policy.RequireClaim("a").RequireClaim("b")));
         _ = builder.Services.AddPortia().AddHttp(options =>
         {
-            _ = options.OpenApi.SecurityPolicy("composite", new Dictionary<string, string[]> { ["a"] = [], ["b"] = [] });
+            _ = options.OpenApi.SecurityPolicy("composite",
+                new Dictionary<string, string[]> { ["a"] = [], ["b"] = [] });
             foreach (var name in (string[])["a", "b"])
-                options.OpenApi.SecuritySchemes.Add(name, new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
+                options.OpenApi.SecuritySchemes.Add(name,
+                    new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
         }).AddRequestHandler<ContractMetadataHandler>();
         await using var app = builder.Build();
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
-        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/composite").RequireAuthorization("composite");
+        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/composite")
+            .RequireAuthorization("composite");
         await app.StartAsync();
 
         // Act
@@ -125,7 +132,8 @@ public sealed class OpenApiSecurityTests
                 options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
         });
         _ = builder.Services.AddPortia().AddHttp(options => options.OpenApi.SecuritySchemes.Add("session",
-            new OpenApiSecurityScheme { Type = SecuritySchemeType.ApiKey, In = ParameterLocation.Cookie, Name = "session" }))
+                new OpenApiSecurityScheme
+                { Type = SecuritySchemeType.ApiKey, In = ParameterLocation.Cookie, Name = "session" }))
             .AddRequestHandler<ContractMetadataHandler>();
         await using var app = builder.Build();
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
@@ -152,12 +160,15 @@ public sealed class OpenApiSecurityTests
         _ = builder.Services.AddAuthorization();
         _ = builder.Services.AddPortia().AddHttp(options =>
         {
-            options.OpenApi.SecuritySchemes.Add("api", new OpenApiSecurityScheme { Type = SecuritySchemeType.ApiKey, In = ParameterLocation.Header, Name = "X-Key" });
+            options.OpenApi.SecuritySchemes.Add("api",
+                new OpenApiSecurityScheme
+                { Type = SecuritySchemeType.ApiKey, In = ParameterLocation.Header, Name = "X-Key" });
             _ = options.OpenApi.SecurityFor<ContractMetadataRequest>("api");
         }).AddRequestHandler<ContractMetadataHandler>();
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
-        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/core").RequireAuthorization().AllowAnonymous();
+        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/core").RequireAuthorization()
+            .AllowAnonymous();
         await app.StartAsync();
 
         // Act
@@ -175,11 +186,13 @@ public sealed class OpenApiSecurityTests
         // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
-        _ = builder.Services.AddAuthorization(options => options.AddPolicy("missing", policy => policy.RequireAuthenticatedUser()));
+        _ = builder.Services.AddAuthorization(options =>
+            options.AddPolicy("missing", policy => policy.RequireAuthenticatedUser()));
         _ = builder.Services.AddPortia().AddHttp().AddRequestHandler<ContractMetadataHandler>();
         await using var app = builder.Build();
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
-        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/missing").RequireAuthorization("missing");
+        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/missing")
+            .RequireAuthorization("missing");
         await app.StartAsync();
 
         // Act
@@ -190,6 +203,7 @@ public sealed class OpenApiSecurityTests
         Assert.Contains("SecurityPolicy", failure.Message, StringComparison.Ordinal);
         Assert.Contains("missing", failure.Message, StringComparison.Ordinal);
     }
+
     /// <summary>An explicitly anonymous alternative stays optional alongside a credential alternative.</summary>
     [Fact]
     public async Task ShouldRetainAnonymousAlternativeGivenOptionalCredentialMapping()
@@ -197,16 +211,20 @@ public sealed class OpenApiSecurityTests
         // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
-        _ = builder.Services.AddAuthorization(options => options.AddPolicy("optional", policy => policy.RequireAssertion(_ => true)));
+        _ = builder.Services.AddAuthorization(options =>
+            options.AddPolicy("optional", policy => policy.RequireAssertion(_ => true)));
         _ = builder.Services.AddPortia().AddHttp(options =>
         {
-            options.OpenApi.SecuritySchemes.Add("api", new OpenApiSecurityScheme { Type = SecuritySchemeType.ApiKey, In = ParameterLocation.Header, Name = "X-Key" });
+            options.OpenApi.SecuritySchemes.Add("api",
+                new OpenApiSecurityScheme
+                { Type = SecuritySchemeType.ApiKey, In = ParameterLocation.Header, Name = "X-Key" });
             _ = options.OpenApi.SecurityPolicy("optional", new Dictionary<string, string[]>(),
                 new Dictionary<string, string[]> { ["api"] = [] });
         }).AddRequestHandler<ContractMetadataHandler>();
         await using var app = builder.Build();
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
-        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/optional").RequireAuthorization("optional");
+        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/optional")
+            .RequireAuthorization("optional");
         await app.StartAsync();
 
         // Act
@@ -226,10 +244,12 @@ public sealed class OpenApiSecurityTests
         // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
-        _ = builder.Services.AddAuthorization(options => options.AddPolicy("named", policy => policy.RequireAuthenticatedUser()));
+        _ = builder.Services.AddAuthorization(options =>
+            options.AddPolicy("named", policy => policy.RequireAuthenticatedUser()));
         _ = builder.Services.AddPortia().AddHttp(options =>
         {
-            options.OpenApi.SecuritySchemes.Add("mapped", new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
+            options.OpenApi.SecuritySchemes.Add("mapped",
+                new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
             _ = options.OpenApi.SecurityPolicy("named", "mapped");
         }).AddRequestHandler<ContractMetadataHandler>();
         await using var app = builder.Build();
@@ -257,7 +277,8 @@ public sealed class OpenApiSecurityTests
         _ = builder.Services.AddAuthorization(options => options.DefaultPolicy =
             new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build());
         _ = builder.Services.AddPortia().AddHttp(options => options.OpenApi.SecuritySchemes.Add("session",
-            new OpenApiSecurityScheme { Type = SecuritySchemeType.ApiKey, In = ParameterLocation.Cookie, Name = "session" }))
+                new OpenApiSecurityScheme
+                { Type = SecuritySchemeType.ApiKey, In = ParameterLocation.Cookie, Name = "session" }))
             .AddRequestHandler<ContractMetadataHandler>();
         await using var app = builder.Build();
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
@@ -310,5 +331,4 @@ public sealed class OpenApiSecurityTests
         var security = document["paths"]!["/custom-policy"]!["get"]!["security"] as JsonArray;
         Assert.True(security is null || security.Count == 0);
     }
-
 }

@@ -36,7 +36,8 @@ public sealed class ProcessorStatusRpcTests
         // Assert
         Assert.Equal(fleet.ProcessorStatusNamespace, explicitNamespace.ProcessorStatusNamespace);
         Assert.Equal(FitzProcessorStatusRoutes.Route(fleet.ProcessorStatusNamespace, new WorkloadIdentity("balances")),
-            FitzProcessorStatusRoutes.Route(explicitNamespace.ProcessorStatusNamespace, new WorkloadIdentity("balances")));
+            FitzProcessorStatusRoutes.Route(explicitNamespace.ProcessorStatusNamespace,
+                new WorkloadIdentity("balances")));
     }
 
     /// <summary>Arbitrary stable names produce exact, distinct application and tenant routes.</summary>
@@ -99,8 +100,10 @@ public sealed class ProcessorStatusRpcTests
         _ = services.AddSingleton(static provider => new JsonRequestSerializer(
             provider.GetServices<RequestTransportRegistration>(),
             provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json)));
-        _ = services.AddSingleton<IRequestDeserializer>(static provider => provider.GetRequiredService<JsonRequestSerializer>());
-        _ = services.AddSingleton<IRequestOutcomeSerializer>(static provider => provider.GetRequiredService<JsonRequestSerializer>());
+        _ = services.AddSingleton<IRequestDeserializer>(static provider =>
+            provider.GetRequiredService<JsonRequestSerializer>());
+        _ = services.AddSingleton<IRequestOutcomeSerializer>(static provider =>
+            provider.GetRequiredService<JsonRequestSerializer>());
         await using var provider = services.BuildServiceProvider();
         var rpc = new InMemoryRpcClient();
         var catalog = new RequestTransportCatalog(provider.GetServices<RequestTransportRegistration>());
@@ -110,12 +113,13 @@ public sealed class ProcessorStatusRpcTests
         var server = new FitzRpcRequestServer(rpc, provider.GetRequiredService<IServiceScopeFactory>(), catalog);
         await using var registration = await server.RegisterAsync<GetProcessorStatus, ProcessorStatus>(route,
             (request, received) => received == route && request.Processor == identity.Name
-                && request.Tenant == identity.Tenant?.Value, default);
+                                                     && request.Tenant == identity.Tenant?.Value, default);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer, catalog);
 
         // Act
         var result = await sender.SendAsync<GetProcessorStatus, ProcessorStatus>(
-            new GetProcessorStatus(processor, tenant), FitzProcessorStatusRoutes.Values("application", identity), "actor");
+            new GetProcessorStatus(processor, tenant), FitzProcessorStatusRoutes.Values("application", identity),
+            "actor");
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -135,7 +139,8 @@ public sealed class ProcessorStatusRpcTests
         _ = services.AddSingleton(handler);
         _ = services.AddSingleton<IRequestActorValidator>(new TestRequestActorValidator());
         var application = services.AddPortia();
-        _ = application.AddGeneratedHandler(new RequestRegistration<GetProcessorStatus, CountingStatusHandler, ProcessorStatus>());
+        _ = application.AddGeneratedHandler(
+            new RequestRegistration<GetProcessorStatus, CountingStatusHandler, ProcessorStatus>());
         _ = application.AddGeneratedRequest(new RequestTransportRegistration(typeof(GetProcessorStatus),
             [RequestTransportId.Callable], new RequestRouteAttribute("*", "*", "*", "status"),
             new DiscriminatorAttribute("portia.processor_status", 1),
@@ -145,8 +150,10 @@ public sealed class ProcessorStatusRpcTests
         _ = services.AddSingleton(static provider => new JsonRequestSerializer(
             provider.GetServices<RequestTransportRegistration>(),
             provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json)));
-        _ = services.AddSingleton<IRequestDeserializer>(static provider => provider.GetRequiredService<JsonRequestSerializer>());
-        _ = services.AddSingleton<IRequestOutcomeSerializer>(static provider => provider.GetRequiredService<JsonRequestSerializer>());
+        _ = services.AddSingleton<IRequestDeserializer>(static provider =>
+            provider.GetRequiredService<JsonRequestSerializer>());
+        _ = services.AddSingleton<IRequestOutcomeSerializer>(static provider =>
+            provider.GetRequiredService<JsonRequestSerializer>());
         await using var provider = services.BuildServiceProvider();
         await using var rpc = new RetainedRpcClient();
         var catalog = new RequestTransportCatalog(provider.GetServices<RequestTransportRegistration>());
@@ -173,6 +180,7 @@ public sealed class ProcessorStatusRpcTests
             Assert.False(cancelledOwner.IsSuccess);
             Assert.Equal(RequestErrorKind.Validation, cancelledOwner.Error.Kind);
         }
+
         await owned.DisposeAsync();
         Assert.Equal(1, rpc.FailedWithdrawals);
 
@@ -194,7 +202,8 @@ public sealed class ProcessorStatusRpcTests
         _ = services.AddSingleton(handler);
         _ = services.AddSingleton<IRequestActorValidator>(new TestRequestActorValidator());
         var application = services.AddPortia();
-        _ = application.AddGeneratedHandler(new RequestRegistration<GetProcessorStatus, CountingStatusHandler, ProcessorStatus>());
+        _ = application.AddGeneratedHandler(
+            new RequestRegistration<GetProcessorStatus, CountingStatusHandler, ProcessorStatus>());
         _ = application.AddGeneratedRequest(new RequestTransportRegistration(typeof(GetProcessorStatus),
             [RequestTransportId.Callable], new RequestRouteAttribute("*", "*", "*", "status"),
             new DiscriminatorAttribute("portia.processor_status", 1),
@@ -204,14 +213,17 @@ public sealed class ProcessorStatusRpcTests
         _ = services.AddSingleton(static provider => new JsonRequestSerializer(
             provider.GetServices<RequestTransportRegistration>(),
             provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json)));
-        _ = services.AddSingleton<IRequestDeserializer>(static provider => provider.GetRequiredService<JsonRequestSerializer>());
-        _ = services.AddSingleton<IRequestOutcomeSerializer>(static provider => provider.GetRequiredService<JsonRequestSerializer>());
+        _ = services.AddSingleton<IRequestDeserializer>(static provider =>
+            provider.GetRequiredService<JsonRequestSerializer>());
+        _ = services.AddSingleton<IRequestOutcomeSerializer>(static provider =>
+            provider.GetRequiredService<JsonRequestSerializer>());
         await using var provider = services.BuildServiceProvider();
         await using var rpc = new RetainedRpcClient();
         var catalog = new RequestTransportCatalog(provider.GetServices<RequestTransportRegistration>());
         var serializer = provider.GetRequiredService<JsonRequestSerializer>();
         var identity = new WorkloadIdentity("balances");
-        await using var registrar = new FitzProcessorStatusRpcRegistrar(rpc, provider.GetRequiredService<IServiceScopeFactory>(),
+        await using var registrar = new FitzProcessorStatusRpcRegistrar(rpc,
+            provider.GetRequiredService<IServiceScopeFactory>(),
             catalog, () => "application", timeProvider: clock);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer, catalog);
         var client = new FitzProcessorStatusClient(sender, () => "application");
@@ -323,7 +335,8 @@ public sealed class ProcessorStatusRpcTests
         _ = services.AddSingleton(handler);
         _ = services.AddSingleton<IRequestActorValidator>(new TestRequestActorValidator());
         var application = services.AddPortia();
-        _ = application.AddGeneratedHandler(new RequestRegistration<GetProcessorStatus, CountingStatusHandler, ProcessorStatus>());
+        _ = application.AddGeneratedHandler(
+            new RequestRegistration<GetProcessorStatus, CountingStatusHandler, ProcessorStatus>());
         _ = application.AddGeneratedRequest(new RequestTransportRegistration(typeof(GetProcessorStatus),
             [RequestTransportId.Callable], new RequestRouteAttribute("*", "*", "*", "status"),
             new DiscriminatorAttribute("portia.processor_status", 1),
@@ -333,8 +346,10 @@ public sealed class ProcessorStatusRpcTests
         _ = services.AddSingleton(static provider => new JsonRequestSerializer(
             provider.GetServices<RequestTransportRegistration>(),
             provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json)));
-        _ = services.AddSingleton<IRequestDeserializer>(static provider => provider.GetRequiredService<JsonRequestSerializer>());
-        _ = services.AddSingleton<IRequestOutcomeSerializer>(static provider => provider.GetRequiredService<JsonRequestSerializer>());
+        _ = services.AddSingleton<IRequestDeserializer>(static provider =>
+            provider.GetRequiredService<JsonRequestSerializer>());
+        _ = services.AddSingleton<IRequestOutcomeSerializer>(static provider =>
+            provider.GetRequiredService<JsonRequestSerializer>());
         return (services, handler);
     }
 
@@ -361,10 +376,18 @@ public sealed class ProcessorStatusRpcTests
         internal int InitialFailures => Volatile.Read(ref _initialFailures);
         internal int BlockingWithdrawals => Volatile.Read(ref _blockingWithdrawals);
         internal bool SecondWithdrawalCancelled => Volatile.Read(ref _secondWithdrawalCancelled) != 0;
-        internal TaskCompletionSource FirstWithdrawalStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        internal TaskCompletionSource FailFirstWithdrawal { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        internal TaskCompletionSource SecondWithdrawalStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        internal TaskCompletionSource ReleaseSecondWithdrawal { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal TaskCompletionSource FirstWithdrawalStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal TaskCompletionSource FailFirstWithdrawal { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal TaskCompletionSource SecondWithdrawalStarted { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal TaskCompletionSource ReleaseSecondWithdrawal { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
 #pragma warning disable RS0026
         public RpcCall CallAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
@@ -384,12 +407,14 @@ public sealed class ProcessorStatusRpcTests
                     _ = Interlocked.Increment(ref _initialFailures);
                     throw new IOException("Broker unavailable.");
                 }
+
                 if (Interlocked.Increment(ref _blockingWithdrawals) == 1)
                 {
                     _ = FirstWithdrawalStarted.TrySetResult();
                     await FailFirstWithdrawal.Task.WaitAsync(token);
                     throw new IOException("First final withdrawal failed.");
                 }
+
                 _ = SecondWithdrawalStarted.TrySetResult();
                 try
                 {
@@ -418,7 +443,8 @@ public sealed class ProcessorStatusRpcTests
         public RpcCall CallAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default)
             => _inner.CallAsync(route, body, ct);
 
-        public RpcCall CallAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? timeout, CancellationToken ct = default)
+        public RpcCall CallAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? timeout,
+            CancellationToken ct = default)
             => _inner.CallAsync(route, body, timeout, ct);
 #pragma warning restore RS0026
 

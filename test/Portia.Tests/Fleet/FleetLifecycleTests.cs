@@ -15,8 +15,10 @@ public sealed class FleetLifecycleTests
         var interval = TimeSpan.FromHours(1);
         var timeout = TimeSpan.FromMinutes(10);
         var clock = new ManualTestClock();
-        var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership(), timeProvider: clock);
-        var terminal = new WorkloadFailureException(new WorkloadIdentity("test"), 1, new IOException("permanent workload failure"));
+        var runner =
+            new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership(), timeProvider: clock);
+        var terminal = new WorkloadFailureException(new WorkloadIdentity("test"), 1,
+            new IOException("permanent workload failure"));
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         // Complete the failure through the lease/competition await chain inline before advancing
         // the clock. Otherwise the test can expire both callbacks before the failed one resumes.
@@ -45,7 +47,8 @@ public sealed class FleetLifecycleTests
         async Task WaitForDelayAsync(TimeSpan expected)
         {
             while (await clock.WaitForDelayAsync(lifetime.Token) != expected)
-            { }
+            {
+            }
         }
 
         // Act
@@ -82,7 +85,8 @@ public sealed class FleetLifecycleTests
         Assert.Same(terminal, failure);
         if (stuckSibling)
         {
-            var cleanup = Assert.IsType<FleetPartitionTerminationTimeoutException>(terminal.Data["Portia.CleanupException"]);
+            var cleanup =
+                Assert.IsType<FleetPartitionTerminationTimeoutException>(terminal.Data["Portia.CleanupException"]);
             Assert.Equal([stuck], cleanup.Partitions);
         }
         else
@@ -119,12 +123,18 @@ public sealed class FleetLifecycleTests
                 await fault.Task.ConfigureAwait(false);
                 return;
             }
+
             // The test retains registrations so a resumed cancelled delay cannot dispose them
             // before CancelAsync invokes the application's callback.
             registrations.Add(ct.Register(() => (id == b ? firstCancelled : secondCancelled).TrySetResult()));
             try
-            { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+            }
+
             if (id == b)
                 await secondCancelled.Task;
         }, lifetime.Token);
@@ -156,7 +166,8 @@ public sealed class FleetLifecycleTests
 
         // Assert
         Assert.Equal(interval, openingDelay);
-        Assert.True(bothCancelled, "Sibling c was still running while the coordinator awaited b's cooperative cleanup.");
+        Assert.True(bothCancelled,
+            "Sibling c was still running while the coordinator awaited b's cooperative cleanup.");
         if (terminal)
             Assert.Same(terminalFailure, failure);
     }

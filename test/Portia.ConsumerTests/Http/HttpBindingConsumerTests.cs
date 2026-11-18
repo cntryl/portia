@@ -137,7 +137,8 @@ public sealed class HttpBindingConsumerTests
     [InlineData(false, false, "{}", 400, null)]
     [InlineData(false, false, "[]", 400, null)]
     [InlineData(false, false, "null", 400, null)]
-    public async Task ShouldHonorJsonOptionsGivenBodyWithNamesConvertersAndNulls(bool snake, bool converter, string json,
+    public async Task ShouldHonorJsonOptionsGivenBodyWithNamesConvertersAndNulls(bool snake, bool converter,
+        string json,
         int expectedStatus, string? expected)
     {
         // Arrange

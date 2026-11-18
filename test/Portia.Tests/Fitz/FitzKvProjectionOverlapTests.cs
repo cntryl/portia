@@ -30,11 +30,14 @@ public sealed class FitzKvProjectionOverlapTests
             await repository.StageAsync("first-batch-value");
             var acceptedNext = new ProjectionCheckpoint(new EventCursor("1"));
             await accepted.CommitAsync(acceptedNext);
-            Assert.Equal(acceptedNext.Cursor, FitzKvCheckpoints.Decode(client.Inner.Read(FitzKvCheckpoints.Key(first))!));
+            Assert.Equal(acceptedNext.Cursor,
+                FitzKvCheckpoints.Decode(client.Inner.Read(FitzKvCheckpoints.Key(first))!));
             Assert.Equal("first-batch-value", client.Inner.Read(OverlapRepository.DataKey) is { } acceptedBytes
-                ? Encoding.UTF8.GetString(acceptedBytes) : null);
+                ? Encoding.UTF8.GetString(acceptedBytes)
+                : null);
             return;
         }
+
         client.ReleaseFirst.TrySetResult();
         await using var firstBatch = await firstOpen.WaitAsync(TimeSpan.FromSeconds(5));
         client.ReleaseSecond.TrySetResult();
@@ -47,7 +50,8 @@ public sealed class FitzKvProjectionOverlapTests
 
         Assert.Equal(next.Cursor, FitzKvCheckpoints.Decode(client.Inner.Read(FitzKvCheckpoints.Key(first))!));
         Assert.Equal("first-batch-value", client.Inner.Read(OverlapRepository.DataKey) is { } bytes
-            ? Encoding.UTF8.GetString(bytes) : null);
+            ? Encoding.UTF8.GetString(bytes)
+            : null);
     }
 
     /// <summary>A query-side read cannot start while the store is still acquiring its batch transaction.</summary>
@@ -75,6 +79,7 @@ public sealed class FitzKvProjectionOverlapTests
             client.ReleaseFirst.TrySetResult();
             client.ReleaseSecond.TrySetResult();
         }
+
         await using var batch = await opening.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
@@ -163,7 +168,8 @@ public sealed class FitzKvProjectionOverlapTests
             throw new NotSupportedException();
     }
 
-    sealed class OverlapRepository(IKvClient client) : FitzKvProjectionStore(client, "kv://review/overlap/orders", "orders")
+    sealed class OverlapRepository(IKvClient client)
+        : FitzKvProjectionStore(client, "kv://review/overlap/orders", "orders")
     {
         internal static ReadOnlyMemory<byte> DataKey => "value"u8.ToArray();
         internal string? WriteRoute { get; private set; }
@@ -203,6 +209,7 @@ public sealed class FitzKvProjectionOverlapTests
                 BothArrived.TrySetResult();
                 await ReleaseSecond.Task.WaitAsync(cancellationToken);
             }
+
             return transaction;
         }
 

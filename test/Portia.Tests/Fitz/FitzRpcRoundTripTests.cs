@@ -186,7 +186,8 @@ public sealed class FitzRpcRoundTripTests
         // Arrange
         var serializer = TestJson.Serializer(typeof(RpcGetValue));
         var rpc = new ScriptedRpcClient(new RpcCall(ThrowAfterDispatch(new TaskCompletionSource(
-                TaskCreationOptions.RunContinuationsAsynchronously), new OperationCanceledException("Transport canceled.")),
+                    TaskCreationOptions.RunContinuationsAsynchronously),
+                new OperationCanceledException("Transport canceled.")),
             Task.FromResult(RpcCancellationOutcome.Unconfirmed)));
 
         // Act

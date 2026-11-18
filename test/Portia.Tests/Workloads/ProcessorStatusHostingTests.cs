@@ -15,7 +15,8 @@ public sealed class ProcessorStatusHostingTests
         var aggregate = Uuid.CreateVersion4();
         var changed = new ValueChanged(1);
         changed.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregate, 1, DateTimeOffset.UtcNow));
-        await source.AppendAsync(new EventStreamAddress("status-hosting", "source", aggregate.ToString()), 0, [changed]);
+        await source.AppendAsync(new EventStreamAddress("status-hosting", "source", aggregate.ToString()), 0,
+            [changed]);
         var control = new StatusHostingControl();
         var endpoints = new FailingStatusRegistrar();
         var services = new ServiceCollection();
@@ -55,6 +56,7 @@ public sealed class ProcessorStatusHostingTests
             await worker.StopAsync(default);
             worker.Dispose();
         }
+
         Assert.Equal(0, endpoints.Active);
     }
 
@@ -122,13 +124,15 @@ public sealed class ProcessorStatusHostingTests
     {
         readonly ConcurrentDictionary<CheckpointIdentity, ProjectionCheckpoint> _checkpoints = new();
 
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default)
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
+            CancellationToken ct = default)
             => ValueTask.FromResult(_checkpoints.GetValueOrDefault(identity));
 
         public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
             => LoadCheckpointAsync(identity, ct);
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default)
         {
             _checkpoints[identity] = checkpoint;
             return ValueTask.CompletedTask;
@@ -149,13 +153,21 @@ public sealed class ProcessorStatusHostingTests
     sealed class FailingStatusRegistrar : IProcessorStatusRpcRegistrar
     {
         internal ConcurrentDictionary<string, int> Attempts { get; } = new();
-        internal TaskCompletionSource ProjectorRegistered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        internal TaskCompletionSource ReactorRegistered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        internal TaskCompletionSource AllowRegistration { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal TaskCompletionSource ProjectorRegistered { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal TaskCompletionSource ReactorRegistered { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        internal TaskCompletionSource AllowRegistration { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         int _active;
         internal int Active => Volatile.Read(ref _active);
 
-        public async ValueTask<IAsyncDisposable> RegisterAsync(WorkloadIdentity workload, CancellationToken ct = default)
+        public async ValueTask<IAsyncDisposable> RegisterAsync(WorkloadIdentity workload,
+            CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
             if (Attempts.AddOrUpdate(workload.Name, 1, static (_, count) => count + 1) == 1)

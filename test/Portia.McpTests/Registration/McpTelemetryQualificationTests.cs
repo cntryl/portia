@@ -48,15 +48,25 @@ public sealed class McpTelemetryQualificationTests
             .AddMcpTool<ReadTelemetry>()
             .AddMcpResource<ReadTelemetry, string>("telemetry://read/{fail}",
                 values => new ReadTelemetry(bool.Parse(values["fail"])),
-                options => { options.Authenticated(); options.AsText("text/plain", value => value); })
-            .AddMcpPrompt<ReadTelemetry, string>("telemetry-read", values => new ReadTelemetry(bool.Parse(values["fail"])),
+                options =>
+                {
+                    options.Authenticated();
+                    options.AsText("text/plain", value => value);
+                })
+            .AddMcpPrompt<ReadTelemetry, string>("telemetry-read",
+                values => new ReadTelemetry(bool.Parse(values["fail"])),
                 value => [new McpPromptMessage("user", value)],
-                options => { options.Authenticated(); options.Required("fail"); })
+                options =>
+                {
+                    options.Authenticated();
+                    options.Required("fail");
+                })
             .AddMcpHttp();
         await using var app = builder.Build();
         app.Use((context, next) =>
         {
-            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "telemetry-actor")], "test"));
+            context.User =
+                new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "telemetry-actor")], "test"));
             return next(context);
         });
         _ = app.MapPortiaMcp().AllowAnonymous();
@@ -72,7 +82,8 @@ public sealed class McpTelemetryQualificationTests
         {
             if (primitive == "tool")
             {
-                var result = await client.CallToolAsync("telemetry.read", new Dictionary<string, object?> { ["fail"] = fails });
+                var result = await client.CallToolAsync("telemetry.read",
+                    new Dictionary<string, object?> { ["fail"] = fails });
                 Assert.Equal(fails, result.IsError == true);
                 if (fails)
                     Assert.Null(result.StructuredContent);
@@ -80,7 +91,8 @@ public sealed class McpTelemetryQualificationTests
             else if (primitive == "resource")
                 _ = await client.ReadResourceAsync($"telemetry://read/{fails}");
             else
-                _ = await client.GetPromptAsync("telemetry-read", new Dictionary<string, object?> { ["fail"] = fails.ToString() });
+                _ = await client.GetPromptAsync("telemetry-read",
+                    new Dictionary<string, object?> { ["fail"] = fails.ToString() });
         });
         // Stop every producer, then assert against snapshots: exporters may still append on other threads.
         await client.DisposeAsync();
@@ -101,8 +113,10 @@ public sealed class McpTelemetryQualificationTests
         var activities = exportedActivities.Snapshot();
         var metrics = exportedMetrics.Snapshot();
         var logs = exportedLogs.Snapshot();
-        var process = Assert.Single(activities, activity => activity.OperationName == PortiaTelemetry.ProcessActivityName);
-        var execute = Assert.Single(activities, activity => activity.OperationName == PortiaTelemetry.ExecuteActivityName);
+        var process = Assert.Single(activities,
+            activity => activity.OperationName == PortiaTelemetry.ProcessActivityName);
+        var execute = Assert.Single(activities,
+            activity => activity.OperationName == PortiaTelemetry.ExecuteActivityName);
         Assert.Equal(2, activities.Length);
         Assert.Equal(process.SpanId, execute.ParentSpanId);
         Assert.Equal(process.TraceId, execute.TraceId);
@@ -110,8 +124,9 @@ public sealed class McpTelemetryQualificationTests
         {
             Assert.Equal(fails ? "fault" : "success", activity.GetTagItem("portia.outcome"));
             Assert.DoesNotContain(activity.TagObjects, tag => Equals(tag.Value, "telemetry-actor")
-                || Equals(tag.Value, $"telemetry://read/{fails}"));
+                                                              || Equals(tag.Value, $"telemetry://read/{fails}"));
         }
+
         var duration = Assert.Single(metrics, metric => metric.Name == "portia.request.duration");
         var durationCount = 0;
         foreach (ref readonly var point in duration.GetMetricPoints())
@@ -125,6 +140,7 @@ public sealed class McpTelemetryQualificationTests
                 Assert.Single(tags, tag => tag.Key == "portia.outcome").Value);
             Assert.Equal(3, point.Tags.Count);
         }
+
         Assert.Equal(1, durationCount);
         if (fails)
         {
@@ -189,14 +205,53 @@ public sealed class McpTelemetryQualificationTests
         readonly List<T> _items = [];
         readonly Lock _gate = new();
 
-        public int Count { get { lock (_gate) return _items.Count; } }
+        public int Count
+        {
+            get
+            {
+                lock (_gate)
+                    return _items.Count;
+            }
+        }
+
         public bool IsReadOnly => false;
-        public T[] Snapshot() { lock (_gate) return [.. _items]; }
-        public void Add(T item) { lock (_gate) _items.Add(item); }
-        public void Clear() { lock (_gate) _items.Clear(); }
-        public bool Contains(T item) { lock (_gate) return _items.Contains(item); }
-        public void CopyTo(T[] array, int arrayIndex) { lock (_gate) _items.CopyTo(array, arrayIndex); }
-        public bool Remove(T item) { lock (_gate) return _items.Remove(item); }
+
+        public T[] Snapshot()
+        {
+            lock (_gate)
+                return [.. _items];
+        }
+
+        public void Add(T item)
+        {
+            lock (_gate)
+                _items.Add(item);
+        }
+
+        public void Clear()
+        {
+            lock (_gate)
+                _items.Clear();
+        }
+
+        public bool Contains(T item)
+        {
+            lock (_gate)
+                return _items.Contains(item);
+        }
+
+        public void CopyTo(T[] array, int arrayIndex)
+        {
+            lock (_gate)
+                _items.CopyTo(array, arrayIndex);
+        }
+
+        public bool Remove(T item)
+        {
+            lock (_gate)
+                return _items.Remove(item);
+        }
+
         public IEnumerator<T> GetEnumerator() => ((IEnumerable<T>)Snapshot()).GetEnumerator();
         System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
     }
@@ -215,7 +270,8 @@ public sealed class McpTelemetryQualificationTests
     public sealed class ReadTelemetryHandler(TelemetryFailure failure) : IRequestHandler<ReadTelemetry, string>
     {
         public ValueTask<Result<string>> HandleAsync(IRequestContext<ReadTelemetry> context, CancellationToken ct) =>
-            context.Request.Fail ? ValueTask.FromException<Result<string>>(failure.Exception)
+            context.Request.Fail
+                ? ValueTask.FromException<Result<string>>(failure.Exception)
                 : ValueTask.FromResult(Result<string>.Success("ok"));
     }
 }

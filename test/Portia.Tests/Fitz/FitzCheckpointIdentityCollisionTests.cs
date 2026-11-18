@@ -15,8 +15,10 @@ public sealed class FitzCheckpointIdentityCollisionProof(FitzBrokerFixture broke
         _ = Assert.Throws<ArgumentException>(() => EventStreamPattern.ForPattern("tenant", "events", "order\0part"));
         _ = Assert.Throws<ArgumentException>(() => new CheckpointIdentity("orders",
             EventStreamPattern.ForPattern("tenant", "events", "order"), "part\0v2"));
-        var first = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "events", "order-part"), "v2");
-        var second = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "events", "order"), "part-v2");
+        var first = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "events", "order-part"),
+            "v2");
+        var second = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "events", "order"),
+            "part-v2");
         Assert.NotEqual(first, second);
 
         // Act

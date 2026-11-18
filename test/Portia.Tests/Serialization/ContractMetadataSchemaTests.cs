@@ -25,7 +25,9 @@ public sealed class ContractMetadataSchemaTests
         // Act
         var text = await app.GetTestClient().GetStringAsync("/openapi/v1.json");
         var document = OpenApiDocument.Parse(text).Document!;
-        var schema = document.Paths["/metadata"].Operations![HttpMethod.Get].Responses!["200"].Content!["application/json"].Schema!;
+        var schema =
+            document.Paths["/metadata"].Operations![HttpMethod.Get].Responses!["200"].Content!["application/json"]
+                .Schema!;
 
         // Assert
         Assert.Equal(1, schema.Properties!["name"].MinLength);
@@ -42,6 +44,7 @@ public sealed class ContractMetadataSchemaTests
         Assert.NotNull(schema.Properties["code"].Pattern);
         Assert.Equal(5, schema.Properties["page_size"].Default!.GetValue<int>());
     }
+
     /// <summary>Input and output schemas follow serialization direction independently.</summary>
     [Fact]
     public async Task ShouldProjectDirectionGivenSerializerIgnoreConditions()
@@ -67,5 +70,4 @@ public sealed class ContractMetadataSchemaTests
         Assert.DoesNotContain("secret", output.Properties!.Keys);
         Assert.Contains("server_value", output.Properties.Keys);
     }
-
 }

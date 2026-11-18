@@ -308,7 +308,8 @@ public sealed class ReactorRunnerTests
         public List<ulong> AggregateVersions { get; } = [];
         public List<int> BatchSizes { get; } = [];
 
-        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts, CancellationToken ct)
+        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts,
+            CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
             BatchSizes.Add(contexts.Count);

@@ -37,13 +37,13 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var publisher = new RecordingRequestQueuePublisher();
         var authorization = new RequestIdentityTests.IdentityAuthorizer();
         var client = await StartAsync(app =>
-                app.MapPortiaPost<RequestIdentityTests.IdentifiedCommand>("/identified/{command_id}"), services =>
-            {
-                _ = services.AddSingleton<IRequestQueuePublisher>(publisher);
-                _ = services.AddSingleton(authorization);
-                _ = services.AddPortia().AddRequestHandler<RequestIdentityTests.IdentifiedCommandHandler>()
-                    .AddRequestAuthorizer<RequestIdentityTests.IdentityAuthorizer>();
-            });
+            app.MapPortiaPost<RequestIdentityTests.IdentifiedCommand>("/identified/{command_id}"), services =>
+        {
+            _ = services.AddSingleton<IRequestQueuePublisher>(publisher);
+            _ = services.AddSingleton(authorization);
+            _ = services.AddPortia().AddRequestHandler<RequestIdentityTests.IdentifiedCommandHandler>()
+                .AddRequestAuthorizer<RequestIdentityTests.IdentityAuthorizer>();
+        });
         var id = Uuid.CreateVersion4();
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/identified/{id}")
         {
@@ -60,7 +60,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.Equal(id.ToString(), receipt.RootElement.GetProperty("request_id").GetString());
         Assert.Equal(id, Assert.Single(publisher.Metadata).RequestId);
-        Assert.Equal(id, Assert.IsType<RequestIdentityTests.IdentifiedCommand>(Assert.Single(publisher.Enqueued)).CommandId);
+        Assert.Equal(id,
+            Assert.IsType<RequestIdentityTests.IdentifiedCommand>(Assert.Single(publisher.Enqueued)).CommandId);
         Assert.Equal(id, authorization.LastRequestId);
     }
 
@@ -72,7 +73,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
     {
         // Arrange
         var client = await StartAsync(app =>
-            app.MapPortiaPost<RequestIdentityTests.IdentifiedCommand>("/form-identity/{command_id}").DisableAntiforgery(),
+                app.MapPortiaPost<RequestIdentityTests.IdentifiedCommand>("/form-identity/{command_id}")
+                    .DisableAntiforgery(),
             services =>
             {
                 _ = services.AddSingleton<IRequestQueuePublisher>(new RecordingRequestQueuePublisher());
@@ -818,7 +820,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
     [InlineData(16L, false, 8L)]
     [InlineData(4L, false, 4L)]
     [InlineData(16L, true, 16L)]
-    public void ShouldRespectServerBodyLimitGivenStricterOrReadOnlyLimit(long? serverMaximum, bool readOnly, long expected)
+    public void ShouldRespectServerBodyLimitGivenStricterOrReadOnlyLimit(long? serverMaximum, bool readOnly,
+        long expected)
     {
         // Arrange
         using var services = new ServiceCollection()

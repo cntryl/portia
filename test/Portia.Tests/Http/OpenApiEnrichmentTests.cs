@@ -66,11 +66,12 @@ public sealed class OpenApiEnrichmentTests
             .AddRequestHandler<ContractExampleHandler>();
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
-        _ = app.MapPortiaPost<ContractExampleRequest, ContractMetadataModel>("/examples/{id}", configuration => configuration
-            .FromQuery(request => request.PageSize)
-            .RequestExample("create", new ContractExampleRequest(7, endpoint))
-            .ResponseExample(200, "normal", endpoint)
-            .ResponseHeader<string>(200, "ETag", "Version token.", required: true));
+        _ = app.MapPortiaPost<ContractExampleRequest, ContractMetadataModel>("/examples/{id}", configuration =>
+            configuration
+                .FromQuery(request => request.PageSize)
+                .RequestExample("create", new ContractExampleRequest(7, endpoint))
+                .ResponseExample(200, "normal", endpoint)
+                .ResponseHeader<string>(200, "ETag", "Version token.", required: true));
         await app.StartAsync();
 
         // Act
@@ -78,13 +79,15 @@ public sealed class OpenApiEnrichmentTests
 
         // Assert
         var operation = document["paths"]!["/examples/{id}"]!["post"]!;
-        Assert.Equal("Create example", operation["requestBody"]!["content"]!["application/json"]!["schema"]!["title"]!.GetValue<string>());
+        Assert.Equal("Create example",
+            operation["requestBody"]!["content"]!["application/json"]!["schema"]!["title"]!.GetValue<string>());
         var input = operation["requestBody"]!["content"]!["application/json"]!["examples"]!["create"]!["value"]!;
         Assert.Equal("Endpoint", input["payload"]!["name"]!.GetValue<string>());
         Assert.Null(input["id"]);
         Assert.Null(input["page_size"]);
         var response = operation["responses"]!["200"]!;
-        Assert.Equal("Endpoint", response["content"]!["application/json"]!["examples"]!["normal"]!["value"]!["name"]!.GetValue<string>());
+        Assert.Equal("Endpoint",
+            response["content"]!["application/json"]!["examples"]!["normal"]!["value"]!["name"]!.GetValue<string>());
         Assert.Equal("Version token.", response["headers"]!["ETag"]!["description"]!.GetValue<string>());
         Assert.True(response["headers"]!["ETag"]!["required"]!.GetValue<bool>());
     }
@@ -124,15 +127,18 @@ public sealed class OpenApiEnrichmentTests
             .AddHttp().AddRequestHandler<ContractMetadataHandler>();
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
-        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/custom-example", configuration => configuration
-            .Produces<string>(200).OnResult((_, _) => Results.Json("actual response")));
+        _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/custom-example", configuration =>
+            configuration
+                .Produces<string>(200).OnResult((_, _) => Results.Json("actual response")));
         await app.StartAsync();
 
         // Act
         var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
 
         // Assert
-        var examples = document["paths"]!["/custom-example"]!["get"]!["responses"]!["200"]!["content"]!["application/json"]!["examples"]!;
+        var examples =
+            document["paths"]!["/custom-example"]!["get"]!["responses"]!["200"]!["content"]!["application/json"]![
+                "examples"]!;
         Assert.Null(examples["handler"]);
         Assert.Equal("actual response", examples["actual"]!["value"]!.GetValue<string>());
     }
@@ -179,8 +185,10 @@ public sealed class OpenApiEnrichmentTests
 
         // Assert
         var parameters = document.Paths["/converted/{id}"].Operations![HttpMethod.Post].Parameters!;
-        Assert.Equal(16, parameters.Single(parameter => parameter.Name == "id").Examples!["converted"].Value!.GetValue<int>());
-        Assert.Equal(7, parameters.Single(parameter => parameter.Name == "count").Examples!["converted"].Value!.GetValue<int>());
+        Assert.Equal(16,
+            parameters.Single(parameter => parameter.Name == "id").Examples!["converted"].Value!.GetValue<int>());
+        Assert.Equal(7,
+            parameters.Single(parameter => parameter.Name == "count").Examples!["converted"].Value!.GetValue<int>());
     }
 
     /// <summary>Enum parameter examples retain the representation advertised by their scalar schema.</summary>
@@ -195,7 +203,9 @@ public sealed class OpenApiEnrichmentTests
         _ = builder.Services.AddPortia().ConfigureJson(options =>
         {
             if (strings)
-                options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter<ExampleMode>(System.Text.Json.JsonNamingPolicy.CamelCase));
+                options.Converters.Add(
+                    new System.Text.Json.Serialization.JsonStringEnumConverter<ExampleMode>(System.Text.Json
+                        .JsonNamingPolicy.CamelCase));
         }).AddHttp().AddRequestHandler<EnumExampleHandler>();
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
@@ -220,5 +230,6 @@ public sealed class OpenApiEnrichmentTests
         }
     }
 
-    static ContractMetadataModel Example(string name) => new(name, 5, ["one"], "AB", "hi@example.com", "https://example.com");
+    static ContractMetadataModel Example(string name) =>
+        new(name, 5, ["one"], "AB", "hi@example.com", "https://example.com");
 }

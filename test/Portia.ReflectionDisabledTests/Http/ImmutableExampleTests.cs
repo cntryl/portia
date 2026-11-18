@@ -18,7 +18,8 @@ public sealed class ImmutableExampleTests
         // Arrange
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
-        _ = builder.Services.AddPortia().ConfigureJson(options => options.TypeInfoResolver = ImmutableExampleJsonContext.Default
+        _ = builder.Services.AddPortia().ConfigureJson(options => options.TypeInfoResolver = ImmutableExampleJsonContext
+            .Default
             .WithAddedModifier(info =>
             {
                 if (info.Type == typeof(ImmutableExampleRequest) || info.Type == typeof(DefaultedImmutableRequest))
@@ -39,7 +40,9 @@ public sealed class ImmutableExampleTests
         var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
 
         // Assert
-        var value = document["paths"]!["/immutable"]!["post"]!["requestBody"]!["content"]!["application/json"]!["examples"]!["sample"]!["value"]!;
+        var value =
+            document["paths"]!["/immutable"]!["post"]!["requestBody"]!["content"]!["application/json"]!["examples"]!
+                ["sample"]!["value"]!;
         Assert.Equal("example", value["wire_text"]!.GetValue<string>());
         Assert.Null(value["wire_note"]);
     }
@@ -53,7 +56,8 @@ sealed class DefaultedImmutableRequest(string? text = null) : IRequest<string>, 
 
 sealed class DefaultedImmutableHandler : IRequestHandler<DefaultedImmutableRequest, string>
 {
-    public ValueTask<Result<string>> HandleAsync(IRequestContext<DefaultedImmutableRequest> context, CancellationToken ct) =>
+    public ValueTask<Result<string>> HandleAsync(IRequestContext<DefaultedImmutableRequest> context,
+        CancellationToken ct) =>
         ValueTask.FromResult(Result<string>.Success(context.Request.Text!));
 }
 
@@ -66,7 +70,8 @@ sealed class ImmutableExampleRequest(string text, string? note, int count = 7) :
 
 sealed class ImmutableExampleHandler : IRequestHandler<ImmutableExampleRequest, string>
 {
-    public ValueTask<Result<string>> HandleAsync(IRequestContext<ImmutableExampleRequest> context, CancellationToken ct) =>
+    public ValueTask<Result<string>>
+        HandleAsync(IRequestContext<ImmutableExampleRequest> context, CancellationToken ct) =>
         ValueTask.FromResult(Result<string>.Success(context.Request.Text));
 }
 

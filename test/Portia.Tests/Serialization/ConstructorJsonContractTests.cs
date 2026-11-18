@@ -22,7 +22,8 @@ public sealed class ConstructorJsonContractTests
         ImmutableConstructorContract? bound = null;
 
         // Act
-        var exception = Record.Exception(() => bound = JsonSerializer.Deserialize(json, strict.GetTypeInfo<ImmutableConstructorContract>()));
+        var exception = Record.Exception(() =>
+            bound = JsonSerializer.Deserialize(json, strict.GetTypeInfo<ImmutableConstructorContract>()));
 
         // Assert
         if (valid)
@@ -34,6 +35,7 @@ public sealed class ConstructorJsonContractTests
         }
         else
             Assert.IsType<JsonException>(exception);
+
         Assert.False(source.RespectRequiredConstructorParameters);
     }
 
@@ -52,7 +54,8 @@ public sealed class ConstructorJsonContractTests
         var type = constructorPolicy ? typeof(ImmutableConstructorContract) : typeof(JsonRequiredConstructorContract);
 
         // Act
-        var exception = Record.Exception(() => JsonSerializer.Deserialize("{\"text\":\"valid\"}", strict.GetTypeInfo(type)));
+        var exception =
+            Record.Exception(() => JsonSerializer.Deserialize("{\"text\":\"valid\"}", strict.GetTypeInfo(type)));
 
         // Assert
         var failure = Assert.IsType<JsonException>(exception);
@@ -68,10 +71,12 @@ public sealed class ConstructorJsonContractTests
         var options = PortiaJsonSchemaProjection.For(source, source, input: true);
 
         // Act
-        var schema = options.GetTypeInfo<ImmutableConstructorContract>().GetJsonSchemaAsNode(new JsonSchemaExporterOptions
-        {
-            TransformSchemaNode = (context, node) => PortiaJsonDescriptions.Apply(context, node, source, input: true)
-        });
+        var schema = options.GetTypeInfo<ImmutableConstructorContract>().GetJsonSchemaAsNode(
+            new JsonSchemaExporterOptions
+            {
+                TransformSchemaNode = (context, node) =>
+                    PortiaJsonDescriptions.Apply(context, node, source, input: true)
+            });
 
         // Assert
         var required = schema["required"]!.AsArray().Select(node => node!.GetValue<string>()).ToArray();
@@ -90,8 +95,7 @@ sealed class ImmutableConstructorContract(string text, string? note, int count =
 sealed class JsonRequiredConstructorContract(string text, string? note)
 {
     public string Text { get; } = text;
-    [JsonRequired]
-    public string? Note { get; } = note;
+    [JsonRequired] public string? Note { get; } = note;
 }
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]

@@ -73,7 +73,8 @@ public sealed class CommunicationsIntegrationTests
     }
 
     static string Endpoint() => Environment.GetEnvironmentVariable("PORTIA_S3_TEST_ENDPOINT")
-        ?? throw new InvalidOperationException("Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
+                                ?? throw new InvalidOperationException(
+                                    "Set PORTIA_S3_TEST_ENDPOINT after starting 'docker compose up -d sqrzl'.");
 
     static MailMessage Mail() => new(["person@example.com"], "Portia integration", "Plain text")
     {

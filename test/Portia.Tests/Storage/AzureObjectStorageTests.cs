@@ -39,7 +39,8 @@ public sealed class AzureObjectStorageTests
 
         // Assert
         Assert.True(service.Contains($"/{ApplicationStorageResolver.Bucket}/{expectedKey}"));
-        Assert.StartsWith($"/{ApplicationStorageResolver.Bucket}/pending/tenant-one/", part.UploadUri.AbsolutePath, StringComparison.Ordinal);
+        Assert.StartsWith($"/{ApplicationStorageResolver.Bucket}/pending/tenant-one/", part.UploadUri.AbsolutePath,
+            StringComparison.Ordinal);
         Assert.Equal(1, service.BlobCount);
     }
 
@@ -58,8 +59,11 @@ public sealed class AzureObjectStorageTests
 
         // Assert
         Assert.Equal(0, service.BlobCount);
-        Assert.All(service.Requests, static request => Assert.StartsWith("/shared-assets/", request.Path, StringComparison.Ordinal));
-        Assert.Contains(service.Requests, static request => request.Path.StartsWith("/shared-assets/documents/tenant-two/", StringComparison.Ordinal));
+        Assert.All(service.Requests,
+            static request => Assert.StartsWith("/shared-assets/", request.Path, StringComparison.Ordinal));
+        Assert.Contains(service.Requests,
+            static request =>
+                request.Path.StartsWith("/shared-assets/documents/tenant-two/", StringComparison.Ordinal));
     }
 
     /// <summary>A replacement between metadata verification and download must never be streamed.</summary>
@@ -116,7 +120,8 @@ public sealed class AzureObjectStorageTests
         Assert.Equal(receipt.Token, query["blockid"]);
         Assert.True(signed.ExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(4));
 
-        var commit = Assert.Single(service.Requests, static r => r.Method == HttpMethod.Put && r.Query.Contains("comp=blocklist", StringComparison.Ordinal));
+        var commit = Assert.Single(service.Requests,
+            static r => r.Method == HttpMethod.Put && r.Query.Contains("comp=blocklist", StringComparison.Ordinal));
         Assert.Equal(FirstScope, commit.Headers["x-ms-encryption-scope"]);
         Assert.Equal(digest.Sha256, commit.Headers["x-ms-meta-portiasha256"]);
         var copy = Assert.Single(service.Requests, static r => r.Headers.ContainsKey("x-ms-copy-source"));
@@ -142,7 +147,8 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
-        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), "changed"u8.ToArray());
+        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)),
+            "changed"u8.ToArray());
 
         // Act
         var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt]));
@@ -163,7 +169,8 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf(content));
-        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), "declared plus extra"u8.ToArray());
+        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)),
+            "declared plus extra"u8.ToArray());
 
         // Act
         var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt]));
@@ -196,7 +203,8 @@ public sealed class AzureObjectStorageTests
 
         // Assert
         Assert.IsType<InvalidDataException>(exception);
-        Assert.DoesNotContain(service.Requests, static r => r.Query.Contains("comp=blocklist", StringComparison.Ordinal) && r.Method == HttpMethod.Put);
+        Assert.DoesNotContain(service.Requests,
+            static r => r.Query.Contains("comp=blocklist", StringComparison.Ordinal) && r.Method == HttpMethod.Put);
         Assert.DoesNotContain(service.Requests, static r => r.Method == HttpMethod.Delete);
         Assert.Equal(2, service.UncommittedBlockCount);
     }
@@ -211,7 +219,8 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
-        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+        var receipt =
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
         var rejected = await Record.ExceptionAsync(async () =>
             await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "forged")]));
 
@@ -232,7 +241,8 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf(content));
-        var uploaded = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+        var uploaded =
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
         var missing = (await storage.SignPartAsync(session, 2, TimeSpan.FromMinutes(1))).UploadUri;
         var missingToken = HttpUtility.ParseQueryString(missing.Query)["blockid"]!;
 
@@ -255,7 +265,8 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
-        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+        var receipt =
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
         await storage.CompleteUploadAsync(session, [receipt]);
 
         // Act
@@ -264,7 +275,8 @@ public sealed class AzureObjectStorageTests
         // Assert
         Assert.Null(exception);
         Assert.Single(service.Requests, static r => r.Headers.ContainsKey("x-ms-copy-source"));
-        Assert.Single(service.Requests, static r => r.Method == HttpMethod.Put && r.Query.Contains("comp=blocklist", StringComparison.Ordinal));
+        Assert.Single(service.Requests,
+            static r => r.Method == HttpMethod.Put && r.Query.Contains("comp=blocklist", StringComparison.Ordinal));
     }
 
     /// <summary>Checks that completion resumes from committed staging without recommitting after a failed promotion.</summary>
@@ -277,7 +289,8 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
-        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+        var receipt =
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
         service.FailNextCopy = true;
         var failed = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt]));
 
@@ -286,7 +299,8 @@ public sealed class AzureObjectStorageTests
 
         // Assert
         Assert.IsType<RequestFailedException>(failed);
-        Assert.Single(service.Requests, static r => r.Method == HttpMethod.Put && r.Query.Contains("comp=blocklist", StringComparison.Ordinal));
+        Assert.Single(service.Requests,
+            static r => r.Method == HttpMethod.Put && r.Query.Contains("comp=blocklist", StringComparison.Ordinal));
         Assert.True(await storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest));
         Assert.Equal(1, service.BlobCount);
     }
@@ -301,8 +315,10 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
-        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
-        service.SeedBlob($"/{FirstContainer}/content/sha256/{digest.Sha256[..2]}/{digest.Sha256}", content, digest.Sha256);
+        var receipt =
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+        service.SeedBlob($"/{FirstContainer}/content/sha256/{digest.Sha256[..2]}/{digest.Sha256}", content,
+            digest.Sha256);
 
         // Act
         var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt]));
@@ -323,8 +339,10 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
-        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
-        service.SeedBlob($"/{FirstContainer}/content/sha256/{digest.Sha256[..2]}/{digest.Sha256}", "impostor"u8.ToArray(), "0".PadLeft(64, '0'));
+        var receipt =
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+        service.SeedBlob($"/{FirstContainer}/content/sha256/{digest.Sha256[..2]}/{digest.Sha256}",
+            "impostor"u8.ToArray(), "0".PadLeft(64, '0'));
 
         // Act
         var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt]));
@@ -345,7 +363,8 @@ public sealed class AzureObjectStorageTests
         var storage = CreateStorage(service);
         var tenant = new TenantId("tenant-one");
         var session = await storage.CreateUploadAsync(tenant, digest);
-        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+        var receipt =
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
 
         // Act
         var results = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(async () =>
@@ -366,12 +385,14 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf(content));
-        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+        var receipt =
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
         using var cancellation = new CancellationTokenSource();
         await cancellation.CancelAsync();
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt], cancellation.Token));
+        var exception = await Record.ExceptionAsync(async () =>
+            await storage.CompleteUploadAsync(session, [receipt], cancellation.Token));
 
         // Assert
         Assert.IsAssignableFrom<OperationCanceledException>(exception);
@@ -391,7 +412,8 @@ public sealed class AzureObjectStorageTests
         var owner = new TenantId("tenant-one");
         var other = new TenantId("tenant-two");
         var session = await storage.CreateUploadAsync(owner, digest);
-        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+        var receipt =
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
         await storage.CompleteUploadAsync(session, [receipt]);
 
         // Act
@@ -401,9 +423,12 @@ public sealed class AzureObjectStorageTests
         Assert.True(await storage.HeadAndVerifyAsync(owner, digest));
         Assert.False(otherVisible);
         Assert.Null(await storage.OpenReadAsync(other, digest));
-        await Assert.ThrowsAsync<FileNotFoundException>(async () => await storage.CreateDownloadAsync(other, digest, TimeSpan.FromMinutes(1)));
-        Assert.Contains(service.Requests, static r => r.Path.StartsWith("/tenant-two-container/", StringComparison.Ordinal));
-        Assert.DoesNotContain(service.Requests, r => r.Path.StartsWith("/tenant-two-container/", StringComparison.Ordinal) && r.Method != HttpMethod.Head);
+        await Assert.ThrowsAsync<FileNotFoundException>(async () =>
+            await storage.CreateDownloadAsync(other, digest, TimeSpan.FromMinutes(1)));
+        Assert.Contains(service.Requests,
+            static r => r.Path.StartsWith("/tenant-two-container/", StringComparison.Ordinal));
+        Assert.DoesNotContain(service.Requests,
+            r => r.Path.StartsWith("/tenant-two-container/", StringComparison.Ordinal) && r.Method != HttpMethod.Head);
     }
 
     /// <summary>Checks that a token cannot be reused to sign parts for another provider key ring.</summary>
@@ -417,8 +442,10 @@ public sealed class AzureObjectStorageTests
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray()));
 
         // Act
-        var foreignKeyRing = await Record.ExceptionAsync(async () => await foreign.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)));
-        var garbage = await Record.ExceptionAsync(async () => await storage.SignPartAsync(new ObjectUploadSession("not-a-token"), 1, TimeSpan.FromMinutes(1)));
+        var foreignKeyRing =
+            await Record.ExceptionAsync(async () => await foreign.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)));
+        var garbage = await Record.ExceptionAsync(async () =>
+            await storage.SignPartAsync(new ObjectUploadSession("not-a-token"), 1, TimeSpan.FromMinutes(1)));
 
         // Assert
         Assert.IsType<ArgumentException>(foreignKeyRing);
@@ -435,22 +462,26 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
         var tenant = new TenantId("tenant-one");
-        service.SeedBlob($"/{FirstContainer}/content/sha256/{digest.Sha256[..2]}/{digest.Sha256}", content, digest.Sha256);
+        service.SeedBlob($"/{FirstContainer}/content/sha256/{digest.Sha256[..2]}/{digest.Sha256}", content,
+            digest.Sha256);
 
         // Act
         var download = await storage.CreateDownloadAsync(tenant, digest, TimeSpan.FromMinutes(5));
 
         // Assert
         var tooLong = await Record.ExceptionAsync(async () =>
-            await storage.CreateDownloadAsync(tenant, digest, ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromSeconds(1)));
-        var zero = await Record.ExceptionAsync(async () => await storage.CreateDownloadAsync(tenant, digest, TimeSpan.Zero));
+            await storage.CreateDownloadAsync(tenant, digest,
+                ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromSeconds(1)));
+        var zero = await Record.ExceptionAsync(async () =>
+            await storage.CreateDownloadAsync(tenant, digest, TimeSpan.Zero));
         Assert.IsType<ArgumentOutOfRangeException>(tooLong);
         Assert.IsType<ArgumentOutOfRangeException>(zero);
         Assert.InRange(download.ExpiresAt, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(5).AddSeconds(5));
         var query = HttpUtility.ParseQueryString(download.DownloadUri.Query);
         Assert.Equal("r", query["sp"]);
         Assert.Equal("https", query["spr"]);
-        Assert.Equal(download.ExpiresAt.UtcDateTime, DateTimeOffset.Parse(query["se"]!, CultureInfo.InvariantCulture).UtcDateTime, TimeSpan.FromSeconds(1));
+        Assert.Equal(download.ExpiresAt.UtcDateTime,
+            DateTimeOffset.Parse(query["se"]!, CultureInfo.InvariantCulture).UtcDateTime, TimeSpan.FromSeconds(1));
     }
 
     /// <summary>Checks that part links cannot outlive the 24-hour upload session or exceed the lifetime bound.</summary>
@@ -463,7 +494,8 @@ public sealed class AzureObjectStorageTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await storage.SignPartAsync(session, 1, ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromSeconds(1)));
+            await storage.SignPartAsync(session, 1,
+                ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromSeconds(1)));
 
         // Assert
         Assert.IsType<ArgumentOutOfRangeException>(exception);
@@ -478,7 +510,8 @@ public sealed class AzureObjectStorageTests
         var digest = DigestOf(content);
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
-        service.SeedBlob($"/{FirstContainer}/content/sha256/{digest.Sha256[..2]}/{digest.Sha256}", content, digest.Sha256);
+        service.SeedBlob($"/{FirstContainer}/content/sha256/{digest.Sha256[..2]}/{digest.Sha256}", content,
+            digest.Sha256);
 
         // Act
         var verified = await storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest);
@@ -499,7 +532,8 @@ public sealed class AzureObjectStorageTests
         var storage = CreateStorage(service);
         var tenant = new TenantId("tenant-one");
         var wrongLength = new ObjectDigest(digest.Sha256, content.LongLength + 1);
-        service.SeedBlob($"/{FirstContainer}/content/sha256/{digest.Sha256[..2]}/{digest.Sha256}", content, new string('f', 64));
+        service.SeedBlob($"/{FirstContainer}/content/sha256/{digest.Sha256[..2]}/{digest.Sha256}", content,
+            new string('f', 64));
 
         // Act
         var unverifiedMetadata = await storage.HeadAndVerifyAsync(tenant, digest);
@@ -521,7 +555,8 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
         var tenant = new TenantId("tenant-one");
-        service.SeedBlob($"/{FirstContainer}/content/sha256/{digest.Sha256[..2]}/{digest.Sha256}", content, digest.Sha256);
+        service.SeedBlob($"/{FirstContainer}/content/sha256/{digest.Sha256[..2]}/{digest.Sha256}", content,
+            digest.Sha256);
 
         // Act
         await using var stream = await storage.OpenReadAsync(tenant, digest);
@@ -565,7 +600,8 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
-        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+        var receipt =
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
         service.FailDeletes = true;
 
         // Act
@@ -582,7 +618,8 @@ public sealed class AzureObjectStorageTests
     {
         // Arrange
         var service = new FakeBlobService();
-        var client = new BlobServiceClient(new Uri("https://account.blob.core.windows.net"), new StaticTokenCredential(), ClientOptions(service));
+        var client = new BlobServiceClient(new Uri("https://account.blob.core.windows.net"),
+            new StaticTokenCredential(), ClientOptions(service));
         var storage = CreateStorage(client);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray()));
 
@@ -597,7 +634,9 @@ public sealed class AzureObjectStorageTests
         Assert.False(string.IsNullOrEmpty(query["skoid"]));
         Assert.False(string.IsNullOrEmpty(query["sig"]));
         Assert.NotNull(second);
-        Assert.Single(service.Requests, static r => r.Method == HttpMethod.Post && r.Query.Contains("comp=userdelegationkey", StringComparison.Ordinal));
+        Assert.Single(service.Requests,
+            static r => r.Method == HttpMethod.Post &&
+                        r.Query.Contains("comp=userdelegationkey", StringComparison.Ordinal));
     }
 
     /// <summary>Checks that a client unable to sign fails closed with a clear error.</summary>
@@ -606,12 +645,14 @@ public sealed class AzureObjectStorageTests
     {
         // Arrange
         var service = new FakeBlobService { DenyDelegationKey = true };
-        var client = new BlobServiceClient(new Uri("https://account.blob.core.windows.net"), new StaticTokenCredential(), ClientOptions(service));
+        var client = new BlobServiceClient(new Uri("https://account.blob.core.windows.net"),
+            new StaticTokenCredential(), ClientOptions(service));
         var storage = CreateStorage(client);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray()));
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)));
+        var exception =
+            await Record.ExceptionAsync(async () => await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)));
 
         // Assert
         Assert.IsType<InvalidOperationException>(exception);
@@ -624,7 +665,8 @@ public sealed class AzureObjectStorageTests
         // Arrange
         var service = new FakeBlobService();
         var client = new BlobServiceClient(new Uri("http://127.0.0.1:10000/devstoreaccount1"),
-            new StorageSharedKeyCredential("devstoreaccount1", Convert.ToBase64String(new byte[32])), ClientOptions(service));
+            new StorageSharedKeyCredential("devstoreaccount1", Convert.ToBase64String(new byte[32])),
+            ClientOptions(service));
         var storage = CreateStorage(client);
         var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray()));
 
@@ -644,7 +686,8 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var services = new ServiceCollection();
         services.AddDataProtection().UseEphemeralDataProtectionProvider();
-        services.AddSingleton<IObjectStorageTenantResolver>(new FixedResolver(new ObjectStorageLocation("container", " ")));
+        services.AddSingleton<IObjectStorageTenantResolver>(
+            new FixedResolver(new ObjectStorageLocation("container", " ")));
         services.AddAzureObjectStorage(builder => builder.UseClient(CreateClient(service)));
         using var provider = services.BuildServiceProvider();
         var storage = provider.GetRequiredService<IObjectStorage>();
@@ -671,7 +714,8 @@ public sealed class AzureObjectStorageTests
         Assert.IsType<InvalidOperationException>(exception);
     }
 
-    static ObjectDigest DigestOf(byte[] content) => new(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
+    static ObjectDigest DigestOf(byte[] content) =>
+        new(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
 
     static BlobClientOptions ClientOptions(FakeBlobService service) => new()
     {
@@ -726,12 +770,17 @@ public sealed class AzureObjectStorageTests
         public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken) =>
             new("token", DateTimeOffset.UtcNow.AddHours(1));
 
-        public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext, CancellationToken cancellationToken) =>
+        public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext,
+            CancellationToken cancellationToken) =>
             ValueTask.FromResult(GetToken(requestContext, cancellationToken));
     }
 
     /// <summary>A captured outgoing blob service request.</summary>
-    sealed record RecordedRequest(HttpMethod Method, string Path, string Query, IReadOnlyDictionary<string, string> Headers);
+    sealed record RecordedRequest(
+        HttpMethod Method,
+        string Path,
+        string Query,
+        IReadOnlyDictionary<string, string> Headers);
 
     /// <summary>A small in-memory Azure Blob service that answers the block blob operations the adapter uses.</summary>
     sealed class FakeBlobService : HttpMessageHandler
@@ -804,7 +853,8 @@ public sealed class AzureObjectStorageTests
         {
             lock (_sync)
             {
-                _blobs[path] = new StoredBlob(content, NextEtag(), new Dictionary<string, string> { ["portiasha256"] = digestMetadata });
+                _blobs[path] = new StoredBlob(content, NextEtag(),
+                    new Dictionary<string, string> { ["portiasha256"] = digestMetadata });
             }
         }
 
@@ -812,16 +862,21 @@ public sealed class AzureObjectStorageTests
         public async Task<ObjectPartReceipt> UploadAsync(ObjectUploadPart part, byte[] bytes)
         {
             using var client = new HttpClient(this, disposeHandler: false);
-            using var request = new HttpRequestMessage(HttpMethod.Put, part.UploadUri) { Content = new ByteArrayContent(bytes) };
+            using var request = new HttpRequestMessage(HttpMethod.Put, part.UploadUri)
+            { Content = new ByteArrayContent(bytes) };
             using var response = await client.SendAsync(request);
             response.EnsureSuccessStatusCode();
-            return new ObjectPartReceipt(part.PartNumber, HttpUtility.ParseQueryString(part.UploadUri.Query)["blockid"]!);
+            return new ObjectPartReceipt(part.PartNumber,
+                HttpUtility.ParseQueryString(part.UploadUri.Query)["blockid"]!);
         }
 
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
+            CancellationToken cancellationToken)
         {
             var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var header in request.Headers.Concat(request.Content?.Headers ?? Enumerable.Empty<KeyValuePair<string, IEnumerable<string>>>()))
+            foreach (var header in request.Headers.Concat(request.Content?.Headers ??
+                                                          Enumerable
+                                                              .Empty<KeyValuePair<string, IEnumerable<string>>>()))
             {
                 headers[header.Key] = string.Join(",", header.Value);
             }
@@ -837,18 +892,23 @@ public sealed class AzureObjectStorageTests
             }
         }
 
-        HttpResponseMessage Handle(HttpMethod method, string path, System.Collections.Specialized.NameValueCollection query,
+        HttpResponseMessage Handle(HttpMethod method, string path,
+            System.Collections.Specialized.NameValueCollection query,
             Dictionary<string, string> headers, byte[] body)
         {
             var comp = query["comp"];
             if (method == HttpMethod.Post && comp == "userdelegationkey")
             {
-                return DenyDelegationKey ? Error(HttpStatusCode.Forbidden, "AuthorizationPermissionMismatch") : DelegationKey(body);
+                return DenyDelegationKey
+                    ? Error(HttpStatusCode.Forbidden, "AuthorizationPermissionMismatch")
+                    : DelegationKey(body);
             }
 
             if (method == HttpMethod.Put && comp == "block")
             {
-                var blocks = _uncommitted.TryGetValue(path, out var existing) ? existing : _uncommitted[path] = [with(StringComparer.Ordinal)];
+                var blocks = _uncommitted.TryGetValue(path, out var existing)
+                    ? existing
+                    : _uncommitted[path] = [with(StringComparer.Ordinal)];
                 blocks[query["blockid"]!] = body;
                 return new HttpResponseMessage(HttpStatusCode.Created);
             }
@@ -864,19 +924,23 @@ public sealed class AzureObjectStorageTests
 
                 return Xml(HttpStatusCode.OK, new XElement("BlockList",
                     new XElement("CommittedBlocks", (blob?.Blocks ?? []).Select(block =>
-                        new XElement("Block", new XElement("Name", block.Key), new XElement("Size", block.Value.Length)))),
+                        new XElement("Block", new XElement("Name", block.Key),
+                            new XElement("Size", block.Value.Length)))),
                     new XElement("UncommittedBlocks", (pending ?? []).Select(block =>
-                        new XElement("Block", new XElement("Name", block.Key), new XElement("Size", block.Value.Length))))));
+                        new XElement("Block", new XElement("Name", block.Key),
+                            new XElement("Size", block.Value.Length))))));
             }
 
             if (method == HttpMethod.Put && comp == "blocklist")
             {
-                var ids = XDocument.Parse(Encoding.UTF8.GetString(body).TrimStart('\uFEFF')).Root!.Elements().Select(static e => e.Value).ToArray();
+                var ids = XDocument.Parse(Encoding.UTF8.GetString(body).TrimStart('\uFEFF')).Root!.Elements()
+                    .Select(static e => e.Value).ToArray();
                 _blobs.TryGetValue(path, out var current);
                 if (current is not null && headers.TryGetValue("If-None-Match", out var condition) && condition == "*")
                 {
                     return Error(HttpStatusCode.PreconditionFailed, "ConditionNotMet");
                 }
+
                 _uncommitted.TryGetValue(path, out var pending);
                 var resolved = new List<KeyValuePair<string, byte[]>>();
                 foreach (var id in ids)
@@ -897,8 +961,10 @@ public sealed class AzureObjectStorageTests
 
                 _uncommitted.Remove(path);
                 var meta = headers.Where(static h => h.Key.StartsWith("x-ms-meta-", StringComparison.OrdinalIgnoreCase))
-                    .ToDictionary(static h => h.Key["x-ms-meta-".Length..], static h => h.Value, StringComparer.OrdinalIgnoreCase);
-                var stored = new StoredBlob(resolved.SelectMany(static b => b.Value).ToArray(), NextEtag(), meta) { Blocks = new Dictionary<string, byte[]>(resolved, StringComparer.Ordinal) };
+                    .ToDictionary(static h => h.Key["x-ms-meta-".Length..], static h => h.Value,
+                        StringComparer.OrdinalIgnoreCase);
+                var stored = new StoredBlob(resolved.SelectMany(static b => b.Value).ToArray(), NextEtag(), meta)
+                { Blocks = new Dictionary<string, byte[]>(resolved, StringComparer.Ordinal) };
                 _blobs[path] = stored;
                 _etagHistory[path] = stored.ETag;
                 return Etagged(HttpStatusCode.Created, stored);
@@ -929,7 +995,8 @@ public sealed class AzureObjectStorageTests
                 }
 
                 var meta = headers.Where(static h => h.Key.StartsWith("x-ms-meta-", StringComparison.OrdinalIgnoreCase))
-                    .ToDictionary(static h => h.Key["x-ms-meta-".Length..], static h => h.Value, StringComparer.OrdinalIgnoreCase);
+                    .ToDictionary(static h => h.Key["x-ms-meta-".Length..], static h => h.Value,
+                        StringComparer.OrdinalIgnoreCase);
                 var copied = new StoredBlob(source.Content, NextEtag(), meta);
                 _blobs[path] = copied;
                 var response = Etagged(HttpStatusCode.Accepted, copied);
@@ -951,7 +1018,9 @@ public sealed class AzureObjectStorageTests
                 }
 
                 var response = Etagged(HttpStatusCode.OK, blob);
-                response.Content = method == HttpMethod.Get ? new ByteArrayContent(blob.Content) : new ByteArrayContent([]);
+                response.Content = method == HttpMethod.Get
+                    ? new ByteArrayContent(blob.Content)
+                    : new ByteArrayContent([]);
                 response.Content.Headers.ContentLength = blob.Content.Length;
                 response.Content.Headers.LastModified = DateTimeOffset.UtcNow;
                 response.Headers.Add("x-ms-blob-type", "BlockBlob");
@@ -977,7 +1046,9 @@ public sealed class AzureObjectStorageTests
                     return Error(HttpStatusCode.InternalServerError, "InternalError");
                 }
 
-                return _blobs.Remove(path) ? new HttpResponseMessage(HttpStatusCode.Accepted) : Error(HttpStatusCode.NotFound, "BlobNotFound");
+                return _blobs.Remove(path)
+                    ? new HttpResponseMessage(HttpStatusCode.Accepted)
+                    : Error(HttpStatusCode.NotFound, "BlobNotFound");
             }
 
             return Error(HttpStatusCode.BadRequest, "UnsupportedFakeOperation");
@@ -995,7 +1066,8 @@ public sealed class AzureObjectStorageTests
 
         static HttpResponseMessage Error(HttpStatusCode status, string code)
         {
-            var response = Xml(status, new XElement("Error", new XElement("Code", code), new XElement("Message", code)));
+            var response = Xml(status,
+                new XElement("Error", new XElement("Code", code), new XElement("Message", code)));
             response.Headers.Add("x-ms-error-code", code);
             return response;
         }

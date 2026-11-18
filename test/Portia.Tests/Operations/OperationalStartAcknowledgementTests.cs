@@ -3,8 +3,11 @@ namespace Cntryl.Portia;
 /// <summary>Lost journal acknowledgements must not duplicate a single durable attempt identity.</summary>
 public sealed class OperationalStartAcknowledgementTests
 {
-    static readonly OperationalTarget Target = new("operational-reactor", "stream://test/operational/*", OperationalScope.Global);
-    static readonly OperationalProcessingSettings Settings = new(512, 4096, 3, TimeSpan.TicksPerMillisecond, TimeSpan.TicksPerSecond);
+    static readonly OperationalTarget Target = new("operational-reactor", "stream://test/operational/*",
+        OperationalScope.Global);
+
+    static readonly OperationalProcessingSettings Settings = new(512, 4096, 3, TimeSpan.TicksPerMillisecond,
+        TimeSpan.TicksPerSecond);
 
     /// <summary>A persisted start can be observed after acknowledgement loss without being appended again.</summary>
     [Fact]
@@ -65,7 +68,9 @@ public sealed class OperationalStartAcknowledgementTests
         reactor.BindWorkload(new WorkloadIdentity(Target.Processor), Target.Processor);
 
         // Act
-        var checkpoint = await new ReactorRunner(await OperationalExecutionTests.EventsAsync()).RunAsync(session, reactor, ProjectionCheckpoint.Start);
+        var checkpoint =
+            await new ReactorRunner(await OperationalExecutionTests.EventsAsync()).RunAsync(session, reactor,
+                ProjectionCheckpoint.Start);
 
         // Assert
         Assert.Equal("2", checkpoint.Cursor.Value);
@@ -103,12 +108,15 @@ public sealed class OperationalStartAcknowledgementTests
                 FailNextStartBeforeCommit = false;
                 throw new IOException("the journal write failed before its attempt start committed");
             }
+
             var result = await _inner.CompareExchangeAsync(replacement, expectedRevision, expectedOwner, ct);
-            if (result && LoseNextStartAcknowledgement && replacement.Attempts.Any(attempt => attempt.Outcome == "running"))
+            if (result && LoseNextStartAcknowledgement &&
+                replacement.Attempts.Any(attempt => attempt.Outcome == "running"))
             {
                 LoseNextStartAcknowledgement = false;
                 throw new IOException("the journal committed the attempt start but its acknowledgement was lost");
             }
+
             return result;
         }
 

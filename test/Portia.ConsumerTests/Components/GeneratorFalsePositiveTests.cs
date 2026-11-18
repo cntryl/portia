@@ -18,18 +18,18 @@ public sealed class GeneratorFalsePositiveTests
     {
         // Arrange
         const string source = """
-                                                                 using Cntryl.Portia;
-                                                                 namespace A.@class
-                                                                 {
-                                                                     [RequestRoute("a", "b", "c", "d")][Discriminator("p1", 1)]
-                                                                     public sealed record Ping : IRequest, ICallable;
-                                                                 }
-                                                                 namespace B
-                                                                 {
-                                                                     [RequestRoute("a", "b", "c", "e")][Discriminator("p2", 1)]
-                                                                     public sealed record Ping : IRequest, ICallable;
-                                                                 }
-                                                                 """;
+                              using Cntryl.Portia;
+                              namespace A.@class
+                              {
+                                  [RequestRoute("a", "b", "c", "d")][Discriminator("p1", 1)]
+                                  public sealed record Ping : IRequest, ICallable;
+                              }
+                              namespace B
+                              {
+                                  [RequestRoute("a", "b", "c", "e")][Discriminator("p2", 1)]
+                                  public sealed record Ping : IRequest, ICallable;
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new PortiaServiceRegistrationGenerator());
@@ -43,14 +43,14 @@ public sealed class GeneratorFalsePositiveTests
     {
         // Arrange
         const string source = """
-                                                                 using Cntryl.Portia;
-                                                                 using Microsoft.AspNetCore.Routing;
-                                                                 public sealed record Quote(decimal Limit = decimal.MaxValue, decimal Floor = decimal.MinValue) : IRequest<string>, ICallable;
-                                                                 public static class Endpoints
-                                                                 {
-                                                                     public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Quote, string>("/quotes");
-                                                                 }
-                                                                 """;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              public sealed record Quote(decimal Limit = decimal.MaxValue, decimal Floor = decimal.MinValue) : IRequest<string>, ICallable;
+                              public static class Endpoints
+                              {
+                                  public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Quote, string>("/quotes");
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
@@ -64,14 +64,14 @@ public sealed class GeneratorFalsePositiveTests
     {
         // Arrange
         const string source = """
-                                                                 using Cntryl.Portia;
-                                                                 using Microsoft.AspNetCore.Routing;
-                                                                 public sealed class Create : IRequest, ICallable { public required string Name { get; init; } }
-                                                                 public static class Endpoints
-                                                                 {
-                                                                     public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Create>("/things");
-                                                                 }
-                                                                 """;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              public sealed class Create : IRequest, ICallable { public required string Name { get; init; } }
+                              public static class Endpoints
+                              {
+                                  public static void Map(IEndpointRouteBuilder app) => app.MapPortiaPost<Create>("/things");
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
@@ -85,15 +85,15 @@ public sealed class GeneratorFalsePositiveTests
     {
         // Arrange
         const string source = """
-                                                                 using System;
-                                                                 using Cntryl.Portia;
-                                                                 using Microsoft.AspNetCore.Routing;
-                                                                 public readonly record struct GetThing(Guid Id) : IRequest<string>, ICallable;
-                                                                 public static class Endpoints
-                                                                 {
-                                                                     public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<GetThing, string>("/things/{id}");
-                                                                 }
-                                                                 """;
+                              using System;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              public readonly record struct GetThing(Guid Id) : IRequest<string>, ICallable;
+                              public static class Endpoints
+                              {
+                                  public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<GetThing, string>("/things/{id}");
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
@@ -108,14 +108,14 @@ public sealed class GeneratorFalsePositiveTests
     {
         // Arrange
         const string source = """
-                                                                 using Cntryl.Portia;
-                                                                 using Microsoft.AspNetCore.Routing;
-                                                                 public sealed record GetCode(string Code) : IRequest<string>, ICallable;
-                                                                 public static class Endpoints
-                                                                 {
-                                                                     public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<GetCode, string>("/codes/{code:regex(^[a-z]?$)}");
-                                                                 }
-                                                                 """;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              public sealed record GetCode(string Code) : IRequest<string>, ICallable;
+                              public static class Endpoints
+                              {
+                                  public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<GetCode, string>("/codes/{code:regex(^[a-z]?$)}");
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
@@ -129,18 +129,18 @@ public sealed class GeneratorFalsePositiveTests
     {
         // Arrange
         const string source = """
-                                                                 using Cntryl.Portia;
-                                                                 using Microsoft.AspNetCore.Routing;
-                                                                 public sealed record GetCode(string Code) : IRequest<string>, ICallable;
-                                                                 public static class Endpoints
-                                                                 {
-                                                                     public static void Map(IEndpointRouteBuilder app)
-                                                                     {
-                                                                         app.MapPortiaGet<GetCode, string>("/a/{code?}");
-                                                                         app.MapPortiaGet<GetCode, string>("/b/{code:int?}");
-                                                                     }
-                                                                 }
-                                                                 """;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Routing;
+                              public sealed record GetCode(string Code) : IRequest<string>, ICallable;
+                              public static class Endpoints
+                              {
+                                  public static void Map(IEndpointRouteBuilder app)
+                                  {
+                                      app.MapPortiaGet<GetCode, string>("/a/{code?}");
+                                      app.MapPortiaGet<GetCode, string>("/b/{code:int?}");
+                                  }
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
@@ -154,20 +154,20 @@ public sealed class GeneratorFalsePositiveTests
     {
         // Arrange
         const string source = """
-                                                                 using Cntryl.Portia;
-                                                                 using Microsoft.AspNetCore.Builder;
-                                                                 using Microsoft.AspNetCore.Routing;
-                                                                 public sealed record GetA(string Id) : IRequest<string>, ICallable;
-                                                                 public static class Endpoints
-                                                                 {
-                                                                     public static void Map(IEndpointRouteBuilder app)
-                                                                     {
-                                                                         var legacy = app.MapPortiaGet<GetA, string>("/legacy/a/{id}");
-                                                                         legacy.ExcludeFromDescription();
-                                                                         app.MapPortiaGet<GetA, string>("/a/{id}");
-                                                                     }
-                                                                 }
-                                                                 """;
+                              using Cntryl.Portia;
+                              using Microsoft.AspNetCore.Builder;
+                              using Microsoft.AspNetCore.Routing;
+                              public sealed record GetA(string Id) : IRequest<string>, ICallable;
+                              public static class Endpoints
+                              {
+                                  public static void Map(IEndpointRouteBuilder app)
+                                  {
+                                      var legacy = app.MapPortiaGet<GetA, string>("/legacy/a/{id}");
+                                      legacy.ExcludeFromDescription();
+                                      app.MapPortiaGet<GetA, string>("/a/{id}");
+                                  }
+                              }
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new RequestHttpBindingGenerator());
@@ -181,23 +181,23 @@ public sealed class GeneratorFalsePositiveTests
     {
         // Arrange
         const string source = """
-                                                           using System;
-                                                           using System.Collections.Generic;
-                                                           using System.Security.Claims;
-                                                           using System.Threading.Tasks;
-                                                           using Cntryl.Portia;
-                                                           public static class Dispatch
-                                                           {
-                                                               // Guid is the real result root and is registered; IRequest<Guid> is not a root.
-                                                               public static ValueTask<Result<Guid>> Go(IRequestBus bus, IRequest<Guid> request, ClaimsPrincipal actor) =>
-                                                                   bus.SendAsync(request, actor);
-                                                               public static ValueTask<Result<IReadOnlyList<T>>> Page<T>(IRequestBus bus, IRequest<IReadOnlyList<T>> request, ClaimsPrincipal actor) =>
-                                                                   bus.SendAsync(request, actor);
-                                                           }
-                                                           [PortiaJsonContext]
-                                                           [System.Text.Json.Serialization.JsonSerializable(typeof(Guid))]
-                                                           internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
-                                                           """;
+                              using System;
+                              using System.Collections.Generic;
+                              using System.Security.Claims;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              public static class Dispatch
+                              {
+                                  // Guid is the real result root and is registered; IRequest<Guid> is not a root.
+                                  public static ValueTask<Result<Guid>> Go(IRequestBus bus, IRequest<Guid> request, ClaimsPrincipal actor) =>
+                                      bus.SendAsync(request, actor);
+                                  public static ValueTask<Result<IReadOnlyList<T>>> Page<T>(IRequestBus bus, IRequest<IReadOnlyList<T>> request, ClaimsPrincipal actor) =>
+                                      bus.SendAsync(request, actor);
+                              }
+                              [PortiaJsonContext]
+                              [System.Text.Json.Serialization.JsonSerializable(typeof(Guid))]
+                              internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
@@ -211,11 +211,11 @@ public sealed class GeneratorFalsePositiveTests
     {
         // Arrange
         const string source = """
-                                                           using Cntryl.Portia;
-                                                           [Discriminator("j01", 1)] file sealed record J01 : DomainEvent;
-                                                           [PortiaJsonContext]
-                                                           internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
-                                                           """;
+                              using Cntryl.Portia;
+                              [Discriminator("j01", 1)] file sealed record J01 : DomainEvent;
+                              [PortiaJsonContext]
+                              internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
+                              """;
 
         // Act
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
@@ -229,20 +229,21 @@ public sealed class GeneratorFalsePositiveTests
     {
         // Arrange
         const string source = """
-                                                                 using System.Threading;
-                                                                 using System.Threading.Tasks;
-                                                                 using Cntryl.Portia;
-                                                                 public sealed record Changed : DomainEvent;
-                                                                 public partial class BaseProjection(IProjectionStore store)
-                                                                     : Projector(store, EventStreamPattern.ForPattern("events")), IProjectorHandler<Changed>
-                                                                 {
-                                                                     public ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
-                                                                 }
-                                                                 public sealed class Projection(IProjectionStore store) : BaseProjection(store);
-                                                                 """;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              using Cntryl.Portia;
+                              public sealed record Changed : DomainEvent;
+                              public partial class BaseProjection(IProjectionStore store)
+                                  : Projector(store, EventStreamPattern.ForPattern("events")), IProjectorHandler<Changed>
+                              {
+                                  public ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                              }
+                              public sealed class Projection(IProjectionStore store) : BaseProjection(store);
+                              """;
 
         // Act
-        var diagnostics = GeneratorCompilation.OutputDiagnostics(source, new ProjectorReactorEventDispatcherGenerator());
+        var diagnostics =
+            GeneratorCompilation.OutputDiagnostics(source, new ProjectorReactorEventDispatcherGenerator());
 
         // Assert
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA002");
@@ -294,15 +295,16 @@ public sealed class GeneratorFalsePositiveTests
 
         // Act
         var generated = GeneratorCompilation.GeneratedSource($$"""
-                                                              using Cntryl.Portia;
-                                                              using Contracts;
-                                                              using Microsoft.Extensions.DependencyInjection;
-                                                              public static class Composition
-                                                              {
-                                                                  public static void Add(IServiceCollection services) => services.AddPortia();
-                                                                  public static int Classify(object value) { {{body}} }
-                                                              }
-                                                              """, [contracts], new RegistrationCallInterceptorGenerator());
+                                                               using Cntryl.Portia;
+                                                               using Contracts;
+                                                               using Microsoft.Extensions.DependencyInjection;
+                                                               public static class Composition
+                                                               {
+                                                                   public static void Add(IServiceCollection services) => services.AddPortia();
+                                                                   public static int Classify(object value) { {{body}} }
+                                                               }
+                                                               """, [contracts],
+            new RegistrationCallInterceptorGenerator());
 
         // Assert
         Assert.Contains("Contracts.UsedEvent", generated, StringComparison.Ordinal);
@@ -314,22 +316,22 @@ public sealed class GeneratorFalsePositiveTests
         // Arrange
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview);
         var compilation = CSharpCompilation.Create("SplitUpcaster",
-        [
-            CSharpSyntaxTree.ParseText("""
-                                       using Cntryl.Portia;
-                                       [Discriminator("evt", 2)] public sealed record Evt : DomainEvent;
-                                       public sealed partial class Up : IJsonDomainEventUpcaster;
-                                       """, parseOptions, "a.cs"),
-            CSharpSyntaxTree.ParseText("""
-                                       using System.Text.Json.Nodes;
-                                       public sealed partial class Up
-                                       {
-                                           public string EventName => "evt";
-                                           public int FromVersion => 1;
-                                           public JsonObject Upcast(JsonObject payload) => payload;
-                                       }
-                                       """, parseOptions, "b.cs")
-        ], ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            [
+                CSharpSyntaxTree.ParseText("""
+                                           using Cntryl.Portia;
+                                           [Discriminator("evt", 2)] public sealed record Evt : DomainEvent;
+                                           public sealed partial class Up : IJsonDomainEventUpcaster;
+                                           """, parseOptions, "a.cs"),
+                CSharpSyntaxTree.ParseText("""
+                                           using System.Text.Json.Nodes;
+                                           public sealed partial class Up
+                                           {
+                                               public string EventName => "evt";
+                                               public int FromVersion => 1;
+                                               public JsonObject Upcast(JsonObject payload) => payload;
+                                           }
+                                           """, parseOptions, "b.cs")
+            ], ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location).Append(typeof(PortiaBuilder).Assembly.Location)
             .Distinct(StringComparer.Ordinal).Select(path => MetadataReference.CreateFromFile(path)),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
@@ -349,10 +351,10 @@ public sealed class GeneratorFalsePositiveTests
     {
         // Arrange
         const string source = """
-                          using Cntryl.Portia;
-                          namespace App;
-                          [Discriminator("created", 1)] public sealed record Created : DomainEvent;
-                          """;
+                              using Cntryl.Portia;
+                              namespace App;
+                              [Discriminator("created", 1)] public sealed record Created : DomainEvent;
+                              """;
 
         // Act
         var diagnostics = GenerateFiles(new JsonMetadataDiagnosticGenerator(),
@@ -377,11 +379,11 @@ public sealed class GeneratorFalsePositiveTests
     {
         // Arrange
         const string source = """
-                                    public sealed partial class Handler
-                                    {
-                                        public Handler(System.IServiceProvider services) => _ = services;
-                                    }
-                                    """;
+                              public sealed partial class Handler
+                              {
+                                  public Handler(System.IServiceProvider services) => _ = services;
+                              }
+                              """;
 
         // Act
         var diagnostics = AnalyzeFiles(new ComponentPracticeAnalyzer(),
@@ -407,7 +409,8 @@ public sealed class GeneratorFalsePositiveTests
         CSharpGeneratorDriver.Create([generator.AsSourceGenerator()], parseOptions: FileParseOptions)
             .RunGenerators(CompileFiles(files)).GetRunResult().Diagnostics;
 
-    static ImmutableArray<Diagnostic> AnalyzeFiles(DiagnosticAnalyzer analyzer, params (string Path, string Source)[] files) =>
+    static ImmutableArray<Diagnostic> AnalyzeFiles(DiagnosticAnalyzer analyzer,
+        params (string Path, string Source)[] files) =>
         CompileFiles(files).WithAnalyzers([analyzer]).GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
 
     static CSharpCompilation CompileFiles((string Path, string Source)[] files) =>

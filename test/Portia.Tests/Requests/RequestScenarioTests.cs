@@ -484,8 +484,10 @@ public sealed class RequestScenarioTests
         using var cancellation = new CancellationTokenSource();
         var log = provider.GetRequiredService<ScenarioLog>();
         Task operation = query
-            ? RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCancelledQuery(), cancellation.Token).AsTask()
-            : RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCancelledCommand(), cancellation.Token).AsTask();
+            ? RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCancelledQuery(), cancellation.Token)
+                .AsTask()
+            : RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCancelledCommand(), cancellation.Token)
+                .AsTask();
         await log.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         // Act
@@ -512,9 +514,12 @@ public sealed class RequestScenarioTests
         _ = services.AddScoped<ScenarioStreamHandler>();
         _ = services.AddScoped<CancelledHandler>();
         _ = services.AddScoped<CancelledBehavior>();
-        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(new RequestPipelineBehaviorRegistration<ScenarioCancelledCommand, CancelledBehavior>(0));
-        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<ScenarioCancelledCommand, CancelledHandler>());
-        _ = services.AddSingleton<RequestHandlerRegistration>(new RequestRegistration<ScenarioCancelledQuery, CancelledHandler, int>());
+        _ = services.AddSingleton<RequestPipelineBehaviorRegistration>(
+            new RequestPipelineBehaviorRegistration<ScenarioCancelledCommand, CancelledBehavior>(0));
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<ScenarioCancelledCommand, CancelledHandler>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<ScenarioCancelledQuery, CancelledHandler, int>());
         _ = services.AddScoped<ScenarioExplodingCommandHandler>();
         _ = services.AddScoped<ScenarioConflictCommandHandler>();
         _ = services.AddScoped<ScenarioNestedDenialStreamHandler>();
@@ -566,6 +571,7 @@ public sealed class RequestScenarioTests
     internal sealed class ScopeMarker : IAsyncDisposable
     {
         public bool Disposed { get; private set; }
+
         public ValueTask DisposeAsync()
         {
             Disposed = true;
@@ -584,11 +590,13 @@ public sealed class RequestScenarioTests
     internal sealed record ScenarioQuery : IRequest<int>, IScenarioFamily;
 
     internal sealed record ScenarioCancelledCommand : IRequest, IScenarioFamily;
+
     internal sealed record ScenarioCancelledQuery : IRequest<int>, IScenarioFamily;
 
     internal sealed class CancelledBehavior(ScenarioLog log) : IRequestPipelineBehavior<ScenarioCancelledCommand>
     {
-        public ValueTask<Result> HandleAsync(IRequestContext<ScenarioCancelledCommand> context, RequestPipelineNext next, CancellationToken ct)
+        public ValueTask<Result> HandleAsync(IRequestContext<ScenarioCancelledCommand> context,
+            RequestPipelineNext next, CancellationToken ct)
         {
             log.Tokens.Add(ct);
             return next(ct);
@@ -598,13 +606,15 @@ public sealed class RequestScenarioTests
     internal sealed class CancelledHandler(ScenarioLog log, ScopeMarker scope)
         : IRequestHandler<ScenarioCancelledCommand>, IRequestHandler<ScenarioCancelledQuery, int>
     {
-        public async ValueTask<Result> HandleAsync(IRequestContext<ScenarioCancelledCommand> context, CancellationToken ct)
+        public async ValueTask<Result> HandleAsync(IRequestContext<ScenarioCancelledCommand> context,
+            CancellationToken ct)
         {
             await WaitAsync(ct);
             return Result.Success;
         }
 
-        public async ValueTask<Result<int>> HandleAsync(IRequestContext<ScenarioCancelledQuery> context, CancellationToken ct)
+        public async ValueTask<Result<int>> HandleAsync(IRequestContext<ScenarioCancelledQuery> context,
+            CancellationToken ct)
         {
             await WaitAsync(ct);
             return Result<int>.Success(1);
@@ -674,7 +684,8 @@ public sealed class RequestScenarioTests
             ValueTask.FromResult(Result<int>.Success(42));
     }
 
-    internal sealed class ScenarioStreamHandler(ScenarioLog log, ScopeMarker scope) : IStreamRequestHandler<ScenarioStream, int>
+    internal sealed class ScenarioStreamHandler(ScenarioLog log, ScopeMarker scope)
+        : IStreamRequestHandler<ScenarioStream, int>
     {
         public async IAsyncEnumerable<int> HandleAsync(IRequestContext<ScenarioStream> context,
             [EnumeratorCancellation] CancellationToken ct)

@@ -16,7 +16,8 @@ public sealed class FitzEventStoreProgressTests
     {
         // Arrange
         var expected = new EventStreamProgress(position is null ? EventCursor.Start : new EventCursor(position),
-            sourcePosition is null ? null : sourcePosition.Length == 0 ? EventCursor.Start : new EventCursor(sourcePosition),
+            sourcePosition is null ? null :
+            sourcePosition.Length == 0 ? EventCursor.Start : new EventCursor(sourcePosition),
             5, false, new DateTimeOffset(2026, 11, 3, 12, 0, 0, TimeSpan.Zero), 5);
         var json = JsonSerializer.Serialize(expected, EventStreamProgressJsonContext.Default.EventStreamProgress);
 
@@ -37,7 +38,8 @@ public sealed class FitzEventStoreProgressTests
     [Theory]
     [InlineData("orders", 10UL, 12UL)]
     [InlineData(null, 30UL, 32UL)]
-    public async Task ShouldObservePatternScopeWithoutDeserializingEventsGivenPatternAreaAndPosition(string? area, ulong position, ulong head)
+    public async Task ShouldObservePatternScopeWithoutDeserializingEventsGivenPatternAreaAndPosition(string? area,
+        ulong position, ulong head)
     {
         // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", area);
@@ -64,7 +66,8 @@ public sealed class FitzEventStoreProgressTests
         var client = new ProgressClient(Page(true, Item(3, 10, 30), Item(4, 11, 31)));
 
         // Act
-        var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), Cursor(10));
+        var progress =
+            await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), Cursor(10));
 
         // Assert
         Assert.Null(progress.SourcePosition);
@@ -139,7 +142,8 @@ public sealed class FitzEventStoreProgressTests
         var client = new ProgressClient(EmptyPage(8));
 
         // Act
-        var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), EventCursor.Start);
+        var progress = await Store(client)
+            .GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), EventCursor.Start);
 
         // Assert
         Assert.Equal(Cursor(9), progress.SourcePosition);
@@ -156,7 +160,8 @@ public sealed class FitzEventStoreProgressTests
         var client = new ProgressClient(Page(false, Item(1, 1, 1), Item(2, 2, 2)), new StreamMetadata(0, 1, 2));
 
         // Act
-        var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), EventCursor.Start);
+        var progress = await Store(client)
+            .GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), EventCursor.Start);
 
         // Assert
         Assert.Equal(Cursor(2), progress.SourcePosition);
@@ -206,7 +211,8 @@ public sealed class FitzEventStoreProgressTests
         var client = new ProgressClient(Page(false, withheld, Item(4, 11, 31)));
 
         // Act
-        var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), Cursor(10));
+        var progress =
+            await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), Cursor(10));
 
         // Assert
         Assert.Equal(Cursor(12), progress.SourcePosition);
@@ -245,7 +251,8 @@ public sealed class FitzEventStoreProgressTests
         var client = new ProgressClient(Page(true, Item(0, 0, 0), Item(1, 1, 1)), new StreamMetadata(0, 9999, 10000));
 
         // Act
-        var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), Cursor(0));
+        var progress = await Store(client)
+            .GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), Cursor(0));
 
         // Assert
         Assert.Equal(Cursor(10000), progress.SourcePosition);
@@ -262,7 +269,8 @@ public sealed class FitzEventStoreProgressTests
         var client = new ProgressClient(Page(false), new StreamMetadata(0, 2, 3));
 
         // Act
-        var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), Cursor(5));
+        var progress = await Store(client)
+            .GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), Cursor(5));
 
         // Assert
         Assert.Equal(Cursor(3), progress.SourcePosition);
@@ -279,7 +287,8 @@ public sealed class FitzEventStoreProgressTests
         var client = new ProgressClient(Page(false), new StreamMetadata(3, 4, 2));
 
         // Act
-        var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), Cursor(1));
+        var progress = await Store(client)
+            .GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), Cursor(1));
 
         // Assert
         Assert.Equal(Cursor(5), progress.SourcePosition);
@@ -320,7 +329,8 @@ public sealed class FitzEventStoreProgressTests
 
         // Assert
         var error = await Assert.ThrowsAsync<OperationCanceledException>(async () =>
-            await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant"), EventCursor.Start, cancellation.Token));
+            await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant"), EventCursor.Start,
+                cancellation.Token));
         Assert.Equal(cancellation.Token, error.CancellationToken);
         Assert.Empty(client.Reads);
     }
@@ -341,7 +351,9 @@ public sealed class FitzEventStoreProgressTests
     }
 
     static FitzEventStore Store(IStreamClient client) => new(client, new UnusedSerializer());
-    static EventCursor Cursor(ulong position) => new(position.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    static EventCursor Cursor(ulong position) =>
+        new(position.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
     static StreamReadItem Item(ulong resource, ulong area, ulong realm, string route = "stream://tenant/orders/one")
     {
@@ -361,11 +373,16 @@ public sealed class FitzEventStoreProgressTests
 
     sealed class UnusedSerializer : IDomainEventSerializer
     {
-        public ReadOnlyMemory<byte> Serialize(DomainEvent ev) => throw new InvalidOperationException("A progress probe must not serialize events.");
-        public DomainEvent Deserialize(ReadOnlyMemory<byte> data) => throw new InvalidOperationException("A progress probe must not deserialize events.");
+        public ReadOnlyMemory<byte> Serialize(DomainEvent ev) =>
+            throw new InvalidOperationException("A progress probe must not serialize events.");
+
+        public DomainEvent Deserialize(ReadOnlyMemory<byte> data) =>
+            throw new InvalidOperationException("A progress probe must not deserialize events.");
     }
 
-    sealed class ProgressClient(StreamReadPage page, StreamMetadata? metadata = null,
+    sealed class ProgressClient(
+        StreamReadPage page,
+        StreamMetadata? metadata = null,
         StreamReadPage? previousPage = null) : IStreamClient
     {
         public List<(string Route, ulong Offset, ulong Limit)> Reads { get; } = [];
@@ -389,10 +406,18 @@ public sealed class FitzEventStoreProgressTests
             return Task.FromResult(metadata ?? throw new InvalidOperationException("Unexpected metadata call."));
         }
 
-        public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null, CancellationToken ct = default) => throw new NotSupportedException();
-        public IAsyncEnumerable<StreamRecord> ReadAsync(string route, ulong startOffset, ulong limit = 100, StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null, ulong? capturedWatermark = null, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) => throw new NotSupportedException();
-        public Task<StreamSubscription> SubscribeAsync(string pattern, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null,
+            CancellationToken ct = default) => throw new NotSupportedException();
+
+        public IAsyncEnumerable<StreamRecord> ReadAsync(string route, ulong startOffset, ulong limit = 100,
+            StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null,
+            ulong? capturedWatermark = null, CancellationToken ct = default) => throw new NotSupportedException();
+
+        public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) =>
+            throw new NotSupportedException();
+
+        public Task<StreamSubscription> SubscribeAsync(string pattern, CancellationToken ct = default) =>
+            throw new NotSupportedException();
     }
 }
 

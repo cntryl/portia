@@ -492,6 +492,7 @@ public sealed class RequestPipelineBehaviorTests
                 release.TrySetResult();
             }
         }
+
         await first;
         Assert.Equal(SingleUseMessage, Assert.Single(behavior.Failures).Message);
     }
@@ -524,6 +525,7 @@ public sealed class RequestPipelineBehaviorTests
                 return false;
             }
         });
+
         Assert.Equal(1, (await Task.WhenAll(Attempt(), Attempt())).Count(won => won));
     }
 
@@ -908,7 +910,8 @@ public sealed class RequestPipelineBehaviorTests
             await EnterAsync(async token =>
             {
                 await foreach (var _ in continuation(token).WithCancellation(token))
-                { }
+                {
+                }
             }, ct);
             await foreach (var item in continuation(ct).WithCancellation(ct))
                 yield return item;
@@ -951,6 +954,7 @@ public sealed class RequestPipelineBehaviorTests
                         yield return item;
                 yield break;
             }
+
             await foreach (var item in _stream(ct).WithCancellation(ct))
                 yield return item;
         }

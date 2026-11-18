@@ -67,7 +67,8 @@ public sealed class AzureMailSenderTests
         var sender = new AzureMailSender(client, new Resolver());
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
+        var exception =
+            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
 
         // Assert
         _ = Assert.IsType<SendThrottledException>(exception);
@@ -108,7 +109,8 @@ public sealed class AzureMailSenderTests
         var sender = new AzureMailSender(client, new Resolver());
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
+        var exception =
+            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(exception);
@@ -128,7 +130,8 @@ public sealed class AzureMailSenderTests
         var sender = new AzureMailSender(client, new Resolver());
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
+        var exception =
+            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
 
         // Assert
         _ = Assert.IsType<RequestFailedException>(exception);

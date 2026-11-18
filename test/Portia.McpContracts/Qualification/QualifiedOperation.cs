@@ -12,11 +12,18 @@ public sealed record QualifiedChange(string Tenant, int Value, string Mode = "su
 
 /// <summary>Reads committed events and completed invocation scopes for the authenticated tenant.</summary>
 [Discriminator("qualification.read")]
-public sealed record QualifiedRead(string Tenant, bool Wait = false, bool Fail = false) : IRequest<QualifiedState>, ICallable;
+public sealed record QualifiedRead(string Tenant, bool Wait = false, bool Fail = false)
+    : IRequest<QualifiedState>, ICallable;
 
 public sealed record QualifiedReply(int Value, Guid ScopeId, string[] Stages);
-public sealed record QualifiedState(int[] Values, string[] Actors, QualifiedScopeEvidence[] Scopes,
-    int WaitStarted, int WaitCanceled);
+
+public sealed record QualifiedState(
+    int[] Values,
+    string[] Actors,
+    QualifiedScopeEvidence[] Scopes,
+    int WaitStarted,
+    int WaitCanceled);
+
 public sealed record QualifiedScopeEvidence(Guid Id, string[] Stages);
 
 /// <summary>The value change committed by the shared application fixture.</summary>
@@ -32,11 +39,14 @@ public sealed class QualifiedObservations
     public ConcurrentQueue<QualifiedScopeEvidence> Completed { get; } = new();
     public int WaitStarted => Volatile.Read(ref _waitStarted);
     public int WaitCanceled => Volatile.Read(ref _waitCanceled);
+
     public async Task WaitAsync(CancellationToken ct)
     {
         _ = Interlocked.Increment(ref _waitStarted);
         try
-        { await Task.Delay(Timeout.InfiniteTimeSpan, ct); }
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+        }
         catch (OperationCanceledException)
         {
             _ = Interlocked.Increment(ref _waitCanceled);
@@ -49,6 +59,7 @@ public sealed class QualifiedScope(QualifiedObservations observations) : IAsyncD
 {
     public Guid Id { get; } = Guid.NewGuid();
     public List<string> Stages { get; } = [];
+
     public async ValueTask DisposeAsync()
     {
         await Task.Yield();
@@ -62,6 +73,7 @@ public sealed class QualifiedWaitScope(QualifiedObservations observations) : IAs
 {
     readonly Guid _id = Guid.NewGuid();
     public bool Waiting { get; set; }
+
     public async ValueTask DisposeAsync()
     {
         await Task.Yield();
@@ -88,7 +100,8 @@ public sealed class QualifiedReadAuthorizer : IRequestAuthorizer<QualifiedRead>
 static class QualifiedPolicy
 {
     internal static Result Authorize(ClaimsPrincipal actor, string tenant) => actor.Identity?.Name == tenant
-        ? Result.Success : Result.Failure(new RequestError(RequestErrorKind.Forbidden, "Tenant access denied."));
+        ? Result.Success
+        : Result.Failure(new RequestError(RequestErrorKind.Forbidden, "Tenant access denied."));
 }
 
 public sealed class QualifiedGuard(QualifiedScope scope) : IRequestGuard<QualifiedChange>
@@ -96,7 +109,8 @@ public sealed class QualifiedGuard(QualifiedScope scope) : IRequestGuard<Qualifi
     public ValueTask<Result> GuardAsync(IRequestContext<QualifiedChange> context, CancellationToken ct)
     {
         scope.Stages.Add("guarded");
-        return ValueTask.FromResult(context.Request.Value > 0 ? Result.Success
+        return ValueTask.FromResult(context.Request.Value > 0
+            ? Result.Success
             : Result.Failure(new RequestError(RequestErrorKind.Validation, "Value must be positive.")));
     }
 }
@@ -110,14 +124,16 @@ public sealed class QualifiedBehavior(QualifiedScope scope) : IRequestPipelineBe
         var result = await continuation(ct);
         scope.Stages.Add("after");
         return result.IsSuccess
-            ? Result<QualifiedReply>.Success(result.Value with { Stages = scope.Stages.ToArray() }) : result;
+            ? Result<QualifiedReply>.Success(result.Value with { Stages = scope.Stages.ToArray() })
+            : result;
     }
 }
 
 public sealed class QualifiedChangeHandler(IAggregateExecutor executor, QualifiedScope scope)
     : IRequestHandler<QualifiedChange, QualifiedReply>
 {
-    public async ValueTask<Result<QualifiedReply>> HandleAsync(IRequestContext<QualifiedChange> context, CancellationToken ct)
+    public async ValueTask<Result<QualifiedReply>> HandleAsync(IRequestContext<QualifiedChange> context,
+        CancellationToken ct)
     {
         scope.Stages.Add("handled");
         if (context.Request.Mode == "conflict")
@@ -133,16 +149,21 @@ public sealed class QualifiedChangeHandler(IAggregateExecutor executor, Qualifie
     }
 }
 
-public sealed class QualifiedReadHandler(IEventStore store, QualifiedObservations observations, QualifiedWaitScope scope)
+public sealed class QualifiedReadHandler(
+    IEventStore store,
+    QualifiedObservations observations,
+    QualifiedWaitScope scope)
     : IRequestHandler<QualifiedRead, QualifiedState>
 {
-    public async ValueTask<Result<QualifiedState>> HandleAsync(IRequestContext<QualifiedRead> context, CancellationToken ct)
+    public async ValueTask<Result<QualifiedState>> HandleAsync(IRequestContext<QualifiedRead> context,
+        CancellationToken ct)
     {
         if (context.Request.Wait)
         {
             scope.Waiting = true;
             await observations.WaitAsync(ct);
         }
+
         if (context.Request.Fail)
             throw new IOException("sensitive query fault");
         var values = new List<int>();
@@ -152,6 +173,7 @@ public sealed class QualifiedReadHandler(IEventStore store, QualifiedObservation
             values.Add(((QualifiedChanged)record.Event).Value);
             actors.Add(record.Event.Metadata.Actor?.Subject ?? "missing");
         }
+
         return Result<QualifiedState>.Success(new QualifiedState(values.ToArray(), actors.ToArray(),
             observations.Completed.ToArray(), observations.WaitStarted, observations.WaitCanceled));
     }
@@ -159,8 +181,10 @@ public sealed class QualifiedReadHandler(IEventStore store, QualifiedObservation
 
 sealed class QualifiedAggregate : Aggregate
 {
-    internal QualifiedAggregate(string tenant) : base(Uuid.Parse(tenant, CultureInfo.InvariantCulture), Address(tenant)) =>
+    internal QualifiedAggregate(string tenant) :
+        base(Uuid.Parse(tenant, CultureInfo.InvariantCulture), Address(tenant)) =>
         On<QualifiedChanged>(changed => Value = changed.Value);
+
     internal int Value { get; private set; }
     internal void Change(int value) => RaiseEvent(new QualifiedChanged(value));
     internal static EventStreamAddress Address(string tenant) => new("qualification", "values", tenant);

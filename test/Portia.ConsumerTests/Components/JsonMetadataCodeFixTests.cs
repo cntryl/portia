@@ -34,9 +34,12 @@ public sealed class JsonMetadataCodeFixTests
 
     [Theory]
     [InlineData("[PortiaJsonContext] internal class WrongBase { }")]
-    [InlineData("[PortiaJsonContext] internal abstract partial class AbstractContext : System.Text.Json.Serialization.JsonSerializerContext;")]
-    [InlineData("[PortiaJsonContext] internal partial class GenericContext<T> : System.Text.Json.Serialization.JsonSerializerContext;")]
-    [InlineData("internal class Outer { [PortiaJsonContext] private partial class HiddenContext : System.Text.Json.Serialization.JsonSerializerContext; }")]
+    [InlineData(
+        "[PortiaJsonContext] internal abstract partial class AbstractContext : System.Text.Json.Serialization.JsonSerializerContext;")]
+    [InlineData(
+        "[PortiaJsonContext] internal partial class GenericContext<T> : System.Text.Json.Serialization.JsonSerializerContext;")]
+    [InlineData(
+        "internal class Outer { [PortiaJsonContext] private partial class HiddenContext : System.Text.Json.Serialization.JsonSerializerContext; }")]
     public async Task ShouldNotOfferContextAsRootTargetGivenUnusableContext(string context)
     {
         // Arrange
@@ -46,7 +49,8 @@ public sealed class JsonMetadataCodeFixTests
         var (actions, _) = await FixAsync(source, "App.Query", projectName: "orders-api");
 
         // Assert
-        Assert.Single(actions, action => action.Title.StartsWith("Create a Portia JSON context", StringComparison.Ordinal));
+        Assert.Single(actions,
+            action => action.Title.StartsWith("Create a Portia JSON context", StringComparison.Ordinal));
         Assert.DoesNotContain(actions, action => action.Title.StartsWith("Add App.Query to", StringComparison.Ordinal));
     }
 
@@ -574,7 +578,8 @@ public sealed class JsonMetadataCodeFixTests
         var source = UnrootedGenericResult.Replace("[PortiaJsonContext]", string.Empty, StringComparison.Ordinal)
             .Replace("[System.Text.Json.Serialization.JsonSerializable(typeof(Query))]", string.Empty,
                 StringComparison.Ordinal)
-            .Replace("internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;",
+            .Replace(
+                "internal sealed partial class AppJsonContext : System.Text.Json.Serialization.JsonSerializerContext;",
                 string.Empty, StringComparison.Ordinal);
 
         // Act

@@ -20,7 +20,8 @@ public sealed class EventSourcedTenantDirectoryRegistrationTests
         await RegisterAsync(events, "acme");
         var services = new ServiceCollection();
         _ = services.AddSingleton<IDomainEventReader>(events);
-        _ = services.AddPortia().AddEventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(Registry, GetTenantId);
+        _ = services.AddPortia()
+            .AddEventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(Registry, GetTenantId);
         await using var provider = services.BuildServiceProvider();
 
         // Act
@@ -42,7 +43,8 @@ public sealed class EventSourcedTenantDirectoryRegistrationTests
         var services = new ServiceCollection();
         _ = services.AddSingleton<IDomainEventReader>(events);
         _ = services.AddSingleton<ITenantDirectorySnapshotStore>(snapshots);
-        _ = services.AddPortia().AddEventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(Registry, GetTenantId);
+        _ = services.AddPortia()
+            .AddEventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(Registry, GetTenantId);
         await using var provider = services.BuildServiceProvider();
 
         _ = await provider.GetRequiredService<ITenantDirectory>().GetActiveTenantsAsync().ToListAsync();
@@ -63,7 +65,8 @@ public sealed class EventSourcedTenantDirectoryRegistrationTests
         var fixedDirectory = new FixedTenantDirectory(new TenantId("demo"));
         var services = new ServiceCollection();
         _ = services.AddSingleton<ITenantDirectory>(fixedDirectory);
-        _ = services.AddPortia().AddEventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(Registry, GetTenantId);
+        _ = services.AddPortia()
+            .AddEventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(Registry, GetTenantId);
 
         // Act
         using var provider = services.BuildServiceProvider();
@@ -75,7 +78,8 @@ public sealed class EventSourcedTenantDirectoryRegistrationTests
     static async Task RegisterAsync(InMemoryEventStore events, string tenant)
     {
         var ev = new TenantRegistered(tenant);
-        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), 1, DateTimeOffset.UtcNow));
+        ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), 1,
+            DateTimeOffset.UtcNow));
         await events.AppendAsync(new EventStreamAddress("global", "tenants", "registry"), 0, [ev]);
     }
 

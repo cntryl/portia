@@ -192,6 +192,7 @@ public sealed class FitzNotificationFaultTests
             Assert.Equal(TimeSpan.FromSeconds(seconds), await clock.WaitForDelayAsync());
             clock.Advance(TimeSpan.FromSeconds(seconds));
         }
+
         Assert.Equal(TimeSpan.FromSeconds(30), await clock.WaitForDelayAsync());
         Assert.False(move.IsCompleted);
         await cancellation.CancelAsync();
@@ -405,6 +406,7 @@ public sealed class FitzNotificationFaultTests
 
         public Task CreateBatchAsync(IReadOnlyList<ScheduleEntry> entries, CancellationToken ct = default) =>
             throw new NotSupportedException();
+
         public Task<ScheduleListPage> ListAsync(string? continuation, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
@@ -439,6 +441,7 @@ public sealed class FitzNotificationFaultTests
 
         public Task CreateBatchAsync(IReadOnlyList<ScheduleEntry> entries, CancellationToken ct = default) =>
             throw new NotSupportedException();
+
         public Task<ScheduleListPage> ListAsync(string? continuation, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();
 

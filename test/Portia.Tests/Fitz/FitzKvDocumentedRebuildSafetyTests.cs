@@ -15,22 +15,26 @@ public sealed class FitzKvDocumentedRebuildSafetyProof(FitzBrokerFixture broker)
         // Arrange
         await using var client = await broker.CreateClientAsync();
         var realm = "review-" + Uuid.CreateVersion4();
-        var repository = new DocumentedBalanceRepository(client.Kv, "kv://portia-review/rebuild/" + Uuid.CreateVersion4());
+        var repository =
+            new DocumentedBalanceRepository(client.Kv, "kv://portia-review/rebuild/" + Uuid.CreateVersion4());
         var pattern = EventStreamPattern.ForPattern(realm, "orders");
         var live = new CheckpointIdentity("AccountProjector", pattern);
         var candidate = new CheckpointIdentity("AccountProjector", pattern, "candidate");
         var account = Uuid.CreateVersion4();
         var checkpoint = new ProjectionCheckpoint(new EventCursor("1"));
 
-        await using (var batch = await repository.BeginAsync(new ProjectionBatchContext(live, ProjectionCheckpoint.Start)))
+        await using (var batch =
+                     await repository.BeginAsync(new ProjectionBatchContext(live, ProjectionCheckpoint.Start)))
         {
             await repository.IncrementBalanceAsync(account, 10, live.RebuildId);
             await batch.CommitAsync(checkpoint);
         }
+
         Assert.Equal(10L, await repository.ReadBalanceAsync(realm, account));
 
         // Act
-        await using (var batch = await repository.BeginAsync(new ProjectionBatchContext(candidate, ProjectionCheckpoint.Start)))
+        await using (var batch =
+                     await repository.BeginAsync(new ProjectionBatchContext(candidate, ProjectionCheckpoint.Start)))
         {
             await repository.IncrementBalanceAsync(account, 10, candidate.RebuildId);
             await batch.CommitAsync(checkpoint);
@@ -55,7 +59,9 @@ public sealed class FitzKvDocumentedRebuildSafetyProof(FitzBrokerFixture broker)
             WriteRoutes.Add(Transaction.Route);
             var key = BalanceKey(accountId, rebuildId);
             var current = await Transaction.GetAsync(key);
-            var balance = current is KvFound { Value: var currentBytes } ? BinaryPrimitives.ReadInt64BigEndian(currentBytes.Span) : 0;
+            var balance = current is KvFound { Value: var currentBytes }
+                ? BinaryPrimitives.ReadInt64BigEndian(currentBytes.Span)
+                : 0;
             var next = new byte[sizeof(long)];
             BinaryPrimitives.WriteInt64BigEndian(next, balance + amount);
             await Transaction.PutAsync(key, next);
@@ -65,7 +71,9 @@ public sealed class FitzKvDocumentedRebuildSafetyProof(FitzBrokerFixture broker)
         {
             await using var transaction = await BeginReadAsync(realm);
             var current = await transaction.GetAsync(BalanceKey(accountId, rebuildId));
-            return current is KvFound { Value: var currentBytes } ? BinaryPrimitives.ReadInt64BigEndian(currentBytes.Span) : null;
+            return current is KvFound { Value: var currentBytes }
+                ? BinaryPrimitives.ReadInt64BigEndian(currentBytes.Span)
+                : null;
         }
 
         static byte[] BalanceKey(Uuid accountId, string? rebuildId) => Encoding.UTF8.GetBytes(

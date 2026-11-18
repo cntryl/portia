@@ -20,7 +20,8 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false, 0, true)]
     [InlineData(false, 1, true)]
     [InlineData(false, 2, true)]
-    public async Task ShouldStopDispatchAndResumeAtCommittedProgressGivenFailedResult(bool projection, int mode, bool transient)
+    public async Task ShouldStopDispatchAndResumeAtCommittedProgressGivenFailedResult(bool projection, int mode,
+        bool transient)
     {
         // Arrange
         var source = await SeedAsync();
@@ -29,7 +30,8 @@ public sealed partial class ProcessorOutcomeTests
         var state = new State { Error = RequestError.Conflict("private failure", transient) };
 
         // Assert
-        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => RunAsync(source, state, projection, mode));
+        var failure =
+            await Assert.ThrowsAsync<ProcessorFailureException>(() => RunAsync(source, state, projection, mode));
 
         Assert.Same(state.Error, failure.Error);
         Assert.Equal(transient, failure.IsTransient);
@@ -64,7 +66,9 @@ public sealed partial class ProcessorOutcomeTests
         var state = new State { Exception = original };
 
         // Assert
-        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(async () => await RunAsync(await SeedAsync(), state, projection, 1));
+        var failure =
+            await Assert.ThrowsAsync<ProcessorFailureException>(async () =>
+                await RunAsync(await SeedAsync(), state, projection, 1));
 
         Assert.Same(original, failure.InnerException);
         Assert.True(failure.IsTransient);
@@ -107,7 +111,8 @@ public sealed partial class ProcessorOutcomeTests
         var failure = Assert.IsType<ProcessorFailureException>(error);
         Assert.False(failure.IsTransient);
         Assert.Contains("uninitialized Result", failure.InnerException!.Message, StringComparison.Ordinal);
-        Assert.Contains(projection ? "Projection" : "Reaction", failure.InnerException.Message, StringComparison.Ordinal);
+        Assert.Contains(projection ? "Projection" : "Reaction", failure.InnerException.Message,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -120,7 +125,9 @@ public sealed partial class ProcessorOutcomeTests
         var state = new State { Error = RequestError.Validation("bad event"), DisposeException = cleanup };
 
         // Assert
-        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(async () => await RunAsync(await SeedAsync(), state, true, 1));
+        var failure =
+            await Assert.ThrowsAsync<ProcessorFailureException>(async () =>
+                await RunAsync(await SeedAsync(), state, true, 1));
 
         Assert.Same(state.Error, failure.Error);
         Assert.Same(cleanup, failure.CleanupException);
@@ -139,7 +146,9 @@ public sealed partial class ProcessorOutcomeTests
         var state = new State { DisposeException = cleanup };
 
         // Assert
-        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(async () => await RunAsync(await SeedAsync(), state, true, 1));
+        var failure =
+            await Assert.ThrowsAsync<ProcessorFailureException>(async () =>
+                await RunAsync(await SeedAsync(), state, true, 1));
 
         Assert.Equal(ProcessorFailureStage.Disposing, failure.Stage);
         Assert.Same(cleanup, failure.InnerException);
@@ -162,7 +171,9 @@ public sealed partial class ProcessorOutcomeTests
         var state = new State { Checkpoint = new ProjectionCheckpoint(new EventCursor("previous")) };
 
         // Assert
-        var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => RunAsync(new FailedReader(original), state, projection, 1));
+        var failure =
+            await Assert.ThrowsAsync<ProcessorFailureException>(() =>
+                RunAsync(new FailedReader(original), state, projection, 1));
 
         Assert.Same(original, failure.InnerException);
         Assert.Equal(ProcessorFailureStage.Reading, failure.Stage);
@@ -188,8 +199,8 @@ public sealed partial class ProcessorOutcomeTests
         services.AddSingleton<IDomainEventReader>(await SeedAsync());
         var portia = services.AddPortia();
         _ = (projection
-            ? portia.AddProjector<GroupedProjection>("outcomes", WorkloadScope.Global)
-            : portia.AddReactor<GroupedReaction>("outcomes", WorkloadScope.Global))
+                ? portia.AddProjector<GroupedProjection>("outcomes", WorkloadScope.Global)
+                : portia.AddReactor<GroupedReaction>("outcomes", WorkloadScope.Global))
             .AddWorkers().UseSingleProcessWorkloads();
 
         // Act
@@ -213,7 +224,8 @@ public sealed partial class ProcessorOutcomeTests
             }
             else
             {
-                var terminal = await Assert.ThrowsAsync<WorkloadFailureException>(() => worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(3)));
+                var terminal = await Assert.ThrowsAsync<WorkloadFailureException>(() =>
+                    worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(3)));
                 Assert.Equal(1, terminal.Attempts);
                 var failure = Assert.IsType<ProcessorFailureException>(terminal.InnerException);
                 Assert.Same(state.Error, failure.Error);
@@ -246,7 +258,8 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false, true, 3)]
     [InlineData(true, false, 3)]
     [InlineData(false, false, 3)]
-    public async Task ShouldRespectClassificationAndRetainCauseGivenHostedException(bool projection, bool transient, int kind)
+    public async Task ShouldRespectClassificationAndRetainCauseGivenHostedException(bool projection, bool transient,
+        int kind)
     {
         // Arrange
         Exception original = kind switch
@@ -254,7 +267,9 @@ public sealed partial class ProcessorOutcomeTests
             1 => new ProviderException(transient),
             2 => new RequestGuardException(RequestError.Conflict("guard rejected", transient)),
             3 => new RequestAuthorizationException(RequestError.Forbidden("authorization rejected", transient)),
-            _ => transient ? new IOException("dependency unavailable") : new NotSupportedException("unsupported operation")
+            _ => transient
+                ? new IOException("dependency unavailable")
+                : new NotSupportedException("unsupported operation")
         };
         var state = new State { Projection = projection, Exception = original };
         var clock = new ManualClock();
@@ -264,8 +279,10 @@ public sealed partial class ProcessorOutcomeTests
         services.AddSingleton<IDomainEventReader>(await SeedAsync());
         var portia = services.AddPortia();
         _ = (projection
-            ? portia.AddProjector<GroupedProjection>("outcomes", WorkloadScope.Global, options => options.FailureAttemptLimit = 2)
-            : portia.AddReactor<GroupedReaction>("outcomes", WorkloadScope.Global, options => options.FailureAttemptLimit = 2))
+                ? portia.AddProjector<GroupedProjection>("outcomes", WorkloadScope.Global,
+                    options => options.FailureAttemptLimit = 2)
+                : portia.AddReactor<GroupedReaction>("outcomes", WorkloadScope.Global,
+                    options => options.FailureAttemptLimit = 2))
             .AddWorkers().UseSingleProcessWorkloads();
 
         // Act
@@ -296,7 +313,10 @@ public sealed partial class ProcessorOutcomeTests
                     clock.Advance(TimeSpan.FromSeconds(1));
                 }
             }
-            var terminal = await Assert.ThrowsAsync<WorkloadFailureException>(() => worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(30)));
+
+            var terminal =
+                await Assert.ThrowsAsync<WorkloadFailureException>(() =>
+                    worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(30)));
             Assert.Equal(transient ? 2 : 1, terminal.Attempts);
             var failure = Assert.IsType<ProcessorFailureException>(terminal.InnerException);
             Assert.Same(original, failure.InnerException);
@@ -332,7 +352,8 @@ public sealed partial class ProcessorOutcomeTests
             Assert.Equal("candidate", context.Identity.RebuildId);
         });
         var first = state.Contexts[0];
-        _ = Assert.Throws<ArgumentException>(() => new ProjectorContext<Changed>(new Changed(1), first.Source, first.Batch));
+        _ = Assert.Throws<ArgumentException>(() =>
+            new ProjectorContext<Changed>(new Changed(1), first.Source, first.Batch));
     }
 
     [Theory]
@@ -360,7 +381,8 @@ public sealed partial class ProcessorOutcomeTests
         Assert.Equal(ProcessorFailureStage.Handling, failure.Stage);
         Assert.Equal(ProjectionCheckpoint.Start, state.Checkpoint);
         if (projection)
-            Assert.Equal([transactionCleanup, cleanup], Assert.IsType<AggregateException>(failure.CleanupException).InnerExceptions);
+            Assert.Equal([transactionCleanup, cleanup],
+                Assert.IsType<AggregateException>(failure.CleanupException).InnerExceptions);
         else
             Assert.Same(cleanup, failure.CleanupException);
     }
@@ -391,12 +413,22 @@ public sealed partial class ProcessorOutcomeTests
         state.Projection = projection;
         if (projection)
         {
-            Projector component = mode switch { 0 => new SingleProjection(state), 1 => new GroupedProjection(state), _ => new BulkProjection(state) };
+            Projector component = mode switch
+            {
+                0 => new SingleProjection(state),
+                1 => new GroupedProjection(state),
+                _ => new BulkProjection(state)
+            };
             _ = await new ProjectorRunner(source).RunAsync(component, state.Checkpoint);
         }
         else
         {
-            Reactor component = mode switch { 0 => new SingleReaction(state), 1 => new GroupedReaction(state), _ => new BulkReaction(state) };
+            Reactor component = mode switch
+            {
+                0 => new SingleReaction(state),
+                1 => new GroupedReaction(state),
+                _ => new BulkReaction(state)
+            };
             _ = await new ReactorRunner(source).RunAsync(component, state.Checkpoint);
         }
     }
@@ -406,7 +438,10 @@ public sealed partial class ProcessorOutcomeTests
         var store = new InMemoryEventStore();
         var id = Uuid.CreateVersion4();
         await store.AppendAsync(new EventStreamAddress("outcome-source", "events", id.ToString()), 0,
-            [DomainEventSeed.Attach(new Changed(1), id, 1), DomainEventSeed.Attach(new Changed(2), id, 2), DomainEventSeed.Attach(new Changed(3), id, 3)]);
+        [
+            DomainEventSeed.Attach(new Changed(1), id, 1), DomainEventSeed.Attach(new Changed(2), id, 2),
+            DomainEventSeed.Attach(new Changed(3), id, 3)
+        ]);
         return store;
     }
 
@@ -417,18 +452,27 @@ public sealed partial class ProcessorOutcomeTests
 
     sealed class CleanupReader(IDomainEventReader source, Exception cleanup) : IDomainEventReader
     {
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset, CancellationToken ct) => throw new NotSupportedException();
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor, CancellationToken ct) =>
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
+            CancellationToken ct) => throw new NotSupportedException();
+
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
+            CancellationToken ct) =>
             new Records(source.ReadAsync(pattern, cursor, ct), cleanup);
-        sealed class Records(IAsyncEnumerable<DomainEventRecord> source, Exception cleanup) : IAsyncEnumerable<DomainEventRecord>
+
+        sealed class Records(IAsyncEnumerable<DomainEventRecord> source, Exception cleanup)
+            : IAsyncEnumerable<DomainEventRecord>
         {
-            public IAsyncEnumerator<DomainEventRecord> GetAsyncEnumerator(CancellationToken cancellationToken = default) =>
+            public IAsyncEnumerator<DomainEventRecord>
+                GetAsyncEnumerator(CancellationToken cancellationToken = default) =>
                 new Cursor(source.GetAsyncEnumerator(cancellationToken), cleanup);
         }
-        sealed class Cursor(IAsyncEnumerator<DomainEventRecord> source, Exception cleanup) : IAsyncEnumerator<DomainEventRecord>
+
+        sealed class Cursor(IAsyncEnumerator<DomainEventRecord> source, Exception cleanup)
+            : IAsyncEnumerator<DomainEventRecord>
         {
             public DomainEventRecord Current => source.Current;
             public ValueTask<bool> MoveNextAsync() => source.MoveNextAsync();
+
             public async ValueTask DisposeAsync()
             {
                 await source.DisposeAsync();
@@ -439,8 +483,11 @@ public sealed partial class ProcessorOutcomeTests
 
     sealed class FailedReader(Exception error) : IDomainEventReader
     {
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset, CancellationToken ct) => throw new NotSupportedException();
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor, [EnumeratorCancellation] CancellationToken ct)
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
+            CancellationToken ct) => throw new NotSupportedException();
+
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
+            [EnumeratorCancellation] CancellationToken ct)
         {
             await Task.FromException(error);
             yield break;

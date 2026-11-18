@@ -32,7 +32,8 @@ public sealed class McpSchemaFidelityTests
         await using var app = builder.Build();
         app.Use((context, next) =>
         {
-            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "schema-actor")], "test"));
+            context.User =
+                new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "schema-actor")], "test"));
             return next(context);
         });
         _ = app.MapPortiaMcp().AllowAnonymous();
@@ -54,13 +55,15 @@ public sealed class McpSchemaFidelityTests
             Assert.NotEmpty(Assert.IsType<TextContentBlock>(Assert.Single(result.Content)).Text);
             return;
         }
+
         var schema = JsonSchema.Build(Assert.IsType<JsonElement>(tool.ProtocolTool.OutputSchema),
             new BuildOptions { Dialect = Dialect.Draft202012, SchemaRegistry = new() });
         Assert.True(schema.Evaluate(Assert.IsType<JsonElement>(result.StructuredContent)).IsValid);
         if (name == "schema.nullable")
             Assert.Equal(JsonValueKind.Null, result.StructuredContent!.Value.GetProperty("result").ValueKind);
         else
-            Assert.Contains("#/properties/result", tool.ProtocolTool.OutputSchema!.Value.GetRawText(), StringComparison.Ordinal);
+            Assert.Contains("#/properties/result", tool.ProtocolTool.OutputSchema!.Value.GetRawText(),
+                StringComparison.Ordinal);
     }
 
     [Fact]
@@ -134,8 +137,12 @@ public sealed class McpSchemaFidelityTests
     [InlineData("{\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[]}", true)]
     [InlineData("{\"inherited\":\"base\",\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[]}", true)]
     [InlineData("{\"inherited\":\"custom\",\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[]}", true)]
-    [InlineData("{\"inherited\":\"base\",\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[2,3],\"choice\":\"Second\",\"note\":null}", true)]
-    [InlineData("{\"inherited\":\"base\",\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[],\"note\":null,\"restricted\":null}", false)]
+    [InlineData(
+        "{\"inherited\":\"base\",\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[2,3],\"choice\":\"Second\",\"note\":null}",
+        true)]
+    [InlineData(
+        "{\"inherited\":\"base\",\"display_name\":\"ok\",\"nested\":{\"value\":1},\"values\":[],\"note\":null,\"restricted\":null}",
+        false)]
     public async Task ShouldAdvertiseEffectiveBindingContractGivenConfiguredBinding(string input, bool valid)
     {
         // Arrange
@@ -147,7 +154,8 @@ public sealed class McpSchemaFidelityTests
         await using var app = builder.Build();
         app.Use((context, next) =>
         {
-            context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "schema-test-actor")], "test"));
+            context.User =
+                new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, "schema-test-actor")], "test"));
             return next(context);
         });
         _ = app.MapPortiaMcp().AllowAnonymous();
@@ -169,13 +177,15 @@ public sealed class McpSchemaFidelityTests
             .ToDictionary(property => property.Name, property => (object?)property.Value.Clone());
         var result = await client.CallToolAsync(tool.Name, arguments);
         Assert.True((result.IsError == true) == !valid,
-            input + ": " + string.Join("; ", result.Content.OfType<TextContentBlock>().Select(content => content.Text)));
+            input + ": " + string.Join("; ",
+                result.Content.OfType<TextContentBlock>().Select(content => content.Text)));
         Assert.Equal(valid ? 1 : 0, probe.Count);
         Assert.Equal(valid, schema.Evaluate(document.RootElement).IsValid);
         if (valid)
         {
             Assert.Equal(document.RootElement.TryGetProperty("inherited", out var inherited)
-                ? inherited.GetString() : "base", probe.Inherited);
+                ? inherited.GetString()
+                : "base", probe.Inherited);
             var output = Assert.IsType<JsonElement>(tool.ProtocolTool.OutputSchema);
             var outputSchema = JsonSchema.Build(output,
                 new BuildOptions { Dialect = Dialect.Draft202012, SchemaRegistry = new() });
@@ -234,11 +244,17 @@ public sealed class McpSchemaFidelityTests
     /// <summary>Inspects required, nullable, defaulted, inherited and converter-backed arguments.</summary>
     [Discriminator("schema.probe")]
     public sealed record SchemaProbe(
-        [property: JsonPropertyName("display_name")] string Name,
-        SchemaNested Nested, int[] Values, string? Note, SchemaChoice Choice = SchemaChoice.First,
-        int Count = 7, [param: DisallowNull] string? Restricted = "") : SchemaBase, IRequest<SchemaReply>, ICallable;
+        [property: JsonPropertyName("display_name")]
+        string Name,
+        SchemaNested Nested,
+        int[] Values,
+        string? Note,
+        SchemaChoice Choice = SchemaChoice.First,
+        int Count = 7,
+        [param: DisallowNull] string? Restricted = "") : SchemaBase, IRequest<SchemaReply>, ICallable;
 
     public sealed record SchemaNested(int Value, string SourceRecordId = "source");
+
     public sealed record SchemaReply(string Name, SchemaNested Nested, string? Note, SchemaChoice Choice, int Count);
 
     /// <summary>Reads a greeting whose JSON name is changed by a configured resolver.</summary>
@@ -247,7 +263,11 @@ public sealed class McpSchemaFidelityTests
     public sealed record ResolverRenamedGreeting(string Name) : IRequest<string>, ICallable;
 
     [JsonConverter(typeof(JsonStringEnumConverter<SchemaChoice>))]
-    public enum SchemaChoice { First, Second }
+    public enum SchemaChoice
+    {
+        First,
+        Second
+    }
 
     /// <summary>Returns a successful nullable value.</summary>
     [Discriminator("schema.nullable")]
@@ -276,8 +296,10 @@ public sealed class McpSchemaFidelityTests
 
     public sealed class ScalarProbeConverter : JsonConverter<ScalarProbe>
     {
-        public override ScalarProbe Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) =>
+        public override ScalarProbe Read(ref Utf8JsonReader reader, Type typeToConvert,
+            JsonSerializerOptions options) =>
             new(reader.GetString()!);
+
         public override void Write(Utf8JsonWriter writer, ScalarProbe value, JsonSerializerOptions options) =>
             writer.WriteStringValue(value.Value);
     }

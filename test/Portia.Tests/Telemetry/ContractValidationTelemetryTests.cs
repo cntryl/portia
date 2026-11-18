@@ -31,14 +31,16 @@ public sealed class ContractValidationTelemetryTests
         // Act
         var exception = await Record.ExceptionAsync(async () =>
         {
-            await foreach (var _ in bus.StreamAsync(new ContractCanceledValidationStream(cancellation), RequestActor.System, cancellation.Token))
+            await foreach (var _ in bus.StreamAsync(new ContractCanceledValidationStream(cancellation),
+                               RequestActor.System, cancellation.Token))
             {
             }
         });
 
         // Assert
         _ = Assert.IsAssignableFrom<OperationCanceledException>(exception);
-        var activity = Assert.Single(captured, item => item.GetTagItem("portia.request.name") as string == nameof(ContractCanceledValidationStream));
+        var activity = Assert.Single(captured,
+            item => item.GetTagItem("portia.request.name") as string == nameof(ContractCanceledValidationStream));
         Assert.Equal("canceled", activity.GetTagItem("portia.outcome"));
     }
 }
@@ -58,6 +60,7 @@ sealed record ContractCanceledValidationStream(CancellationTokenSource Cancellat
 
 sealed class ContractCanceledValidationHandler : IStreamRequestHandler<ContractCanceledValidationStream, int>
 {
-    public IAsyncEnumerable<int> HandleAsync(IRequestContext<ContractCanceledValidationStream> context, CancellationToken ct) =>
+    public IAsyncEnumerable<int> HandleAsync(IRequestContext<ContractCanceledValidationStream> context,
+        CancellationToken ct) =>
         throw new InvalidOperationException("A canceled request must not invoke its handler.");
 }
