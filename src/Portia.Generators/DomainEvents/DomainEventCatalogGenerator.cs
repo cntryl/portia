@@ -52,7 +52,8 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(catalogCalls, static (output, calls) =>
         {
             foreach (var call in calls.Where(call => call.Location is null))
-                output.ReportDiagnostic(Diagnostic.Create(RegistrationCallInterceptorGenerator.UnsupportedRegistrationCallSite,
+                output.ReportDiagnostic(Diagnostic.Create(
+                    RegistrationCallInterceptorGenerator.UnsupportedRegistrationCallSite,
                     call.DiagnosticLocation.ToLocation(), CatalogMethodName));
         });
         var events = context.SyntaxProvider
@@ -105,16 +106,27 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
         var assemblyIdentity = context.CompilationProvider.Select(static (compilation, _) =>
             compilation.Assembly.Identity.ToString());
         var files = eventRegistrations.Combine(assemblyIdentity).Combine(catalogCalls).SelectMany(static (input, ct) =>
-            GeneratedSource.Capture(output => GenerateCatalog(output, input.Left.Left, input.Left.Right, input.Right), ct))
+                GeneratedSource.Capture(
+                    output => GenerateCatalog(output, input.Left.Left, input.Left.Right, input.Right), ct))
             .WithTrackingName("PortiaEventCatalogGeneratedFiles");
-        context.RegisterSourceOutput(files, static (output, file) => GeneratedSource.Add(output, file.HintName, file.Source));
+        context.RegisterSourceOutput(files,
+            static (output, file) => GeneratedSource.Add(output, file.HintName, file.Source));
     }
 
     static bool IsCatalogCallSyntax(SyntaxNode node) => node switch
     {
-        InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: CatalogMethodName } }
-            or InvocationExpressionSyntax { Expression: MemberBindingExpressionSyntax { Name.Identifier.ValueText: CatalogMethodName } }
-            or MemberAccessExpressionSyntax { Name.Identifier.ValueText: CatalogMethodName, Parent: not InvocationExpressionSyntax } => true,
+        InvocationExpressionSyntax
+        {
+            Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: CatalogMethodName }
+        }
+            or InvocationExpressionSyntax
+        {
+            Expression: MemberBindingExpressionSyntax { Name.Identifier.ValueText: CatalogMethodName }
+        }
+            or MemberAccessExpressionSyntax
+        {
+            Name.Identifier.ValueText: CatalogMethodName, Parent: not InvocationExpressionSyntax
+        } => true,
         _ => false
     };
 
@@ -125,7 +137,8 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
             || !SymbolNames.Is(method.ContainingType, "Cntryl.Portia.DomainEventTypeCatalog"))
             return null;
         var location = context.Node is InvocationExpressionSyntax invocation
-            ? context.SemanticModel.GetInterceptableLocation(invocation, ct) : null;
+            ? context.SemanticModel.GetInterceptableLocation(invocation, ct)
+            : null;
         return new CatalogCall(location is null ? null : InterceptableLocationModel.From(location),
             DiagnosticLocation.From(context.Node.GetLocation()));
     }
@@ -157,8 +170,10 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
                     {
                         pending.Push(type);
                         if (type.DeclaredAccessibility == Accessibility.Public && !type.IsAbstract
-                                                                               && InheritsFrom(type, DomainEventMetadataName)
-                                                                               && GetSchemaIdentity(type).Name is { } name)
+                                                                               && InheritsFrom(type,
+                                                                                   DomainEventMetadataName)
+                                                                               && GetSchemaIdentity(type).Name is
+                                                                               { } name)
                         {
                             _ = names.Add(name);
                         }
@@ -246,7 +261,8 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
             builder.Append("        [global::System.Runtime.CompilerServices.InterceptsLocation(")
                 .Append(location.Version).Append(", ")
                 .Append(RequestTransportDiscovery.FormatStringLiteral(location.Data)).AppendLine(")]");
-        builder.AppendLine("        public static global::Cntryl.Portia.DomainEventTypeCatalog Register(this global::Cntryl.Portia.DomainEventTypeCatalog catalog)")
+        builder.AppendLine(
+                "        public static global::Cntryl.Portia.DomainEventTypeCatalog Register(this global::Cntryl.Portia.DomainEventTypeCatalog catalog)")
             .Append("            => ").Append(helperType).AppendLine(".AddPortiaGeneratedDomainEvents(catalog);")
             .AppendLine("    }").AppendLine("}");
         GeneratedSource.Add(context, "PortiaEventCatalogInterceptors.g.cs", builder.ToString());
@@ -341,7 +357,9 @@ public sealed class DomainEventCatalogGenerator : IIncrementalGenerator
     static (string? Name, int Version) GetSchemaIdentity(INamedTypeSymbol symbol)
     {
         var attribute = symbol.GetAttributes()
-            .FirstOrDefault(a => a.AttributeClass is { } attributeType && SymbolNames.Is(attributeType, DiscriminatorAttributeMetadataName));
+            .FirstOrDefault(a =>
+                a.AttributeClass is { } attributeType &&
+                SymbolNames.Is(attributeType, DiscriminatorAttributeMetadataName));
 
         if (attribute is null || attribute.ConstructorArguments.Length != 2)
             return (null, 0);

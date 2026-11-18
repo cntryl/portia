@@ -44,14 +44,17 @@ public static class ObjectStorageConformance
             await CompleteAsync(storage, otherTenant, digest, content, uploadPart, ct).ConfigureAwait(false);
             if (!await storage.HeadAndVerifyAsync(otherTenant, digest, ct).ConfigureAwait(false))
             {
-                throw new ConformanceViolationException("The same digest could not be stored independently for another tenant.");
+                throw new ConformanceViolationException(
+                    "The same digest could not be stored independently for another tenant.");
             }
 
-            var download = await storage.CreateDownloadAsync(tenant, digest, TimeSpan.FromMinutes(5), ct).ConfigureAwait(false);
+            var download = await storage.CreateDownloadAsync(tenant, digest, TimeSpan.FromMinutes(5), ct)
+                .ConfigureAwait(false);
             var now = DateTimeOffset.UtcNow;
             if (download.ExpiresAt <= now || download.ExpiresAt > now.Add(ObjectStorageLimits.MaximumDownloadLifetime))
             {
-                throw new ConformanceViolationException("The provider returned a download link outside the bounded lifetime.");
+                throw new ConformanceViolationException(
+                    "The provider returned a download link outside the bounded lifetime.");
             }
 
             await using var stream = await storage.OpenReadAsync(tenant, digest, ct).ConfigureAwait(false);
@@ -78,7 +81,8 @@ public static class ObjectStorageConformance
             if (length != digest.Length ||
                 !CryptographicOperations.FixedTimeEquals(hash.GetHashAndReset(), Convert.FromHexString(digest.Sha256)))
             {
-                throw new ConformanceViolationException("The provider returned bytes that did not match the verified object digest.");
+                throw new ConformanceViolationException(
+                    "The provider returned bytes that did not match the verified object digest.");
             }
         }
         finally

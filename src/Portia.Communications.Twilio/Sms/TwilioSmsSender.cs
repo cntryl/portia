@@ -35,16 +35,18 @@ public sealed class TwilioSmsSender : ISmsSender
         _ = SendId.Require(id, nameof(id));
         var tenantSegment = SendCorrelation.EncodeTenant(tenant);
         var account = await _tenantResolver.ResolveAsync(tenant, ct).ConfigureAwait(false)
-            ?? throw new InvalidOperationException("The tenant has no Twilio configuration.");
+                      ?? throw new InvalidOperationException("The tenant has no Twilio configuration.");
 
         var form = new List<KeyValuePair<string, string>>
         {
             new("To", message.To),
             new("Body", message.Body),
-            new(account.Sender.StartsWith("MG", StringComparison.Ordinal) ? "MessagingServiceSid" : "From", account.Sender),
+            new(account.Sender.StartsWith("MG", StringComparison.Ordinal) ? "MessagingServiceSid" : "From",
+                account.Sender),
         };
         if (_statusCallbackAddress is not null)
-            form.Add(new("StatusCallback", TwilioStatusCallbacks.Address(_statusCallbackAddress, tenantSegment, id.Value)));
+            form.Add(new("StatusCallback",
+                TwilioStatusCallbacks.Address(_statusCallbackAddress, tenantSegment, id.Value)));
 
         // A client base address, such as a local emulator, replaces Twilio's API host.
         var path = $"2010-04-01/Accounts/{account.AccountSid}/Messages.json";
@@ -83,10 +85,14 @@ public sealed class TwilioSmsSender : ISmsSender
     {
         if ((int)status is >= 200 and < 300)
             return SendOutcome.Accepted(body is { } accepted && accepted.TryGetProperty("sid", out var sid)
-                && sid.ValueKind == JsonValueKind.String ? sid.GetString() : null);
+                                                             && sid.ValueKind == JsonValueKind.String
+                ? sid.GetString()
+                : null);
 
         var code = body is { } error && error.TryGetProperty("code", out var value)
-            && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number) ? number : 0;
+                                     && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)
+            ? number
+            : 0;
         if (status == HttpStatusCode.TooManyRequests || code == 20429)
             throw new SendThrottledException(retryAfter);
         if (status is HttpStatusCode.Unauthorized or HttpStatusCode.NotFound || code == 20003)

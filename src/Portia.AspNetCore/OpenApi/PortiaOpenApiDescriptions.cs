@@ -17,18 +17,21 @@ sealed record PortiaOpenApiDescriptions(
             copy.Description = description;
             return copy;
         }
+
         if (schema is OpenApiSchema concrete)
         {
             var copy = (OpenApiSchema)concrete.CreateShallowCopy();
             copy.Description = description;
             return copy;
         }
+
         return schema;
     }
 
     internal void ApplyResponses(OpenApiOperation operation)
     {
-        var descriptions = Responses.ToDictionary(item => item.Key.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        var descriptions = Responses.ToDictionary(
+            item => item.Key.ToString(System.Globalization.CultureInfo.InvariantCulture),
             item => item.Value, StringComparer.Ordinal);
         if (SuccessResponse is not null)
         {
@@ -40,6 +43,7 @@ sealed record PortiaOpenApiDescriptions(
             if (!descriptions.TryAdd(statuses[0], SuccessResponse))
                 throw new InvalidOperationException($"OpenAPI response '{statuses[0]}' is described more than once.");
         }
+
         foreach (var (status, description) in descriptions)
         {
             if (!operation.Responses!.TryGetValue(status, out var response))

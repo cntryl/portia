@@ -20,10 +20,11 @@ public static class CassiePortiaBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         if (builder.Services.Any(static service => service.ServiceType == typeof(CassieProjectionDatabase)
-            || service.ServiceType == typeof(CassieDataSource)))
+                                                   || service.ServiceType == typeof(CassieDataSource)))
             throw new InvalidOperationException("Cassie projection services are already configured.");
         builder.Services.AddSingleton(_ => new CassieDataSource(connectionString));
-        builder.Services.AddSingleton(sp => new CassieProjectionDatabase(sp.GetRequiredService<CassieDataSource>(), checkpointTable));
+        builder.Services.AddSingleton(sp =>
+            new CassieProjectionDatabase(sp.GetRequiredService<CassieDataSource>(), checkpointTable));
         builder.Services.AddSingleton<IHostedService, CassieProjectionStartup>();
         return builder;
     }
@@ -37,8 +38,10 @@ public static class CassiePortiaBuilderExtensions
     /// <param name="configure">Optional processing, polling, and retry settings.</param>
     /// <returns>The same builder for further composition.</returns>
     public static PortiaBuilder AddCassieProjection<
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProjector,
-        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TRepository>(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+    TProjector,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+    TRepository>(
         this PortiaBuilder builder, string name, WorkloadScope scope, Action<WorkloadOptions>? configure = null)
         where TProjector : Projector
         where TRepository : CassieProjectionRepository

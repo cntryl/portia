@@ -202,6 +202,7 @@ public sealed class QueueRunner(
                         PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, ex, _logger,
                             recordException: false);
                     }
+
                     if (reservationLost)
                         continue;
                     // A failed release or acknowledgment has an unknown transport outcome.

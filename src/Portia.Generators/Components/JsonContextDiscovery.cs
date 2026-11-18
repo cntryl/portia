@@ -27,10 +27,15 @@ static class JsonContextDiscovery
             .WithTrackingName("PortiaReferencedJsonContexts");
 
     static DiscoveredJsonContext? JsonContextModel(INamedTypeSymbol symbol) =>
-        JsonContextShape.UnsupportedReason(symbol) is null ? new(symbol.ToDisplayString(), Type(symbol),
-            "static type => { " + JsonDescriptionEmission.Body(symbol.GetAttributes()
-                .Where(attribute => attribute.AttributeClass?.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializableAttribute")
-                .Select(attribute => attribute.ConstructorArguments.FirstOrDefault().Value).OfType<ITypeSymbol>()).Replace("\r", string.Empty).Replace("\n", " ") + " }") : null;
+        JsonContextShape.UnsupportedReason(symbol) is null
+            ? new(symbol.ToDisplayString(), Type(symbol),
+                "static type => { " + JsonDescriptionEmission.Body(symbol.GetAttributes()
+                        .Where(attribute => attribute.AttributeClass?.ToDisplayString() ==
+                                            "System.Text.Json.Serialization.JsonSerializableAttribute")
+                        .Select(attribute => attribute.ConstructorArguments.FirstOrDefault().Value)
+                        .OfType<ITypeSymbol>())
+                    .Replace("\r", string.Empty).Replace("\n", " ") + " }")
+            : null;
 
     static ImmutableArray<DiscoveredJsonContext> ReferencedJsonContexts(Compilation compilation)
     {
@@ -77,6 +82,7 @@ static class JsonContextDiscovery
                 foreach (var context in contexts)
                     hash = unchecked(hash * 31 + context.GetHashCode());
             }
+
             return hash;
         }
     }

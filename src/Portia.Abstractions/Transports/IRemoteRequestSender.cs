@@ -58,7 +58,8 @@ public interface IRemoteRequestSender
     ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(TRequest request,
         RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
         where TRequest : IRequest<TOut>, ICallable
-        => SendWithOutcomeAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
+        => SendWithOutcomeAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.FromRequest(request),
+            ct);
 
     /// <summary>Sends a result-bearing request with explicit logical identity and reports its transport outcome.</summary>
     /// <typeparam name="TRequest">The concrete request type.</typeparam>

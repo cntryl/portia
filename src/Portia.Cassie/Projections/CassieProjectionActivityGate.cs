@@ -14,7 +14,8 @@ sealed class CassieProjectionActivityGate
         lock (_sync)
         {
             if (_batchActive)
-                throw new NotSupportedException("Read through the active batch's commands while a projection batch is open.");
+                throw new NotSupportedException(
+                    "Read through the active batch's commands while a projection batch is open.");
             if (_activeReads++ == 0)
                 _readsDrained = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             return new ReadLease(this);
@@ -60,6 +61,7 @@ sealed class CassieProjectionActivityGate
             if (--_activeReads == 0)
                 drained = _readsDrained;
         }
+
         drained?.TrySetResult();
     }
 

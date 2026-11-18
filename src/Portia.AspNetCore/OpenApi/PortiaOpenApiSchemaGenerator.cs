@@ -11,7 +11,12 @@ namespace Cntryl.Portia;
 // Export the actual Portia contract, independently of application-owned ASP.NET JSON options.
 static class PortiaOpenApiSchemaGenerator
 {
-    static readonly string[] EditorialKeywords = ["description", "title", "examples", "example", "default", "deprecated", "externalDocs", "$comment", "readOnly", "writeOnly"];
+    static readonly string[] EditorialKeywords =
+    [
+        "description", "title", "examples", "example", "default", "deprecated", "externalDocs", "$comment", "readOnly",
+        "writeOnly"
+    ];
+
     public static IOpenApiSchema Create(Type type, JsonSerializerOptions options, OpenApiDocument document,
         Func<Type, Type?>? schemaType = null, bool rootIsNullable = false,
         Func<Type, Type, bool?>? schemaCollectionElementIsNullable = null,
@@ -19,7 +24,8 @@ static class PortiaOpenApiSchemaGenerator
     {
         if (typeof(Stream).IsAssignableFrom(type))
             return new OpenApiSchema { Type = JsonSchemaType.String, Format = "binary" };
-        var node = new PortiaOpenApiJsonSchemaExporter(options, schemaType, schemaCollectionElementIsNullable, descriptions, input)
+        var node = new PortiaOpenApiJsonSchemaExporter(options, schemaType, schemaCollectionElementIsNullable,
+                descriptions, input)
             .Export(type, rootIsNullable);
         JsonObject? originalAnnotations = null;
         JsonObject? memberAnnotations = null;
@@ -29,6 +35,7 @@ static class PortiaOpenApiSchemaGenerator
             PortiaJsonDescriptions.ApplyMemberFacts(root, options, type, member);
             memberAnnotations = Annotations(root);
         }
+
         var nodes = new Dictionary<string, JsonNode>(StringComparer.Ordinal);
         var references = new List<(JsonObject Node, string Target)>();
         Visit(node, "#");
@@ -50,10 +57,12 @@ static class PortiaOpenApiSchemaGenerator
             foreach (var (keyword, value) in originalAnnotations)
                 component[keyword] = value?.DeepClone();
         }
+
         var shape = node.DeepClone();
         RemoveAnnotations(shape);
         // Direction is part of the contract: even identical shapes can have different nested examples.
-        var identity = type.Assembly.GetName().Name + "\n" + type.FullName + "\n" + (input ? "input" : "output") + "\n" + shape.ToJsonString();
+        var identity = type.Assembly.GetName().Name + "\n" + type.FullName + "\n" + (input ? "input" : "output") +
+                       "\n" + shape.ToJsonString();
         var name = string.Concat(FriendlyName(type).Select(character =>
             char.IsAsciiLetterOrDigit(character) || character == '_' ? character : '_'));
         var id = "Portia_" + name + "_" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)))[..16];
@@ -119,8 +128,8 @@ static class PortiaOpenApiSchemaGenerator
             foreach (var (name, child) in SchemaChildren(obj))
                 Visit(child, path + "/" + name);
         }
-
     }
+
     static string FriendlyName(Type type)
     {
         if (type.IsArray)
@@ -158,7 +167,9 @@ static class PortiaOpenApiSchemaGenerator
             {
                 foreach (var (key, child) in map)
                     if (child is not null)
-                        yield return (name + "/" + key.Replace("~", "~0", StringComparison.Ordinal).Replace("/", "~1", StringComparison.Ordinal), child);
+                        yield return (
+                            name + "/" + key.Replace("~", "~0", StringComparison.Ordinal)
+                                .Replace("/", "~1", StringComparison.Ordinal), child);
             }
             else if (node is JsonArray array && name is "allOf" or "anyOf" or "oneOf" or "prefixItems")
             {
@@ -166,7 +177,8 @@ static class PortiaOpenApiSchemaGenerator
                     if (array[index] is { } child)
                         yield return (name + "/" + index.ToString(CultureInfo.InvariantCulture), child);
             }
-            else if (node is not null && name is "items" or "additionalProperties" or "unevaluatedProperties" or "propertyNames" or "contains" or "not" or "if" or "then" or "else")
+            else if (node is not null && name is "items" or "additionalProperties" or "unevaluatedProperties"
+                         or "propertyNames" or "contains" or "not" or "if" or "then" or "else")
                 yield return (name, node);
         }
     }

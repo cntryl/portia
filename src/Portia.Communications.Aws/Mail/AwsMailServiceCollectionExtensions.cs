@@ -34,10 +34,12 @@ public static class AwsMailServiceCollectionExtensions
         var builder = new AwsMailBuilder();
         configure(builder);
         var client = builder.Client
-            ?? throw new InvalidOperationException("An IAmazonSimpleEmailServiceV2 client must be configured.");
+                     ?? throw new InvalidOperationException(
+                         "An IAmazonSimpleEmailServiceV2 client must be configured.");
         services.AddSingleton<IMailSender>(provider =>
             new AwsMailSender(client, provider.GetRequiredService<IAwsMailTenantResolver>()));
-        services.AddSingleton(provider => new AwsMailEventIngester(provider.GetRequiredService<IDeliveryEventReceiver>()));
+        services.AddSingleton(provider =>
+            new AwsMailEventIngester(provider.GetRequiredService<IDeliveryEventReceiver>()));
         return services;
     }
 }

@@ -30,13 +30,15 @@ public sealed class FitzRequestQueuePublisher(
         => EnqueueCoreAsync(request, routeValues, actorToken, metadata, null, ct);
 
     /// <inheritdoc />
-    public ValueTask EnqueueWithOptionsAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
+    public ValueTask EnqueueWithOptionsAsync<TRequest>(TRequest request, RequestRouteValues routeValues,
+        string? actorToken,
         RequestQueueOptions options, CancellationToken ct)
         where TRequest : IRequest, IQueuable
         => EnqueueWithOptionsAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), options, ct);
 
     /// <inheritdoc />
-    public ValueTask EnqueueWithOptionsAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
+    public ValueTask EnqueueWithOptionsAsync<TRequest>(TRequest request, RequestRouteValues routeValues,
+        string? actorToken,
         RequestMetadata metadata, RequestQueueOptions options, CancellationToken ct = default)
         where TRequest : IRequest, IQueuable
     {

@@ -129,8 +129,10 @@ sealed class PortiaEndpointConfigurationState<TRequest>
             throw new ArgumentOutOfRangeException(nameof(status));
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
-        if (_responseHeaders.Any(item => item.Status == status && string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase)))
-            throw new InvalidOperationException($"Response header '{name}' is declared more than once for status {status}.");
+        if (_responseHeaders.Any(item =>
+                item.Status == status && string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException(
+                $"Response header '{name}' is declared more than once for status {status}.");
         _responseHeaders.Add(new PortiaHttpResponseHeader(status, name, typeof(T), description, required));
     }
 
@@ -179,12 +181,15 @@ sealed class PortiaEndpointConfigurationState<TRequest>
             throw new InvalidOperationException(
                 "FromQuery applies to default binding; declare OnBind inputs with Parameter.");
         if (_descriptions.Count > 0 && Binder is not null)
-            throw new InvalidOperationException("Describe applies to default binding; describe OnBind inputs with Parameter.");
+            throw new InvalidOperationException(
+                "Describe applies to default binding; describe OnBind inputs with Parameter.");
         foreach (var name in _descriptions.Keys)
         {
             if (!members.Any(member => string.Equals(member.Name, name, StringComparison.OrdinalIgnoreCase)))
-                throw new InvalidOperationException($"Describe member '{name}' is not a constructor-bound request member.");
+                throw new InvalidOperationException(
+                    $"Describe member '{name}' is not a constructor-bound request member.");
         }
+
         var flags = new bool[members.Length];
         foreach (var name in _queryMembers)
         {

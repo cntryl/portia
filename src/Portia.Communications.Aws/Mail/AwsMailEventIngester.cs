@@ -89,13 +89,14 @@ public sealed class AwsMailEventIngester(IDeliveryEventReceiver receiver)
 
     static string? Tag(JsonElement tags, string name) =>
         tags.TryGetProperty(name, out var values) && values.ValueKind == JsonValueKind.Array
-        && values.GetArrayLength() == 1 && values[0].ValueKind == JsonValueKind.String
+                                                  && values.GetArrayLength() == 1 &&
+                                                  values[0].ValueKind == JsonValueKind.String
             ? values[0].GetString()
             : null;
 
     static string? Text(JsonElement element, string name) =>
         element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value)
-        && value.ValueKind == JsonValueKind.String
+                                                  && value.ValueKind == JsonValueKind.String
             ? value.GetString()
             : null;
 

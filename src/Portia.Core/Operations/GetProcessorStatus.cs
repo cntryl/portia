@@ -17,8 +17,15 @@ public sealed record GetProcessorStatus(string Processor, string? Tenant = null)
 /// <param name="Failure">Available failure evidence, or null when no current failure is recorded.</param>
 /// <param name="SourceError">The source probe failure classification, or null when sampling succeeded.</param>
 /// <param name="FailureError">The failure-evidence read classification, or null when reading succeeded.</param>
-public sealed record ProcessorStatus(string Processor, string Kind, string? Tenant, string Pattern,
-    string? RebuildId, EventStreamProgress Progress, ProcessorStatusFailure? Failure, string? SourceError = null,
+public sealed record ProcessorStatus(
+    string Processor,
+    string Kind,
+    string? Tenant,
+    string Pattern,
+    string? RebuildId,
+    EventStreamProgress Progress,
+    ProcessorStatusFailure? Failure,
+    string? SourceError = null,
     string? FailureError = null);
 
 /// <summary>Recorded processing failure evidence; it does not independently establish worker liveness.</summary>
@@ -28,5 +35,10 @@ public sealed record ProcessorStatus(string Processor, string Kind, string? Tena
 /// <param name="ConsecutiveFailures">The recorded consecutive failure count.</param>
 /// <param name="IsBlocked">Whether a terminal failure requires recovery.</param>
 /// <param name="FailedAt">The recorded failure completion time, when available.</param>
-public sealed record ProcessorStatusFailure(string? Stage, string? Kind, bool? IsTransient,
-    int ConsecutiveFailures, bool IsBlocked, DateTimeOffset? FailedAt);
+public sealed record ProcessorStatusFailure(
+    string? Stage,
+    string? Kind,
+    bool? IsTransient,
+    int ConsecutiveFailures,
+    bool IsBlocked,
+    DateTimeOffset? FailedAt);

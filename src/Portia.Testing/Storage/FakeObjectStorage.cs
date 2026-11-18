@@ -22,7 +22,8 @@ public sealed class FakeObjectStorage : IObjectStorage
     }
 
     /// <summary>Starts an isolated upload for the supplied tenant and content digest.</summary>
-    public ValueTask<ObjectUploadSession> CreateUploadAsync(TenantId tenantId, ObjectDigest expected, CancellationToken ct = default)
+    public ValueTask<ObjectUploadSession> CreateUploadAsync(TenantId tenantId, ObjectDigest expected,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(expected);
         ct.ThrowIfCancellationRequested();
@@ -37,7 +38,8 @@ public sealed class FakeObjectStorage : IObjectStorage
     }
 
     /// <summary>Returns an in-memory upload destination.</summary>
-    public ValueTask<ObjectUploadPart> SignPartAsync(ObjectUploadSession session, int partNumber, TimeSpan lifetime, CancellationToken ct = default)
+    public ValueTask<ObjectUploadPart> SignPartAsync(ObjectUploadSession session, int partNumber, TimeSpan lifetime,
+        CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
         if (partNumber is < 1 or > 10_000)
@@ -55,12 +57,14 @@ public sealed class FakeObjectStorage : IObjectStorage
             var upload = GetUpload(session);
             EnsureActive(upload);
             var expires = Min(DateTimeOffset.UtcNow.Add(lifetime), upload.ExpiresAt);
-            return ValueTask.FromResult(new ObjectUploadPart(partNumber, new Uri($"memory://upload/{session.Token}/{partNumber}"), expires));
+            return ValueTask.FromResult(new ObjectUploadPart(partNumber,
+                new Uri($"memory://upload/{session.Token}/{partNumber}"), expires));
         }
     }
 
     /// <summary>Accepts the bytes addressed by a previously signed fake part.</summary>
-    public async ValueTask<ObjectPartReceipt> AcceptPartAsync(ObjectUploadSession session, int partNumber, Stream contents, CancellationToken ct = default)
+    public async ValueTask<ObjectPartReceipt> AcceptPartAsync(ObjectUploadSession session, int partNumber,
+        Stream contents, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(contents);
         ct.ThrowIfCancellationRequested();
@@ -105,7 +109,8 @@ public sealed class FakeObjectStorage : IObjectStorage
     }
 
     /// <inheritdoc />
-    public ValueTask CompleteUploadAsync(ObjectUploadSession session, IReadOnlyList<ObjectPartReceipt> parts, CancellationToken ct = default)
+    public ValueTask CompleteUploadAsync(ObjectUploadSession session, IReadOnlyList<ObjectPartReceipt> parts,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(parts);
@@ -147,9 +152,11 @@ public sealed class FakeObjectStorage : IObjectStorage
 
             // Like S3, rejected receipts or part sizes leave the session open so the caller can correct
             // its parts and complete again. Only a content verification outcome consumes the session.
-            if (parts.Count is < 1 or > 10_000 || parts.Any(static part => part is null || part.PartNumber is < 1 or > 10_000) ||
+            if (parts.Count is < 1 or > 10_000 ||
+                parts.Any(static part => part is null || part.PartNumber is < 1 or > 10_000) ||
                 parts.Select(static part => part.PartNumber).Distinct().Count() != parts.Count ||
-                parts.Any(part => !upload.Parts.TryGetValue(part.PartNumber, out var stored) || stored.Receipt != part.Token))
+                parts.Any(part =>
+                    !upload.Parts.TryGetValue(part.PartNumber, out var stored) || stored.Receipt != part.Token))
             {
                 throw new InvalidDataException("Part receipts are missing, duplicated, or invalid.");
             }
@@ -157,7 +164,8 @@ public sealed class FakeObjectStorage : IObjectStorage
             var ordered = parts.OrderBy(static part => part.PartNumber).ToArray();
             for (var index = 0; index < ordered.Length - 1; index++)
             {
-                if (upload.Parts[ordered[index].PartNumber].Content.Length < ObjectStorageLimits.MinimumNonfinalPartLength)
+                if (upload.Parts[ordered[index].PartNumber].Content.Length <
+                    ObjectStorageLimits.MinimumNonfinalPartLength)
                 {
                     throw new InvalidDataException("Every nonfinal multipart part must contain at least 5 MiB.");
                 }
@@ -182,7 +190,8 @@ public sealed class FakeObjectStorage : IObjectStorage
                 var digest = Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant();
                 if (content.LongLength != upload.Expected.Length || digest != upload.Expected.Sha256)
                 {
-                    throw new InvalidDataException("Uploaded object length or SHA-256 does not match the declared content.");
+                    throw new InvalidDataException(
+                        "Uploaded object length or SHA-256 does not match the declared content.");
                 }
 
                 var tenantObjects = GetObjects(upload.TenantId);
@@ -191,7 +200,8 @@ public sealed class FakeObjectStorage : IObjectStorage
                     if (existing.LongLength != content.LongLength ||
                         !CryptographicOperations.FixedTimeEquals(SHA256.HashData(existing), SHA256.HashData(content)))
                     {
-                        throw new InvalidDataException("An object already exists at the immutable content key but failed verification.");
+                        throw new InvalidDataException(
+                            "An object already exists at the immutable content key but failed verification.");
                     }
                 }
                 else
@@ -199,7 +209,8 @@ public sealed class FakeObjectStorage : IObjectStorage
                     tenantObjects.Add(digest, content);
                 }
 
-                _completedUploads.Add(session.Token, new CompletedUpload(upload.TenantId, upload.Expected, upload.ExpiresAt,
+                _completedUploads.Add(session.Token, new CompletedUpload(upload.TenantId, upload.Expected,
+                    upload.ExpiresAt,
                     ordered.Select(static part => new ObjectPartReceipt(part.PartNumber, part.Token)).ToArray()));
                 return ValueTask.CompletedTask;
             }
@@ -240,7 +251,8 @@ public sealed class FakeObjectStorage : IObjectStorage
     }
 
     /// <inheritdoc />
-    public async ValueTask<ObjectDownload> CreateDownloadAsync(TenantId tenantId, ObjectDigest expected, TimeSpan lifetime, CancellationToken ct = default)
+    public async ValueTask<ObjectDownload> CreateDownloadAsync(TenantId tenantId, ObjectDigest expected,
+        TimeSpan lifetime, CancellationToken ct = default)
     {
         if (lifetime <= TimeSpan.Zero || lifetime > ObjectStorageLimits.MaximumDownloadLifetime)
         {
@@ -253,7 +265,8 @@ public sealed class FakeObjectStorage : IObjectStorage
         }
 
         var expires = DateTimeOffset.UtcNow.Add(lifetime);
-        return new ObjectDownload(new Uri($"memory://download/{Uri.EscapeDataString(tenantId.Value)}/{expected.Sha256}"), expires);
+        return new ObjectDownload(
+            new Uri($"memory://download/{Uri.EscapeDataString(tenantId.Value)}/{expected.Sha256}"), expires);
     }
 
     /// <inheritdoc />
@@ -265,7 +278,8 @@ public sealed class FakeObjectStorage : IObjectStorage
         {
             if (!GetObjects(tenantId).TryGetValue(expected.Sha256, out var content) ||
                 content.LongLength != expected.Length || !string.Equals(
-                    Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant(), expected.Sha256, StringComparison.Ordinal))
+                    Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant(), expected.Sha256,
+                    StringComparison.Ordinal))
             {
                 return ValueTask.FromResult<Stream?>(null);
             }
@@ -324,7 +338,8 @@ public sealed class FakeObjectStorage : IObjectStorage
             return;
         }
 
-        foreach (var token in _completedUploads.Where(pair => pair.Value.ExpiresAt <= now).Select(static pair => pair.Key).ToArray())
+        foreach (var token in _completedUploads.Where(pair => pair.Value.ExpiresAt <= now)
+                     .Select(static pair => pair.Key).ToArray())
         {
             _completedUploads.Remove(token);
         }
@@ -348,6 +363,9 @@ public sealed class FakeObjectStorage : IObjectStorage
         public Dictionary<int, (string Receipt, byte[] Content)> Parts { get; } = [];
     }
 
-    sealed record CompletedUpload(TenantId TenantId, ObjectDigest Expected, DateTimeOffset ExpiresAt,
+    sealed record CompletedUpload(
+        TenantId TenantId,
+        ObjectDigest Expected,
+        DateTimeOffset ExpiresAt,
         ObjectPartReceipt[] Receipts);
 }

@@ -17,7 +17,8 @@ static class ProcessorStatusRegistration
         _ = application.AddGeneratedHandler(
             new RequestRegistration<GetProcessorStatus, ProcessorStatusHandler, ProcessorStatus>());
         _ = application.AddGeneratedAuthorizer(
-            new RequestAuthorizerRegistration<GetProcessorStatus, ProcessorStatusAuthorizer>(AuthorizationStage.Principal));
+            new RequestAuthorizerRegistration<GetProcessorStatus, ProcessorStatusAuthorizer>(AuthorizationStage
+                .Principal));
         _ = application.AddGeneratedRequest(new RequestTransportRegistration(typeof(GetProcessorStatus),
             [RequestTransportId.Callable], new RequestRouteAttribute("*", "*", "*", "status"),
             new DiscriminatorAttribute("portia.processor_status", 1),

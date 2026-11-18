@@ -19,6 +19,7 @@ static class McpPrimitiveHandlers
                 .WithListResourceTemplatesHandler(ListTemplatesAsync)
                 .WithReadResourceHandler(ReadResourceAsync);
         }
+
         if (services.Any(service => service.ServiceType == typeof(McpPromptEntry)))
             _ = server.WithListPromptsHandler(ListPromptsAsync).WithGetPromptHandler(GetPromptAsync);
     }
@@ -96,7 +97,7 @@ static class McpPrimitiveHandlers
         var limits = services.GetRequiredService<McpLimits>();
         var uri = call.Params.Uri;
         var validUri = uri is not null && Encoding.UTF8.GetByteCount(uri) <= limits.MaxResourceUriBytes
-                       && McpUri.TryValidate(uri);
+                                       && McpUri.TryValidate(uri);
         var catalog = services.GetRequiredService<McpPrimitiveCatalog>();
         McpResourceEntry? entry = null;
         Dictionary<string, string>? values = null;
@@ -120,6 +121,7 @@ static class McpPrimitiveHandlers
                 }
             }
         }
+
         using var receive = PortiaTelemetry.StartProcess(entry?.Template ?? "unknown",
             new McpResourceInvocation(entry?.Template ?? "unknown"), PortiaTelemetry.CaptureTraceContext(),
             receivedTraceContext: false);
@@ -203,12 +205,12 @@ static class McpPrimitiveHandlers
                     Title = entry.Title,
                     Description = entry.Description,
                     Arguments = entry.PromptOptions.Arguments
-                    .Select(argument => new PromptArgument
-                    {
-                        Name = argument.Key,
-                        Required = argument.Value,
-                        Description = entry.PromptOptions.ArgumentDescriptions[argument.Key]
-                    }).ToArray()
+                        .Select(argument => new PromptArgument
+                        {
+                            Name = argument.Key,
+                            Required = argument.Value,
+                            Description = entry.PromptOptions.ArgumentDescriptions[argument.Key]
+                        }).ToArray()
                 });
         return new ListPromptsResult
         {
@@ -261,9 +263,11 @@ static class McpPrimitiveHandlers
                         new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
                 values.Add(argument.Key, value);
             }
+
             var result = await entry.GetAsync(values, services, actor, deadline.Token).ConfigureAwait(false);
             var size = result.Messages.Sum(message => message.Content is TextContentBlock text
-                ? JsonEncodedText.Encode(text.Text).EncodedUtf8Bytes.Length + 128L : long.MaxValue);
+                ? JsonEncodedText.Encode(text.Text).EncodedUtf8Bytes.Length + 128L
+                : long.MaxValue);
             if (size > limits.MaxResultBytes)
                 throw new McpRequestFailureException(
                     new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
@@ -316,8 +320,8 @@ static class McpPrimitiveHandlers
         if (PortiaMcpHttpMarker.IsCurrentRequest)
             return new ClaimsPrincipal(new ClaimsIdentity());
         var provider = Services(call).GetService<IMcpActorProvider>()
-            ?? throw new McpActorRequiredException("MCP ingress has no actor provider.");
+                       ?? throw new McpActorRequiredException("MCP ingress has no actor provider.");
         return await provider.GetActorAsync(ct).ConfigureAwait(false)
-            ?? throw new McpActorRequiredException("MCP ingress has no actor.");
+               ?? throw new McpActorRequiredException("MCP ingress has no actor.");
     }
 }

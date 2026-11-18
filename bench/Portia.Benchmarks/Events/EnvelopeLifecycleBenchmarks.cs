@@ -31,7 +31,8 @@ public class EnvelopeLifecycleBenchmarks
             new DomainEventTypeCatalog().Register<EnvelopeEvent>(2, "benchmark.envelope"),
             [new EnvelopeUpcaster()], EnvelopeJsonContext.Default.Options);
         var unit = Text == "ascii" ? "a" : "é\"\\\n";
-        var text = string.Concat(Enumerable.Repeat(unit, (PayloadLength + unit.Length - 1) / unit.Length))[..PayloadLength];
+        var text =
+            string.Concat(Enumerable.Repeat(unit, (PayloadLength + unit.Length - 1) / unit.Length))[..PayloadLength];
         _event = new EnvelopeEvent(text, 123456);
         _event.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4(), 42,
             DateTimeOffset.UnixEpoch, Uuid.CreateVersion4(), Uuid.CreateVersion4(), IsAudit: true)
@@ -74,12 +75,16 @@ public class EnvelopeLifecycleBenchmarks
 }
 
 [Discriminator("benchmark.envelope", 2)]
-sealed record EnvelopeEvent(string Payload, [property: JsonConverter(typeof(EnvelopeHexConverter))] int Number) : DomainEvent;
+sealed record EnvelopeEvent(
+    string Payload,
+    [property: JsonConverter(typeof(EnvelopeHexConverter))]
+    int Number) : DomainEvent;
 
 sealed class EnvelopeUpcaster : IJsonDomainEventUpcaster
 {
     public string EventName => "benchmark.envelope";
     public int FromVersion => 1;
+
     public JsonObject Upcast(JsonObject payload)
     {
         var value = payload["LegacyPayload"];

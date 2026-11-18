@@ -172,7 +172,7 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
                     ? "inject IDomainEventReader to read events"
                     : Matches(parameter.Type, ProjectionContracts)
                         ? "inject an application-owned query interface that exposes only the read this preflight needs"
-                    : "move the effect into the request handler";
+                        : "move the effect into the request handler";
             if (guard)
                 findings.Add(Finding.Create(Kind.GuardEffect, Location(parameter), symbol.Name, Display(parameter),
                     remedy));
@@ -247,6 +247,7 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         {
             return;
         }
+
         var compilation = semanticModel.Compilation;
         var exceptionType = compilation.GetTypeByMetadataName("System.Exception");
         var resultType = compilation.GetTypeByMetadataName("Cntryl.Portia.Result");

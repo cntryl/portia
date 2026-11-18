@@ -195,7 +195,8 @@ public sealed class FitzRemoteRequestSender(
     public ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(TRequest request,
         RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
         where TRequest : IRequest<TOut>, ICallable
-        => SendWithOutcomeAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
+        => SendWithOutcomeAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.FromRequest(request),
+            ct);
 
     /// <inheritdoc />
     public async ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(TRequest request,
@@ -293,8 +294,8 @@ public sealed class FitzRemoteRequestSender(
 
         var finalCancellation = await TryGetCancellationOutcomeAsync(call).ConfigureAwait(false);
         return new FitzRpcCallOutcome(null, finalCancellation is { } outcome
-            ? MapCancellationOutcome(outcome)
-            : RemoteRequestOutcomeKind.OutcomeUnknown,
+                ? MapCancellationOutcome(outcome)
+                : RemoteRequestOutcomeKind.OutcomeUnknown,
             new InvalidOperationException("The RPC call produced no final response."));
     }
 

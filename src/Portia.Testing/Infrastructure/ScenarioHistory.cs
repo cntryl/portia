@@ -55,7 +55,7 @@ sealed class ScenarioHistory
         foreach (var (ev, resource) in _events)
         {
             if (resource is not null && pattern.Resource is not null
-                && !string.Equals(resource, pattern.Resource, StringComparison.Ordinal))
+                                     && !string.Equals(resource, pattern.Resource, StringComparison.Ordinal))
             {
                 throw new InvalidOperationException(
                     $"Events were given on stream resource '{resource}', which the pattern '{pattern}' never delivers.");

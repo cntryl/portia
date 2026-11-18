@@ -12,12 +12,14 @@ public static class EventAssert
     /// <param name="expected">The expected event.</param>
     /// <param name="actual">The observed event.</param>
     /// <exception cref="InvalidOperationException">The payloads differ.</exception>
-    [RequiresUnreferencedCode("Structural event assertions require public payload fields and properties to be retained.")]
+    [RequiresUnreferencedCode(
+        "Structural event assertions require public payload fields and properties to be retained.")]
     public static void Equal(DomainEvent expected, DomainEvent actual)
     {
         ArgumentNullException.ThrowIfNull(expected);
         ArgumentNullException.ThrowIfNull(actual);
-        var difference = Difference(expected, actual, expected.GetType().Name, [with(PairComparer.Instance)]);
+        var difference = Difference(expected, actual, expected.GetType().Name,
+            [with(PairComparer.Instance)]);
         if (difference is not null)
             throw new InvalidOperationException($"Event payload differs at {difference}.");
     }
@@ -26,13 +28,15 @@ public static class EventAssert
     /// <param name="expected">The expected events.</param>
     /// <param name="actual">The observed events.</param>
     /// <exception cref="InvalidOperationException">The sequences or their payloads differ.</exception>
-    [RequiresUnreferencedCode("Structural event assertions require public payload fields and properties to be retained.")]
+    [RequiresUnreferencedCode(
+        "Structural event assertions require public payload fields and properties to be retained.")]
     public static void Equal(IReadOnlyList<DomainEvent> expected, IReadOnlyList<DomainEvent> actual)
     {
         ArgumentNullException.ThrowIfNull(expected);
         ArgumentNullException.ThrowIfNull(actual);
         if (expected.Count != actual.Count)
-            throw new InvalidOperationException($"Event count differs: expected {expected.Count}, actual {actual.Count}.");
+            throw new InvalidOperationException(
+                $"Event count differs: expected {expected.Count}, actual {actual.Count}.");
         for (var index = 0; index < expected.Count; index++)
         {
             var difference = Difference(expected[index], actual[index], $"[{index}].{expected[index]?.GetType().Name}",
@@ -42,7 +46,8 @@ public static class EventAssert
         }
     }
 
-    [RequiresUnreferencedCode("Structural event assertions require public payload fields and properties to be retained.")]
+    [RequiresUnreferencedCode(
+        "Structural event assertions require public payload fields and properties to be retained.")]
     static string? Difference(object? expected, object? actual, string path, HashSet<(object, object)> visited)
     {
         if (ReferenceEquals(expected, actual))
@@ -76,7 +81,8 @@ public static class EventAssert
 
         var properties = type.GetProperties(BindingFlags.Instance | BindingFlags.Public)
             .Where(property => property.GetMethod is { IsPublic: true } && property.GetIndexParameters().Length == 0
-                               && property.DeclaringType != typeof(DomainEvent))
+                                                                        && property.DeclaringType !=
+                                                                        typeof(DomainEvent))
             .OrderBy(property => property.Name, StringComparer.Ordinal)
             .ToArray();
         var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public)

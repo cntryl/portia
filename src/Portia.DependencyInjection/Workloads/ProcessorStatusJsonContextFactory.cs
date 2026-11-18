@@ -11,5 +11,6 @@ public static class ProcessorStatusJsonContextFactory
     /// <summary>Creates the built-in status context using the application's composed Portia JSON options.</summary>
     /// <param name="options">The shared serialization options.</param>
     /// <returns>The source-generated status context.</returns>
-    public static JsonSerializerContext Create(JsonSerializerOptions options) => new ProcessorStatusJsonContext(options);
+    public static JsonSerializerContext Create(JsonSerializerOptions options) =>
+        new ProcessorStatusJsonContext(options);
 }

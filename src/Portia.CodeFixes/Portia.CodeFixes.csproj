@@ -7,6 +7,7 @@
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <!-- Shipped inside Cntryl.Portia.Analyzers under analyzers/dotnet/cs. -->
     <IsPackable>false</IsPackable>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" PrivateAssets="all"/>

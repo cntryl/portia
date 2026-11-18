@@ -4,8 +4,11 @@ using Microsoft.Extensions.Logging;
 
 namespace Cntryl.Portia;
 
-sealed class FitzProcessorStatusRpcRegistrar(IRpcClient rpc,
-    IServiceScopeFactory scopes, RequestTransportCatalog catalog, Func<string> application,
+sealed class FitzProcessorStatusRpcRegistrar(
+    IRpcClient rpc,
+    IServiceScopeFactory scopes,
+    RequestTransportCatalog catalog,
+    Func<string> application,
     ILogger<FitzProcessorStatusRpcRegistrar>? logger = null,
     TimeProvider? timeProvider = null) : IProcessorStatusRpcRegistrar, IAsyncDisposable
 {
@@ -22,7 +25,8 @@ sealed class FitzProcessorStatusRpcRegistrar(IRpcClient rpc,
         IServiceScopeFactory scopes, RequestTransportCatalog catalog, Func<string> application,
         ILogger<FitzProcessorStatusRpcRegistrar>? logger = null,
         TimeProvider? timeProvider = null)
-        : this(connection.Client.Rpc, scopes, catalog, application, logger, timeProvider) => _connect = connection.StartAsync;
+        : this(connection.Client.Rpc, scopes, catalog, application, logger, timeProvider) =>
+        _connect = connection.StartAsync;
 
     public async ValueTask<IAsyncDisposable> RegisterAsync(WorkloadIdentity workload, CancellationToken ct = default)
     {
@@ -38,6 +42,7 @@ sealed class FitzProcessorStatusRpcRegistrar(IRpcClient rpc,
             await pending.UnregisterAsync(ct).ConfigureAwait(false);
             _ = _withdrawals.TryRemove(new KeyValuePair<string, RpcWorkerRegistration>(route, pending));
         }
+
         var owned = new FitzProcessorStatusRpcRegistration(workload, route, ct,
             registration => WithdrawAsync(route, registration));
         try
@@ -63,6 +68,7 @@ sealed class FitzProcessorStatusRpcRegistrar(IRpcClient rpc,
             _disposed = true;
             cleanup = _cleanupTask ?? Task.CompletedTask;
         }
+
         await _cleanupLifetime.CancelAsync().ConfigureAwait(false);
         await cleanup.ConfigureAwait(false);
         using var finalWithdrawalBudget = new CancellationTokenSource(TimeSpan.FromSeconds(5), _clock);
@@ -72,6 +78,7 @@ sealed class FitzProcessorStatusRpcRegistrar(IRpcClient rpc,
                 break;
             _ = await TryWithdrawAsync(pending.Key, pending.Value, finalWithdrawalBudget.Token).ConfigureAwait(false);
         }
+
         _cleanupWake.Dispose();
         _cleanupLifetime.Dispose();
     }
@@ -107,6 +114,7 @@ sealed class FitzProcessorStatusRpcRegistrar(IRpcClient rpc,
                         ct.ThrowIfCancellationRequested();
                         _ = await TryWithdrawAsync(pending.Key, pending.Value, ct).ConfigureAwait(false);
                     }
+
                     delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 30));
                 }
             }
@@ -141,8 +149,11 @@ sealed class FitzProcessorStatusRpcRegistrar(IRpcClient rpc,
     }
 }
 
-sealed class FitzProcessorStatusRpcRegistration(WorkloadIdentity workload, string route,
-    CancellationToken ownership, Func<RpcWorkerRegistration, ValueTask>? withdraw = null) : IAsyncDisposable
+sealed class FitzProcessorStatusRpcRegistration(
+    WorkloadIdentity workload,
+    string route,
+    CancellationToken ownership,
+    Func<RpcWorkerRegistration, ValueTask>? withdraw = null) : IAsyncDisposable
 {
     RpcWorkerRegistration? _registration;
     int _active = 1;
@@ -151,9 +162,10 @@ sealed class FitzProcessorStatusRpcRegistration(WorkloadIdentity workload, strin
 
     internal bool Accepts(GetProcessorStatus request, string received) =>
         Volatile.Read(ref _active) != 0 && !ownership.IsCancellationRequested
-        && string.Equals(received, route, StringComparison.Ordinal)
-        && string.Equals(request.Processor, workload.Name, StringComparison.Ordinal)
-        && string.Equals(request.Tenant, workload.Tenant?.Value, StringComparison.Ordinal);
+                                        && string.Equals(received, route, StringComparison.Ordinal)
+                                        && string.Equals(request.Processor, workload.Name, StringComparison.Ordinal)
+                                        && string.Equals(request.Tenant, workload.Tenant?.Value,
+                                            StringComparison.Ordinal);
 
     public async ValueTask DisposeAsync()
     {

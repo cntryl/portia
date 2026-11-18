@@ -72,13 +72,15 @@ sealed class PortiaWorkloadService(
         if (operationalStore is not null)
         {
             if (operationalOptions is null || topology is null || !available.IsService(typeof(OperationalExecution)))
-                throw new InvalidOperationException("Operational workers require the complete operations registration from their infrastructure builder.");
+                throw new InvalidOperationException(
+                    "Operational workers require the complete operations registration from their infrastructure builder.");
             operationalOptions.Validate();
             await using var operationalScope = scopes.CreateAsyncScope();
             var checkpoints = operationalScope.ServiceProvider.GetServices<IProjectionCheckpointStore>().ToArray();
             if (checkpoints.Length != 1 || !ReferenceEquals(checkpoints[0],
-                operationalScope.ServiceProvider.GetService<IOperationalReactionCheckpointStore>()))
-                throw new InvalidOperationException("Operational workers require exactly one operational checkpoint registration.");
+                    operationalScope.ServiceProvider.GetService<IOperationalReactionCheckpointStore>()))
+                throw new InvalidOperationException(
+                    "Operational workers require exactly one operational checkpoint registration.");
         }
 
         foreach (var registration in _registrations)
@@ -187,7 +189,8 @@ sealed class PortiaWorkloadService(
         catch (Exception exception)
         {
             cancellationFailure = exception;
-            PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Cleanup, exception, _logger);
+            PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Cleanup, exception,
+                _logger);
         }
 
         // Cancelling application callbacks may fail. The hosted lifetime still includes every
@@ -215,6 +218,7 @@ sealed class PortiaWorkloadService(
                 ProcessorFailureException.RecordCleanup(failure, cancellationFailure);
             ExceptionDispatchInfo.Capture(failure).Throw();
         }
+
         if (cancellationFailure is not null)
             ExceptionDispatchInfo.Capture(cancellationFailure).Throw();
 
@@ -276,7 +280,8 @@ sealed class PortiaWorkloadService(
                     {
                         if (operationalSession is null)
                         {
-                            operationalSession = new OperationalSession(operationalStore, operationalOptions!, topology!, _clock);
+                            operationalSession = new OperationalSession(operationalStore, operationalOptions!,
+                                topology!, _clock);
                             var target = new OperationalTarget(registration.Name, passPattern.ToString(),
                                 new OperationalScope(identity.Tenant?.Value), processing.RebuildId);
                             await operationalSession.AcquireAsync(target,
@@ -285,17 +290,21 @@ sealed class PortiaWorkloadService(
                                     registration.FailureAttemptLimit, registration.PollInterval.Ticks,
                                     registration.MaximumFailureDelay.Ticks), null, ct).ConfigureAwait(false);
                         }
+
                         operationalSession.BeginPass();
-                        var checkpoint = await registration.Descriptor.LoadCheckpoint(provider, processing, ct).ConfigureAwait(false);
+                        var checkpoint = await registration.Descriptor.LoadCheckpoint(provider, processing, ct)
+                            .ConfigureAwait(false);
                         if (!await operationalSession.PrepareAsync(checkpoint, ct).ConfigureAwait(false))
                         {
                             await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false);
                             continue;
                         }
+
                         provider.GetRequiredService<OperationalExecution>().Session = operationalSession;
                         processing = operationalSession.BoundOptions(processing);
                         consecutiveFailures = operationalSession.State.ConsecutiveFailures;
                     }
+
                     var pass = await registration.Descriptor.RunPass(provider, processing, ct)
                         .ConfigureAwait(false);
                     if (operationalSession is not null)
@@ -320,6 +329,7 @@ sealed class PortiaWorkloadService(
                     }
                     else
                         consecutiveFailures++;
+
                     PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Workload, ex,
                         _logger);
                     if (IsTerminal(ex, consecutiveFailures, registration, operationalSession))
@@ -332,8 +342,12 @@ sealed class PortiaWorkloadService(
                         LogFailureDecision(_logger, registration.Name,
                             ex is ProcessorFailureException diagnostic ? diagnostic.Stage.ToString() : "Pass",
                             consecutiveFailures, terminalFailure is null ? "retry" : "stop",
-                            terminalFailure is null ? GetFailureDelay(registration, consecutiveFailures) : TimeSpan.Zero,
-                            ex is ProcessorFailureException { Error: { } error } ? error.Kind.ToString() : ex.GetType().Name,
+                            terminalFailure is null
+                                ? GetFailureDelay(registration, consecutiveFailures)
+                                : TimeSpan.Zero,
+                            ex is ProcessorFailureException { Error: { } error }
+                                ? error.Kind.ToString()
+                                : ex.GetType().Name,
                             null);
                     }
                 }
@@ -430,9 +444,11 @@ sealed class PortiaWorkloadService(
                     {
                         if (failure is not null)
                             ProcessorFailureException.RecordCleanup(failure, exception);
-                        PortiaTelemetry.RecordRunnerFault(nameof(IProcessorStatusRpcRegistrar), RunnerFaultStage.Cleanup,
+                        PortiaTelemetry.RecordRunnerFault(nameof(IProcessorStatusRpcRegistrar),
+                            RunnerFaultStage.Cleanup,
                             exception, _logger);
                     }
+
                     await statusTask.ConfigureAwait(false);
                 }
             }
@@ -469,7 +485,8 @@ sealed class PortiaWorkloadService(
             {
                 if (failure is not null)
                     ProcessorFailureException.RecordCleanup(failure, exception);
-                PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Cleanup, exception, _logger);
+                PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Cleanup, exception,
+                    _logger);
             }
         }
 
@@ -495,7 +512,8 @@ sealed class PortiaWorkloadService(
         }
     }
 
-    async Task MaintainStatusRpcAsync(WorkloadRegistration registration, WorkloadIdentity identity, CancellationToken ct)
+    async Task MaintainStatusRpcAsync(WorkloadRegistration registration, WorkloadIdentity identity,
+        CancellationToken ct)
     {
         IAsyncDisposable? endpoint = null;
         var failures = 0;
@@ -507,7 +525,8 @@ sealed class PortiaWorkloadService(
                 try
                 {
                     endpoint = await statusRpc!.RegisterAsync(identity, ct).ConfigureAwait(false)
-                        ?? throw new InvalidOperationException("Processor status registration returned no endpoint.");
+                               ?? throw new InvalidOperationException(
+                                   "Processor status registration returned no endpoint.");
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
@@ -515,12 +534,14 @@ sealed class PortiaWorkloadService(
                 }
                 catch (Exception exception)
                 {
-                    PortiaTelemetry.RecordRunnerFault(nameof(IProcessorStatusRpcRegistrar), RunnerFaultStage.Acquisition,
+                    PortiaTelemetry.RecordRunnerFault(nameof(IProcessorStatusRpcRegistrar),
+                        RunnerFaultStage.Acquisition,
                         exception, _logger);
                     failures = Math.Min(failures, 30) + 1;
                     await Task.Delay(GetFailureDelay(registration, failures), _clock, ct).ConfigureAwait(false);
                 }
             }
+
             await Task.Delay(Timeout.InfiniteTimeSpan, ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

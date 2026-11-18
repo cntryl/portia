@@ -94,7 +94,8 @@ public sealed class PortiaOperations : IPortiaOperations
     {
         var state = await InspectProcessorAsync(actor, target, ct).ConfigureAwait(false);
         return state?.Attempts.SingleOrDefault(a => a.Id == attemptId)
-            ?? throw new KeyNotFoundException("The attempt is outside retained history or does not exist in this scope.");
+               ?? throw new KeyNotFoundException(
+                   "The attempt is outside retained history or does not exist in this scope.");
     }
 
     /// <inheritdoc />
@@ -109,8 +110,10 @@ public sealed class PortiaOperations : IPortiaOperations
         {
             var block = state.Block ?? throw new InvalidOperationException("The processor is not blocked.");
             var attempt = state.Attempts.Single(a => a.Id == block.AttemptId);
-            var action = attempt.Outcome == OperationalAttemptOutcomes.CommittedCleanupFailed || state.Checkpoint != attempt.ExpectedCheckpoint
-                ? RepairActions.Resume : RepairActions.Retry;
+            var action = attempt.Outcome == OperationalAttemptOutcomes.CommittedCleanupFailed ||
+                         state.Checkpoint != attempt.ExpectedCheckpoint
+                ? RepairActions.Resume
+                : RepairActions.Retry;
             if (action == RepairActions.Retry && attempt.Sources.Count == 0)
                 action = RepairActions.Resume;
             var plan = new RepairPlan(id, target, state.OwnerSession, block.AttemptId, block.FailureRevision,
@@ -153,7 +156,8 @@ public sealed class PortiaOperations : IPortiaOperations
             return state with
             {
                 Approvals = state.Approvals.Select(a => a.PlanId == planId ? a with { Revoked = true } : a).ToArray(),
-                Repairs = state.Repairs.Select(r => r.PlanId == planId ? r with { Status = OperationalRepairStatuses.Invalidated } : r).ToArray()
+                Repairs = state.Repairs.Select(r =>
+                    r.PlanId == planId ? r with { Status = OperationalRepairStatuses.Invalidated } : r).ToArray()
             };
         }, ct).ConfigureAwait(false);
     }
@@ -175,8 +179,11 @@ public sealed class PortiaOperations : IPortiaOperations
             RequireApproval(state, planId, _clock.GetUtcNow());
             return state with
             {
-                Repairs = [.. state.Repairs, new OperationalRepair(id, planId, actorReference,
-                OperationalRepairStatuses.Queued, _clock.GetUtcNow())]
+                Repairs =
+                [
+                    .. state.Repairs, new OperationalRepair(id, planId, actorReference,
+                        OperationalRepairStatuses.Queued, _clock.GetUtcNow())
+                ]
             };
         }, ct).ConfigureAwait(false);
         return saved.Repairs.Single(r => r.PlanId == planId);
@@ -188,18 +195,21 @@ public sealed class PortiaOperations : IPortiaOperations
     {
         var state = await InspectProcessorAsync(actor, target, ct).ConfigureAwait(false);
         return state?.Repairs.SingleOrDefault(r => r.PlanId == planId)
-            ?? throw new KeyNotFoundException("No execution exists for this plan in retained history.");
+               ?? throw new KeyNotFoundException("No execution exists for this plan in retained history.");
     }
 
     internal static RepairPlan RequireCurrentPlan(OperationalProcessorState state, Guid planId, DateTimeOffset now)
     {
         var plan = state.Plans.SingleOrDefault(p => p.Id == planId)
-            ?? throw new KeyNotFoundException("The repair plan does not exist in retained history.");
+                   ?? throw new KeyNotFoundException("The repair plan does not exist in retained history.");
         if (plan.Target != state.Target || plan.OwnerSession != state.OwnerSession
-            || plan.ExpiresAt <= now || state.Block is not { } block
-            || block.AttemptId != plan.FailedAttemptId || block.FailureRevision != plan.FailureRevision
-            || state.Settings != plan.Settings || state.Checkpoint != plan.ExpectedCheckpoint
-            || !state.Attempts.Single(a => a.Id == plan.FailedAttemptId).Sources.SequenceEqual(plan.Sources))
+                                        || plan.ExpiresAt <= now || state.Block is not { } block
+                                        || block.AttemptId != plan.FailedAttemptId ||
+                                        block.FailureRevision != plan.FailureRevision
+                                        || state.Settings != plan.Settings ||
+                                        state.Checkpoint != plan.ExpectedCheckpoint
+                                        || !state.Attempts.Single(a => a.Id == plan.FailedAttemptId).Sources
+                                            .SequenceEqual(plan.Sources))
             throw new InvalidOperationException("The repair plan is expired or no longer matches this workload.");
         return plan;
     }
@@ -224,7 +234,9 @@ public sealed class PortiaOperations : IPortiaOperations
     static ActorAttribution Attribution(ClaimsPrincipal actor)
     {
         try
-        { return ActorAttribution.FromPrincipal(actor); }
+        {
+            return ActorAttribution.FromPrincipal(actor);
+        }
         catch (InvalidOperationException)
         {
             throw new UnauthorizedAccessException("A stable authenticated subject and issuer are required.");
@@ -239,14 +251,15 @@ public sealed class PortiaOperations : IPortiaOperations
         {
             ct.ThrowIfCancellationRequested();
             var current = await _store.ReadAsync(target, ct).ConfigureAwait(false)
-                ?? throw new KeyNotFoundException("The processor has no durable operational evidence.");
+                          ?? throw new KeyNotFoundException("The processor has no durable operational evidence.");
             var next = change(current);
             if (ReferenceEquals(next, current))
                 return current;
             next = next with { Revision = checked(current.Revision + 1) };
             try
             {
-                if (await _store.CompareExchangeAsync(next, current.Revision, current.OwnerSession, ct).ConfigureAwait(false))
+                if (await _store.CompareExchangeAsync(next, current.Revision, current.OwnerSession, ct)
+                        .ConfigureAwait(false))
                     return next;
             }
             catch (ProjectionConcurrencyException)

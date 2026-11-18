@@ -37,7 +37,9 @@ namespace Cntryl.Portia;
 ///     same token. Pass the value the application's bearer authentication uses, including when it turns mapping off
 ///     globally through <c>JwtSecurityTokenHandler.DefaultMapInboundClaims</c>, which this validator does not read.
 /// </param>
-public sealed class JwtRequestActorValidator(TokenValidationParameters validationParameters, bool mapInboundClaims = true)
+public sealed class JwtRequestActorValidator(
+    TokenValidationParameters validationParameters,
+    bool mapInboundClaims = true)
     : IRequestActorValidator
 {
     readonly JsonWebTokenHandler _handler = new() { MapInboundClaims = mapInboundClaims };

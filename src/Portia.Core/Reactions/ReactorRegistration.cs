@@ -34,8 +34,10 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
     void IWorkloadDescriptor.Validate(IServiceProvider services, string componentName)
     {
         if (services.GetService<IOperationalStore>() is not null
-            && !ReferenceEquals(_resolve(services).Checkpoints, services.GetService<IOperationalReactionCheckpointStore>()))
-            throw new InvalidOperationException("Operational reactors must use the registered operational checkpoint store.");
+            && !ReferenceEquals(_resolve(services).Checkpoints,
+                services.GetService<IOperationalReactionCheckpointStore>()))
+            throw new InvalidOperationException(
+                "Operational reactors must use the registered operational checkpoint store.");
     }
 
     ValueTask<ProjectionCheckpoint> IWorkloadDescriptor.LoadCheckpoint(IServiceProvider services,
@@ -55,7 +57,7 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
         var checkpoint = await ProcessorCheckpoints.LoadAsync(reactor.Checkpoints,
             new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
         return await services.GetRequiredService<ReactorRunner>().ExecutePassAsync(
-            services.GetService<OperationalExecution>()?.Session, reactor, checkpoint, options, ct)
+                services.GetService<OperationalExecution>()?.Session, reactor, checkpoint, options, ct)
             .ConfigureAwait(false);
     }
 

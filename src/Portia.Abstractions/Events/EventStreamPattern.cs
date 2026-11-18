@@ -99,7 +99,9 @@ public sealed record EventStreamPattern
             : value;
     }
 
-    static string? ValidateOptionalSegment(string? value, string parameterName) => string.IsNullOrWhiteSpace(value) ? null : ValidateRequiredSegment(value, parameterName);
+    static string? ValidateOptionalSegment(string? value, string parameterName) => string.IsNullOrWhiteSpace(value)
+        ? null
+        : ValidateRequiredSegment(value, parameterName);
 
     static EventStreamPatternScope GetScope(string? area, string? resource)
     {

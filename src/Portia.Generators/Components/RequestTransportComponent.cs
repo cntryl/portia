@@ -28,6 +28,7 @@ sealed class RequestTransportComponent : IEquatable<RequestTransportComponent>
     public string DiscriminatorName { get; }
     public string? ResultType { get; }
     public string? ResultRuntimeType { get; }
+
     public bool Equals(RequestTransportComponent? other) => other is not null
                                                             && TypeName == other.TypeName &&
                                                             Transports.SequenceEqual(other.Transports,

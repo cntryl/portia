@@ -4,6 +4,7 @@
          binding — needed here so HttpBindingTests can exercise real generated bindings, not just
          the generator's own model, through a real ASP.NET Core TestServer. -->
     <InterceptorsNamespaces>$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>

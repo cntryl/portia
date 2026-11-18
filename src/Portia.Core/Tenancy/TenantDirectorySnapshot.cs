@@ -7,5 +7,6 @@ public sealed class TenantDirectorySnapshot(EventCursor cursor, IReadOnlyList<Te
     public EventCursor Cursor { get; } = cursor;
 
     /// <summary>The tenants active through this cursor.</summary>
-    public IReadOnlyList<TenantId> ActiveTenants { get; } = activeTenants ?? throw new ArgumentNullException(nameof(activeTenants));
+    public IReadOnlyList<TenantId> ActiveTenants { get; } =
+        activeTenants ?? throw new ArgumentNullException(nameof(activeTenants));
 }

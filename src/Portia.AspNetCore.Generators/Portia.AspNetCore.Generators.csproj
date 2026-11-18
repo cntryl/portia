@@ -6,6 +6,7 @@
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <IsPackable>false</IsPackable>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../Portia.Generators/Infrastructure/GeneratedSource.cs" Link="Infrastructure/GeneratedSource.cs"/>

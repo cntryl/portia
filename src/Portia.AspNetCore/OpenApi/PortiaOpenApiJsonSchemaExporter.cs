@@ -8,8 +8,12 @@ namespace Cntryl.Portia;
 // Let the serializer identify schema locations, including dictionary values and polymorphic
 // branches. Its callback omits some properties with null defaults; their containing object still
 // supplies the exact property metadata needed to complete those locations.
-sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func<Type, Type?>? schemaType,
-    Func<Type, Type, bool?>? schemaCollectionElementIsNullable, PortiaOpenApiOptions? descriptions, bool input)
+sealed class PortiaOpenApiJsonSchemaExporter(
+    JsonSerializerOptions options,
+    Func<Type, Type?>? schemaType,
+    Func<Type, Type, bool?>? schemaCollectionElementIsNullable,
+    PortiaOpenApiOptions? descriptions,
+    bool input)
 {
     readonly Dictionary<Type, string> _activeMappings = [];
     readonly HashSet<JsonNode> _processed = [with(ReferenceEqualityComparer.Instance)];
@@ -18,36 +22,38 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
 
     JsonNode Export(Type type, string[] prefix, bool rootIsNullable = false,
         bool? rootCollectionElementIsNullable = null) =>
-        PortiaJsonSchemaProjection.For(options, options, input).GetTypeInfo(type).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
-        {
-            TransformSchemaNode = (context, schema) =>
+        PortiaJsonSchemaProjection.For(options, options, input).GetTypeInfo(type).GetJsonSchemaAsNode(
+            new JsonSchemaExporterOptions
             {
-                var path = prefix.Concat(context.Path.ToArray()).ToArray();
-                var contractType = context.Path.IsEmpty ? type
-                    : context.BaseTypeInfo is not null ? context.TypeInfo.Type
-                    : context.PropertyInfo?.PropertyType ?? context.TypeInfo.Type;
-                var normalized = Normalize(schema, contractType);
-                if (normalized is JsonObject reference && reference["$ref"] is JsonValue value &&
-                    value.TryGetValue<string>(out var target) && target.StartsWith('#'))
-                    reference["$ref"] = Pointer(prefix) + target[1..];
-
-                var declaredNullable = context.Path.IsEmpty && prefix.Length == 0
-                    ? rootIsNullable
-                    : IsNullable(contractType, context.PropertyInfo, path);
-                var mapped = Map(normalized, contractType, path, context.PropertyInfo, declaredNullable);
-                var result = mapped ?? normalized;
-                if (mapped is null)
+                TransformSchemaNode = (context, schema) =>
                 {
-                    CompleteChildren(result, context.TypeInfo, path,
-                        context.Path.IsEmpty ? rootCollectionElementIsNullable : null);
-                    if (context.Path.IsEmpty && prefix.Length == 0)
-                        result = ApplyAnnotations(result, normalized, declaredNullable);
+                    var path = prefix.Concat(context.Path.ToArray()).ToArray();
+                    var contractType = context.Path.IsEmpty ? type
+                        : context.BaseTypeInfo is not null ? context.TypeInfo.Type
+                        : context.PropertyInfo?.PropertyType ?? context.TypeInfo.Type;
+                    var normalized = Normalize(schema, contractType);
+                    if (normalized is JsonObject reference && reference["$ref"] is JsonValue value &&
+                        value.TryGetValue<string>(out var target) && target.StartsWith('#'))
+                        reference["$ref"] = Pointer(prefix) + target[1..];
+
+                    var declaredNullable = context.Path.IsEmpty && prefix.Length == 0
+                        ? rootIsNullable
+                        : IsNullable(contractType, context.PropertyInfo, path);
+                    var mapped = Map(normalized, contractType, path, context.PropertyInfo, declaredNullable);
+                    var result = mapped ?? normalized;
+                    if (mapped is null)
+                    {
+                        CompleteChildren(result, context.TypeInfo, path,
+                            context.Path.IsEmpty ? rootCollectionElementIsNullable : null);
+                        if (context.Path.IsEmpty && prefix.Length == 0)
+                            result = ApplyAnnotations(result, normalized, declaredNullable);
+                    }
+
+                    Describe(result, contractType, context.PropertyInfo);
+                    _ = _processed.Add(result);
+                    return result;
                 }
-                Describe(result, contractType, context.PropertyInfo);
-                _ = _processed.Add(result);
-                return result;
-            }
-        });
+            });
 
     void CompleteChildren(JsonNode schema, JsonTypeInfo typeInfo, string[] path,
         bool? collectionElementIsNullable = null)
@@ -82,8 +88,10 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
                 obj[keyword] = completed;
                 _ = _processed.Add(completed);
             }
+
             return;
         }
+
         if (typeInfo.Kind != JsonTypeInfoKind.Object)
             return;
         PortiaJsonDescriptions.CompleteRequired(schema, typeInfo, options, input);
@@ -98,12 +106,13 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
             string[] childPath = [.. path, "properties", property.Name];
             var normalized = Normalize(original, property.PropertyType);
             var result = Map(normalized, property.PropertyType, childPath, property,
-                    IsNullable(property.PropertyType, property, childPath))
+                             IsNullable(property.PropertyType, property, childPath))
                          ?? normalized;
             Describe(result, property.PropertyType, property);
             properties[property.Name] = result;
             _ = _processed.Add(result);
         }
+
         // Discriminators are synthesized by the serializer and have no JsonPropertyInfo.
         foreach (var (name, child) in properties)
         {
@@ -119,8 +128,12 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
             return;
         PortiaJsonDescriptions.ApplyFacts(obj, options, contractType, property);
         PortiaJsonDescriptions.ApplyExamples(obj, options, contractType, input);
-        var description = (property is not null ? descriptions?.Property(property, options) ?? PortiaJsonDescriptions.Property(options, property) : null)
-                          ?? descriptions?.Schema(contractType, options) ?? PortiaJsonDescriptions.Type(options, contractType);
+        var description = (property is not null
+                              ? descriptions?.Property(property, options) ??
+                                PortiaJsonDescriptions.Property(options, property)
+                              : null)
+                          ?? descriptions?.Schema(contractType, options) ??
+                          PortiaJsonDescriptions.Type(options, contractType);
         if (description is not null)
             obj["description"] = description;
     }
@@ -134,6 +147,7 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
             mappingType = underlying;
             representation = schemaType?.Invoke(mappingType);
         }
+
         if (representation is null || representation == mappingType)
             return null;
 
@@ -182,6 +196,7 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
                 : JsonValue.Create("string");
             return tenant;
         }
+
         // The OpenAPI reader expects object nodes for entries in a properties map.
         return schema.GetValueKind() switch
         {
@@ -226,6 +241,7 @@ sealed class PortiaOpenApiJsonSchemaExporter(JsonSerializerOptions options, Func
                         new JsonObject { ["not"] = new JsonObject { ["type"] = "null" } })
                 };
         }
+
         if (original is JsonObject originalObject && originalObject.ContainsKey("default"))
             result["default"] = originalObject["default"]?.DeepClone();
         return result;

@@ -34,16 +34,19 @@ static class PortiaJsonSchemaProjection
                 {
                     var property = info.Properties[index];
                     var member = PortiaJsonDescriptions.PropertyMetadata(facts, property);
-                    var handling = property.ObjectCreationHandling ?? info.PreferredPropertyObjectCreationHandling ?? source.PreferredObjectCreationHandling;
+                    var handling = property.ObjectCreationHandling ?? info.PreferredPropertyObjectCreationHandling ??
+                        source.PreferredObjectCreationHandling;
                     var permitted = input
-                        ? member?.Input != false && (property.Set is not null || property.AssociatedParameter is not null ||
-                            handling == JsonObjectCreationHandling.Populate)
+                        ? member?.Input != false &&
+                          (property.Set is not null || property.AssociatedParameter is not null ||
+                           handling == JsonObjectCreationHandling.Populate)
                         : member?.Output != false && property.Get is not null;
                     if (!permitted)
                     {
                         info.Properties.RemoveAt(index);
                         continue;
                     }
+
                     if (input)
                     {
                         property.ShouldSerialize = null;

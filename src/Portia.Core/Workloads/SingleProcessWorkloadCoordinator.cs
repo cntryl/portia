@@ -57,8 +57,10 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
 
                 // Cancel the entire release set before awaiting cleanup. One callback may need
                 // a sibling's cancellation signal to finish releasing their shared resources.
-                await ReleaseAsync(owned, [.. owned.Keys.Where(identity =>
-                    !current.Contains(identity) || owned[identity].Run.IsCompleted)]).ConfigureAwait(false);
+                await ReleaseAsync(owned, [
+                    .. owned.Keys.Where(identity =>
+                        !current.Contains(identity) || owned[identity].Run.IsCompleted)
+                ]).ConfigureAwait(false);
 
                 foreach (var identity in current)
                 {
@@ -111,7 +113,8 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
         // A run that ended before its token was cancelled was not stopped by this coordinator, so
         // any cancellation it ended with is its own failure, not a requested stop.
         var releasing = identities.Select(identity => owned[identity]).Select(workload =>
-            (Workload: workload, StopRequested: !workload.Run.IsCompleted || workload.Cancellation.IsCancellationRequested)).ToArray();
+            (Workload: workload,
+                StopRequested: !workload.Run.IsCompleted || workload.Cancellation.IsCancellationRequested)).ToArray();
         foreach (var identity in identities)
             _ = owned.Remove(identity);
 
@@ -130,11 +133,17 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
                 faults.Add(error);
             }
         }
+
         foreach (var cancellation in cancellations)
         {
             try
-            { await cancellation.ConfigureAwait(false); }
-            catch (Exception error) { faults.Add(error); }
+            {
+                await cancellation.ConfigureAwait(false);
+            }
+            catch (Exception error)
+            {
+                faults.Add(error);
+            }
         }
 
         foreach (var (workload, stopRequested) in releasing)

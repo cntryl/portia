@@ -51,7 +51,8 @@ public sealed class AwsMailSender : IMailSender
                 Simple = new Message
                 {
                     Subject = Utf8(message.Subject),
-                    Body = new Body { Text = Utf8(message.Text), Html = message.Html is null ? null : Utf8(message.Html) },
+                    Body = new Body
+                    { Text = Utf8(message.Text), Html = message.Html is null ? null : Utf8(message.Html) },
                 },
             },
             EmailTags =
@@ -83,7 +84,8 @@ public sealed class AwsMailSender : IMailSender
             rejected.Message.Contains("not verified", StringComparison.OrdinalIgnoreCase)
                 ? SendRejectionReason.SenderNotAuthorized
                 : SendRejectionReason.ContentRejected),
-        NotFoundException => throw Misconfigured("a configured SES resource, such as the configuration set, was not found"),
+        NotFoundException => throw Misconfigured(
+            "a configured SES resource, such as the configuration set, was not found"),
         BadRequestException => SendOutcome.Rejected(SendRejectionReason.Other),
         AmazonServiceException { StatusCode: HttpStatusCode.TooManyRequests } => throw new SendThrottledException(),
         AmazonServiceException { StatusCode: HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden } service =>

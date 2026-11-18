@@ -15,7 +15,8 @@ public sealed class FitzKvTenantDirectorySnapshotStore(IKvClient client, string 
     /// <param name="client">The Fitz KV client.</param>
     /// <param name="route">The snapshot base route.</param>
     /// <param name="durability">The persistence requested when committing a snapshot.</param>
-    public FitzKvTenantDirectorySnapshotStore(IKvClient client, string route, KvDurability durability) : this(client, route)
+    public FitzKvTenantDirectorySnapshotStore(IKvClient client, string route, KvDurability durability) : this(client,
+        route)
         => _durability = FitzKvCheckpoints.RequireDurability(durability);
 
     /// <inheritdoc />
@@ -54,7 +55,9 @@ public sealed class FitzKvTenantDirectorySnapshotStore(IKvClient client, string 
             try
             {
                 var stored = await tx.GetAsync(Key, ct).ConfigureAwait(false);
-                var actual = stored is KvFound { Value: var storedBytes } ? Decode(storedBytes.Span).Cursor : (EventCursor?)null;
+                var actual = stored is KvFound { Value: var storedBytes }
+                    ? Decode(storedBytes.Span).Cursor
+                    : (EventCursor?)null;
                 if (actual != expectedCursor)
                     return false;
                 var value = JsonSerializer.SerializeToUtf8Bytes(

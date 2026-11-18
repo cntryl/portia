@@ -32,10 +32,12 @@ public sealed class McpCallExpectations
     {
         var snapshot = await _task.ConfigureAwait(false);
         if (snapshot.IsError)
-            throw new InvalidOperationException($"Expected a successful MCP tool result, but the call failed.{Describe(snapshot)}");
+            throw new InvalidOperationException(
+                $"Expected a successful MCP tool result, but the call failed.{Describe(snapshot)}");
         if (snapshot.StructuredJson is not { ValueKind: JsonValueKind.Object } structured
             || !structured.TryGetProperty("result", out var result))
-            throw new InvalidOperationException("The successful MCP tool result did not contain structured JSON property 'result'.");
+            throw new InvalidOperationException(
+                "The successful MCP tool result did not contain structured JSON property 'result'.");
         var value = result.Deserialize(typeInfo);
         inspect(value!);
         return snapshot;

@@ -5,7 +5,8 @@ using Microsoft.Extensions.Hosting;
 namespace Cntryl.Portia;
 
 sealed class McpStartupValidator(
-    [FromKeyedServices(PortiaServiceKeys.Json)] JsonSerializerOptions json,
+    [FromKeyedServices(PortiaServiceKeys.Json)]
+    JsonSerializerOptions json,
     IEnumerable<McpToolRegistration> tools,
     IEnumerable<McpResourceEntry> resources,
     IEnumerable<McpPromptEntry> prompts,

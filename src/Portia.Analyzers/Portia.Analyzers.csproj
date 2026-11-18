@@ -4,6 +4,7 @@
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <IsAotCompatible>false</IsAotCompatible>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>

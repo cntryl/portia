@@ -13,8 +13,10 @@ public sealed class QueueRunnerOptions
     internal void Validate()
     {
         if (TerminalAttempt == 0)
-            throw new QueueConfigurationException("QueueRunnerOptions.TerminalAttempt must be positive when configured.");
+            throw new QueueConfigurationException(
+                "QueueRunnerOptions.TerminalAttempt must be positive when configured.");
         if (RetryDelay is { } delay && (delay < TimeSpan.Zero || delay.Ticks % TimeSpan.TicksPerSecond != 0))
-            throw new QueueConfigurationException("QueueRunnerOptions.RetryDelay must be nonnegative whole seconds when configured.");
+            throw new QueueConfigurationException(
+                "QueueRunnerOptions.RetryDelay must be nonnegative whole seconds when configured.");
     }
 }

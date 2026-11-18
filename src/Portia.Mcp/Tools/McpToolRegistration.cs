@@ -85,10 +85,11 @@ public abstract class McpToolRegistration
             throw new InvalidOperationException(
                 $"MCP tool '{Name}' requires object-shaped JSON input metadata for '{RequestType}'. "
                 + "Use an object request without a root converter.");
-        var input = PortiaJsonSchemaProjection.For(json, json, true).GetTypeInfo(RequestType).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
-        {
-            TransformSchemaNode = (context, node) => PortiaJsonDescriptions.Apply(context, node, json, input: true)
-        });
+        var input = PortiaJsonSchemaProjection.For(json, json, true).GetTypeInfo(RequestType).GetJsonSchemaAsNode(
+            new JsonSchemaExporterOptions
+            {
+                TransformSchemaNode = (context, node) => PortiaJsonDescriptions.Apply(context, node, json, input: true)
+            });
         if (input is not JsonObject inputObject)
             throw new InvalidOperationException($"MCP tool '{Name}' did not produce an object input schema.");
         inputObject["type"] = "object";
@@ -102,16 +103,20 @@ public abstract class McpToolRegistration
             foreach (var (propertyName, propertyDescription) in _propertyDescriptions)
             {
                 var jsonName = contractNames.GetValueOrDefault(propertyName)
-                    ?? propertyDescription.JsonName
-                    ?? json.PropertyNamingPolicy?.ConvertName(propertyName) ?? propertyName;
+                               ?? propertyDescription.JsonName
+                               ?? json.PropertyNamingPolicy?.ConvertName(propertyName) ?? propertyName;
                 if (properties[jsonName] is JsonObject propertySchema)
                     propertySchema["description"] = propertyDescription.Description;
             }
         }
-        var result = ResultType is null ? null : PortiaJsonSchemaProjection.For(json, json, false).GetTypeInfo(ResultType).GetJsonSchemaAsNode(new JsonSchemaExporterOptions
-        {
-            TransformSchemaNode = (context, node) => PortiaJsonDescriptions.Apply(context, node, json)
-        });
+
+        var result = ResultType is null
+            ? null
+            : PortiaJsonSchemaProjection.For(json, json, false).GetTypeInfo(ResultType).GetJsonSchemaAsNode(
+                new JsonSchemaExporterOptions
+                {
+                    TransformSchemaNode = (context, node) => PortiaJsonDescriptions.Apply(context, node, json)
+                });
         if (result is not null)
             RewriteResultReferences(result);
         JsonNode? output = result is null
@@ -269,8 +274,9 @@ public abstract class McpToolRegistration
             return;
         if (schema["$ref"] is JsonValue value && value.TryGetValue<string>(out var reference) &&
             (reference == "#" || reference.StartsWith("#/", StringComparison.Ordinal)))
-            schema["$ref"] = reference == "#" ? "#/properties/result" :
-                string.Concat("#/properties/result", reference.AsSpan(1));
+            schema["$ref"] = reference == "#"
+                ? "#/properties/result"
+                : string.Concat("#/properties/result", reference.AsSpan(1));
         // Walk schema locations only. Property names and example/default data may themselves contain $ref.
         foreach (var (name, child) in schema.ToArray())
         {
@@ -281,7 +287,8 @@ public abstract class McpToolRegistration
                         RewriteResultReferences(entry);
             }
             else if (child is JsonObject && name is "items" or "additionalProperties" or "unevaluatedProperties" or
-                     "unevaluatedItems" or "contains" or "not" or "if" or "then" or "else" or "propertyNames" or "contentSchema")
+                         "unevaluatedItems" or "contains" or "not" or "if" or "then" or "else" or "propertyNames"
+                         or "contentSchema")
                 RewriteResultReferences(child);
             else if (child is JsonArray array && name is "allOf" or "anyOf" or "oneOf" or "prefixItems")
                 foreach (var entry in array)

@@ -12,6 +12,7 @@ namespace Cntryl.Portia;
 public sealed class RequestBus(IServiceProvider services, RequestRegistry registry) : IRequestBus
 {
     readonly PortiaContractMetadataRegistry? _contracts = services.GetService<PortiaContractMetadataRegistry>();
+
     /// <inheritdoc />
     public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null)
         => new(actor, metadata: metadata, timeProvider: services.GetService<TimeProvider>());
@@ -30,7 +31,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         if (policies.IsUnprotected)
             ThrowUnprotectedRequest(registration.RequestType);
         var authorization = policies.HasAuthorizers
-            ? await AuthorizeAsync(policies, request, registration.CreateContext(request, context), ct).ConfigureAwait(false)
+            ? await AuthorizeAsync(policies, request, registration.CreateContext(request, context), ct)
+                .ConfigureAwait(false)
             : Result.Success;
         if (!authorization.IsSuccess)
             return authorization;
@@ -85,7 +87,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         finally
         {
             if (ProcessingObservation.IsEnabled)
-                ProcessingObservation.Record("request", registration.RequestType.FullName ?? registration.RequestType.Name,
+                ProcessingObservation.Record("request",
+                    registration.RequestType.FullName ?? registration.RequestType.Name,
                     context.Metadata.RequestId.ToString(), context.ExecutionId.ToString(), outcome);
             PortiaTelemetry.RequestFinished(started, policies.Name, transport, outcome);
         }
@@ -138,7 +141,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         finally
         {
             if (ProcessingObservation.IsEnabled)
-                ProcessingObservation.Record("request", registration.RequestType.FullName ?? registration.RequestType.Name,
+                ProcessingObservation.Record("request",
+                    registration.RequestType.FullName ?? registration.RequestType.Name,
                     context.Metadata.RequestId.ToString(), context.ExecutionId.ToString(), outcome);
             PortiaTelemetry.RequestFinished(started, policies.Name, transport, outcome);
         }
@@ -179,7 +183,8 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         var suspended = false;
         try
         {
-            var (authorization, validation) = await AuthorizeStreamAsync(registration, policies, request, requestContext,
+            var (authorization, validation) = await AuthorizeStreamAsync(registration, policies, request,
+                requestContext,
                 activity, observed, ct).ConfigureAwait(false);
             if (!authorization.IsSuccess)
             {
@@ -240,14 +245,16 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
                 PortiaTelemetry.RecordFault(activity);
 
             if (ProcessingObservation.IsEnabled)
-                ProcessingObservation.Record("request", registration.RequestType.FullName ?? registration.RequestType.Name,
+                ProcessingObservation.Record("request",
+                    registration.RequestType.FullName ?? registration.RequestType.Name,
                     context.Metadata.RequestId.ToString(), context.ExecutionId.ToString(), outcome);
             PortiaTelemetry.RequestFinished(started, policies.Name, transport, outcome);
         }
     }
 
     // Preflight runs outside an iterator catch so its exception is recorded before the iterator settles.
-    async ValueTask<(Result Authorization, RequestError? Validation)> AuthorizeStreamAsync(RequestHandlerRegistration registration, RequestPolicies policies,
+    async ValueTask<(Result Authorization, RequestError? Validation)> AuthorizeStreamAsync(
+        RequestHandlerRegistration registration, RequestPolicies policies,
         IRequestBase request, IRequestContext requestContext, Activity? activity, StreamObservation observed,
         CancellationToken ct)
     {

@@ -31,11 +31,16 @@ public sealed class GcpObjectStorage(
 
     readonly StorageClient _client = client ?? throw new ArgumentNullException(nameof(client));
     readonly UrlSigner _signer = signer ?? throw new ArgumentNullException(nameof(signer));
-    readonly IObjectStorageTenantResolver _tenantResolver = tenantResolver ?? throw new ArgumentNullException(nameof(tenantResolver));
-    readonly IDataProtector _sessionProtector = sessionProtector ?? throw new ArgumentNullException(nameof(sessionProtector));
+
+    readonly IObjectStorageTenantResolver _tenantResolver =
+        tenantResolver ?? throw new ArgumentNullException(nameof(tenantResolver));
+
+    readonly IDataProtector _sessionProtector =
+        sessionProtector ?? throw new ArgumentNullException(nameof(sessionProtector));
 
     /// <inheritdoc />
-    public async ValueTask<ObjectUploadSession> CreateUploadAsync(TenantId tenantId, ObjectDigest expected, CancellationToken ct = default)
+    public async ValueTask<ObjectUploadSession> CreateUploadAsync(TenantId tenantId, ObjectDigest expected,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
@@ -44,10 +49,12 @@ public sealed class GcpObjectStorage(
 
         // Signed part URLs cannot carry the tenant key, so staged parts are encrypted by the bucket default.
         // Refuse to start an upload that could land under any other key.
-        var bucket = await _client.GetBucketAsync(location.BucketReference, cancellationToken: ct).ConfigureAwait(false);
+        var bucket = await _client.GetBucketAsync(location.BucketReference, cancellationToken: ct)
+            .ConfigureAwait(false);
         if (VerifyEncryptionEvidence && !IsKey(bucket.Encryption?.DefaultKmsKeyName, location.EncryptionKeyReference))
         {
-            throw new InvalidOperationException("The tenant bucket's default Cloud KMS key must be the tenant encryption key.");
+            throw new InvalidOperationException(
+                "The tenant bucket's default Cloud KMS key must be the tenant encryption key.");
         }
 
         return new(new SessionPayload(
@@ -61,7 +68,8 @@ public sealed class GcpObjectStorage(
     }
 
     /// <inheritdoc />
-    public async ValueTask<ObjectUploadPart> SignPartAsync(ObjectUploadSession session, int partNumber, TimeSpan lifetime, CancellationToken ct = default)
+    public async ValueTask<ObjectUploadPart> SignPartAsync(ObjectUploadSession session, int partNumber,
+        TimeSpan lifetime, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(session);
         ct.ThrowIfCancellationRequested();
@@ -86,7 +94,8 @@ public sealed class GcpObjectStorage(
     }
 
     /// <inheritdoc />
-    public async ValueTask CompleteUploadAsync(ObjectUploadSession session, IReadOnlyList<ObjectPartReceipt> parts, CancellationToken ct = default)
+    public async ValueTask CompleteUploadAsync(ObjectUploadSession session, IReadOnlyList<ObjectPartReceipt> parts,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(parts);
@@ -96,7 +105,8 @@ public sealed class GcpObjectStorage(
         // Only an explicit abort can safely discard potentially promoted staging data.
         ct.ThrowIfCancellationRequested();
 
-        if (parts.Count is < 1 or > MaximumParts || parts.Any(static part => part is null || string.IsNullOrWhiteSpace(part.Token)) ||
+        if (parts.Count is < 1 or > MaximumParts ||
+            parts.Any(static part => part is null || string.IsNullOrWhiteSpace(part.Token)) ||
             parts.Select(static part => part.PartNumber).Distinct().Count() != parts.Count ||
             parts.Any(static part => part.PartNumber is < 1 or > MaximumParts))
         {
@@ -110,7 +120,8 @@ public sealed class GcpObjectStorage(
         {
             var part = ordered[index];
             // The receipt is the generation Cloud Storage assigned to the uploaded part (x-goog-generation).
-            if (!long.TryParse(part.Token, NumberStyles.None, CultureInfo.InvariantCulture, out var generation) || generation <= 0)
+            if (!long.TryParse(part.Token, NumberStyles.None, CultureInfo.InvariantCulture, out var generation) ||
+                generation <= 0)
             {
                 throw new InvalidDataException("A part receipt is not a Cloud Storage object generation.");
             }
@@ -126,7 +137,8 @@ public sealed class GcpObjectStorage(
                     return;
                 }
 
-                throw new InvalidDataException("An uploaded part is missing or its receipt no longer matches the staged part.");
+                throw new InvalidDataException(
+                    "An uploaded part is missing or its receipt no longer matches the staged part.");
             }
 
             if (VerifyEncryptionEvidence)
@@ -187,22 +199,26 @@ public sealed class GcpObjectStorage(
     }
 
     /// <inheritdoc />
-    public async ValueTask<bool> HeadAndVerifyAsync(TenantId tenantId, ObjectDigest expected, CancellationToken ct = default)
+    public async ValueTask<bool> HeadAndVerifyAsync(TenantId tenantId, ObjectDigest expected,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
         var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
-        return await GetVerifiedAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct).ConfigureAwait(false) is not null;
+        return await GetVerifiedAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct)
+            .ConfigureAwait(false) is not null;
     }
 
     /// <inheritdoc />
-    public async ValueTask<ObjectDownload> CreateDownloadAsync(TenantId tenantId, ObjectDigest expected, TimeSpan lifetime, CancellationToken ct = default)
+    public async ValueTask<ObjectDownload> CreateDownloadAsync(TenantId tenantId, ObjectDigest expected,
+        TimeSpan lifetime, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(expected);
         var duration = ObjectStorageRules.BoundLifetime(lifetime);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
         var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
-        if (await GetVerifiedAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct).ConfigureAwait(false) is null)
+        if (await GetVerifiedAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct)
+                .ConfigureAwait(false) is null)
         {
             throw new FileNotFoundException("The verified object was not found.");
         }
@@ -214,12 +230,14 @@ public sealed class GcpObjectStorage(
     }
 
     /// <inheritdoc />
-    public async ValueTask<Stream?> OpenReadAsync(TenantId tenantId, ObjectDigest expected, CancellationToken ct = default)
+    public async ValueTask<Stream?> OpenReadAsync(TenantId tenantId, ObjectDigest expected,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
         var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
-        var verified = await GetVerifiedAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct).ConfigureAwait(false);
+        var verified = await GetVerifiedAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct)
+            .ConfigureAwait(false);
         if (verified is null)
         {
             return null;
@@ -247,7 +265,8 @@ public sealed class GcpObjectStorage(
         var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
         try
         {
-            await _client.DeleteObjectAsync(location.BucketReference, objectKey, cancellationToken: ct).ConfigureAwait(false);
+            await _client.DeleteObjectAsync(location.BucketReference, objectKey, cancellationToken: ct)
+                .ConfigureAwait(false);
         }
         catch (GoogleApiException exception) when (exception.HttpStatusCode == HttpStatusCode.NotFound)
         {
@@ -255,15 +274,18 @@ public sealed class GcpObjectStorage(
         }
     }
 
-    async ValueTask<string> SignAsync(string bucket, string name, TimeSpan duration, HttpMethod method, CancellationToken ct) =>
+    async ValueTask<string> SignAsync(string bucket, string name, TimeSpan duration, HttpMethod method,
+        CancellationToken ct) =>
         await _signer.SignAsync(bucket, name, duration, method, SigningVersion.V4, ct).ConfigureAwait(false);
 
     async ValueTask<ObjectStorageLocation> ResolveAsync(TenantId tenantId, CancellationToken ct)
     {
         var location = await _tenantResolver.ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(location.BucketReference) || string.IsNullOrWhiteSpace(location.EncryptionKeyReference))
+        if (string.IsNullOrWhiteSpace(location.BucketReference) ||
+            string.IsNullOrWhiteSpace(location.EncryptionKeyReference))
         {
-            throw new InvalidOperationException("Tenant storage resolution must provide bucket and encryption-key references.");
+            throw new InvalidOperationException(
+                "Tenant storage resolution must provide bucket and encryption-key references.");
         }
 
         return location;
@@ -294,7 +316,8 @@ public sealed class GcpObjectStorage(
         }
 
         var computed = hash.GetHashAndReset();
-        if (length != payload.Length || !CryptographicOperations.FixedTimeEquals(computed, Convert.FromHexString(payload.Sha256)))
+        if (length != payload.Length ||
+            !CryptographicOperations.FixedTimeEquals(computed, Convert.FromHexString(payload.Sha256)))
         {
             throw new InvalidDataException("Uploaded object length or SHA-256 does not match the declared content.");
         }
@@ -306,7 +329,8 @@ public sealed class GcpObjectStorage(
     /// Writes the verified bytes to the immutable content key, tenant-keyed, only if no object exists there. The
     /// object is created in one conditional upload, so it is never visible without its digest metadata.
     /// </summary>
-    async ValueTask PromoteVerifiedAsync(SessionPayload payload, List<Source> sources, string verifiedDigest, CancellationToken ct)
+    async ValueTask PromoteVerifiedAsync(SessionPayload payload, List<Source> sources, string verifiedDigest,
+        CancellationToken ct)
     {
         for (var attempt = 1; attempt <= MaximumConditionalCopyAttempts; attempt++)
         {
@@ -335,7 +359,8 @@ public sealed class GcpObjectStorage(
 
                 return;
             }
-            catch (GoogleApiException exception) when (exception.HttpStatusCode is HttpStatusCode.PreconditionFailed or HttpStatusCode.Conflict or HttpStatusCode.NotFound)
+            catch (GoogleApiException exception) when (exception.HttpStatusCode is HttpStatusCode.PreconditionFailed
+                                                           or HttpStatusCode.Conflict or HttpStatusCode.NotFound)
             {
                 if (await IsPromotedAsync(payload, ct).ConfigureAwait(false))
                 {
@@ -343,9 +368,11 @@ public sealed class GcpObjectStorage(
                 }
 
                 if (exception.HttpStatusCode == HttpStatusCode.PreconditionFailed &&
-                    await TryGetObjectAsync(payload.Bucket, payload.ObjectKey, null, ct).ConfigureAwait(false) is not null)
+                    await TryGetObjectAsync(payload.Bucket, payload.ObjectKey, null, ct)
+                        .ConfigureAwait(false) is not null)
                 {
-                    throw new InvalidDataException("An object already exists at the immutable content key but failed verification.", exception);
+                    throw new InvalidDataException(
+                        "An object already exists at the immutable content key but failed verification.", exception);
                 }
 
                 if (exception.HttpStatusCode != HttpStatusCode.Conflict || attempt == MaximumConditionalCopyAttempts)
@@ -361,7 +388,8 @@ public sealed class GcpObjectStorage(
 
     async ValueTask<bool> IsPromotedAsync(SessionPayload payload, CancellationToken ct)
     {
-        var promoted = await GetVerifiedAsync(payload.Bucket, payload.ObjectKey, payload.Sha256, payload.Length, ct).ConfigureAwait(false);
+        var promoted = await GetVerifiedAsync(payload.Bucket, payload.ObjectKey, payload.Sha256, payload.Length, ct)
+            .ConfigureAwait(false);
         if (promoted is null)
             return false;
 
@@ -371,12 +399,13 @@ public sealed class GcpObjectStorage(
         return true;
     }
 
-    async ValueTask<GcsObject?> GetVerifiedAsync(string bucket, string objectKey, string sha256, long length, CancellationToken ct)
+    async ValueTask<GcsObject?> GetVerifiedAsync(string bucket, string objectKey, string sha256, long length,
+        CancellationToken ct)
     {
         var content = await TryGetObjectAsync(bucket, objectKey, null, ct).ConfigureAwait(false);
         return content is not null && content.Size == (ulong)length &&
-            content.Metadata is not null && content.Metadata.TryGetValue(DigestMetadata, out var digest) &&
-            string.Equals(digest, sha256, StringComparison.Ordinal)
+               content.Metadata is not null && content.Metadata.TryGetValue(DigestMetadata, out var digest) &&
+               string.Equals(digest, sha256, StringComparison.Ordinal)
             ? content
             : null;
     }
@@ -385,7 +414,8 @@ public sealed class GcpObjectStorage(
     {
         try
         {
-            return await _client.GetObjectAsync(bucket, name, new GetObjectOptions { Generation = generation }, ct).ConfigureAwait(false);
+            return await _client.GetObjectAsync(bucket, name, new GetObjectOptions { Generation = generation }, ct)
+                .ConfigureAwait(false);
         }
         catch (GoogleApiException exception) when (exception.HttpStatusCode == HttpStatusCode.NotFound)
         {
@@ -396,7 +426,8 @@ public sealed class GcpObjectStorage(
     async ValueTask CleanupStagingAsync(SessionPayload payload, CancellationToken ct)
     {
         var names = new List<string>();
-        await foreach (var staged in _client.ListObjectsAsync(payload.Bucket, payload.Prefix + "/").WithCancellation(ct).ConfigureAwait(false))
+        await foreach (var staged in _client.ListObjectsAsync(payload.Bucket, payload.Prefix + "/").WithCancellation(ct)
+                           .ConfigureAwait(false))
         {
             names.Add(staged.Name);
         }
@@ -424,8 +455,9 @@ public sealed class GcpObjectStorage(
         {
             await CleanupStagingAsync(payload, CancellationToken.None).ConfigureAwait(false);
         }
-        catch (Exception exception) when (exception is GoogleApiException or System.Net.Http.HttpRequestException or IOException or
-            TimeoutException or TaskCanceledException)
+        catch (Exception exception) when (exception is GoogleApiException or System.Net.Http.HttpRequestException
+                                              or IOException or
+                                              TimeoutException or TaskCanceledException)
         {
             // Best effort by design: the object is committed (or rejected) and staging expires by lifecycle rule.
         }
@@ -443,7 +475,7 @@ public sealed class GcpObjectStorage(
     /// <summary>Cloud Storage reports an object's key with a trailing <c>/cryptoKeyVersions/N</c> segment.</summary>
     static bool IsKey(string? actual, string expected) =>
         actual is not null && (string.Equals(actual, expected, StringComparison.Ordinal) ||
-            actual.StartsWith(expected + "/cryptoKeyVersions/", StringComparison.Ordinal));
+                               actual.StartsWith(expected + "/cryptoKeyVersions/", StringComparison.Ordinal));
 
     static string PartName(string prefix, int partNumber) => $"{prefix}/part-{partNumber:D5}";
 
@@ -467,9 +499,11 @@ public sealed class GcpObjectStorage(
             {
                 var json = protector.Unprotect(token);
                 var payload = JsonSerializer.Deserialize(json, GcpUploadSessionJsonContext.Default.SessionPayload);
-                if (payload is null || string.IsNullOrWhiteSpace(payload.Bucket) || string.IsNullOrWhiteSpace(payload.KmsKey) ||
+                if (payload is null || string.IsNullOrWhiteSpace(payload.Bucket) ||
+                    string.IsNullOrWhiteSpace(payload.KmsKey) ||
                     string.IsNullOrWhiteSpace(payload.ObjectKey) || string.IsNullOrWhiteSpace(payload.Prefix) ||
-                    string.IsNullOrWhiteSpace(payload.Sha256) || payload.Sha256.Length != 64 || !payload.Sha256.All(Uri.IsHexDigit) ||
+                    string.IsNullOrWhiteSpace(payload.Sha256) || payload.Sha256.Length != 64 ||
+                    !payload.Sha256.All(Uri.IsHexDigit) ||
                     payload.Length is < 0 or > ObjectStorageLimits.MaximumObjectLength || payload.ExpiresAt == default)
                 {
                     throw new FormatException();
@@ -477,7 +511,8 @@ public sealed class GcpObjectStorage(
 
                 return payload;
             }
-            catch (Exception exception) when (exception is FormatException or JsonException or ArgumentException or CryptographicException)
+            catch (Exception exception) when (exception is FormatException or JsonException or ArgumentException
+                                                  or CryptographicException)
             {
                 throw new ArgumentException("The upload session token is invalid.", nameof(token), exception);
             }
@@ -485,7 +520,8 @@ public sealed class GcpObjectStorage(
     }
 
     /// <summary>A forward-only read stream over the pinned generations of the ordered parts.</summary>
-    sealed class PartsStream(StorageClient client, string bucket, IReadOnlyList<Source> sources, CancellationToken ct) : Stream
+    sealed class PartsStream(StorageClient client, string bucket, IReadOnlyList<Source> sources, CancellationToken ct)
+        : Stream
     {
         int _next;
         Stream? _current;
@@ -494,9 +530,15 @@ public sealed class GcpObjectStorage(
         public override bool CanSeek => false;
         public override bool CanWrite => false;
         public override long Length => throw new NotSupportedException();
-        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
 
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
         {
             while (true)
             {
@@ -511,7 +553,9 @@ public sealed class GcpObjectStorage(
                     var request = client.Service.Objects.Get(bucket, source.Name);
                     request.Generation = source.Generation;
                     request.Alt = Google.Apis.Storage.v1.StorageBaseServiceRequest<GcsObject>.AltEnum.Media;
-                    _current = await request.ExecuteAsStreamAsync(cancellationToken.CanBeCanceled ? cancellationToken : ct).ConfigureAwait(false);
+                    _current = await request
+                        .ExecuteAsStreamAsync(cancellationToken.CanBeCanceled ? cancellationToken : ct)
+                        .ConfigureAwait(false);
                 }
 
                 var read = await _current.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
@@ -525,7 +569,8 @@ public sealed class GcpObjectStorage(
             }
         }
 
-        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count,
+            CancellationToken cancellationToken) =>
             ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
 
         public override int Read(byte[] buffer, int offset, int count) =>

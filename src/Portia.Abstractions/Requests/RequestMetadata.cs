@@ -38,9 +38,11 @@ public sealed record RequestMetadata(Uuid RequestId, Uuid CorrelationId, Uuid? C
         if (request is not IIdentifiedRequest identified)
             return null;
         if (identified.RequestId == Uuid.Empty)
-            return new RequestError(RequestErrorKind.Validation, "A typed operation identity is required and cannot be empty.");
+            return new RequestError(RequestErrorKind.Validation,
+                "A typed operation identity is required and cannot be empty.");
         return metadata is not null && metadata.RequestId != identified.RequestId
-            ? new RequestError(RequestErrorKind.Validation, "The typed operation identity conflicts with the carried request identity.")
+            ? new RequestError(RequestErrorKind.Validation,
+                "The typed operation identity conflicts with the carried request identity.")
             : null;
     }
 
