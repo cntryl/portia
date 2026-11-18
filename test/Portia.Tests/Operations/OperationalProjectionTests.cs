@@ -105,6 +105,48 @@ public sealed partial class OperationalProjectionTests
         Assert.Equal("2", native.Checkpoint.Cursor.Value);
     }
 
+    /// <summary>Lazy checkpoint loading must not resurrect an interrupted unit from before native progress.</summary>
+    [Fact]
+    public async Task ShouldIgnoreStaleInterruptedUnitGivenNativeProgressBetweenHandoffs()
+    {
+        // Arrange
+        var store = new MemoryOperationalStore();
+        var start = ProjectionCheckpoint.Start;
+        var first = await SessionAsync(store, start);
+        var events = await OperationalExecutionTests.EventsAsync();
+        var record = await events.ReadAsync(Target.Identity.Pattern, EventCursor.Start, default).FirstAsync();
+        _ = await first.BeginAsync([record], start, default);
+        _ = await SessionAsync(store, start);
+        var advanced = new ProjectionCheckpoint(record.NextCursor);
+        _ = await SessionAsync(store, advanced);
+        var replacement = new OperationalSession(store, new OperationalOptions(), new EmptyApplicationTopology(),
+            TimeProvider.System);
+        await replacement.AcquireAsync(Target, "projector", Settings, null, default);
+
+        // Act
+        var ready = await replacement.PrepareAsync(advanced, default);
+
+        // Assert
+        Assert.True(ready);
+        Assert.Null(replacement.InterruptedSources);
+        Assert.Equal(advanced.Cursor.Value, replacement.State.Checkpoint);
+    }
+
+    /// <summary>The authoritative start cursor is distinct from a checkpoint that has not been loaded.</summary>
+    [Fact]
+    public async Task ShouldRecordStartGivenAuthoritativeEmptyCheckpoint()
+    {
+        // Arrange
+        var store = new MemoryOperationalStore();
+        _ = await SessionAsync(store, new ProjectionCheckpoint(new EventCursor("previous")));
+
+        // Act
+        var replacement = await SessionAsync(store, ProjectionCheckpoint.Start);
+
+        // Assert
+        Assert.Null(replacement.State.Checkpoint);
+    }
+
     static async Task<OperationalSession> SessionAsync(MemoryOperationalStore store, ProjectionCheckpoint checkpoint)
     {
         var session = new OperationalSession(store,

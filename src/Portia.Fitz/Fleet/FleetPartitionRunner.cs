@@ -121,7 +121,7 @@ public sealed partial class FleetPartitionRunner(
         var assignments = new FleetAssignmentCache();
         var prefix = options.MembershipSelector[..^1];
         var unavailable = false;
-        WorkloadFailureException? terminal = null;
+        Exception? terminal = null;
         try
         {
             while (!ct.IsCancellationRequested)
@@ -144,8 +144,6 @@ public sealed partial class FleetPartitionRunner(
                     ? assignments.GetAssignments(current, workers, options.WorkerId!)
                     : [with(StringComparer.Ordinal)];
                 var revoked = active.Keys.Where(partition => !assigned.Contains(partition)).ToArray();
-                foreach (var partition in revoked)
-                    Cancel(active[partition].Cancellation);
                 await ObserveAsync([.. revoked.Select(partition => (partition, active[partition]))],
                     options.PartitionStopTimeout).ConfigureAwait(false);
                 foreach (var partition in revoked)
@@ -163,41 +161,39 @@ public sealed partial class FleetPartitionRunner(
                     }
 
                     ct.ThrowIfCancellationRequested();
-                    var cancellation = new CancellationTokenSource();
-                    var registration = ct.Register(() => Cancel(cancellation));
-                    active.Add(partition, new PartitionRun(cancellation,
-                        Task.Run(() => CompeteAsync(partition, callback, options.TtlSeconds, cancellation.Token),
-                            CancellationToken.None), registration));
+                    active.Add(partition, new PartitionRun(
+                        token => CompeteAsync(partition, callback, options.TtlSeconds, token), CancelAsync, ct));
                     PortiaTelemetry.RecordFleetAssignment(options.WorkerId!, partition, true, _logger);
                 }
 
-                foreach (var run in active.Values.Where(run => run.Task.IsCompleted))
-                    await run.Task.ConfigureAwait(false);
+                foreach (var run in active.Values.Where(run => run.Execution.IsCompleted))
+                    await run.Execution.ConfigureAwait(false);
                 await Task.Delay(options.ReconciliationInterval, _clock, ct).ConfigureAwait(false);
             }
         }
-        catch (WorkloadFailureException ex)
+        catch (Exception ex)
         {
             terminal = ex;
+        }
+
+        try
+        {
+            await ObserveAsync([.. active.Select(pair => (pair.Key, pair.Value))],
+                options.PartitionStopTimeout).ConfigureAwait(false);
+        }
+        catch (WorkloadFailureException failure) when (terminal is FleetPartitionTerminationTimeoutException)
+        {
+            ProcessorFailureException.RecordCleanup(failure, terminal);
             throw;
         }
-        finally
+        catch (Exception cleanup) when (terminal is WorkloadFailureException or FleetPartitionTerminationTimeoutException)
         {
-            foreach (var (partition, run) in active)
-                Cancel(run.Cancellation);
-            try
-            {
-                await ObserveAsync([.. active.Select(pair => (pair.Key, pair.Value))],
-                    options.PartitionStopTimeout).ConfigureAwait(false);
-            }
-            catch (Exception cleanup) when (terminal is not null)
-            {
-                // Observing the same failed run again must not attach it to itself. Other
-                // terminal faults and termination timeouts remain secondary to the first failure.
-                if (!ReferenceEquals(terminal, cleanup))
-                    ProcessorFailureException.RecordCleanup(terminal, cleanup);
-            }
+            if (!ReferenceEquals(terminal, cleanup))
+                ProcessorFailureException.RecordCleanup(terminal, cleanup);
         }
+
+        if (terminal is not null)
+            ExceptionDispatchInfo.Capture(terminal).Throw();
     }
 
     async Task CompeteAsync(string partition, Func<string, CancellationToken, Task> callback,
@@ -265,11 +261,11 @@ public sealed partial class FleetPartitionRunner(
         }
     }
 
-    void Cancel(CancellationTokenSource cancellation)
+    async Task CancelAsync(CancellationTokenSource cancellation)
     {
         try
         {
-            cancellation.Cancel();
+            await cancellation.CancelAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -288,11 +284,11 @@ public sealed partial class FleetPartitionRunner(
         (string Partition, PartitionRun Run)[] timedOut = [];
         try
         {
-            await Task.WhenAll(runs.Select(item => item.Run.Task)).WaitAsync(timeout, _clock).ConfigureAwait(false);
+            await Task.WhenAll(runs.Select(item => item.Run.StopAsync())).WaitAsync(timeout, _clock).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
-            timedOut = [.. runs.Where(item => !item.Run.Task.IsCompleted)];
+            timedOut = [.. runs.Where(item => !item.Run.StopAsync().IsCompleted)];
         }
         catch (Exception)
         {
@@ -305,13 +301,16 @@ public sealed partial class FleetPartitionRunner(
         {
             if (run.TryClaimObservation())
             {
-                if (!run.Task.IsCompleted)
+                WorkloadFailureException? failure;
+                if (run.StopAsync().IsCompleted)
+                    failure = await ObserveCompletedAsync(run).ConfigureAwait(false);
+                else
                 {
+                    // The workload can already be terminal while one of its cancellation callbacks is stuck.
+                    failure = run.Execution.Exception?.InnerException as WorkloadFailureException;
                     _ = ObserveLateAsync(run);
-                    continue;
                 }
 
-                var failure = await ObserveCompletedAsync(run).ConfigureAwait(false);
                 if (terminal is null)
                     terminal = failure;
                 else if (failure is not null && !ReferenceEquals(terminal, failure))
@@ -347,7 +346,7 @@ public sealed partial class FleetPartitionRunner(
     {
         try
         {
-            await run.Task.ConfigureAwait(false);
+            await run.StopAsync().ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (run.Cancellation.IsCancellationRequested)
         {
@@ -383,15 +382,26 @@ public sealed partial class FleetPartitionRunner(
         public bool WasReady { get; set; }
     }
 
-    sealed class PartitionRun(
-        CancellationTokenSource cancellation,
-        Task task,
-        CancellationTokenRegistration registration)
+    sealed class PartitionRun
     {
+        readonly Lazy<Task> _signal;
+        Task? _stopping;
         int _observationClaimed;
-        public CancellationTokenSource Cancellation { get; } = cancellation;
-        public Task Task { get; } = task;
-        public CancellationTokenRegistration Registration { get; } = registration;
+
+        public PartitionRun(Func<CancellationToken, Task> execute, Func<CancellationTokenSource, Task> cancel,
+            CancellationToken membership)
+        {
+            // Subscribe before scheduling work. Host shutdown and revocation must join the
+            // same cancellation, including callbacks that outlive the workload.
+            _signal = new(() => cancel(Cancellation));
+            Registration = membership.Register(() => _ = _signal.Value);
+            Execution = Task.Run(() => execute(Cancellation.Token), CancellationToken.None);
+        }
+
+        public CancellationTokenSource Cancellation { get; } = new();
+        public Task Execution { get; }
+        public CancellationTokenRegistration Registration { get; }
+        public Task StopAsync() => _stopping ??= Task.WhenAll(Execution, _signal.Value);
         public bool ObservationClaimed => Volatile.Read(ref _observationClaimed) != 0;
         public bool TryClaimObservation() => Interlocked.Exchange(ref _observationClaimed, 1) == 0;
     }

@@ -23,15 +23,69 @@ public sealed class CompilerCancellationProbeTests
     }
 
     [Fact]
+    public async Task ShouldRetainWorkspaceGivenUnresponsiveRequestUntilExecutionEnds()
+    {
+        // Arrange
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var disposed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var owner = new ProbeOwner(() => disposed.TrySetResult());
+        var operation = new BenchmarkCase(() => new ValueTask(release.Task),
+            () => Task.FromResult(new Evidence("probe", 0, 0, 0, "probe")), owner);
+        bool disposedAtTimeout;
+        CancellationObservation result;
+
+        // Act
+        try
+        {
+            result = await CancellationProbe.RunTrialAsync(_ => Task.FromResult(operation), 0, CancellationToken.None)
+                .WaitAsync(TimeSpan.FromSeconds(15));
+            disposedAtTimeout = disposed.Task.IsCompleted;
+        }
+        finally
+        {
+            release.TrySetResult();
+        }
+
+        // Assert
+        Assert.Equal("unresponsive", result.Status);
+        Assert.False(disposedAtTimeout);
+        await disposed.Task.WaitAsync(TimeSpan.FromSeconds(3));
+    }
+
+    [Fact]
+    public async Task ShouldReportOperationFaultGivenRequestThrowsTimeoutAfterCancellation()
+    {
+        // Arrange
+        static Task<BenchmarkCase> Prepare(CancellationToken token) => Task.FromResult(new BenchmarkCase(async () =>
+        {
+            try
+            {
+                await Task.Delay(Timeout.Infinite, token);
+            }
+            catch (OperationCanceledException)
+            {
+                throw new TimeoutException("operation deadline");
+            }
+        }, () => Task.FromResult(new Evidence("probe", 0, 0, 0, "probe"))));
+
+        // Act
+        var result = await CancellationProbe.RunTrialAsync(Prepare, 1, CancellationToken.None);
+
+        // Assert
+        Assert.Equal("faulted-after-cancel", result.Status);
+        Assert.Contains("operation deadline", result.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ShouldObserveCancellationGivenPendingOperation()
     {
         // Arrange
-        using var cancellation = new CancellationTokenSource();
-        using var operation = new BenchmarkCase(async () => await Task.Delay(Timeout.Infinite, cancellation.Token),
-            () => Task.FromResult(new Evidence("probe", 0, 0, 0, "probe")));
+        static Task<BenchmarkCase> Prepare(CancellationToken token) => Task.FromResult(new BenchmarkCase(
+            async () => await Task.Delay(Timeout.Infinite, token),
+            () => Task.FromResult(new Evidence("probe", 0, 0, 0, "probe"))));
 
         // Act
-        var result = await CancellationProbe.ObserveAsync(operation, cancellation);
+        var result = await CancellationProbe.RunTrialAsync(Prepare, 1, CancellationToken.None);
 
         // Assert
         Assert.Equal("canceled-after-entry", result.Status);
@@ -43,15 +97,24 @@ public sealed class CompilerCancellationProbeTests
     public async Task ShouldPreserveCompletionGivenOperationFinishedBeforeCancellation()
     {
         // Arrange
-        using var cancellation = new CancellationTokenSource();
-        using var operation = new BenchmarkCase(() => ValueTask.CompletedTask,
-            () => Task.FromResult(new Evidence("probe", 0, 0, 0, "probe")));
+        CancellationToken observed = default;
+        Task<BenchmarkCase> Prepare(CancellationToken token)
+        {
+            observed = token;
+            return Task.FromResult(new BenchmarkCase(() => ValueTask.CompletedTask,
+                () => Task.FromResult(new Evidence("probe", 0, 0, 0, "probe"))));
+        }
 
         // Act
-        var result = await CancellationProbe.ObserveAsync(operation, cancellation, 10);
+        var result = await CancellationProbe.RunTrialAsync(Prepare, 10, CancellationToken.None);
 
         // Assert
         Assert.Equal("completed-before-cancel", result.Status);
-        Assert.False(cancellation.IsCancellationRequested);
+        Assert.False(observed.IsCancellationRequested);
+    }
+
+    sealed class ProbeOwner(Action dispose) : IDisposable
+    {
+        public void Dispose() => dispose();
     }
 }

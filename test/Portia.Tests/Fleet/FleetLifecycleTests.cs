@@ -3,6 +3,131 @@ namespace Cntryl.Portia;
 /// <summary>Revocation observes terminal faults and cancels dependent siblings together.</summary>
 public sealed class FleetLifecycleTests
 {
+    /// <summary>The stop deadline also covers synchronous handlers registered on the partition token.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldBoundBlockingCancellationCallbackGivenRevocationOrShutdown(bool shutdown)
+    {
+        // Arrange
+        const string partition = "lease://test/work/blocked";
+        var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership());
+        using var lifetime = new CancellationTokenSource();
+        using var release = new ManualResetEventSlim();
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finished = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        string[] snapshot = [partition];
+        var options = SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with
+        {
+            ReconciliationInterval = TimeSpan.FromMilliseconds(10),
+            PartitionStopTimeout = TimeSpan.FromMilliseconds(50)
+        };
+        var run = runner.RunAsync(() => Volatile.Read(ref snapshot), (_, token) =>
+        {
+            // Keep the registration alive even after the workload task has finished.
+            token.Register(() =>
+            {
+                started.TrySetResult();
+                release.Wait();
+                finished.TrySetResult();
+            });
+            ready.TrySetResult();
+            return started.Task;
+        }, options, lifetime.Token);
+        // Wait until the first partition has installed its callback before requesting a stop.
+        Exception? error;
+        var stopping = Task.CompletedTask;
+        await ready.Task.WaitAsync(TimeSpan.FromSeconds(3));
+
+        // Act
+        try
+        {
+            if (shutdown)
+                stopping = lifetime.CancelAsync();
+            else
+                Volatile.Write(ref snapshot, []);
+            error = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3)));
+        }
+        finally
+        {
+            release.Set();
+            await finished.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            await stopping;
+            await lifetime.CancelAsync();
+            _ = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3)));
+        }
+
+        // Assert
+        Assert.Equal([partition], Assert.IsType<FleetPartitionTerminationTimeoutException>(error).Partitions);
+    }
+
+    /// <summary>A timeout during final cleanup preserves the earlier revocation timeout and its route.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldPreserveRevokedTimeoutGivenAnotherFailureDuringShutdown(bool workloadFails)
+    {
+        // Arrange
+        const string revoked = "lease://test/work/revoked";
+        const string retained = "lease://test/work/retained";
+        var runner = new FleetPartitionRunner(new InMemoryLeaseClient(), new SingleWorkerMembership());
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = 0;
+        var failure = new WorkloadFailureException(new WorkloadIdentity("retained"), 1, new IOException("terminal"));
+        string[] snapshot = [retained, revoked];
+        var options = SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)) with
+        {
+            ReconciliationInterval = TimeSpan.FromMilliseconds(10),
+            PartitionStopTimeout = TimeSpan.FromMilliseconds(50)
+        };
+        using var lifetime = new CancellationTokenSource();
+        var run = runner.RunAsync(() => Volatile.Read(ref snapshot), async (route, token) =>
+        {
+            if (Interlocked.Increment(ref started) == 2)
+                ready.TrySetResult();
+            if (workloadFails && route == retained)
+            {
+                var stop = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                using var registration = token.Register(() => stop.TrySetResult());
+                await stop.Task;
+                throw failure;
+            }
+
+            await release.Task;
+        }, options, lifetime.Token);
+        await ready.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        Exception? error;
+
+        // Act
+        try
+        {
+            Volatile.Write(ref snapshot, [retained]);
+            error = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3)));
+        }
+        finally
+        {
+            release.TrySetResult();
+            await lifetime.CancelAsync();
+        }
+
+        // Assert
+        if (workloadFails)
+        {
+            Assert.Same(failure, error);
+            var timeout = Assert.IsType<FleetPartitionTerminationTimeoutException>(failure.Data["Portia.CleanupException"]);
+            Assert.Equal([revoked], timeout.Partitions);
+        }
+        else
+        {
+            var primary = Assert.IsType<FleetPartitionTerminationTimeoutException>(error);
+            Assert.Equal([revoked], primary.Partitions);
+            var cleanup = Assert.IsType<FleetPartitionTerminationTimeoutException>(primary.Data["Portia.CleanupException"]);
+            Assert.Equal([retained], cleanup.Partitions);
+        }
+    }
+
     /// <summary>Revocation retains a terminal fault, including when another revoked callback times out.</summary>
     [Theory]
     [InlineData(false)]

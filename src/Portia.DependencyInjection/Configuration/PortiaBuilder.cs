@@ -401,7 +401,8 @@ public sealed class PortiaBuilder
         return AddWorkload(registration);
     }
 
-    /// <summary>Registers a typed projector for one ordered source.</summary>
+    /// <summary>Registers a plain typed projector for one ordered source.</summary>
+    /// <remarks>Subclasses of <see cref="Projector" /> declare their own source and use the overload accepting <see cref="WorkloadScope" />.</remarks>
     /// <typeparam name="TProjector">The application projector.</typeparam>
     /// <param name="name">The workload and checkpoint name.</param>
     /// <param name="source">The event streams to project.</param>

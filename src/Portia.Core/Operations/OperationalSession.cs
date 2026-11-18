@@ -68,23 +68,25 @@ sealed class OperationalSession(
         await RequiredAsync(async () =>
         {
             var prior = await store.ReadAsync(target, ct).ConfigureAwait(false);
-            InterruptedSources = prior?.Attempts.LastOrDefault(a => a.Outcome == OperationalAttemptOutcomes.Running
-                                                                    && (checkpoint is null || a.ExpectedCheckpoint ==
-                                                                        checkpoint.Value.Cursor.Value))?.Sources;
+            var cursor = checkpoint is { } loaded ? loaded.Cursor.Value : prior?.Checkpoint;
+            var latest = prior is { Attempts.Count: > 0 } ? prior.Attempts[^1] : null;
+            InterruptedSources = latest is { Outcome: OperationalAttemptOutcomes.Running or OperationalAttemptOutcomes.Interrupted }
+                                 && latest.ExpectedCheckpoint == cursor
+                ? latest.Sources
+                : null;
             var now = clock.GetUtcNow();
-            // A source read that was never verified cannot unblock a replacement owner.
-            var replayInterruptedRepair = prior?.Repairs.Any(r => r.Status == OperationalRepairStatuses.Running &&
-                (InterruptedSources is { Count: > 0 } ||
-                 prior.Plans.Any(plan => plan.Id == r.PlanId && plan.Action == RepairActions.Retry))) == true;
+            // Only a durable attempt start permits automatic replay after losing the repair owner.
+            var replayInterruptedRepair = InterruptedSources is { Count: > 0 } &&
+                                          prior?.Repairs.Any(r => r.Status == OperationalRepairStatuses.Running) == true;
             var next = prior is null
-                ? new OperationalProcessorState(target, kind, _owner, 1, checkpoint?.Cursor.Value, settings,
+                ? new OperationalProcessorState(target, kind, _owner, 1, cursor, settings,
                     [], null, [], [], [], 0, now)
                 : prior with
                 {
                     OwnerSession = _owner,
                     Revision = checked(prior.Revision + 1),
                     Settings = settings,
-                    Checkpoint = checkpoint?.Cursor.Value ?? prior.Checkpoint,
+                    Checkpoint = cursor,
                     Attempts = prior.Attempts.Select(a => a.Outcome == OperationalAttemptOutcomes.Running
                         ? a with
                         {

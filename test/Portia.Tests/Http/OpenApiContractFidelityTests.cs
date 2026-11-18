@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -198,6 +199,49 @@ public sealed class OpenApiContractFidelityTests
         Assert.Equal("[]]", schema["x-portia-dotnet-pattern"]!.GetValue<string>());
     }
 
+    /// <summary>Literal .NET braces outside a quantifier are syntax errors in Unicode ECMAScript.</summary>
+    [Theory]
+    [InlineData("a{")]
+    [InlineData("a}")]
+    [InlineData("a{b}")]
+    public void ShouldOmitPortablePatternGivenLiteralBraces(string pattern)
+    {
+        // Arrange
+        var rule = new RegularExpressionAttribute(pattern);
+        var member = new PortiaContractMemberMetadata("Value", typeof(string)) { Rules = [rule] };
+        var schema = new JsonObject { ["type"] = "string" };
+
+        // Act
+        PortiaJsonConstraints.Apply(schema, member, JsonSerializerOptions.Web);
+
+        // Assert
+        Assert.True(rule.IsValid(pattern));
+        Assert.Null(schema["pattern"]);
+        Assert.Equal(pattern, schema["x-portia-dotnet-pattern"]!.GetValue<string>());
+    }
+
+    /// <summary>The schema must use the first match chosen by the runtime before checking its length.</summary>
+    [Theory]
+    [InlineData("a|ab", "ab", false)]
+    [InlineData("a+?", "aa", false)]
+    [InlineData("(ab|a)b?", "abb", true)]
+    [InlineData("a|ab", "", true)]
+    public void ShouldMatchRuntimeGivenCompetingRegexMatches(string pattern, string input, bool expected)
+    {
+        // Arrange
+        var rule = new RegularExpressionAttribute(pattern);
+        var member = new PortiaContractMemberMetadata("Value", typeof(string)) { Rules = [rule] };
+        var schema = new JsonObject { ["type"] = "string" };
+
+        // Act
+        PortiaJsonConstraints.Apply(schema, member, JsonSerializerOptions.Web);
+
+        // Assert
+        Assert.Equal(expected, rule.IsValid(input));
+        Assert.Equal(expected, Regex.IsMatch(input, schema["pattern"]!.GetValue<string>(),
+            RegexOptions.ECMAScript));
+    }
+
     /// <summary>Ordinary ASCII classes, groups and quantifiers keep their portable constraints.</summary>
     [Theory]
     [InlineData("[A-Z]{2}")]
@@ -213,7 +257,8 @@ public sealed class OpenApiContractFidelityTests
         PortiaJsonConstraints.Apply(schema, member, JsonSerializerOptions.Web);
 
         // Assert
-        Assert.Equal("^(?:(?:" + pattern + ")|)(?![\\s\\S])", schema["pattern"]!.GetValue<string>());
+        Assert.NotNull(schema["pattern"]);
+        Assert.Equal(pattern, schema["x-portia-dotnet-pattern"]!.GetValue<string>());
     }
 
     /// <summary>Preserves the runtime contract in the published schema.</summary>

@@ -59,6 +59,59 @@ public sealed partial class OperationalExecutionTests
             FitzJsonContext.Default.OperationalProcessorState), StringComparison.Ordinal);
     }
 
+    /// <summary>A replacement cannot widen a repair which the previous owner claimed but never began.</summary>
+    [Fact]
+    public async Task ShouldKeepBlockGivenRetryClaimedBeforeDurableStart()
+    {
+        // Arrange
+        var journal = new MemoryOperationalStore();
+        var first = await SessionAsync(journal);
+        var events = await EventsAsync();
+        var checkpoint = ProjectionCheckpoint.Start;
+        var record = await events.ReadAsync(Target.Identity.Pattern, EventCursor.Start, default).FirstAsync();
+        _ = await first.BeginAsync([record], checkpoint, default);
+        await first.RecordFailureAsync(new ProcessorFailureException(Target.Identity, checkpoint,
+            ProcessorFailureStage.Handling, error: RequestError.Validation("failed")), null, default);
+        var api = Api(journal);
+        var actor = TestOperationalAuthorizer.AdministratorActor(true);
+        var plan = await api.PreviewRepairAsync(actor, Target);
+        _ = await api.ApproveRepairAsync(actor, Target, plan.Id);
+        _ = await api.ExecuteRepairAsync(actor, Target, plan.Id);
+        Assert.True(await first.PrepareAsync(checkpoint, default));
+
+        // Act
+        var replacement = await SessionAsync(journal);
+
+        // Assert
+        Assert.Equal(first.State.Block, replacement.State.Block);
+        Assert.False(await replacement.PrepareAsync(checkpoint, default));
+        Assert.Equal("indeterminate", (await api.VerifyRepairAsync(actor, Target, plan.Id)).Status);
+        Assert.Single(replacement.State.Attempts);
+    }
+
+    /// <summary>Repeated ownership changes preserve the latest unfinished unit until processing resumes.</summary>
+    [Fact]
+    public async Task ShouldPreserveOriginalUnitGivenTwoHandoffsBeforeReplay()
+    {
+        // Arrange
+        var journal = new MemoryOperationalStore();
+        var first = await SessionAsync(journal);
+        var events = await EventsAsync();
+        var records = await events.ReadAsync(Target.Identity.Pattern, EventCursor.Start, default).ToListAsync();
+        var checkpoint = ProjectionCheckpoint.Start;
+        _ = await first.BeginAsync([records[0]], checkpoint, default);
+        _ = await SessionAsync(journal);
+        var replacement = await SessionAsync(journal);
+
+        // Act
+        var error = await Record.ExceptionAsync(async () => await replacement.BeginAsync(records, checkpoint, default));
+
+        // Assert
+        _ = Assert.IsType<ProcessorFailureException>(error);
+        Assert.Equal(1, replacement.BoundOptions(ProjectionRunOptions.Default).MaxBatchSize);
+        Assert.Single(replacement.State.Attempts);
+    }
+
     /// <summary>A lost commit acknowledgement is resolved by reading the atomic receipt.</summary>
     [Fact]
     public async Task ShouldResolveWithoutReplayGivenLostReactorCommitAcknowledgement()

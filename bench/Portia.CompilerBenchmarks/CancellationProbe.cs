@@ -8,46 +8,86 @@ sealed record CancellationReport(string Case, string Size, CancellationObservati
 
 static class CancellationProbe
 {
-    public static async Task<CancellationObservation> ObserveAsync(BenchmarkCase operation,
-        CancellationTokenSource cancellation, int delayMilliseconds = 1)
+    internal static async Task<CancellationObservation> RunTrialAsync(Func<CancellationToken, Task<BenchmarkCase>> prepare,
+        int delay, CancellationToken ct)
     {
-        if (delayMilliseconds is < 0 or > 1000)
-            throw new ArgumentOutOfRangeException(nameof(delayMilliseconds));
-        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var execution = Task.Run(async () =>
-        {
-            entered.SetResult();
-            await operation.ExecuteAsync().ConfigureAwait(false);
-        }, CancellationToken.None);
-        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
-        await Task.Delay(delayMilliseconds, CancellationToken.None).ConfigureAwait(false);
-        if (execution.IsCompleted)
-        {
-            try
-            { await execution.ConfigureAwait(false); }
-            catch (Exception error) { return new CancellationObservation("faulted-before-cancel", null, error.ToString()); }
-            return new CancellationObservation("completed-before-cancel", null, null);
-        }
-        var start = Stopwatch.GetTimestamp();
+        if (delay is < 0 or > 1000)
+            throw new ArgumentOutOfRangeException(nameof(delay));
+
+        var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        BenchmarkCase? operation = null;
+        var pending = Task.CompletedTask;
         try
         {
-            await Task.WhenAll(cancellation.CancelAsync(), execution).WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false);
-            return new CancellationObservation("completed-after-cancel", Stopwatch.GetElapsedTime(start).TotalMilliseconds, null);
+            operation = await prepare(cancellation.Token).ConfigureAwait(false);
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var execution = Task.Run(async () =>
+            {
+                entered.SetResult();
+                await operation.ExecuteAsync().ConfigureAwait(false);
+            }, CancellationToken.None);
+            pending = execution;
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(10), ct).ConfigureAwait(false);
+            await Task.Delay(delay, CancellationToken.None).ConfigureAwait(false);
+            if (execution.IsCompleted)
+            {
+                try
+                {
+                    await execution.ConfigureAwait(false);
+                    return new("completed-before-cancel", null, null);
+                }
+                catch (Exception error)
+                {
+                    return new("faulted-before-cancel", null, error.ToString());
+                }
+            }
+
+            var start = Stopwatch.GetTimestamp();
+            pending = Task.WhenAll(cancellation.CancelAsync(), execution);
+            using var timer = new CancellationTokenSource();
+            var deadline = Task.Delay(TimeSpan.FromSeconds(5), timer.Token);
+            if (await Task.WhenAny(pending, deadline).ConfigureAwait(false) == deadline)
+                return new("unresponsive", Stopwatch.GetElapsedTime(start).TotalMilliseconds,
+                    "Request did not stop within five seconds; terminate this probe process before another trial.");
+
+            await timer.CancelAsync().ConfigureAwait(false);
+            try
+            {
+                await pending.ConfigureAwait(false);
+                return new("completed-after-cancel", Stopwatch.GetElapsedTime(start).TotalMilliseconds, null);
+            }
+            catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+            {
+                return new("canceled-after-entry", Stopwatch.GetElapsedTime(start).TotalMilliseconds, null);
+            }
+            catch (Exception error)
+            {
+                return new("faulted-after-cancel", Stopwatch.GetElapsedTime(start).TotalMilliseconds, error.ToString());
+            }
         }
-        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        finally
         {
-            return new CancellationObservation("canceled-after-entry", Stopwatch.GetElapsedTime(start).TotalMilliseconds, null);
+            // A watchdog returns a measurement while the compiler or its cancellation callbacks
+            // can still be using the workspace. Their completion owns disposal in that case.
+            if (pending.IsCompleted)
+            {
+                _ = pending.Exception;
+                DisposeResources();
+            }
+            else
+                _ = DisposeWhenStoppedAsync(pending);
         }
-        catch (TimeoutException)
+
+        void DisposeResources()
         {
-            _ = execution.ContinueWith(task => _ = task.Exception, CancellationToken.None,
-                TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
-            return new CancellationObservation("unresponsive", Stopwatch.GetElapsedTime(start).TotalMilliseconds,
-                "Request did not stop within five seconds; terminate this probe process before another trial.");
+            using (cancellation)
+                operation?.Dispose();
         }
-        catch (Exception error)
+
+        async Task DisposeWhenStoppedAsync(Task lifetime)
         {
-            return new CancellationObservation("faulted-after-cancel", Stopwatch.GetElapsedTime(start).TotalMilliseconds, error.ToString());
+            await lifetime.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            DisposeResources();
         }
     }
 
@@ -60,9 +100,8 @@ static class CancellationProbe
         for (var i = 0; i < trials; i++)
         {
             ct.ThrowIfCancellationRequested();
-            using var cancel = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            using var operation = await BenchmarkCase.PrepareAsync(spec, size, cancel.Token).ConfigureAwait(false);
-            var result = await ObserveAsync(operation, cancel, delay).ConfigureAwait(false);
+            var result = await RunTrialAsync(token => BenchmarkCase.PrepareAsync(spec, size, token), delay, ct)
+                .ConfigureAwait(false);
             results.Add(result);
             Console.Error.WriteLine(System.Text.Json.JsonSerializer.Serialize(result, Campaign.Json));
             if (result.Error is not null)
