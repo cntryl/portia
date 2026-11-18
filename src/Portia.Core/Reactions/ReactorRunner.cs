@@ -178,7 +178,7 @@ public sealed class ReactorRunner(
                 var failure = exception as ProcessorFailureException
                               ?? new ProcessorFailureException(identity, checkpoint, stage,
                                   contexts[0].Source, contexts[^1].Source, UninitializedResult.Is(exception)
-                                      ? UninitializedResult.ReturnedBy("reactor", reactor.GetType(), exception)
+                                      ? UninitializedResult.ReturnedBy("reactor", reactor.ComponentType, exception)
                                       : exception);
                 if (session is { } operations)
                     await operations.RecordFailureAsync(failure, null, ct).ConfigureAwait(false);

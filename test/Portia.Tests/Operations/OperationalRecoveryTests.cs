@@ -108,7 +108,72 @@ public sealed class OperationalRecoveryTests
         Assert.Equal("queued", first.Status);
         Assert.Single((await store.ReadAsync(Target))!.Repairs);
         Assert.True(await session.PrepareAsync(ProjectionCheckpoint.Start, default));
-        Assert.Equal("committed", (await operations.VerifyRepairAsync(agent, Target, plan.Id)).Status);
+        Assert.Equal("running", (await operations.VerifyRepairAsync(agent, Target, plan.Id)).Status);
+    }
+
+    /// <summary>A resume without committed source evidence stays open until the new pass proves recovery or fails.</summary>
+    [Theory]
+    [InlineData(true, "resumed")]
+    [InlineData(false, "failed")]
+    public async Task ShouldReportTheNextPassOutcomeGivenResumeAfterSourceReadFailure(bool sourceRecovers,
+        string expectedStatus)
+    {
+        // Arrange
+        var store = new MemoryOperationalStore();
+        var session = await BlockAsync(store);
+        var operations = Api(store);
+        var actor = TestOperationalAuthorizer.AdministratorActor(true);
+        var plan = await operations.PreviewRepairAsync(actor, Target);
+        _ = await operations.ApproveRepairAsync(actor, Target, plan.Id);
+        _ = await operations.ExecuteRepairAsync(actor, Target, plan.Id);
+        var checkpoint = ProjectionCheckpoint.Start;
+        var failure = new ProcessorFailureException(Target.Identity, checkpoint, ProcessorFailureStage.Reading,
+            error: RequestError.Validation("source unavailable"));
+
+        // Act
+        var mayResume = await session.PrepareAsync(checkpoint, default);
+        var claimed = await operations.VerifyRepairAsync(actor, Target, plan.Id);
+        if (sourceRecovers)
+        {
+            session.EnsureRecoveryCompleted(checkpoint);
+            await session.PassSucceededAsync(default);
+        }
+        else
+            await session.RecordFailureAsync(failure, null, default);
+        var settled = await operations.VerifyRepairAsync(actor, Target, plan.Id);
+
+        // Assert
+        Assert.True(mayResume);
+        Assert.Equal("running", claimed.Status);
+        Assert.Equal(expectedStatus, settled.Status);
+        Assert.Equal(checkpoint.Cursor.Value, session.State.Checkpoint);
+        Assert.Equal(sourceRecovers, session.State.Block is null);
+    }
+
+    /// <summary>A claimed resume without processing evidence cannot unblock a replacement owner.</summary>
+    [Fact]
+    public async Task ShouldPreserveTheBlockGivenOwnershipChangesBeforeResumeVerifiesTheSource()
+    {
+        // Arrange
+        var store = new MemoryOperationalStore();
+        var owner = await BlockAsync(store);
+        var operations = Api(store);
+        var actor = TestOperationalAuthorizer.AdministratorActor(true);
+        var plan = await operations.PreviewRepairAsync(actor, Target);
+        _ = await operations.ApproveRepairAsync(actor, Target, plan.Id);
+        _ = await operations.ExecuteRepairAsync(actor, Target, plan.Id);
+        var checkpoint = ProjectionCheckpoint.Start;
+        _ = await owner.PrepareAsync(checkpoint, default);
+        var next = new OperationalSession(store, new OperationalOptions(), new EmptyApplicationTopology(),
+            TimeProvider.System);
+
+        // Act
+        await next.AcquireAsync(Target, "reactor", Settings, checkpoint, default);
+
+        // Assert
+        Assert.NotNull(owner.State.Block);
+        Assert.Equal(owner.State.Block, next.State.Block);
+        Assert.Equal("indeterminate", (await operations.VerifyRepairAsync(actor, Target, plan.Id)).Status);
     }
 
     /// <summary>Ownership handoff preserves blocks but invalidates old plans and writes.</summary>
@@ -248,6 +313,7 @@ public sealed class OperationalRecoveryTests
         _ = await operations.ApproveRepairAsync(actor, Target, plan.Id);
         _ = await operations.ExecuteRepairAsync(actor, Target, plan.Id);
         Assert.True(await session.PrepareAsync(ProjectionCheckpoint.Start, default));
+        await session.PassSucceededAsync(default);
         clock.Advance(TimeSpan.FromDays(31));
         session.BeginPass();
         await session.RecordFailureAsync(failure, null, default);

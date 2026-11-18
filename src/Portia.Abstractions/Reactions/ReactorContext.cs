@@ -2,7 +2,7 @@ using System.Security.Claims;
 
 namespace Cntryl.Portia;
 
-/// <summary>The typed view of a reaction's execution, supplied by generated event dispatch.</summary>
+/// <summary>The typed view of a reaction's execution, supplied by Portia event dispatch.</summary>
 /// <typeparam name="TEvent">The triggering event type.</typeparam>
 public sealed class ReactorContext<TEvent> : IReactorContext<TEvent>
     where TEvent : DomainEvent

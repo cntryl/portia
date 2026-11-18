@@ -4,6 +4,19 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## Unreleased
+
+- `AddReactor<THandler, TEvent>(name, source)` hosts an ordinary `IReactorHandler<TEvent>` class.
+  The source selects tenant or global scope, and the handler uses the host's reactor checkpoint store.
+- Fitz confirms an unacknowledged event commit by matching the exact batch at its expected offsets.
+  An unresolved commit raises `EventStreamCommitUnknownException` and reports an `unknown`
+  event-store outcome.
+- A source-read repair stays `running` until processing verifies recovery. An empty successful read
+  reports `resumed`. Terminal failure and ownership handoff before read verification both preserve
+  the workload block.
+- Asynchronous HTTP documentation and generated OpenAPI describe the queue acceptance receipt and
+  provider-owned crash recovery.
+
 ## 0.14.2
 
 ### Fixed

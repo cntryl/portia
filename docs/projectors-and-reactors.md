@@ -255,30 +255,36 @@ worker faults do not replace business outcome validation. See
 
 ## Reactions
 
-A base processor skips event types for which it has no handler, including manually implemented
-processors. A component instance can be bound repeatedly to the same workload identity, but it
-cannot be rebound to another identity; persisted checkpoints under the selected identity remain
-the resume and handoff state.
-
-A reactor performs an application effect after observing an event. There are two ordinary
-patterns; choose the one that describes the behavior rather than wrapping every effect in a
-command mechanically.
+A reactor performs an application effect after observing an event. Start with a class that
+implements `IReactorHandler<TEvent>` and inject only the application services it uses.
 
 Dispatch a command when the behavior is a reusable application operation, needs the request
 authorization and handler pipeline, or can also originate outside the reactor:
 
 ```csharp
-public sealed partial class AccountReactor(
-    IProjectionCheckpointStore checkpoints,
-    IRequestBus bus)
-    : Reactor(checkpoints, EventStreamPattern.ForTenant("balances")),
-      IReactorHandler<MoneyDeposited>
+public sealed class AccountReactor(IRequestBus bus) : IReactorHandler<MoneyDeposited>
 {
     public ValueTask<Result> HandleAsync(IReactorContext<MoneyDeposited> context, CancellationToken ct) =>
         bus.SendReactionAsync(
-            new SendDepositReceipt(context.Trigger.Metadata.AggregateId), context, ct);
+            new SendDepositReceipt(context.Trigger.Metadata.AggregateId, context.Trigger.Metadata.EventId),
+            context, ct);
 }
 ```
+
+Register it alongside the application's other workloads:
+
+```csharp
+services.AddPortia()
+    .AddReactor<AccountReactor, MoneyDeposited>("AccountReactor", EventStreamPattern.ForTenant("balances"))
+    .AddFitz(configuration, fitz => fitz.UseKvCheckpoints("kv://accounts/progress/checkpoints"))
+    .AddWorkers();
+```
+
+The stable name identifies worker ownership and its checkpoint. When moving a single-event reactor
+to this registration, keep the name, source pattern, and effect identities used by recipients.
+A tenant template selects one workload per active tenant, and a fixed realm pattern selects a
+global workload. The checkpoint store is host configuration. The runner skips unrelated events in
+the source and preserves the bound tenant, execution, and causation when it invokes the handler.
 
 `SendReactionAsync` creates a child request from that event's reaction context, preserving its
 system actor, correlation, and causation. It returns the command's `Result`; returning that outcome
@@ -286,17 +292,20 @@ from the reactor lets Portia enforce its retry policy and prevents checkpointing
 Result-bearing requests use `SendAsync<T>` directly because the reactor decides how their value
 maps to its own outcome.
 
-`CreateEffectId(context, effectName)` derives a stable UUID from the reactor/checkpoint identity,
-source event ID, and effect name for use with an idempotent target. This does not make arbitrary
-effects exactly once: the effect and checkpoint are still not one atomic transaction.
+Carry a stable business identity into the command or integration call. The receipt example uses the
+source event ID for its single effect. When several effects share a source, give each a distinct
+business identity. On the `Reactor` and `BatchReactor` bases, `CreateEffectId(context, effectName)`
+derives a stable UUID from the reactor/checkpoint identity, source event ID, and effect name for an
+idempotent target. Each effect still commits independently of the checkpoint.
 Its workload name, tenant, reactor name, source event ID, and effect name are explicitly
 length-prefixed before UUID derivation. The format is independent of record `ToString()` output;
 valid names containing colons, UUIDs, or record-formatting text cannot consume adjacent fields.
 Effect names must contain well-formed UTF-16. The helper derives only a key; the application owns
 any deduplication, tracking, and resolution of pending or unknown external effects.
 
-Call an injected integration service directly when the action is inherently caused by the event
-and adding a request contract would add no useful application boundary:
+Use the same single-event handler shape for a direct integration call. Use `BatchReactor` when
+you need a bounded group of events for bulk I/O. A batch handler can also call an injected
+integration service directly:
 
 ```csharp
 public interface IAccountReactions
@@ -556,6 +565,21 @@ extensions, so reference `Cntryl.Fitz.Extensions` 1.4.0 or later directly.
 
 ## Storage implementations
 
+Start with one read model, one scoped repository, and one projector. Pick the backend by the
+queries the feature needs and by what its write path can commit atomically:
+
+| Need | Starting point |
+| --- | --- |
+| Native SQL in Cassie | [Register a Cassie repository](cassie-projections.md#composition). Portia and Cassie own the transaction and checkpoint plumbing. Supply the schema, scoped keys, SQL, and projector handlers. |
+| Keyed state in Fitz | [Derive from `FitzKvProjectionStore`](#fitz-kv-persistence). Put model keys and the checkpoint in the same KV transaction. |
+| Another transactional backend | Implement `IProjectionStore` on the repository and return an `IProjectionBatch` from its transaction. Run `ProjectionStoreConformance` against the actual backend. The [external package consumer](../smoke/Portia.ProjectionStore.PackageConsumer/Projections/UserlandProjectionStoreProbe.cs) shows the public contracts and test wiring. |
+| A target with a separate commit boundary | Use a reactor and supply a stable effect ID that the target can use for deduplication or reconciliation. |
+
+For a rebuild, write to a candidate generation, check its checkpoint and representative queries, then
+select the generation through the application's query configuration. Scope model keys and query
+predicates by generation and, for per-tenant projections, by tenant. Use committed command outcomes
+when clients need immediate confirmation while the projection catches up.
+
 The contract supports either a live transaction or buffered writes:
 
 - **EF Core relational providers:** the repository's scoped `DbContext` uses one
@@ -571,9 +595,8 @@ The contract supports either a live transaction or buffered writes:
   for checkpoint writes and enforce optimistic conditions for read-modify-write operations.
   See [TransactWriteItems](https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_TransactWriteItems.html).
 
-These are implementation requirements for a backend Portia does not bundle. Fitz KV is the
-exception described above; no relational or document-database adapter is bundled. The framework
-cannot predict how many backend writes an event causes. Applications must select suitable
+These recipes apply when the application supplies its own adapter. The framework cannot predict
+how many backend writes an event causes. Applications must select suitable
 batch sizes and their repositories must enforce backend limits without partially committing
 an oversized projection batch. Test atomicity, conditional conflicts, cancellation,
 and ambiguous commit responses against the chosen backend.

@@ -12,6 +12,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class CompleteWorkflowTests
 {
     static readonly int[] Deposits = [5, 7, 11, 13];
+    const string DepositOnly = "deposit-only";
 
     [Theory]
     [InlineData(false)]
@@ -61,6 +62,7 @@ public sealed class CompleteWorkflowTests
             .AddProjector<SecondProjector>("second-projector", WorkloadScope.Global)
             .AddReactor<FirstReactor>("first-reactor", WorkloadScope.Global)
             .AddReactor<SecondReactor>("second-reactor", WorkloadScope.Global)
+            .AddReactor<DepositOnlyReactor, Deposited>(DepositOnly, ConsumerStreams.AccountsPattern)
             .AddWorkers()
             .UseSingleProcessWorkloads();
         var id = Uuid.CreateVersion4();
@@ -146,6 +148,10 @@ public sealed class CompleteWorkflowTests
                 Assert.Equal(36, applied.Sum(item => item.Amount));
                 _ = Assert.Single(applied, item => item.Amount == 0);
             }
+
+            await effects.WaitForAsync(DepositOnly, Deposits.Length, id);
+            Assert.Equal(Deposits, effects.Items.Where(item => item.Component == DepositOnly && item.AggregateId == id)
+                .Select(item => item.Amount));
         }
         finally
         {
@@ -153,5 +159,14 @@ public sealed class CompleteWorkflowTests
         }
 
         Assert.All(effects.Scopes.Values, Assert.True);
+    }
+
+    sealed class DepositOnlyReactor(IConsumerEffects effects, IConsumerScope scope) : IReactorHandler<Deposited>
+    {
+        public ValueTask<Result> HandleAsync(IReactorContext<Deposited> context, CancellationToken ct)
+        {
+            effects.Record(DepositOnly, context.Trigger.Metadata.AggregateId, context.Trigger.Amount, scope.Id);
+            return ValueTask.FromResult(Result.Success);
+        }
     }
 }

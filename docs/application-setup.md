@@ -36,8 +36,8 @@ public static class ApplicationSetup
             .AddRequestHandler<DepositAccountHandler>()
             .AddProjector<AccountProjector>("AccountProjector", WorkloadScope.PerTenant)
             .AddProjector<PlatformSummaryProjector>("PlatformSummaryProjector", WorkloadScope.Global)
-            .AddReactor<AccountReactor>("AccountReactor", WorkloadScope.PerTenant)
-            .AddFitz(configuration.GetSection("Fitz"));
+            .AddReactor<AccountReactor, MoneyDeposited>("AccountReactor", EventStreamPattern.ForTenant("accounts"))
+            .AddFitz(configuration.GetSection("Fitz"), fitz => fitz.UseKvCheckpoints("kv://accounts/progress/reactors"));
     }
 }
 ```
@@ -251,12 +251,13 @@ cannot be rolled back by the framework.
 
 ## Projectors and reactors across worker replicas
 
-Workload registration belongs to Portia and requires an explicit scope:
+Workload registration belongs in shared setup. Projectors specify their scope, and single-event
+reactors select it through the source pattern:
 
 ```csharp
 portia.AddProjector<AccountProjector>("AccountProjector", WorkloadScope.PerTenant);
 portia.AddProjector<PlatformSummaryProjector>("PlatformSummaryProjector", WorkloadScope.Global);
-portia.AddReactor<AccountReactor>("AccountReactor", WorkloadScope.PerTenant);
+portia.AddReactor<AccountReactor, MoneyDeposited>("AccountReactor", EventStreamPattern.ForTenant("accounts"));
 ```
 
 `WorkloadScope.PerTenant` creates an independently owned workload for each active `ITenantDirectory`
@@ -265,7 +266,7 @@ to the tenant ID before constructing a checkpoint or reading, retaining its area
 filters. `WorkloadScope.Global` requires `EventStreamPattern.ForPattern(...)` and retains that exact
 realm. Either mismatch fails startup, and an unbound template cannot be driven manually.
 
-An omitted ID or scope, an invalid scope, a conflicting registration, or duplicate workload ID
+A missing ID, an invalid explicit scope, a conflicting registration, or a duplicate workload ID
 fails during configuration. Repeating an identical registration is idempotent. The
 explicit ID is used both to coordinate ownership and as the hosted component's checkpoint identity;
 for reactors it is also the stable effect identity. Constructor-selected component names are used

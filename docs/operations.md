@@ -77,8 +77,12 @@ Opaque checkpoints must be supplied and compared unchanged.
 5. Execute the approved plan. This reauthorizes and queues one execution; duplicates return the
    same repair. Only the owning worker can claim it. The worker rechecks approval, expiry, ownership,
    failure revision, source identities, settings, and checkpoint before invoking handlers.
-6. Verify the repair's queued, running, committed, failed, invalidated, or indeterminate status.
-   Processing verification does not infer a business outcome.
+6. Verify the repair's status. `committed` identifies verified processing progress. For a resume
+   after a source-read failure, the repair stays `running` through the read. If the read succeeds
+   and finds the processor caught up, the repair is `resumed` at the existing checkpoint. If the
+   source still fails after the allowed attempts, the repair is `failed` and the workload is blocked.
+   `invalidated` means the plan no longer applies, and `indeterminate` preserves an outcome that
+   could not be verified. Use the domain's recorded outcomes to verify business completion.
 
 Retries replay the complete uncommitted unit with its original source events and stable effect IDs,
 new execution IDs, the configured system reactor principal, normal downstream command authorization,
@@ -92,6 +96,8 @@ administration remain available. Coordinator and bootstrap failures retain their
 Required journal outages pause handler invocation rather than running without durable start evidence.
 Completed failures and retry counts survive ownership changes. Pending plans become invalid when
 ownership changes, and interrupted attempts remain visible when automatic crash replay succeeds.
+A claimed source-read resume that loses its owner before verifying the read is `indeterminate`.
+The replacement owner keeps the workload blocked for a new recovery decision.
 
 The Fitz journal uses synchronous commits and short resource transactions. Attempt starts precede
 application invocation. If a start's commit acknowledgement is lost, the owner reloads and confirms

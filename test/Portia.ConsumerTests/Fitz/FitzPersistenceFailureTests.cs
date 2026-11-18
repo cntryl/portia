@@ -31,21 +31,22 @@ public sealed class FitzPersistenceFailureTests
         var account = new Account(Uuid.CreateVersion4());
         var payload = new Declined("failure contract");
         account.Audit(payload);
+        var scenario = new AggregateScenario<Account>(account);
 
         // Act
-        var scenario = new AggregateScenario<Account>(account);
+        var error = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext).AsTask());
 
         // Assert
         if (failureAt == "success")
         {
-            await repository.SaveAsync(account, _saveContext);
+            Assert.Null(error);
             Assert.Empty(scenario.PendingAudits);
             Assert.Equal(0, session.Rollbacks);
         }
         else
         {
-            var error =
-                await Assert.ThrowsAsync<IOException>(() => repository.SaveAsync(account, _saveContext).AsTask());
+            if (failureAt == "commit")
+                error = Assert.IsType<EventStreamCommitUnknownException>(error).InnerException;
             Assert.Same(session.Failure, error);
             Assert.Same(payload, Assert.Single(scenario.PendingAudits));
             Assert.Equal(1, session.Rollbacks);
@@ -82,6 +83,61 @@ public sealed class FitzPersistenceFailureTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldConfirmTheWholeBatchGivenLostCommitReply(bool readFailsInitially)
+    {
+        // Arrange
+        var session = new Session("lost-reply", false);
+        var streams = new Streams(session) { ReadFails = readFailsInitially };
+        var store = new FitzEventStore(streams,
+            ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Deposited>(1, "Deposited")));
+        var repository = new AggregateRepository(store);
+        var account = new Account(Uuid.CreateVersion4());
+        account.Deposit(10);
+        account.Deposit(5);
+        Exception? unconfirmed = null;
+        if (readFailsInitially)
+        {
+            unconfirmed = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext).AsTask());
+            streams.ReadFails = false;
+        }
+
+        // Act
+        await repository.SaveAsync(account, _saveContext);
+
+        // Assert
+        if (readFailsInitially)
+            Assert.Same(session.Failure, Assert.IsType<EventStreamCommitUnknownException>(unconfirmed).InnerException);
+        Assert.Equal(2UL, account.CommittedStreamPosition);
+        Assert.Single(streams.SuccessfulReads);
+        Assert.Equal(2, session.Appended.Count);
+    }
+
+    [Fact]
+    public async Task ShouldPreserveConflictGivenOnlyAPrefixOfTheBatchMatches()
+    {
+        // Arrange
+        var session = new Session("lost-reply", false);
+        var streams = new Streams(session) { TruncateRead = true };
+        var store = new FitzEventStore(streams,
+            ConsumerJson.DomainSerializer(new DomainEventTypeCatalog().Register<Deposited>(1, "Deposited")));
+        var account = new Account(Uuid.CreateVersion4());
+        account.Deposit(10);
+        account.Deposit(5);
+        var repository = new AggregateRepository(store);
+        _ = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext).AsTask());
+
+        // Act
+        var failure = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext).AsTask());
+
+        // Assert
+        Assert.IsType<EventStreamConcurrencyException>(failure);
+        Assert.Equal(0UL, account.CommittedStreamPosition);
+        Assert.Equal(2, new AggregateScenario<Account>(account).PendingEvents.Count);
+    }
+
+    [Theory]
     [InlineData("append", FitzErrorCodes.StreamConcurrencyConflict, "unrelated wording", true)]
     [InlineData("commit", FitzErrorCodes.StreamConcurrencyConflict, "unrelated wording", true)]
     [InlineData("append", FitzErrorCodes.StreamSessionAlreadyActive, "concurrency conflict", false)]
@@ -107,6 +163,10 @@ public sealed class FitzPersistenceFailureTests
         if (conflict)
         {
             Assert.Same(original, Assert.IsType<EventStreamConcurrencyException>(error).InnerException);
+        }
+        else if (failureAt == "commit")
+        {
+            Assert.Same(original, Assert.IsType<EventStreamCommitUnknownException>(error).InnerException);
         }
         else
         {
@@ -212,9 +272,18 @@ public sealed class FitzPersistenceFailureTests
 
         public bool Committed { get; private set; }
 
+        public List<(ulong Offset, ReadOnlyMemory<byte> Body, ReadOnlyMemory<byte>? Metadata)> Appended { get; } = [];
+
         public Task<ulong?> AppendAsync(ulong expectedOffset, ReadOnlyMemory<byte> body,
             ReadOnlyMemory<byte>? metadata = null, string? discriminator = null, CancellationToken ct = default)
-            => failureAt == "append" ? throw Failure : Task.FromResult<ulong?>(expectedOffset);
+        {
+            if (failureAt == "append")
+                throw Failure;
+            if (Committed)
+                throw new StreamException("offset occupied", "APPEND_FAILED", domainCode: FitzErrorCodes.StreamConcurrencyConflict);
+            Appended.Add((expectedOffset, body, metadata));
+            return Task.FromResult<ulong?>(expectedOffset);
+        }
 
         public Task CommitAsync(StreamCommitMode mode, CancellationToken ct = default)
         {
@@ -223,6 +292,8 @@ public sealed class FitzPersistenceFailureTests
                 throw Failure;
 
             Committed = true;
+            if (failureAt == "lost-reply")
+                throw Failure;
             return Task.CompletedTask;
         }
 
@@ -243,6 +314,12 @@ public sealed class FitzPersistenceFailureTests
     {
         public string? Route { get; private set; }
 
+        public bool ReadFails { get; set; }
+
+        public bool TruncateRead { get; init; }
+
+        public List<ulong> SuccessfulReads { get; } = [];
+
         public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null,
             CancellationToken ct = default)
         {
@@ -258,7 +335,21 @@ public sealed class FitzPersistenceFailureTests
 
         public Task<StreamReadPage> ReadPageAsync(string route, ulong startOffset, ulong limit = 100,
             StreamFilterSet? filter = null, ulong? maxBytes = null, ulong? cursorFingerprint = null,
-            ulong? capturedWatermark = null, CancellationToken ct = default) => throw new NotSupportedException();
+            ulong? capturedWatermark = null, CancellationToken ct = default)
+        {
+            if (ReadFails)
+                throw new IOException("read unavailable");
+            var appended = (Session)session;
+            var items = (appended.Committed ? appended.Appended : [])
+                .Where(record => record.Offset >= startOffset)
+                .Take(TruncateRead ? 1 : checked((int)limit))
+                .Select(record => new StreamReadItem(route, StreamReadItemKind.Event,
+                    new StreamRecord(route, record.Offset, 0, 0, null, record.Body, record.Metadata, 0)))
+                .ToArray();
+            SuccessfulReads.Add(startOffset);
+            return Task.FromResult(new StreamReadPage(items,
+                new StreamReadCursor(items.LastOrDefault()?.Offset ?? 0, null, null, null, null, null, false)));
+        }
 
         public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) =>
             throw new NotSupportedException();

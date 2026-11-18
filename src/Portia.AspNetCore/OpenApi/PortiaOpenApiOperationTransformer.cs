@@ -323,14 +323,14 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             SetDefaultResponse("202", Response("Accepted", "application/json", new OpenApiSchema
             {
                 Type = JsonSchemaType.Object,
-                Description = "Receipt for an accepted asynchronous request.",
+                Description = "Enqueue acceptance receipt. Crash recovery depends on the queue provider. The request ID is for correlation.",
                 Properties = new Dictionary<string, IOpenApiSchema>
                 {
                     [jsonOptions.PropertyNamingPolicy?.ConvertName("RequestId") ?? "RequestId"] = new OpenApiSchema
                     {
                         Type = JsonSchemaType.String,
                         Format = "uuid",
-                        Description = "Identifier of the queued request."
+                        Description = "Correlation identifier for the accepted request."
                     }
                 },
                 Required = new HashSet<string>
