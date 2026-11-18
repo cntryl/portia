@@ -4,13 +4,12 @@ const path = require('node:path');
 const os = require('node:os');
 const {spawn} = require('node:child_process');
 const crypto = require('node:crypto');
-const {executionTrigger} = require('./state.cjs');
+const {executionTrigger, validateManifest} = require('./state.cjs');
 
 const workspace = path.resolve(process.argv[2] ?? 'artifacts/compiler/vscode-pilot');
 const generatorExecution = process.argv[3] ?? 'Automatic';
 executionTrigger(generatorExecution);
-const manifest = JSON.parse(fs.readFileSync(path.join(workspace, 'portia-benchmark-workspace.json'), 'utf8'));
-if (manifest.format !== 'portia-editor-benchmark-1') throw new Error('Expected an exported editor benchmark workspace.');
+validateManifest(JSON.parse(fs.readFileSync(path.join(workspace, 'portia-benchmark-workspace.json'), 'utf8')));
 // macOS Unix sockets require a short user-data path, even when artifacts live in a deep checkout.
 const profile = fs.mkdtempSync(path.join(process.platform === 'darwin' ? '/tmp' : os.tmpdir(), 'portia-editor-'));
 const artifacts = path.join(path.dirname(workspace), 'editor-run-' + crypto.randomUUID());

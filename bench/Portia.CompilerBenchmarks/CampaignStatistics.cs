@@ -2,6 +2,32 @@ namespace Cntryl.Portia.CompilerBenchmarks;
 
 static partial class Campaign
 {
+    public static Comparison[] CompareFirstRequests(IReadOnlyList<WorkerResult> results)
+    {
+        return results.GroupBy(result => result.Report?.Case ?? throw new InvalidOperationException("Missing worker report."))
+            .SelectMany(group =>
+            {
+                var pairs = group.GroupBy(result => result.Pair).Select(pair =>
+                {
+                    var baseline = pair.Single(row => row.Side == "baseline");
+                    var candidate = pair.Single(row => row.Side == "candidate");
+                    if (baseline.Report!.Warmup != 0 || candidate.Report!.Warmup != 0
+                        || baseline.Report.Samples.Length != 1 || candidate.Report.Samples.Length != 1
+                        || baseline.FirstRequestMilliseconds is not { } first || candidate.FirstRequestMilliseconds is not { } second
+                        || !double.IsFinite(first) || !double.IsFinite(second) || first <= 0 || second <= 0)
+                        throw new InvalidOperationException("First-load report has no valid cold request completion boundary.");
+                    return (first, second);
+                }).ToArray();
+                var median = CompareMetric(group.Key, "first-request-median-ms", pairs, 10);
+                var p95 = CompareP95(group.Key, pairs.Select(pair => (new[] { pair.first }, new[] { pair.second })).ToArray(), 10, 100)
+                    with
+                { Metric = "first-request-p95-ms" };
+                if (pairs.Length < 100)
+                    p95 = p95 with { Result = "insufficient-cold-processes" };
+                return new[] { median, p95 };
+            }).ToArray();
+    }
+
     static void ValidateManifests(IEnumerable<WorkerResult> results)
     {
         foreach (var side in results.GroupBy(result => result.Side))
@@ -22,7 +48,7 @@ static partial class Campaign
         }
     }
 
-    public static Comparison CompareP95(string scenario, (double[] Baseline, double[] Candidate)[] pairs)
+    public static Comparison CompareP95(string scenario, (double[] Baseline, double[] Candidate)[] pairs, double absolute = 1, int minimumProcesses = 10)
     {
         if (pairs.Length == 0 || pairs.Any(pair => pair.Baseline.Length == 0 || pair.Candidate.Length == 0
             || pair.Baseline.Concat(pair.Candidate).Any(value => !double.IsFinite(value) || value < 0)))
@@ -39,8 +65,8 @@ static partial class Campaign
         }
         var lower = Quantile(distribution, .025);
         var upper = Quantile(distribution, .975);
-        var allowance = Math.Max(baseline * .05, 1);
-        var enough = pairs.Length >= 10 && pairs.Sum(pair => pair.Baseline.Length) >= 100
+        var allowance = Math.Max(baseline * .05, absolute);
+        var enough = pairs.Length >= minimumProcesses && pairs.Sum(pair => pair.Baseline.Length) >= 100
             && pairs.Sum(pair => pair.Candidate.Length) >= 100;
         var result = !enough ? "insufficient-processes-or-samples" : upper <= allowance ? "within-margin"
             : lower > allowance ? "regression" : "inconclusive";

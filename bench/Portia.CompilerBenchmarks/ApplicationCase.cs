@@ -46,7 +46,7 @@ sealed partial class BenchmarkCase
         });
     }
 
-    static async Task<Diagnostic[]> AnalyzeDocumentAsync(ApplicationBuild build, string edit, CancellationToken ct)
+    internal static async Task<Diagnostic[]> AnalyzeDocumentAsync(ApplicationBuild build, string edit, CancellationToken ct)
     {
         var role = edit is "metadata" or "reference" ? "Common" : "Core";
         var project = build.Projects.Single(project => project.Role == role);

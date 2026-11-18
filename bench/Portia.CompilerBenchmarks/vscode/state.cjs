@@ -26,4 +26,23 @@ function executionTrigger(mode) {
     throw new Error('Unsupported source generator execution mode: ' + mode);
 }
 
-module.exports = {diagnosticCode, matches, replacement, executionTrigger};
+function acceptsFeedback(diagnostics, code, marker, absent = false, cleared = []) {
+    if (cleared.some(expected => diagnostics.some(item => matches(item, expected.code, expected.marker)))) return false;
+    return absent ? !diagnostics.some(item => matches(item, code, marker))
+        : diagnostics.some(item => matches(item, code, marker));
+}
+
+module.exports = {diagnosticCode, matches, replacement, executionTrigger, acceptsFeedback};
+
+const fixtureFiles = Object.freeze(['Projector.cs', 'Request.cs', 'Editing.cs', 'CrossProject.cs', 'Contracts/SharedContract.cs']);
+const scaffoldFiles = Object.freeze(['Bench.Editor.csproj', 'Contracts/Bench.Replay.Common.csproj']);
+function validateManifest(manifest) {
+    if (manifest.format !== 'portia-editor-benchmark-2' ||
+        JSON.stringify(manifest.files) !== JSON.stringify(fixtureFiles) ||
+        JSON.stringify(manifest.scaffoldFiles) !== JSON.stringify(scaffoldFiles))
+        throw new Error('Unsupported disposable workspace manifest.');
+    return manifest;
+}
+module.exports.fixtureFiles = fixtureFiles;
+module.exports.scaffoldFiles = scaffoldFiles;
+module.exports.validateManifest = validateManifest;

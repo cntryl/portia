@@ -140,6 +140,7 @@ sealed class ApplicationFixture(Dictionary<string, CSharpCompilation> inputs)
         var (role, file, from, to) = edit switch
         {
             "body" => ("Core", "Change0Handler.cs", "=> 1;", "=> 2;"),
+            "body-restore" => ("Core", "Change0Handler.cs", "=> 2;", "=> 1;"),
             "incomplete" => ("Core", "Change0Handler.cs", "=> 1;", "=> ;"),
             "metadata" => ("Common", "Change0.cs", "\"quantity\"", "\"units\""),
             "reference" => ("Common", "Change0.cs", ": IRequest, ICallable;", ": IRequest, ICallable { public int Revision { get; init; } }"),

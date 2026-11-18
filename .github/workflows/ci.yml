@@ -111,6 +111,14 @@ jobs:
       - name: Verify compiler benchmark fixtures
         run: dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll verify --size minimal
 
+      - name: Capture and verify Accounts compiler inputs
+        shell: bash
+        run: |
+          dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll capture-accounts \
+            --root . --output artifacts/compiler/accounts-ci
+          PORTIA_COMPILER_ACCOUNTS="$PWD/artifacts/compiler/accounts-ci" \
+            dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll verify --corpus accounts
+
       - name: Verify editor benchmark policies
         run: node --test bench/Portia.CompilerBenchmarks/vscode/state.test.cjs
 
