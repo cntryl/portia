@@ -1,2 +1,1 @@
 #nullable enable
-const Cntryl.Portia.OperationalRepairStatuses.Resumed = "resumed" -> string!

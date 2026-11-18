@@ -4,18 +4,40 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
-## Unreleased
+## 0.14.3
+
+### Added
+
+- `AddProjector<TProjector>(name, source)` hosts a plain C# projector with typed handlers.
+  Its declared repository owns both writes and checkpoints. `ProjectorScenario` can exercise
+  the same generated dispatch. Projectors derived from `Projector` use the scope-based overload.
 
 - `AddReactor<THandler, TEvent>(name, source)` hosts an ordinary `IReactorHandler<TEvent>` class.
   The source selects tenant or global scope, and the handler uses the host's reactor checkpoint store.
+
+### Changed
+
+- Fitz projection rebuilds store each candidate in its own resource. Read a candidate with
+  `BeginReadAsync(identity, ct)`. Rebuild existing candidates created under the shared-resource layout.
+- Portia now uses Fitz 4.3.0 and Cassie 0.2.1. The in-memory Fitz RPC client's streaming overloads
+  are named `CallStreamingAsync`.
+- Asynchronous HTTP documentation and generated OpenAPI describe the queue acceptance receipt and
+  provider-owned crash recovery.
+
+### Fixed
+
 - Fitz confirms an unacknowledged event commit by matching the exact batch at its expected offsets.
   An unresolved commit raises `EventStreamCommitUnknownException` and reports an `unknown`
   event-store outcome.
 - A source-read repair stays `running` until processing verifies recovery. An empty successful read
   reports `resumed`. Terminal failure and ownership handoff before read verification both preserve
   the workload block.
-- Asynchronous HTTP documentation and generated OpenAPI describe the queue acceptance receipt and
-  provider-owned crash recovery.
+- A repair that loses its owner before the retry starts stays blocked. Once an attempt starts,
+  a replacement owner replays its original records only while the checkpoint still matches.
+- Fleet shutdown applies its deadline to cancellation callbacks, keeps their resources alive until
+  they return, and preserves the original failure when cleanup also fails.
+- Generated regex constraints honor the first match chosen by .NET validation. Patterns containing
+  literal braces that are invalid in Unicode ECMAScript retain their .NET metadata.
 
 ## 0.14.2
 

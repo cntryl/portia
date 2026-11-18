@@ -72,3 +72,6 @@ Cntryl.Portia.PortiaBuilder.AddEventSourcedTenantDirectory<TStartEvent, TStopEve
 Cntryl.Portia.PortiaBuilder.AddGeneratedContractMetadata(System.Func<System.Type!, Cntryl.Portia.PortiaContractMetadata?>! provider) -> Cntryl.Portia.PortiaBuilder!
 Cntryl.Portia.PortiaBuilder.AddGeneratedJsonContext(System.Func<System.Text.Json.JsonSerializerOptions!, System.Text.Json.Serialization.JsonSerializerContext!>! factory, System.Func<System.Type!, Cntryl.Portia.PortiaContractMetadata?>? metadata = null) -> Cntryl.Portia.PortiaBuilder!
 Cntryl.Portia.PortiaBuilder.AddExample<T>(string! name, T value, string? summary = null, Cntryl.Portia.PortiaContractUse use = Cntryl.Portia.PortiaContractUse.Both) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddReactor<THandler, TEvent>(string! name, Cntryl.Portia.EventStreamPattern! source) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddReactor<THandler, TEvent>(string! name, Cntryl.Portia.EventStreamPattern! source, System.Action<Cntryl.Portia.WorkloadOptions!>? configure) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.AddProjector<TProjector>(string! name, Cntryl.Portia.EventStreamPattern! source, System.Action<Cntryl.Portia.WorkloadOptions!>? configure = null) -> Cntryl.Portia.PortiaBuilder!
