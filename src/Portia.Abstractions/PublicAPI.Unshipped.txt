@@ -1,7 +1,1 @@
 #nullable enable
-Cntryl.Portia.EventStreamCommitUnknownException
-Cntryl.Portia.EventStreamCommitUnknownException.EventStreamCommitUnknownException(string! message, System.Exception! innerException) -> void
-Cntryl.Portia.IProjector
-Cntryl.Portia.ProjectorDispatch<T>
-Cntryl.Portia.IProjector.Store.get -> Cntryl.Portia.IProjectionStore!
-static Cntryl.Portia.ProjectorDispatch<T>.Register(System.Func<T!, string!, Cntryl.Portia.EventStreamPattern!, Cntryl.Portia.Projector!>! factory, params string![]! subscriptions) -> void

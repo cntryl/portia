@@ -621,3 +621,4 @@ const Cntryl.Portia.RepairActions.Retry = "retry" -> string!
 Cntryl.Portia.ProcessorKinds
 const Cntryl.Portia.ProcessorKinds.Projector = "projector" -> string!
 const Cntryl.Portia.ProcessorKinds.Reactor = "reactor" -> string!
+const Cntryl.Portia.OperationalRepairStatuses.Resumed = "resumed" -> string!

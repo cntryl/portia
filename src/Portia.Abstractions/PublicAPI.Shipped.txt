@@ -1142,3 +1142,9 @@ Cntryl.Portia.PortiaContractUse.Input = 1 -> Cntryl.Portia.PortiaContractUse
 Cntryl.Portia.PortiaContractUse.Output = 2 -> Cntryl.Portia.PortiaContractUse
 Cntryl.Portia.PortiaContractUse.Both = Cntryl.Portia.PortiaContractUse.Input | Cntryl.Portia.PortiaContractUse.Output -> Cntryl.Portia.PortiaContractUse
 Cntryl.Portia.PortiaContractUse.None = 0 -> Cntryl.Portia.PortiaContractUse
+Cntryl.Portia.EventStreamCommitUnknownException
+Cntryl.Portia.EventStreamCommitUnknownException.EventStreamCommitUnknownException(string! message, System.Exception! innerException) -> void
+Cntryl.Portia.IProjector
+Cntryl.Portia.ProjectorDispatch<T>
+Cntryl.Portia.IProjector.Store.get -> Cntryl.Portia.IProjectionStore!
+static Cntryl.Portia.ProjectorDispatch<T>.Register(System.Func<T!, string!, Cntryl.Portia.EventStreamPattern!, Cntryl.Portia.Projector!>! factory, params string![]! subscriptions) -> void

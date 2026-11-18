@@ -211,3 +211,4 @@ static Cntryl.Portia.Testing.FakeSubmission<TMessage>.operator !=(Cntryl.Portia.
 static Cntryl.Portia.Testing.FakeSubmission<TMessage>.operator ==(Cntryl.Portia.Testing.FakeSubmission<TMessage>? left, Cntryl.Portia.Testing.FakeSubmission<TMessage>? right) -> bool
 Cntryl.Portia.Testing.ReactorScenario.RespondTo<TRequest, TOut>(Cntryl.Portia.Result<TOut> result) -> Cntryl.Portia.Testing.ReactorScenario!
 Cntryl.Portia.Testing.ReactorScenario.RespondToStream<TRequest, TOut>(params TOut[]! items) -> Cntryl.Portia.Testing.ReactorScenario!
+Cntryl.Portia.Testing.ProjectorScenario.RunAsync<T>(T! projector, string! name, Cntryl.Portia.EventStreamPattern! source, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
