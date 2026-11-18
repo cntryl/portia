@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {matches, replacement, executionTrigger} = require('./state.cjs');
+const {matches, replacement, executionTrigger, acceptsFeedback} = require('./state.cjs');
 
 function capture(action) {
     try {
@@ -84,4 +84,44 @@ test('ShouldRejectUnchangedInputGivenRepeatedReplayEdit', () => {
     // Assert
     assert.ok(error instanceof Error);
     assert.match(error.message, /no-op/);
+});
+
+test('ShouldRejectOldFixtureGivenChangedReplayContract', () => {
+    // Arrange
+    const manifest = {format: 'portia-editor-benchmark-1', files: ['Projector.cs', 'Request.cs', 'Editing.cs']};
+    // Act
+    const error = capture(() => require('./state.cjs').validateManifest(manifest));
+    // Assert
+    assert.ok(error instanceof Error);
+});
+
+test('ShouldRejectMissingProjectGivenCrossProjectReplay', () => {
+    // Arrange
+    const state = require('./state.cjs');
+    const manifest = {format: 'portia-editor-benchmark-2', files: [...state.fixtureFiles], scaffoldFiles: ['Bench.Editor.csproj']};
+    // Act
+    const error = capture(() => state.validateManifest(manifest));
+    // Assert
+    assert.ok(error instanceof Error);
+});
+
+test('ShouldRejectRepairFeedbackGivenStaleSemanticFailure', () => {
+    // Arrange
+    const diagnostics = [{code: 'CS1030', message: 'PORTIA_REPAIR_1'},
+        {code: 'CS1061', message: 'No member Value_PORTIA_CROSS_0'}];
+    // Act
+    const accepted = acceptsFeedback(diagnostics, 'CS1030', 'PORTIA_REPAIR_1', false,
+        [{code: 'CS1061', marker: 'Value_PORTIA_CROSS_0'}]);
+    // Assert
+    assert.equal(accepted, false);
+});
+
+test('ShouldAcceptRepairFeedbackGivenFreshMarkerAndClearedFailure', () => {
+    // Arrange
+    const diagnostics = [{code: 'CS1030', message: 'PORTIA_REPAIR_1'}];
+    // Act
+    const accepted = acceptsFeedback(diagnostics, 'CS1030', 'PORTIA_REPAIR_1', false,
+        [{code: 'CS0246', marker: 'Missing_PORTIA_INCOMPLETE_1'}]);
+    // Assert
+    assert.equal(accepted, true);
 });

@@ -19,7 +19,8 @@ sealed record WorkerReport(
     string OS,
     string Architecture,
     Dictionary<string, string> Assemblies,
-    Sample[] Samples);
+    Sample[] Samples,
+    double LifetimeCpuMilliseconds = 0);
 
 sealed record WorkerResult(
     int Pair,
@@ -27,7 +28,9 @@ sealed record WorkerResult(
     string Assembly,
     double ProcessMilliseconds,
     WorkerReport? Report,
-    string? Error);
+    string? Error,
+    HostRun? Host = null,
+    double? FirstRequestMilliseconds = null);
 
 sealed record Comparison(
     string Case,
@@ -38,31 +41,48 @@ sealed record Comparison(
     double Allowance,
     string Result);
 
-static class Campaign
+static partial class Campaign
 {
-    public const string Format = "portia-compiler-benchmarks-2";
+    public const string Format = "portia-compiler-benchmarks-4";
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     static readonly JsonSerializerOptions PrettyJson = new() { WriteIndented = true };
 
     public static async Task<WorkerReport> WorkerAsync(CaseSpec spec, string size, int samples, int warmup,
         CancellationToken ct,
-        Action<Sample>? completed = null)
+        Action<Sample>? completed = null, bool completionAck = false)
     {
         CompilerHost.VerifyInventory();
         for (var i = 0; i < warmup; i++)
-            _ = await BenchmarkCase.MeasureAsync(spec, "minimal", -1, ct).ConfigureAwait(false);
+            _ = await BenchmarkCase.MeasureAsync(spec, size, -1, ct: ct).ConfigureAwait(false);
         var rows = new List<Sample>();
         for (var i = 0; i < samples; i++)
         {
             ct.ThrowIfCancellationRequested();
-            var row = await BenchmarkCase.MeasureAsync(spec, size, i, ct).ConfigureAwait(false);
+            var row = await BenchmarkCase.MeasureAsync(spec, size, i,
+                () =>
+                {
+                    Console.WriteLine(JsonSerializer.Serialize(new { RequestCompleted = i }, Json));
+                    if (completionAck && Console.ReadLine() != "continue:" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                        throw new InvalidOperationException("Controller did not acknowledge the request boundary.");
+                }, ct).ConfigureAwait(false);
             rows.Add(row);
             completed?.Invoke(row);
         }
 
-        var fixture = CompilerFixture.Create(size);
-        var fixtureHash = CompilerHost.Hash(string.Join("\n",
-            fixture.Compilation.SyntaxTrees.Select(tree => tree.FilePath + "|" + tree.GetText())));
+        var identity = Identity();
+        using var process = Process.GetCurrentProcess();
+        return new WorkerReport(Format, spec.Id, size, warmup, warmup == 0 ? "none" : size, Environment.ProcessId,
+            FixtureHash(spec, size), identity.HarnessHash, identity.Runtime, identity.Roslyn, identity.OS,
+            identity.Architecture, identity.Assemblies, rows.ToArray(), process.TotalProcessorTime.TotalMilliseconds);
+    }
+
+    public static string FixtureHash(CaseSpec spec, string size) => spec.Kind == "accounts" ? AccountsFixture.Load(spec.Component).Identity :
+        spec.Kind == "applications" ? ApplicationFixture.Create(size).Identity :
+        CompilerHost.Hash(string.Join("\n", CompilerFixture.Create(size).Compilation.SyntaxTrees
+            .Select(tree => tree.FilePath + "|" + tree.GetText())));
+
+    public static ToolingIdentity Identity()
+    {
         var assemblies = CompilerHost.Generators.Concat(CompilerHost.Analyzers).Concat(CompilerHost.CodeFixes)
             .Select(type => type.Assembly).Append(typeof(Aggregate).Assembly).Append(typeof(PortiaBuilder).Assembly)
             .Append(typeof(Microsoft.CodeAnalysis.Compilation).Assembly).Distinct()
@@ -81,12 +101,9 @@ static class Campaign
                                                                               ?.GetILAsByteArray() ?? []))))));
         assemblies.Add("fixture-references", CompilerHost.Hash(string.Join("\n", CompilerHost.References
             .Select(reference => CompilerHost.FileHash(reference.Display!)).Order(StringComparer.Ordinal))));
-        return new WorkerReport(Format, spec.Id, size, warmup, warmup == 0 ? "none" : "minimal", Environment.ProcessId,
-            fixtureHash,
-            CompilerHost.FileHash(typeof(Campaign).Assembly.Location), RuntimeInformation.FrameworkDescription,
-            typeof(Microsoft.CodeAnalysis.Compilation).Assembly.GetName().Version!.ToString(),
-            RuntimeInformation.OSDescription, RuntimeInformation.ProcessArchitecture.ToString(), assemblies,
-            rows.ToArray());
+        return new ToolingIdentity(CompilerHost.FileHash(typeof(Campaign).Assembly.Location),
+            RuntimeInformation.FrameworkDescription, typeof(Microsoft.CodeAnalysis.Compilation).Assembly.GetName().Version!.ToString(),
+            RuntimeInformation.OSDescription, RuntimeInformation.ProcessArchitecture.ToString(), assemblies);
     }
 
     public static async Task<WorkerResult> LaunchAsync(string assembly, CaseSpec spec, string size, int samples,
@@ -94,55 +111,82 @@ static class Campaign
         int pair, string side, TimeSpan timeout, CancellationToken ct, Func<string, Task>? progress = null)
     {
         var start = new ProcessStartInfo("dotnet")
-        { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        { RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true, UseShellExecute = false };
         foreach (var argument in new[]
                  {
-                     Path.GetFullPath(assembly), "worker", "--case", spec.Id, "--size", size,
+                     Path.GetFullPath(assembly), "worker", "--corpus", spec.Kind == "accounts" ? "accounts" : "core", "--case", spec.Id, "--size", size,
                      "--samples", samples.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                     "--warmup", warmup.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                     "--warmup", warmup.ToString(System.Globalization.CultureInfo.InvariantCulture), "--completion-ack", "true"
                  })
             start.ArgumentList.Add(argument);
         using var process = new Process { StartInfo = start };
+        using var monitor = new HostMonitor(process);
         var watch = Stopwatch.StartNew();
         if (!process.Start())
             throw new InvalidOperationException("Could not launch worker.");
-        var stdout = ReadWorkerAsync(process.StandardOutput, progress);
+        double? firstRequest = null;
+        var stdout = ReadWorkerAsync(process.StandardOutput, samples, progress, async index =>
+        {
+            firstRequest ??= watch.Elapsed.TotalMilliseconds;
+            await process.StandardInput.WriteLineAsync("continue:" + index.ToString(System.Globalization.CultureInfo.InvariantCulture)).ConfigureAwait(false);
+            await process.StandardInput.FlushAsync(CancellationToken.None).ConfigureAwait(false);
+        });
         var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(timeout);
         try
         {
-            await process.WaitForExitAsync(deadline.Token).ConfigureAwait(false);
+            var exited = process.WaitForExitAsync(deadline.Token);
+            while (!exited.IsCompleted)
+            {
+                _ = await Task.WhenAny(exited, Task.Delay(1000, CancellationToken.None)).ConfigureAwait(false);
+                deadline.Token.ThrowIfCancellationRequested();
+                if (stdout.IsFaulted)
+                    _ = await stdout.ConfigureAwait(false);
+                if (!exited.IsCompleted && !monitor.Observe())
+                {
+                    process.Kill(entireProcessTree: true);
+                    break;
+                }
+            }
+            await exited.ConfigureAwait(false);
             var output = await stdout.ConfigureAwait(false);
             var error = await stderr.ConfigureAwait(false);
             if (process.ExitCode != 0)
                 return new WorkerResult(pair, side, assembly, watch.Elapsed.TotalMilliseconds, null,
-                    "exit=" + process.ExitCode + "; " + error + output);
+                    "exit=" + process.ExitCode + "; " + error + output, monitor.Complete());
             var report = JsonSerializer.Deserialize<WorkerReport>(output, Json) ??
                          throw new InvalidOperationException("Empty worker report.");
-            if (report.Case != spec.Id || report.Size != size || report.Samples.Length != samples)
+            if (report.Format != Format || report.Case != spec.Id || report.Size != size || report.Samples.Length != samples
+                || !double.IsFinite(report.LifetimeCpuMilliseconds) || report.LifetimeCpuMilliseconds <= 0)
                 throw new InvalidOperationException("Worker did not report the requested case and sample count.");
-            return new WorkerResult(pair, side, assembly, watch.Elapsed.TotalMilliseconds, report, null);
+            var host = monitor.Complete(report.LifetimeCpuMilliseconds);
+            return new WorkerResult(pair, side, assembly, watch.Elapsed.TotalMilliseconds, report,
+                host.Accepted ? null : "host rejected: " + string.Join("; ", host.Reasons), host, firstRequest);
         }
-        catch (OperationCanceledException)
+        catch (Exception error) when (error is OperationCanceledException or JsonException or InvalidOperationException or IOException)
         {
             if (!process.HasExited)
                 process.Kill(entireProcessTree: true);
             await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
-            _ = await stdout.ConfigureAwait(false);
+            try
+            { _ = await stdout.ConfigureAwait(false); }
+            catch (Exception readError) when (readError is JsonException or InvalidOperationException or IOException)
+            { /* Completed progress records have already been flushed to the raw log. */ }
             _ = await stderr.ConfigureAwait(false);
             return new WorkerResult(pair, side, assembly, watch.Elapsed.TotalMilliseconds, null,
-                ct.IsCancellationRequested ? "campaign canceled" : "worker timed out");
-        }
-        catch (Exception error) when (error is JsonException or InvalidOperationException)
-        {
-            return new WorkerResult(pair, side, assembly, watch.Elapsed.TotalMilliseconds, null, error.Message);
+                error is OperationCanceledException ? (ct.IsCancellationRequested ? "campaign canceled" : "worker timed out") : error.Message,
+                monitor.Complete());
         }
     }
 
     public static async Task<int> RunAsync(string baseline, string candidate, CaseSpec[] cases, string size,
-        string directory, int pairs, int samples, int warmup, int seconds, CancellationToken ct)
+        string directory, int pairs, int samples, int warmup, int seconds, CancellationToken ct, bool calibration = false, bool firstLoad = false)
     {
+        if (firstLoad && (samples != 1 || warmup != 0))
+            throw new InvalidOperationException("First-load collection requires one sample and no warmup per process.");
+        if (calibration && CompilerHost.FileHash(baseline) != CompilerHost.FileHash(candidate))
+            throw new InvalidOperationException("A/A calibration requires the same immutable executable.");
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "run-" + Guid.NewGuid().ToString("N"));
         await using var stream = new FileStream(path + ".jsonl", FileMode.CreateNew, FileAccess.Write, FileShare.Read);
@@ -150,9 +194,15 @@ static class Campaign
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(TimeSpan.FromSeconds(seconds));
         var results = new List<WorkerResult>();
-        var complete = true;
+        var preflight = await HostMonitor.IdleAsync(10, deadline.Token).ConfigureAwait(false);
+        await writer.WriteLineAsync(JsonSerializer.Serialize(new { Preflight = preflight }, Json)).ConfigureAwait(false);
+        var complete = preflight.Accepted;
+        if (!complete)
+            Console.Error.WriteLine("Host preflight rejected: " + string.Join("; ", preflight.Reasons));
         foreach (var spec in cases)
         {
+            if (!complete)
+                break;
             for (var pair = 0; pair < pairs; pair++)
             {
                 foreach (var side in pair % 2 == 0
@@ -165,6 +215,10 @@ static class Campaign
                         break;
                     }
 
+                    var idle = await HostMonitor.IdleAsync(1, deadline.Token).ConfigureAwait(false);
+                    await writer.WriteLineAsync(JsonSerializer.Serialize(new { pair, side, Idle = idle }, Json)).ConfigureAwait(false);
+                    if (!idle.Accepted)
+                    { complete = false; break; }
                     var result = await LaunchAsync(side == "baseline" ? baseline : candidate, spec, size, samples,
                         warmup, pair, side, TimeSpan.FromSeconds(seconds), deadline.Token, async line =>
                         {
@@ -201,6 +255,11 @@ static class Campaign
             try
             {
                 comparisons = Compare(results);
+                if (firstLoad)
+                {
+                    var first = CompareFirstRequests(results);
+                    comparisons = [.. comparisons, .. first];
+                }
             }
             catch (InvalidOperationException error)
             {
@@ -209,10 +268,15 @@ static class Campaign
             }
         }
 
+        var calibrated = calibration && complete && pairs >= 10 && samples * pairs >= 100 && CalibrationAccepted(comparisons);
         var report = new
         {
             format = Format,
-            status = complete ? "diagnostic-comparison" : "incomplete",
+            mode = firstLoad ? "first-load" : calibration ? "calibration" : "comparison",
+            status = !complete ? "incomplete" : calibration ? (calibrated ? "calibrated" : "calibration-inconclusive") : "diagnostic-comparison",
+            hostPolicy = HostMonitor.Policy,
+            preflight,
+            hostAccepted = complete && results.All(result => result.Host is { Accepted: true }),
             qualification = "pending controlled-host acceptance, A/A calibration, and complete design coverage",
             baseline = Path.GetFullPath(baseline),
             candidate = Path.GetFullPath(candidate),
@@ -236,22 +300,32 @@ static class Campaign
                     p95Milliseconds =
                         Quantile(group.SelectMany(result => result.Report!.Samples.Select(row => row.Milliseconds)),
                             .95),
-                    p95IsDiagnosticOnly = true
+                    p95IsDiagnosticOnly = comparisons.Any(comparison => comparison.Metric == "p95-ms" && comparison.Result == "insufficient-processes-or-samples")
                 }).ToArray(),
             raw = Path.GetFileName(path + ".jsonl")
         };
         await File.WriteAllTextAsync(path + ".summary.json", JsonSerializer.Serialize(report, PrettyJson),
             CancellationToken.None).ConfigureAwait(false);
         Console.WriteLine(path + ".summary.json");
-        return complete ? 0 : 1;
+        return !complete ? 1 : calibration && !calibrated ? 2 : 0;
     }
 
-    static async Task<string> ReadWorkerAsync(StreamReader reader, Func<string, Task>? progress)
+    internal static async Task<string> ReadWorkerAsync(TextReader reader, int samples, Func<string, Task>? progress, Func<int, Task> requestCompleted)
     {
         var report = "";
+        var requests = 0;
         while (await reader.ReadLineAsync(CancellationToken.None).ConfigureAwait(false) is { } line)
         {
-            if (line.StartsWith("{\"Sample\":", StringComparison.Ordinal))
+            if (line.StartsWith("{\"RequestCompleted\":", StringComparison.Ordinal))
+            {
+                using var marker = JsonDocument.Parse(line);
+                if (requests >= samples || marker.RootElement.GetProperty("RequestCompleted").GetInt32() != requests)
+                    throw new InvalidOperationException("Worker reported an out-of-order request boundary.");
+                await requestCompleted(requests++).ConfigureAwait(false);
+                if (progress is not null)
+                    await progress(line).ConfigureAwait(false);
+            }
+            else if (line.StartsWith("{\"Sample\":", StringComparison.Ordinal))
             {
                 if (progress is not null)
                     await progress(line).ConfigureAwait(false);
@@ -260,7 +334,16 @@ static class Campaign
                 report = line;
         }
 
+        if (requests != samples)
+            throw new InvalidOperationException("Worker did not report every request boundary.");
         return report;
+    }
+
+    public static bool CalibrationAccepted(IEnumerable<Comparison> comparisons)
+    {
+        var rows = comparisons.ToArray();
+        return rows.Length > 0 && rows.All(row => row.Result == "within-margin"
+            && row.Lower >= -row.Allowance && row.Upper <= row.Allowance);
     }
 
     public static Comparison[] Compare(IReadOnlyList<WorkerResult> results)
@@ -269,6 +352,7 @@ static class Campaign
         foreach (var group in results.GroupBy(result =>
                      result.Report?.Case ?? throw new InvalidOperationException("Cannot compare failed workers.")))
         {
+            ValidateManifests(group);
             var blocks = group.GroupBy(result => result.Pair).Select(pair =>
             {
                 var baseline = pair.Single(item => item.Side == "baseline").Report!;
@@ -276,12 +360,16 @@ static class Campaign
                 foreach (var report in new[] { baseline, candidate })
                     if (report.Samples.Where((row, index) =>
                             row.Index != index || row.Case != report.Case || row.Size != report.Size
-                            || row.AllocatedBytes < 0 || !double.IsFinite(row.Milliseconds) || row.Milliseconds < 0)
+                            || row.AllocatedBytes < 0 || !double.IsFinite(row.Milliseconds) || row.Milliseconds < 0
+                            || !double.IsFinite(row.CpuMilliseconds) || row.CpuMilliseconds < 0
+                            || !double.IsFinite(row.PreparationMilliseconds) || row.PreparationMilliseconds < 0
+                            || !double.IsFinite(row.VerificationMilliseconds) || row.VerificationMilliseconds < 0
+                            || row.Gen0 < 0 || row.Gen1 < 0 || row.Gen2 < 0)
                         .Any())
                         throw new InvalidOperationException(
                             "Worker report contains missing, invalid or misidentified samples.");
                 if (baseline.Format != candidate.Format || baseline.Format != Format ||
-                    baseline.FixtureHash != candidate.FixtureHash
+                    baseline.FixtureHash != candidate.FixtureHash || baseline.HarnessHash != candidate.HarnessHash
                     || baseline.Warmup != candidate.Warmup || baseline.WarmupSize != candidate.WarmupSize
                     || baseline.Runtime != candidate.Runtime || baseline.Roslyn != candidate.Roslyn ||
                     baseline.OS != candidate.OS
@@ -293,18 +381,25 @@ static class Campaign
                     candidate.Assemblies["System.Text.Json.SourceGeneration"])
                     throw new InvalidOperationException(
                         "Baseline and candidate have incompatible workload or host manifests.");
-                Verification.Coverage(baseline.Samples.Select(row => row.Evidence.OutputHash),
-                    candidate.Samples.Select(row => row.Evidence.OutputHash));
+                if (!baseline.Samples.Select(row => row.Evidence.OutputHash)
+                    .SequenceEqual(candidate.Samples.Select(row => row.Evidence.OutputHash)))
+                    throw new InvalidOperationException("Baseline/candidate outputs differ at a requested sample index.");
                 return (Baseline: baseline, Candidate: candidate);
             }).ToArray();
             comparisons.Add(CompareMetric(group.Key, "median-ms", blocks.Select(block =>
                     (Quantile(block.Baseline.Samples.Select(row => row.Milliseconds), .5),
                         Quantile(block.Candidate.Samples.Select(row => row.Milliseconds), .5))).ToArray(),
-                group.Key.EndsWith("/cold", StringComparison.Ordinal) ? 10 : 1));
+                1));
+            comparisons.Add(CompareP95(group.Key, blocks.Select(block =>
+                (block.Baseline.Samples.Select(row => row.Milliseconds).ToArray(),
+                 block.Candidate.Samples.Select(row => row.Milliseconds).ToArray())).ToArray()));
             comparisons.Add(CompareMetric(group.Key, "allocated-bytes", blocks.Select(block =>
                     (Quantile(block.Baseline.Samples.Select(row => (double)row.AllocatedBytes), .5),
                         Quantile(block.Candidate.Samples.Select(row => (double)row.AllocatedBytes), .5))).ToArray(),
                 65536));
+            comparisons.Add(CompareMetric(group.Key, "cpu-ms", blocks.Select(block =>
+                (Quantile(block.Baseline.Samples.Select(row => row.CpuMilliseconds), .5),
+                 Quantile(block.Candidate.Samples.Select(row => row.CpuMilliseconds), .5))).ToArray(), 1));
         }
 
         return comparisons.ToArray();

@@ -14,8 +14,18 @@ sealed record CaseSpec(string Kind, string Operation, string Component = "all")
     static readonly string[] FixStages = ["discover", "discover-cached", "preview", "compute", "apply", "complete"];
     public string Id => Kind + "/" + Component + "/" + Operation;
 
-    public static CaseSpec[] All() =>
+    public static CaseSpec[] All(string corpus = "core") => corpus switch
+    {
+        "core" => Core(),
+        "accounts" => [.. AccountsCapture.Projects.SelectMany(project => new[]
+            { new CaseSpec("accounts", "cold", project.ToLowerInvariant()), new CaseSpec("accounts", "body", project.ToLowerInvariant()) })],
+        _ => throw new ArgumentException("Corpus must be core or accounts.", nameof(corpus))
+    };
+
+    static CaseSpec[] Core() =>
     [
+        .. ApplicationFixture.Edits.Select(edit => new CaseSpec("applications", edit)),
+        new("applications", "full"), new("applications", "analyze"),
         .. CompilerFixture.Edits.Select(edit => new CaseSpec("generators", edit)), new("generators", "cold"),
         new("generators", "negative"),
         .. CompilerHost.Generators.Select(type => new CaseSpec("generators", "body", type.Name)),
@@ -39,9 +49,11 @@ sealed record Sample(
     int Gen0,
     int Gen1,
     int Gen2,
-    Evidence Evidence);
+    Evidence Evidence,
+    double PreparationMilliseconds = 0,
+    double VerificationMilliseconds = 0);
 
-sealed class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>> verify, IDisposable? owner = null)
+sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>> verify, IDisposable? owner = null)
     : IDisposable
 {
     static readonly string[] CombinedAnalyzerDiagnostics =
@@ -68,21 +80,27 @@ sealed class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>> verify,
     public static async Task<BenchmarkCase> PrepareAsync(CaseSpec spec, string size, CancellationToken ct = default) =>
         spec.Kind switch
         {
+            "accounts" => PrepareAccounts(spec, ct),
+            "applications" => PrepareApplication(spec, size, ct),
             "generators" => PrepareGenerators(spec, size, ct),
             "analyzers" => PrepareAnalyzers(spec, size, ct),
             "fixes" => await PrepareFixAsync(spec, size, ct).ConfigureAwait(false),
             _ => throw new ArgumentException("Unknown case kind: " + spec.Kind, nameof(spec))
         };
 
-    public static async Task<Sample> MeasureAsync(CaseSpec spec, string size, int index, CancellationToken ct = default)
+    public static async Task<Sample> MeasureAsync(CaseSpec spec, string size, int index, Action? requestCompleted = null, CancellationToken ct = default)
     {
         // Preparation owns fresh state for each sample. Verification is after the allocation and wall timers.
+        var start = Stopwatch.GetTimestamp();
         using var operation = await PrepareAsync(spec, size, ct).ConfigureAwait(false);
-        return await MeasurePreparedAsync(operation, spec, size, index).ConfigureAwait(false);
+        var preparation = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        return (await MeasurePreparedAsync(operation, spec, size, index, requestCompleted).ConfigureAwait(false))
+            with
+        { PreparationMilliseconds = preparation };
     }
 
     public static async Task<Sample> MeasurePreparedAsync(BenchmarkCase operation, CaseSpec spec, string size,
-        int index)
+        int index, Action? requestCompleted = null)
     {
         using var process = Process.GetCurrentProcess();
         var cpu = process.TotalProcessorTime;
@@ -94,9 +112,12 @@ sealed class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>> verify,
         var bytes = GC.GetTotalAllocatedBytes(precise: true) - allocated;
         var cpuMilliseconds = (process.TotalProcessorTime - cpu).TotalMilliseconds;
         var counts = new[] { GC.CollectionCount(0), GC.CollectionCount(1), GC.CollectionCount(2) };
+        requestCompleted?.Invoke();
+        var verificationStart = Stopwatch.GetTimestamp();
         var evidence = await operation.VerifyAsync().ConfigureAwait(false);
+        var verification = Stopwatch.GetElapsedTime(verificationStart).TotalMilliseconds;
         return new Sample(spec.Id, size, index, elapsed, cpuMilliseconds, bytes,
-            counts[0] - collections[0], counts[1] - collections[1], counts[2] - collections[2], evidence);
+            counts[0] - collections[0], counts[1] - collections[1], counts[2] - collections[2], evidence, 0, verification);
     }
 
     static BenchmarkCase PrepareGenerators(CaseSpec spec, string size, CancellationToken ct)

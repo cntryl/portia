@@ -31,14 +31,21 @@ installation. It uses a short temporary profile path for macOS socket limits, en
 run deadline, and retains the launch log and temporary profile location in `artifacts/compiler`.
 The existing licensed editor session and account settings stay in their original profile.
 
+The version 2 fixture has a root consumer project and a referenced Common contract project. Old
+fixture formats are rejected; export a new directory after upgrading the adapter. Before editing,
+the adapter validates source, project and analyzer assembly hashes.
+
 The replay measures processor diagnostics, contract metadata diagnostics, compiler syntax feedback,
-code-fix discovery/resolution, and application of the processor partial fix. A unique diagnostic
+incomplete-edit errors and repair, propagation of a contract member rename into a consumer project,
+code-fix discovery/resolution, and application of the processor partial fix. Repair feedback requires
+both a fresh warning marker and removal of the targeted semantic error. Cross-project propagation
+watches the unchanged consumer version and the edited contract version. A unique diagnostic
 marker acknowledges each request, so old diagnostics cannot count as new feedback. Source files
 are restored before a successful completion record is written. Completed samples and failures remain
 in `editor-*.jsonl` under the disposable workspace.
 
 The first processor request includes project/server initialization. It is labeled separately from
-subsequent edits. Three observations are a pilot, not a P95 qualification campaign. Each feedback
+subsequent edits. Three observations per edit scenario are a pilot, not a P95 qualification campaign. Each feedback
 measurement acknowledges its named diagnostic; VS Code's public diagnostics API does not expose
 completion of all C# analysis, so `completeAnalysisMilliseconds` remains null. Compiler feedback
 for an unrelated body edit cannot establish when every generator/reactor diagnostic finished.

@@ -17,6 +17,7 @@ static class EditorFixture
                 new XElement("ImplicitUsings", "enable"), new XElement("Nullable", "enable"),
                 new XElement("GenerateDocumentationFile", "false"), new XElement("TreatWarningsAsErrors", "false"),
                 new XElement("EnableNETAnalyzers", "false"), new XElement("IsPackable", "false"),
+                new XElement("EnforceCodeStyleInBuild", "false"),
                 new XElement("PortiaProjectStructure", "false"),
                 new XElement("InterceptorsNamespaces", "Cntryl.Portia.Generated")),
             new XElement("ItemGroup",
@@ -32,6 +33,24 @@ static class EditorFixture
                         typeof(JsonMetadataCodeFixProvider).Assembly
                     }
                     .Select(assembly => new XElement("Analyzer", new XAttribute("Include", assembly.Location)))));
+        project.Add(new XElement("ItemGroup",
+            new XElement("Compile", new XAttribute("Remove", "Contracts/**/*.cs")),
+            new XElement("ProjectReference", new XAttribute("Include", "Contracts/Bench.Replay.Common.csproj"))));
+        Directory.CreateDirectory(Path.Combine(directory, "Contracts"));
+        await File.WriteAllTextAsync(Path.Combine(directory, "Contracts/Bench.Replay.Common.csproj"),
+            "<Project Sdk=\"Microsoft.NET.Sdk\"><PropertyGroup><TargetFramework>net11.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><GenerateDocumentationFile>false</GenerateDocumentationFile><EnableNETAnalyzers>false</EnableNETAnalyzers><EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild><TreatWarningsAsErrors>false</TreatWarningsAsErrors><IsPackable>false</IsPackable></PropertyGroup></Project>", ct).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(directory, "Contracts/SharedContract.cs"), """
+            namespace Bench.Replay.Common;
+            public sealed record SharedContract(int Value_PORTIA_CROSS_0);
+            """, ct).ConfigureAwait(false);
+        await File.WriteAllTextAsync(Path.Combine(directory, "CrossProject.cs"), """
+            #warning PORTIA_CROSS_REPAIR_0
+            namespace Bench.Editor;
+            public static class CrossProject
+            {
+                public static int Read(Bench.Replay.Common.SharedContract value) => value.Value_PORTIA_CROSS_0;
+            }
+            """, ct).ConfigureAwait(false);
         await File.WriteAllTextAsync(Path.Combine(directory, "Bench.Editor.csproj"), project.ToString(), ct)
             .ConfigureAwait(false);
         await File.WriteAllTextAsync(Path.Combine(directory, "Projector.cs"), """
@@ -62,16 +81,20 @@ static class EditorFixture
                                                                             namespace Bench.Editor;
                                                                             public static class Editing { public static int Value() => 1; }
                                                                             """, ct).ConfigureAwait(false);
-        var files = new[] { "Projector.cs", "Request.cs", "Editing.cs" };
+        var files = new[] { "Projector.cs", "Request.cs", "Editing.cs", "CrossProject.cs", "Contracts/SharedContract.cs" };
+        var scaffoldFiles = new[] { "Bench.Editor.csproj", "Contracts/Bench.Replay.Common.csproj" };
         await File.WriteAllTextAsync(Path.Combine(directory, "portia-benchmark-workspace.json"),
             JsonSerializer.Serialize(new
             {
-                format = "portia-editor-benchmark-1",
+                format = "portia-editor-benchmark-2",
                 files,
+                scaffoldFiles,
+                scaffoldHashes = scaffoldFiles.ToDictionary(file => file, file => CompilerHost.FileHash(Path.Combine(directory, file))),
                 initialHashes = files.ToDictionary(file => file,
                     file => CompilerHost.FileHash(Path.Combine(directory, file))),
                 subjectAssemblies = project.Descendants("Analyzer")
                     .Select(element => element.Attribute("Include")!.Value)
+                    .Concat(project.Descendants("HintPath").Select(element => element.Value)).Distinct(StringComparer.Ordinal)
                     .ToDictionary(path => path, CompilerHost.FileHash)
             }, Campaign.Json), ct).ConfigureAwait(false);
         Directory.CreateDirectory(Path.Combine(directory, ".vscode"));

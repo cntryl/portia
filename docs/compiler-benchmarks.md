@@ -4,7 +4,7 @@ Qualify Portia's analyzers, code fixes, and source generators by measuring the w
 causes: opening a project, editing a file, requesting a fix, previewing it, and applying it.
 Use focused measurements to find a cause and complete compiler workloads to check the benefit.
 This is the proposed benchmark contract for [issue #175](https://github.com/cntryl/portia/issues/175).
-The separate Runtime Async comparison remains deferred.
+The separate [Runtime Async comparison](https://github.com/cntryl/portia/issues/257) remains paused.
 
 Implement a small maintained `bench/Portia.CompilerBenchmarks` executable with deterministic
 fixtures and a process controller. Keep fixture definitions, correctness expectations, and budgets
@@ -14,6 +14,22 @@ requirements below remain proposed; the initial executable implements the subset
 The initial executable and its current coverage are documented in
 [Compiler benchmarks](../bench/Portia.CompilerBenchmarks/README.md). Its diagnostic reports keep
 the remaining host, workload and qualification requirements explicit.
+
+The implementation now includes a valid four-project application graph, captured Accounts SDK
+inputs, strict host monitoring and A/A calibration, process-first-request notification, retention
+and cancellation probes, and a two-project VS Code replay. These are implemented measurement paths;
+their existence does not satisfy the qualification criteria below. Reports reject prior protocols
+and incompatible harness bytes. Ordinary CI verifies correctness without accepting timings.
+
+The November 18 reference-host calibration attempt stopped at its idle preflight: background CPU
+was 18.2%, above the declared 10% limit. No measurement worker ran. Controlled timing campaigns and
+the expanded editor replay await an idle-host window; implementation and correctness checks can
+continue independently. The next evidence sequence is accepted-host A/A, representative warm and
+first-load comparisons, long retention and in-flight cancellation observations, then Automatic and
+Balanced editor replay. Profile missed budgets, change only confirmed causes, and repeat matched
+measurements before publishing an acceptance matrix. More reference/metadata variants, a JSON
+generator control, code-fix cache retention, cancellation publication checks and SDK build timing
+remain explicit gaps in the full design.
 
 ## Measurement boundaries
 

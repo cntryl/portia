@@ -4,15 +4,25 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const {performance} = require('node:perf_hooks');
-const {matches, replacement, executionTrigger} = require('./state.cjs');
+const {matches, replacement, executionTrigger, validateManifest, acceptsFeedback} = require('./state.cjs');
 
 let running = false;
+
+async function verifyDependencies(root, manifest) {
+    for (const [file, expected] of [
+        ...manifest.scaffoldFiles.map(file => [path.join(root, file), manifest.scaffoldHashes[file]]),
+        ...Object.entries(manifest.subjectAssemblies)
+    ]) {
+        const actual = crypto.createHash('sha256').update(await fs.readFile(file)).digest('hex').toUpperCase();
+        if (actual !== expected) throw new Error(`Fixture dependency has changed: ${file}`);
+    }
+}
 
 function activate(context) {
     context.subscriptions.push(vscode.commands.registerCommand('portia.compilerBenchmarks.run', () => run()));
 }
 
-function watch(document, code, marker, version, timeoutMs, absent = false) {
+function watch(document, code, marker, version, timeoutMs, absent = false, cleared = [], source) {
     let listener;
     let timer;
     let rejectPromise;
@@ -25,10 +35,14 @@ function watch(document, code, marker, version, timeoutMs, absent = false) {
             events++;
             if (document.version > version) return reject(new Error('Document changed outside the measured request.'));
             if (document.version !== version) return;
-            const diagnostic = vscode.languages.getDiagnostics(document.uri).find(item => matches(item, code, marker));
-            if (absent ? !diagnostic : diagnostic) resolve({
+            if (source && source.document.version > source.version)
+                return reject(new Error('Source document changed outside the measured request.'));
+            if (source && source.document.version !== source.version) return;
+            const diagnostics = vscode.languages.getDiagnostics(document.uri);
+            if (acceptsFeedback(diagnostics, code, marker, absent, cleared)) resolve({
                 milliseconds: performance.now() - started,
                 version,
+                ...(source ? {sourceVersion: source.version, consumer: document.uri.toString()} : {}),
                 code,
                 marker
             });
@@ -57,10 +71,13 @@ function watch(document, code, marker, version, timeoutMs, absent = false) {
     };
 }
 
-async function editAndObserve(document, text, code, marker, timeoutMs) {
+async function editAndObserve(document, text, code, marker, timeoutMs, cleared = [], consumer) {
     const trigger = executionTrigger(vscode.workspace.getConfiguration('dotnet.server', document.uri).get('sourceGeneratorExecution'));
     const delta = replacement(document.getText(), text);
-    const pending = watch(document, code, marker, document.version + 1, timeoutMs);
+    const pending = consumer
+        ? watch(consumer, code, marker, consumer.version, timeoutMs, false, cleared,
+            {document, version: document.version + 1})
+        : watch(document, code, marker, document.version + 1, timeoutMs, false, cleared);
     try {
         const edit = new vscode.WorkspaceEdit();
         edit.replace(document.uri, new vscode.Range(document.positionAt(delta.start), document.positionAt(delta.end)), delta.text);
@@ -91,13 +108,12 @@ async function run(options = {}) {
     const originals = new Map();
     let failure;
     let validated = false;
+    let manifest;
     const append = value => fs.appendFile(output, JSON.stringify(value) + '\n');
     try {
-        const manifest = JSON.parse(await fs.readFile(path.join(root, 'portia-benchmark-workspace.json'), 'utf8'));
-        if (manifest.format !== 'portia-editor-benchmark-1' ||
-            JSON.stringify(manifest.files) !== JSON.stringify(['Projector.cs', 'Request.cs', 'Editing.cs']))
-            throw new Error('Unsupported disposable workspace manifest.');
+        manifest = validateManifest(JSON.parse(await fs.readFile(path.join(root, 'portia-benchmark-workspace.json'), 'utf8')));
         validated = true;
+        await verifyDependencies(root, manifest);
         for (const file of manifest.files) {
             const content = await fs.readFile(path.join(root, file), 'utf8');
             if (crypto.createHash('sha256').update(content).digest('hex').toUpperCase() !== manifest.initialHashes[file])
@@ -149,6 +165,10 @@ async function run(options = {}) {
             await append({kind: 'sample', scenario: 'metadata-diagnostic', completeAnalysisMilliseconds: null, ...row});
             oldPattern = pattern;
         }
+        await editAndObserve(request, '#warning PORTIA_METADATA_RESTORED\n' +
+            request.getText().replace(JSON.stringify(oldPattern), JSON.stringify('.*')),
+        'CS1030', 'PORTIA_METADATA_RESTORED', timeoutMs,
+        [{code: 'PORTIA031', marker: `PORTIA_BENCH_METADATA_${samples}`}]);
         const editing = documents.get('Editing.cs');
         await vscode.window.showTextDocument(editing);
         let oldMarker = 'PORTIA_BENCH_0';
@@ -162,6 +182,40 @@ async function run(options = {}) {
                 completeAnalysisMilliseconds: null, ...row
             });
             oldMarker = marker;
+        }
+        for (let i = 1; i <= samples; i++) {
+            const missing = `Missing_PORTIA_INCOMPLETE_${i}`;
+            const broken = editing.getText().replace('int Value()', `${missing} Value()`);
+            const incomplete = await editAndObserve(editing, broken, 'CS0246', missing, timeoutMs);
+            await append({kind: 'sample', scenario: 'incomplete-edit', completeAnalysisMilliseconds: null, ...incomplete});
+            const marker = `PORTIA_INCOMPLETE_REPAIR_${i}`;
+            const repaired = editing.getText().replace(`${missing} Value()`, 'int Value()').replace(oldMarker, marker);
+            const repair = await editAndObserve(editing, repaired, 'CS1030', marker, timeoutMs,
+                [{code: 'CS0246', marker: missing}]);
+            await append({kind: 'sample', scenario: 'incomplete-edit-repair', completeAnalysisMilliseconds: null, ...repair});
+            oldMarker = marker;
+        }
+        const contract = documents.get('Contracts/SharedContract.cs');
+        const consumer = documents.get('CrossProject.cs');
+        await vscode.window.showTextDocument(consumer);
+        await editAndObserve(consumer, consumer.getText().replace('PORTIA_CROSS_REPAIR_0', 'PORTIA_CROSS_BASELINE'),
+            'CS1030', 'PORTIA_CROSS_BASELINE', timeoutMs);
+        if (vscode.languages.getDiagnostics(consumer.uri).some(item => matches(item, 'CS1061', 'Value_PORTIA_CROSS_0')))
+            throw new Error('Cross-project consumer was invalid before replay.');
+        let oldMember = 'Value_PORTIA_CROSS_0';
+        let oldRepair = 'PORTIA_CROSS_BASELINE';
+        for (let i = 1; i <= samples; i++) {
+            const member = `Value_PORTIA_CROSS_${i}`;
+            const propagation = await editAndObserve(contract, contract.getText().replace(oldMember, member),
+                'CS1061', oldMember, timeoutMs, [], consumer);
+            await append({kind: 'sample', scenario: 'cross-project-propagation', completeAnalysisMilliseconds: null, ...propagation});
+            const marker = `PORTIA_CROSS_REPAIR_${i}`;
+            const repaired = consumer.getText().replace(oldMember, member).replace(oldRepair, marker);
+            const repair = await editAndObserve(consumer, repaired, 'CS1030', marker, timeoutMs,
+                [{code: 'CS1061', marker: oldMember}]);
+            await append({kind: 'sample', scenario: 'cross-project-repair', completeAnalysisMilliseconds: null, ...repair});
+            oldMember = member;
+            oldRepair = marker;
         }
         await vscode.window.showTextDocument(projector);
         const diagnostic = vscode.languages.getDiagnostics(projector.uri).find(item => matches(item, 'PORTIA002', oldProjection));
@@ -218,7 +272,10 @@ async function run(options = {}) {
                     if (!await vscode.workspace.applyEdit(edit)) throw new Error('Could not restore disposable fixture: ' + file);
                 }
                 if (document.isDirty && !await document.save()) throw new Error('Could not save restored fixture: ' + file);
+                if (await fs.readFile(path.join(root, file), 'utf8') !== text)
+                    throw new Error('Restored fixture content changed during save: ' + file);
             }
+            if (validated) await verifyDependencies(root, manifest);
         } catch (error) {
             failure = failure ?? error;
             if (validated) await append({kind: 'failed', phase: 'restore', error: String(error.stack ?? error)});
