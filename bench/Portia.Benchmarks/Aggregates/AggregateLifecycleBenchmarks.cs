@@ -105,27 +105,34 @@ sealed class AggregateApplication : IDisposable
         _store = new AggregateRecordingStore { YieldPersistence = yieldPersistence };
         services.AddSingleton<IEventStore>(_store);
         services.AddPortia().AddRequestHandler<AggregateEmitHandler>();
-        _provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+        _provider = services.BuildServiceProvider(new ServiceProviderOptions
+        { ValidateScopes = true, ValidateOnBuild = true });
         _scope = _provider.CreateScope();
         _bus = _scope.ServiceProvider.GetRequiredService<IRequestBus>();
     }
 
     internal static LifecycleAggregate NewAggregate() => new(AggregateId, Stream);
-    internal ValueTask<Result> RunAsync(int count, string decision) => _bus.SendAsync(new AggregateEmit(count, decision), RuntimeApplication.Actor);
+
+    internal ValueTask<Result> RunAsync(int count, string decision) =>
+        _bus.SendAsync(new AggregateEmit(count, decision), RuntimeApplication.Actor);
 
     internal async Task QualifyAsync()
     {
         foreach (var count in new[] { 0, 1, 8, 128 })
         {
             _store.Reset();
-            if (!(await RunAsync(count, "commit")).IsSuccess || _store.Appends != (count == 0 ? 0 : 1) || _store.Last.Length != count)
-                throw new InvalidOperationException("Aggregate fixture did not atomically commit the requested event count.");
+            if (!(await RunAsync(count, "commit")).IsSuccess || _store.Appends != (count == 0 ? 0 : 1) ||
+                _store.Last.Length != count)
+                throw new InvalidOperationException(
+                    "Aggregate fixture did not atomically commit the requested event count.");
             for (var index = 0; index < count; index++)
             {
                 var ev = (LifecycleChanged)_store.Last[index];
-                if (ev.Value != index || ev.Metadata.AggregateVersion != (ulong)index + 1 || ev.Metadata.EventId == Uuid.Empty)
+                if (ev.Value != index || ev.Metadata.AggregateVersion != (ulong)index + 1 ||
+                    ev.Metadata.EventId == Uuid.Empty)
                     throw new InvalidOperationException("Aggregate fixture lost event order or identity.");
             }
+
             if (_store.Last.Select(ev => ev.Metadata.EventId).Distinct().Count() != count)
                 throw new InvalidOperationException("Aggregate fixture reused event IDs.");
             if (count > 0 && _store.Last.Any(ev => ev.Metadata.ExecutionId is null || ev.Metadata.CausationId is null))
@@ -137,6 +144,7 @@ sealed class AggregateApplication : IDisposable
             if (!(await RunAsync(count, "save")).IsSuccess || _store.Last.Length != count)
                 throw new InvalidOperationException("Save did not preserve the raised event count.");
         }
+
         _store.Reset();
     }
 
@@ -149,7 +157,9 @@ sealed class AggregateApplication : IDisposable
 
 sealed class LifecycleAggregate : Aggregate
 {
-    internal LifecycleAggregate(Uuid id, EventStreamAddress stream) : base(id, stream) => On<LifecycleChanged>(_ => { });
+    internal LifecycleAggregate(Uuid id, EventStreamAddress stream) : base(id, stream) =>
+        On<LifecycleChanged>(_ => { });
+
     internal void Change(int count)
     {
         for (var index = 0; index < count; index++)
@@ -159,11 +169,13 @@ sealed class LifecycleAggregate : Aggregate
 
 [Discriminator("benchmark.lifecycle.changed", 1)]
 sealed record LifecycleChanged(int Value) : DomainEvent;
+
 sealed record AggregateEmit(int Count, string Decision) : IRequest;
 
 sealed class AggregateEmitHandler(IAggregateExecutor executor, IAggregateWriter writer) : IRequestHandler<AggregateEmit>
 {
     static readonly RequestError Discarded = new(RequestErrorKind.Conflict, "explicit fixture discard");
+
     public async ValueTask<Result> HandleAsync(IRequestContext<AggregateEmit> context, CancellationToken ct)
     {
         var aggregate = AggregateApplication.NewAggregate();
@@ -173,10 +185,13 @@ sealed class AggregateEmitHandler(IAggregateExecutor executor, IAggregateWriter 
             await writer.SaveAsync(aggregate, context, ct);
             return Result.Success;
         }
+
         return await executor.ExecuteAsync(aggregate, value =>
         {
             value.Change(context.Request.Count);
-            return context.Request.Decision == "commit" ? AggregateOutcome.Commit(Result.Success) : AggregateOutcome.Discard(Result.Failure(Discarded));
+            return context.Request.Decision == "commit"
+                ? AggregateOutcome.Commit(Result.Success)
+                : AggregateOutcome.Discard(Result.Failure(Discarded));
         }, context, ct);
     }
 }
@@ -186,10 +201,21 @@ sealed class AggregateRecordingStore : IEventStore
     internal bool YieldPersistence { get; init; }
     internal DomainEvent[] Last { get; private set; } = [];
     internal int Appends { get; private set; }
-    internal void Reset() { Last = []; Appends = 0; }
-    public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset, CancellationToken ct) => Empty(ct);
-    public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor, CancellationToken ct) => Empty(ct);
-    public async ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition, IReadOnlyList<DomainEvent> events, CancellationToken ct = default)
+
+    internal void Reset()
+    {
+        Last = [];
+        Appends = 0;
+    }
+
+    public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
+        CancellationToken ct) => Empty(ct);
+
+    public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
+        CancellationToken ct) => Empty(ct);
+
+    public async ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,
+        IReadOnlyList<DomainEvent> events, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
         if (expectedStreamPosition != 0)
@@ -200,6 +226,7 @@ sealed class AggregateRecordingStore : IEventStore
         Last = events.ToArray();
         Appends++;
     }
+
     static async IAsyncEnumerable<DomainEventRecord> Empty([EnumeratorCancellation] CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();

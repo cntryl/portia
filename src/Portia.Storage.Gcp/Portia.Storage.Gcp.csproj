@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>Google Cloud Storage object storage provider for Portia with tenant-scoped Cloud KMS (CMEK) encryption.</Description>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>

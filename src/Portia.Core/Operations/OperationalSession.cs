@@ -2,8 +2,11 @@ namespace Cntryl.Portia;
 
 // A session exists only inside one coordinator ownership callback. All durable changes are fenced
 // by that session. Each write reloads the document so concurrent operator approval cannot be lost.
-sealed class OperationalSession(IOperationalStore store, OperationalOptions options,
-    IApplicationTopology topology, TimeProvider clock)
+sealed class OperationalSession(
+    IOperationalStore store,
+    OperationalOptions options,
+    IApplicationTopology topology,
+    TimeProvider clock)
 {
     readonly Guid _owner = Guid.NewGuid();
     OperationalTraceBuffer _trace = new(options.MaxTraceEntries);
@@ -21,13 +24,15 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
         if (_state.ConsecutiveFailures != 0)
             await ChangeAsync(state => state with { ConsecutiveFailures = 0 }, ct).ConfigureAwait(false);
     }
+
     internal RepairPlan? ActivePlan => _repairPlan is { } id ? _state.Plans.Single(p => p.Id == id) : null;
     internal IReadOnlyList<OperationalSource>? InterruptedSources { get; private set; }
 
     internal void EnsureRecoveryCompleted(ProjectionCheckpoint checkpoint)
     {
         if (InterruptedSources is { Count: > 0 }
-            || _repairPlan is { } id && _state.Repairs.Any(r => r.PlanId == id && r.Status == OperationalRepairStatuses.Running))
+            || _repairPlan is { } id &&
+            _state.Repairs.Any(r => r.PlanId == id && r.Status == OperationalRepairStatuses.Running))
             throw new ProcessorFailureException(_target.Identity, checkpoint, ProcessorFailureStage.Reading,
                 error: RequestError.Validation("The original recovery source set is unavailable."));
     }
@@ -40,7 +45,8 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
         {
             var prior = await store.ReadAsync(target, ct).ConfigureAwait(false);
             InterruptedSources = prior?.Attempts.LastOrDefault(a => a.Outcome == OperationalAttemptOutcomes.Running
-                && (checkpoint is null || a.ExpectedCheckpoint == checkpoint.Value.Cursor.Value))?.Sources;
+                                                                    && (checkpoint is null || a.ExpectedCheckpoint ==
+                                                                        checkpoint.Value.Cursor.Value))?.Sources;
             var now = clock.GetUtcNow();
             var interruptedRepair = prior?.Repairs.Any(r => r.Status == OperationalRepairStatuses.Running) == true;
             var next = prior is null
@@ -55,12 +61,24 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
                     Attempts = prior.Attempts.Select(a => a.Outcome == OperationalAttemptOutcomes.Running
                         ? a with
                         {
-                            Outcome = kind == ProcessorKinds.Projector && checkpoint is { } native && a.ExpectedCheckpoint != native.Cursor.Value ? OperationalAttemptOutcomes.Indeterminate : OperationalAttemptOutcomes.Interrupted,
+                            Outcome =
+                            kind == ProcessorKinds.Projector && checkpoint is { } native &&
+                            a.ExpectedCheckpoint != native.Cursor.Value
+                                ? OperationalAttemptOutcomes.Indeterminate
+                                : OperationalAttemptOutcomes.Interrupted,
                             CompletedAt = now,
                             Coverage = a.Coverage + "; process interrupted before confirmation"
-                        } : a).ToArray(),
-                    Repairs = prior.Repairs.Select(r => r.Status is OperationalRepairStatuses.Queued or OperationalRepairStatuses.Running
-                        ? r with { Status = r.Status == OperationalRepairStatuses.Running ? OperationalRepairStatuses.Indeterminate : OperationalRepairStatuses.Invalidated } : r).ToArray(),
+                        }
+                        : a).ToArray(),
+                    Repairs = prior.Repairs.Select(r =>
+                        r.Status is OperationalRepairStatuses.Queued or OperationalRepairStatuses.Running
+                            ? r with
+                            {
+                                Status = r.Status == OperationalRepairStatuses.Running
+                                    ? OperationalRepairStatuses.Indeterminate
+                                    : OperationalRepairStatuses.Invalidated
+                            }
+                            : r).ToArray(),
                     Block = interruptedRepair ? null : prior.Block
                 };
             if (!await store.CompareExchangeAsync(next, prior?.Revision ?? 0, prior?.OwnerSession ?? Guid.Empty, ct)
@@ -85,33 +103,42 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
             return state with
             {
                 Checkpoint = checkpoint.Cursor.Value,
-                Attempts = state.Attempts.Select(a => a.Outcome is OperationalAttemptOutcomes.Running or OperationalAttemptOutcomes.Failed or OperationalAttemptOutcomes.Interrupted
+                Attempts = state.Attempts.Select(a =>
+                    a.Outcome is OperationalAttemptOutcomes.Running or OperationalAttemptOutcomes.Failed
+                        or OperationalAttemptOutcomes.Interrupted
                     && a.ExpectedCheckpoint != checkpoint.Cursor.Value
-                    ? a with
-                    {
-                        Outcome = OperationalAttemptOutcomes.Indeterminate,
-                        CompletedAt = a.CompletedAt ?? now,
-                        Coverage = a.Coverage + "; authoritative progress differs from historical confirmation"
-                    } : a).ToArray(),
+                        ? a with
+                        {
+                            Outcome = OperationalAttemptOutcomes.Indeterminate,
+                            CompletedAt = a.CompletedAt ?? now,
+                            Coverage = a.Coverage + "; authoritative progress differs from historical confirmation"
+                        }
+                        : a).ToArray(),
                 // Native progress supersedes this retry's source set without proving its outcome.
                 Repairs = state.Repairs.Select(repair => repair.Status == OperationalRepairStatuses.Running
-                    && state.Plans.Any(plan => plan.Id == repair.PlanId
-                        && plan.ExpectedCheckpoint != checkpoint.Cursor.Value)
-                    ? repair with { Status = OperationalRepairStatuses.Indeterminate } : repair).ToArray()
+                                                         && state.Plans.Any(plan => plan.Id == repair.PlanId
+                                                             && plan.ExpectedCheckpoint != checkpoint.Cursor.Value)
+                    ? repair with { Status = OperationalRepairStatuses.Indeterminate }
+                    : repair).ToArray()
             };
         }, ct).ConfigureAwait(false);
-        if (_repairPlan is { } active && !_state.Repairs.Any(r => r.PlanId == active && r.Status == OperationalRepairStatuses.Running))
+        if (_repairPlan is { } active &&
+            !_state.Repairs.Any(r => r.PlanId == active && r.Status == OperationalRepairStatuses.Running))
             _repairPlan = null;
         if (_repairPlan is { } running && !_state.Approvals.Any(a => a.PlanId == running
-            && !a.Revoked && a.ExpiresAt > clock.GetUtcNow()))
+                                                                     && !a.Revoked && a.ExpiresAt > clock.GetUtcNow()))
         {
-            await ChangeAsync(state => CompleteRepair(state, OperationalRepairStatuses.Invalidated, null, state.Checkpoint), ct).ConfigureAwait(false);
+            await ChangeAsync(
+                    state => CompleteRepair(state, OperationalRepairStatuses.Invalidated, null, state.Checkpoint), ct)
+                .ConfigureAwait(false);
             _repairPlan = null;
             return false;
         }
+
         if (_state.Block is null)
         {
-            if (_state.ConsecutiveFailures > 0 && _state.Attempts.Count > 0 && _state.Attempts[^1] is { Outcome: OperationalAttemptOutcomes.Failed, CompletedAt: { } ended })
+            if (_state.ConsecutiveFailures > 0 && _state.Attempts.Count > 0 && _state.Attempts[^1] is
+                { Outcome: OperationalAttemptOutcomes.Failed, CompletedAt: { } ended })
             {
                 var settings = _state.Settings;
                 if (clock.GetUtcNow() < ended + WorkloadFailureBackoff.Delay(
@@ -119,8 +146,10 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
                         TimeSpan.FromTicks(settings.MaximumFailureDelayTicks), _state.ConsecutiveFailures))
                     return false;
             }
+
             return true;
         }
+
         if (_repairPlan is not null)
             return true;
         var queued = _state.Repairs.FirstOrDefault(r => r.Status == OperationalRepairStatuses.Queued);
@@ -139,14 +168,17 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
                 return state with
                 {
                     Repairs = state.Repairs.Select(r => r.Id == queued.Id
-                    ? r with { Status = OperationalRepairStatuses.Invalidated } : r).ToArray()
+                        ? r with { Status = OperationalRepairStatuses.Invalidated }
+                        : r).ToArray()
                 };
             }
+
             return state with
             {
                 ConsecutiveFailures = 0,
                 Repairs = state.Repairs.Select(r => r.Id == queued.Id
-                ? r with { Status = OperationalRepairStatuses.Running } : r).ToArray()
+                    ? r with { Status = OperationalRepairStatuses.Running }
+                    : r).ToArray()
             };
         }, ct).ConfigureAwait(false);
         if (!_state.Repairs.Any(r => r.Id == queued.Id && r.Status == OperationalRepairStatuses.Running))
@@ -155,10 +187,14 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
         if (claimed!.Action == RepairActions.Resume)
         {
             await ChangeAsync(state => CompleteRepair(state with { Block = null, ConsecutiveFailures = 0 },
-                state.Attempts.Single(a => a.Id == claimed.FailedAttemptId).Outcome == OperationalAttemptOutcomes.Indeterminate ? OperationalRepairStatuses.Indeterminate : OperationalRepairStatuses.Committed,
+                state.Attempts.Single(a => a.Id == claimed.FailedAttemptId).Outcome ==
+                OperationalAttemptOutcomes.Indeterminate
+                    ? OperationalRepairStatuses.Indeterminate
+                    : OperationalRepairStatuses.Committed,
                 null, checkpoint.Cursor.Value), ct).ConfigureAwait(false);
             _repairPlan = null;
         }
+
         return true;
     }
 
@@ -166,7 +202,8 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
     {
         var sources = ActivePlan?.Sources ?? InterruptedSources;
         return sources is { Count: > 0 }
-            ? normal with { MaxBatchSize = sources.Count, MaxEventsPerPass = sources.Count } : normal;
+            ? normal with { MaxBatchSize = sources.Count, MaxEventsPerPass = sources.Count }
+            : normal;
     }
 
     internal async ValueTask<Guid> BeginAsync(IReadOnlyList<DomainEventRecord> records,
@@ -189,18 +226,24 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
             }
             else if (state.Block is not null)
                 throw new InvalidOperationException("The processor is durably blocked.");
+
             // A durable start whose acknowledgement was lost is this same pending invocation.
             // Reconfirm it after reloading instead of appending its identity a second time.
             if (state.Attempts.SingleOrDefault(candidate => candidate.Id == id) is { } existing)
             {
                 if (existing.OwnerSession != _owner || existing.StartedAt != started
-                    || existing.Outcome != OperationalAttemptOutcomes.Running || existing.ExpectedCheckpoint != checkpoint.Cursor.Value
-                    || existing.NextCheckpoint != sources[^1].NextCursor || !existing.Sources.SequenceEqual(sources))
+                                                    || existing.Outcome != OperationalAttemptOutcomes.Running ||
+                                                    existing.ExpectedCheckpoint != checkpoint.Cursor.Value
+                                                    || existing.NextCheckpoint != sources[^1].NextCursor ||
+                                                    !existing.Sources.SequenceEqual(sources))
                     throw new InvalidDataException("The persisted attempt start does not match this invocation.");
                 return state;
             }
-            var attempt = new OperationalAttempt(id, _owner, started, null, OperationalAttemptOutcomes.Running, checkpoint.Cursor.Value,
-                sources[^1].NextCursor, sources, [], "local awaited generated dispatch; opaque dependencies and detached work unknown",
+
+            var attempt = new OperationalAttempt(id, _owner, started, null, OperationalAttemptOutcomes.Running,
+                checkpoint.Cursor.Value,
+                sources[^1].NextCursor, sources, [],
+                "local awaited generated dispatch; opaque dependencies and detached work unknown",
                 topology.Describe());
             return state with { Attempts = [.. state.Attempts, attempt] };
         }, ct).ConfigureAwait(false);
@@ -229,6 +272,7 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
                 _state = state;
                 return true;
             }
+
             var replacement = Succeed(state, id, next.Cursor.Value) with { Revision = checked(state.Revision + 1) };
             if (!await checkpoints.CommitAsync(replacement, state.Revision, _owner, id, expected.Cursor.Value,
                     next.Cursor.Value, ct).ConfigureAwait(false))
@@ -262,15 +306,19 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
                 return state;
             var now = clock.GetUtcNow();
             var prior = state.Attempts.SingleOrDefault(a => a.Id == id)
-                ?? new OperationalAttempt(id, _owner, now, null, OperationalAttemptOutcomes.Running, state.Checkpoint, null,
-                    ActivePlan?.Sources ?? InterruptedSources ?? [], [], "no handler invocation recorded", topology.Describe());
+                        ?? new OperationalAttempt(id, _owner, now, null, OperationalAttemptOutcomes.Running,
+                            state.Checkpoint, null,
+                            ActivePlan?.Sources ?? InterruptedSources ?? [], [], "no handler invocation recorded",
+                            topology.Describe());
             var transient = diagnostic?.IsTransient ?? true;
             var failures = checked(state.ConsecutiveFailures + 1);
             var terminal = committed is not null || !transient || failures >= state.Settings.FailureAttemptLimit;
             var attempt = prior with
             {
                 CompletedAt = now,
-                Outcome = committed is null ? OperationalAttemptOutcomes.Failed : OperationalAttemptOutcomes.CommittedCleanupFailed,
+                Outcome = committed is null
+                    ? OperationalAttemptOutcomes.Failed
+                    : OperationalAttemptOutcomes.CommittedCleanupFailed,
                 Trace = _attempt is null ? [] : TraceSnapshot(),
                 Coverage = _attempt is null ? prior.Coverage : Coverage(prior),
                 FailureStage = diagnostic?.Stage.ToString() ?? "Pass",
@@ -285,8 +333,11 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
                 Attempts = [.. state.Attempts.Where(a => a.Id != id), attempt],
                 Block = terminal ? new OperationalBlock(id, checked(state.Revision + 1)) : state.Block
             };
-            return terminal ? CompleteRepair(next, committed is null ? OperationalRepairStatuses.Failed : OperationalRepairStatuses.Committed, id,
-                committed?.Cursor.Value) : next;
+            return terminal
+                ? CompleteRepair(next,
+                    committed is null ? OperationalRepairStatuses.Failed : OperationalRepairStatuses.Committed, id,
+                    committed?.Cursor.Value)
+                : next;
         }, ct).ConfigureAwait(false);
         _attempt = null;
         _failureRecorded = true;
@@ -298,22 +349,28 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
             Checkpoint = checkpoint,
             ConsecutiveFailures = _repairPlan is null ? state.ConsecutiveFailures : 0,
             Block = null,
-            Attempts = state.Attempts.Select(a => a.Id == id ? a with
-            {
-                Outcome = OperationalAttemptOutcomes.Committed,
-                CompletedAt = clock.GetUtcNow(),
-                NextCheckpoint = checkpoint,
-                Trace = TraceSnapshot(),
-                Coverage = Coverage(a)
-            } : a).ToArray()
+            Attempts = state.Attempts.Select(a => a.Id == id
+                ? a with
+                {
+                    Outcome = OperationalAttemptOutcomes.Committed,
+                    CompletedAt = clock.GetUtcNow(),
+                    NextCheckpoint = checkpoint,
+                    Trace = TraceSnapshot(),
+                    Coverage = Coverage(a)
+                }
+                : a).ToArray()
         }, OperationalRepairStatuses.Committed, id, checkpoint));
 
-    OperationalProcessorState CompleteRepair(OperationalProcessorState state, string status, Guid? attempt, string? checkpoint)
-        => _repairPlan is not { } id ? state : state with
-        {
-            Repairs = state.Repairs.Select(r => r.PlanId == id
-                ? r with { Status = status, AttemptId = attempt, Checkpoint = checkpoint } : r).ToArray()
-        };
+    OperationalProcessorState CompleteRepair(OperationalProcessorState state, string status, Guid? attempt,
+        string? checkpoint)
+        => _repairPlan is not { } id
+            ? state
+            : state with
+            {
+                Repairs = state.Repairs.Select(r => r.PlanId == id
+                    ? r with { Status = status, AttemptId = attempt, Checkpoint = checkpoint }
+                    : r).ToArray()
+            };
 
     OperationalProcessorState InvalidateObsoleteQueuedRepairs(OperationalProcessorState state)
     {
@@ -340,7 +397,9 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
     }
 
     OperationalTraceEntry[] TraceSnapshot() => _trace.Snapshot();
-    string Coverage(OperationalAttempt attempt) => attempt.Coverage + (_trace.Limited ? "; trace limit reached" : string.Empty);
+
+    string Coverage(OperationalAttempt attempt) =>
+        attempt.Coverage + (_trace.Limited ? "; trace limit reached" : string.Empty);
 
     async ValueTask<OperationalProcessorState> ReadOwnedAsync(CancellationToken ct)
     {
@@ -361,6 +420,7 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
                 _state = current;
                 return true;
             }
+
             next = Retain(next) with { Revision = checked(current.Revision + 1) };
             if (!await store.CompareExchangeAsync(next, current.Revision, _owner, ct).ConfigureAwait(false))
                 return false;
@@ -373,17 +433,33 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
     {
         var cutoff = clock.GetUtcNow() - options.CompletedRecordRetention;
         var plans = state.Plans.Where(p => p.ExpiresAt >= cutoff || state.Repairs.Any(r =>
-            r.PlanId == p.Id && r.Status is OperationalRepairStatuses.Queued or OperationalRepairStatuses.Running or OperationalRepairStatuses.Indeterminate)
-            || state.Block?.AttemptId == p.FailedAttemptId).ToArray();
+                                                                     r.PlanId == p.Id &&
+                                                                     r.Status is OperationalRepairStatuses.Queued
+                                                                         or OperationalRepairStatuses.Running
+                                                                         or OperationalRepairStatuses.Indeterminate)
+                                                                 || state.Block?.AttemptId == p.FailedAttemptId)
+            .ToArray();
         var referenced = plans.Select(p => p.FailedAttemptId).Append(state.Block?.AttemptId ?? Guid.Empty).ToHashSet();
-        var resolved = state.Plans.Where(p => state.Repairs.Any(r => r.PlanId == p.Id && r.Status == OperationalRepairStatuses.Committed))
+        var resolved = state.Plans.Where(p =>
+                state.Repairs.Any(r => r.PlanId == p.Id && r.Status == OperationalRepairStatuses.Committed))
             .Select(p => p.FailedAttemptId).ToHashSet();
         var attempts = state.Attempts.Where(a => a.CompletedAt is null || a.CompletedAt >= cutoff
-            || referenced.Contains(a.Id) || a.Outcome == OperationalAttemptOutcomes.Indeterminate
-            || a.Outcome is OperationalAttemptOutcomes.Failed or OperationalAttemptOutcomes.Interrupted && !resolved.Contains(a.Id) && !state.Attempts.Any(success =>
-                success.Outcome == OperationalAttemptOutcomes.Committed && success.StartedAt >= a.CompletedAt
-                && success.ExpectedCheckpoint == a.ExpectedCheckpoint
-                && (a.Sources.Count == 0 || success.Sources.SequenceEqual(a.Sources)))).ToArray();
+                                                                       || referenced.Contains(a.Id) ||
+                                                                       a.Outcome == OperationalAttemptOutcomes
+                                                                           .Indeterminate
+                                                                       || a.Outcome is OperationalAttemptOutcomes.Failed
+                                                                           or OperationalAttemptOutcomes.Interrupted &&
+                                                                       !resolved.Contains(a.Id) &&
+                                                                       !state.Attempts.Any(success =>
+                                                                           success.Outcome == OperationalAttemptOutcomes
+                                                                               .Committed &&
+                                                                           success.StartedAt >= a.CompletedAt
+                                                                           && success.ExpectedCheckpoint ==
+                                                                           a.ExpectedCheckpoint
+                                                                           && (a.Sources.Count == 0 ||
+                                                                               success.Sources
+                                                                                   .SequenceEqual(a.Sources))))
+            .ToArray();
         return state with
         {
             Plans = plans,
@@ -400,13 +476,19 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
         {
             ct.ThrowIfCancellationRequested();
             try
-            { if (await operation().ConfigureAwait(false)) return; }
-            catch (Exception ex) when (ex is not (OperationalOwnershipException or OperationalCheckpointConflictException or OperationCanceledException
-                or ArgumentException or InvalidOperationException or UnauthorizedAccessException or InvalidDataException))
+            {
+                if (await operation().ConfigureAwait(false))
+                    return;
+            }
+            catch (Exception ex) when (ex is not (OperationalOwnershipException
+                                           or OperationalCheckpointConflictException or OperationCanceledException
+                                           or ArgumentException or InvalidOperationException
+                                           or UnauthorizedAccessException or InvalidDataException))
             {
                 // Required journal outages pause invocation. Keep the exact pending write in memory;
                 // termination leaves the durable start visible for automatic crash replay.
             }
+
             await Task.Delay(options.JournalRetryDelay, clock, ct).ConfigureAwait(false);
         }
     }
@@ -414,7 +496,8 @@ sealed class OperationalSession(IOperationalStore store, OperationalOptions opti
 
 sealed class OperationalOwnershipException() : InvalidOperationException("Operational workload ownership changed.");
 
-sealed class OperationalCheckpointConflictException() : ProjectionConcurrencyException("The authoritative checkpoint changed before operational completion.");
+sealed class OperationalCheckpointConflictException()
+    : ProjectionConcurrencyException("The authoritative checkpoint changed before operational completion.");
 
 sealed class OperationalExecution
 {

@@ -61,26 +61,42 @@ sealed class ApplicationProject(string directory, string name, string rootNamesp
         symbol.AllInterfaces.Any(iface => SymbolNames.Is(iface, "Cntryl.Portia.IRequestBase"));
 
     public static bool IsDomainEventCatalogAdapter(INamedTypeSymbol symbol) => symbol.IsStatic
-        && symbol.Name.EndsWith("DomainEventCatalog", StringComparison.Ordinal)
-        && symbol.GetMembers().OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Name == "AddTo"
-            && method.Parameters.Length == 1
-            && method.Parameters[0].Type is INamedTypeSymbol parameterType
-            && SymbolNames.Is(parameterType, "Cntryl.Portia.DomainEventTypeCatalog")
-            && method.ReturnType is INamedTypeSymbol returnType
-            && SymbolNames.Is(returnType, "Cntryl.Portia.DomainEventTypeCatalog"));
+                                                                               && symbol.Name.EndsWith(
+                                                                                   "DomainEventCatalog",
+                                                                                   StringComparison.Ordinal)
+                                                                               && symbol.GetMembers()
+                                                                                   .OfType<IMethodSymbol>()
+                                                                                   .Any(method => method.IsStatic &&
+                                                                                       method.Name == "AddTo"
+                                                                                       && method.Parameters.Length == 1
+                                                                                       && method.Parameters[0].Type is
+                                                                                           INamedTypeSymbol
+                                                                                           parameterType
+                                                                                       && SymbolNames.Is(parameterType,
+                                                                                           "Cntryl.Portia.DomainEventTypeCatalog")
+                                                                                       && method.ReturnType is
+                                                                                           INamedTypeSymbol returnType
+                                                                                       && SymbolNames.Is(returnType,
+                                                                                           "Cntryl.Portia.DomainEventTypeCatalog"));
 
     public static bool IsReactor(INamedTypeSymbol symbol) => DerivesFrom(symbol, "Reactor")
-        || symbol.AllInterfaces.Any(iface => SymbolNames.Is(iface, "Cntryl.Portia.IReactorHandler`1")
-                                            || SymbolNames.Is(iface, "Cntryl.Portia.IBatchReactorHandler`1"));
+                                                             || symbol.AllInterfaces.Any(iface =>
+                                                                 SymbolNames.Is(iface,
+                                                                     "Cntryl.Portia.IReactorHandler`1")
+                                                                 || SymbolNames.Is(iface,
+                                                                     "Cntryl.Portia.IBatchReactorHandler`1"));
 
     public static bool IsProjector(INamedTypeSymbol symbol) => DerivesFrom(symbol, "Projector")
-        || symbol.AllInterfaces.Any(iface => SymbolNames.Is(iface, "Cntryl.Portia.IProjectorHandler`1")
-                                            || SymbolNames.Is(iface, "Cntryl.Portia.IBatchProjectorHandler`1"));
+                                                               || symbol.AllInterfaces.Any(iface =>
+                                                                   SymbolNames.Is(iface,
+                                                                       "Cntryl.Portia.IProjectorHandler`1")
+                                                                   || SymbolNames.Is(iface,
+                                                                       "Cntryl.Portia.IBatchProjectorHandler`1"));
 
     public static bool IsContractIn(ITypeSymbol symbol, string folder)
     {
         var space = symbol.ContainingNamespace;
         return space is not null && space.Name == folder
-            && space.ContainingNamespace?.ContainingNamespace?.Name == "Features";
+                                 && space.ContainingNamespace?.ContainingNamespace?.Name == "Features";
     }
 }

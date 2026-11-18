@@ -23,6 +23,7 @@ static class PortiaJsonConstraints
             else
                 _ = schema.Remove("default");
         }
+
         foreach (var rule in member.Rules)
         {
             switch (rule)
@@ -34,6 +35,7 @@ static class PortiaJsonConstraints
                         Lower(schema, "minLength", 1);
                         schema["x-portia-reject-whitespace"] = true;
                     }
+
                     break;
                 case RangeAttribute range:
                     schema["x-portia-range"] = new JsonObject
@@ -47,18 +49,23 @@ static class PortiaJsonConstraints
                     var valueType = Nullable.GetUnderlyingType(member.Type) ?? member.Type;
                     if (valueType.IsEnum)
                         valueType = Enum.GetUnderlyingType(valueType);
-                    var roundsFractional = range.Minimum is int && (valueType == typeof(double) || valueType == typeof(float) || valueType == typeof(decimal));
+                    var roundsFractional = range.Minimum is int && (valueType == typeof(double) ||
+                                                                    valueType == typeof(float) ||
+                                                                    valueType == typeof(decimal));
                     // BCL comparison converts to double, while decimal/Int64 JSON values retain
                     // their precision and Single JSON uses its shortest round-trip representation.
                     var losesPrecision = range.Minimum is double lower && range.Maximum is double upper &&
-                        (valueType == typeof(decimal) || valueType == typeof(float) ||
-                         (valueType == typeof(long) || valueType == typeof(ulong)) &&
-                         (Math.Abs(lower) >= 9_007_199_254_740_992D || Math.Abs(upper) >= 9_007_199_254_740_992D));
-                    if (!roundsFractional && !losesPrecision && (HasType(schema, "number") || HasType(schema, "integer")))
+                                         (valueType == typeof(decimal) || valueType == typeof(float) ||
+                                          (valueType == typeof(long) || valueType == typeof(ulong)) &&
+                                          (Math.Abs(lower) >= 9_007_199_254_740_992D ||
+                                           Math.Abs(upper) >= 9_007_199_254_740_992D));
+                    if (!roundsFractional && !losesPrecision &&
+                        (HasType(schema, "number") || HasType(schema, "integer")))
                     {
                         Bound(schema, range.MinimumIsExclusive ? "exclusiveMinimum" : "minimum", range.Minimum);
                         Bound(schema, range.MaximumIsExclusive ? "exclusiveMaximum" : "maximum", range.Maximum);
                     }
+
                     break;
                 case StringLengthAttribute length when HasType(schema, "string"):
                     StringMinimum(schema, length.MinimumLength);
@@ -102,7 +109,8 @@ static class PortiaJsonConstraints
         : schema["type"] is JsonValue value && value.TryGetValue<string>(out var type) && type == name;
 
     static string? LengthKeyword(JsonObject schema, string prefix) => HasType(schema, "string") ? prefix + "Length"
-        : HasType(schema, "array") ? prefix + "Items" : HasType(schema, "object") ? prefix + "Properties" : null;
+        : HasType(schema, "array") ? prefix + "Items"
+        : HasType(schema, "object") ? prefix + "Properties" : null;
 
     static void StringMinimum(JsonObject schema, int units)
     {
@@ -158,9 +166,11 @@ static class PortiaJsonConstraints
                     index += 2;
                 }
             }
+
             if (count == 0 || index == pattern.Length)
                 return false;
         }
+
         return true;
     }
 
@@ -177,7 +187,8 @@ static class PortiaJsonConstraints
         else if (!schema.ContainsKey("type"))
         {
             var existing = schema["not"]?.DeepClone();
-            schema["not"] = existing is null ? new JsonObject { ["type"] = "null" }
+            schema["not"] = existing is null
+                ? new JsonObject { ["type"] = "null" }
                 : new JsonObject { ["anyOf"] = new JsonArray(existing, new JsonObject { ["type"] = "null" }) };
         }
     }

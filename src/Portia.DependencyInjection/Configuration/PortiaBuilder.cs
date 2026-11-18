@@ -47,7 +47,8 @@ public sealed class PortiaBuilder
     /// <param name="summary">An optional human-readable summary.</param>
     /// <param name="use">The contract directions illustrated by the example.</param>
     /// <returns>This builder, for chaining.</returns>
-    public PortiaBuilder AddExample<T>(string name, T value, string? summary = null, PortiaContractUse use = PortiaContractUse.Both)
+    public PortiaBuilder AddExample<T>(string name, T value, string? summary = null,
+        PortiaContractUse use = PortiaContractUse.Both)
         where T : notnull
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
@@ -57,7 +58,8 @@ public sealed class PortiaBuilder
         if (_contracts is not null)
             throw new InvalidOperationException("Contract metadata is already composed.");
         if (_examples.Any(example => example.Type == typeof(T) && example.Name == name && (example.Use & use) != 0))
-            throw new InvalidOperationException($"Contract example '{name}' for '{typeof(T)}' is registered more than once.");
+            throw new InvalidOperationException(
+                $"Contract example '{name}' for '{typeof(T)}' is registered more than once.");
         _examples.Add(new PortiaContractExample(typeof(T), name, value, summary, use));
         _json.AddRoot(typeof(T));
         return this;

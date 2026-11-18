@@ -4,7 +4,10 @@ using System.Text;
 namespace Cntryl.Portia.Storage.Azure;
 
 /// <summary>Implements immutable tenant-scoped objects with Azure Blob Storage block blobs.</summary>
-public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageTenantResolver tenantResolver, IDataProtector sessionProtector) : IObjectStorage
+public sealed class AzureObjectStorage(
+    BlobServiceClient client,
+    IObjectStorageTenantResolver tenantResolver,
+    IDataProtector sessionProtector) : IObjectStorage
 {
     // Azure metadata names must be valid C# identifiers, so they cannot contain hyphens.
     const string DigestMetadata = "portiasha256";
@@ -16,13 +19,19 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
     static readonly TimeSpan DelegationKeyLifetime = TimeSpan.FromHours(1);
 
     readonly BlobServiceClient _client = client ?? throw new ArgumentNullException(nameof(client));
-    readonly IObjectStorageTenantResolver _tenantResolver = tenantResolver ?? throw new ArgumentNullException(nameof(tenantResolver));
-    readonly IDataProtector _sessionProtector = sessionProtector ?? throw new ArgumentNullException(nameof(sessionProtector));
+
+    readonly IObjectStorageTenantResolver _tenantResolver =
+        tenantResolver ?? throw new ArgumentNullException(nameof(tenantResolver));
+
+    readonly IDataProtector _sessionProtector =
+        sessionProtector ?? throw new ArgumentNullException(nameof(sessionProtector));
+
     // Racing refreshes only cost a duplicate key request, so the cache needs no lock.
     volatile UserDelegationKey? _delegationKey;
 
     /// <inheritdoc />
-    public async ValueTask<ObjectUploadSession> CreateUploadAsync(TenantId tenantId, ObjectDigest expected, CancellationToken ct = default)
+    public async ValueTask<ObjectUploadSession> CreateUploadAsync(TenantId tenantId, ObjectDigest expected,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
@@ -42,7 +51,8 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
     }
 
     /// <inheritdoc />
-    public async ValueTask<ObjectUploadPart> SignPartAsync(ObjectUploadSession session, int partNumber, TimeSpan lifetime, CancellationToken ct = default)
+    public async ValueTask<ObjectUploadPart> SignPartAsync(ObjectUploadSession session, int partNumber,
+        TimeSpan lifetime, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(session);
         ct.ThrowIfCancellationRequested();
@@ -63,14 +73,16 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
         // The SAS is pinned to the tenant's encryption scope, so the uploaded block cannot be written
         // under a different scope. Put Block needs write permission on exactly this staging blob.
         var blob = _client.GetBlobContainerClient(payload.Container).GetBlobClient(payload.StagingKey);
-        var signed = await SignAsync(blob, BlobSasPermissions.Write, expiresAt, payload.EncryptionScope, ct).ConfigureAwait(false);
+        var signed = await SignAsync(blob, BlobSasPermissions.Write, expiresAt, payload.EncryptionScope, ct)
+            .ConfigureAwait(false);
         var blockId = BlockId(partNumber);
         var uri = new Uri($"{signed.AbsoluteUri}&comp=block&blockid={Uri.EscapeDataString(blockId)}");
         return new ObjectUploadPart(partNumber, uri, expiresAt);
     }
 
     /// <inheritdoc />
-    public async ValueTask CompleteUploadAsync(ObjectUploadSession session, IReadOnlyList<ObjectPartReceipt> parts, CancellationToken ct = default)
+    public async ValueTask CompleteUploadAsync(ObjectUploadSession session, IReadOnlyList<ObjectPartReceipt> parts,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(parts);
@@ -80,7 +92,8 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
         // Only an explicit abort can safely discard its potentially committed staging blob.
         ct.ThrowIfCancellationRequested();
 
-        if (parts.Count is < 1 or > MaximumParts || parts.Any(static part => part is null || string.IsNullOrWhiteSpace(part.Token)) ||
+        if (parts.Count is < 1 or > MaximumParts ||
+            parts.Any(static part => part is null || string.IsNullOrWhiteSpace(part.Token)) ||
             parts.Select(static part => part.PartNumber).Distinct().Count() != parts.Count ||
             parts.Any(static part => part.PartNumber is < 1 or > MaximumParts))
         {
@@ -93,12 +106,14 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
         BlockList blocks;
         try
         {
-            blocks = (await staging.GetBlockListAsync(BlockListTypes.All, cancellationToken: ct).ConfigureAwait(false)).Value;
+            blocks = (await staging.GetBlockListAsync(BlockListTypes.All, cancellationToken: ct).ConfigureAwait(false))
+                .Value;
         }
         catch (RequestFailedException exception) when (exception.Status == 404)
         {
             // Staging is gone after a successful promotion whose response was lost, or was never uploaded.
-            if (await HeadAndVerifyAsync(payload.Container, payload.ObjectKey, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
+            if (await HeadAndVerifyAsync(payload.Container, payload.ObjectKey, payload.Sha256, payload.Length, ct)
+                    .ConfigureAwait(false))
             {
                 return;
             }
@@ -124,10 +139,12 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
                     Conditions = new BlobRequestConditions { IfNoneMatch = ETag.All }
                 }, ct).ConfigureAwait(false);
             }
-            catch (RequestFailedException exception) when (exception.ErrorCode == "InvalidBlockList" || exception.Status == 412)
+            catch (RequestFailedException exception) when (exception.ErrorCode == "InvalidBlockList" ||
+                                                           exception.Status == 412)
             {
                 // A concurrent completion consumed the uncommitted blocks first.
-                if (await HeadAndVerifyAsync(payload.Container, payload.ObjectKey, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
+                if (await HeadAndVerifyAsync(payload.Container, payload.ObjectKey, payload.Sha256, payload.Length, ct)
+                        .ConfigureAwait(false))
                 {
                     return;
                 }
@@ -153,7 +170,8 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
         {
             // A concurrent completion may have promoted and removed staging while this caller
             // was retrying. An absent destination leaves the outcome unresolved for another retry.
-            if (await HeadAndVerifyAsync(payload.Container, payload.ObjectKey, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
+            if (await HeadAndVerifyAsync(payload.Container, payload.ObjectKey, payload.Sha256, payload.Length, ct)
+                    .ConfigureAwait(false))
             {
                 return;
             }
@@ -176,39 +194,46 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
     }
 
     /// <inheritdoc />
-    public async ValueTask<bool> HeadAndVerifyAsync(TenantId tenantId, ObjectDigest expected, CancellationToken ct = default)
+    public async ValueTask<bool> HeadAndVerifyAsync(TenantId tenantId, ObjectDigest expected,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
         var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
-        return await HeadAndVerifyAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct).ConfigureAwait(false);
+        return await HeadAndVerifyAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct)
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public async ValueTask<ObjectDownload> CreateDownloadAsync(TenantId tenantId, ObjectDigest expected, TimeSpan lifetime, CancellationToken ct = default)
+    public async ValueTask<ObjectDownload> CreateDownloadAsync(TenantId tenantId, ObjectDigest expected,
+        TimeSpan lifetime, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(expected);
         var duration = ObjectStorageRules.BoundLifetime(lifetime);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
         var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
-        if (!await HeadAndVerifyAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct).ConfigureAwait(false))
+        if (!await HeadAndVerifyAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct)
+                .ConfigureAwait(false))
         {
             throw new FileNotFoundException("The verified object was not found.");
         }
 
         var expiresAt = DateTimeOffset.UtcNow.Add(duration);
         var blob = _client.GetBlobContainerClient(location.BucketReference).GetBlobClient(objectKey);
-        var url = await SignAsync(blob, BlobSasPermissions.Read, expiresAt, encryptionScope: null, ct).ConfigureAwait(false);
+        var url = await SignAsync(blob, BlobSasPermissions.Read, expiresAt, encryptionScope: null, ct)
+            .ConfigureAwait(false);
         return new(url, expiresAt);
     }
 
     /// <inheritdoc />
-    public async ValueTask<Stream?> OpenReadAsync(TenantId tenantId, ObjectDigest expected, CancellationToken ct = default)
+    public async ValueTask<Stream?> OpenReadAsync(TenantId tenantId, ObjectDigest expected,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
         var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
-        var verified = await GetVerifiedAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct).ConfigureAwait(false);
+        var verified = await GetVerifiedAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct)
+            .ConfigureAwait(false);
         if (verified is null)
         {
             return null;
@@ -243,9 +268,11 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
     async ValueTask<ObjectStorageLocation> ResolveAsync(TenantId tenantId, CancellationToken ct)
     {
         var location = await _tenantResolver.ResolveAsync(tenantId, ct).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(location.BucketReference) || string.IsNullOrWhiteSpace(location.EncryptionKeyReference))
+        if (string.IsNullOrWhiteSpace(location.BucketReference) ||
+            string.IsNullOrWhiteSpace(location.EncryptionKeyReference))
         {
-            throw new InvalidOperationException("Tenant storage resolution must provide container and encryption-scope references.");
+            throw new InvalidOperationException(
+                "Tenant storage resolution must provide container and encryption-scope references.");
         }
 
         return location;
@@ -258,8 +285,10 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
 
     static string[] ValidateReceipts(ObjectPartReceipt[] ordered, BlockList blocks, out long totalLength)
     {
-        var uncommitted = blocks.UncommittedBlocks.ToDictionary(static block => block.Name, static block => block.SizeLong, StringComparer.Ordinal);
-        var committed = blocks.CommittedBlocks.ToDictionary(static block => block.Name, static block => block.SizeLong, StringComparer.Ordinal);
+        var uncommitted = blocks.UncommittedBlocks.ToDictionary(static block => block.Name,
+            static block => block.SizeLong, StringComparer.Ordinal);
+        var committed = blocks.CommittedBlocks.ToDictionary(static block => block.Name, static block => block.SizeLong,
+            StringComparer.Ordinal);
         var ids = new string[ordered.Length];
         totalLength = 0;
         for (var index = 0; index < ordered.Length; index++)
@@ -325,7 +354,8 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
         }
 
         var computed = hash.GetHashAndReset();
-        if (length != payload.Length || !CryptographicOperations.FixedTimeEquals(computed, Convert.FromHexString(payload.Sha256)))
+        if (length != payload.Length ||
+            !CryptographicOperations.FixedTimeEquals(computed, Convert.FromHexString(payload.Sha256)))
         {
             throw new InvalidDataException("Uploaded object length or SHA-256 does not match the declared content.");
         }
@@ -333,7 +363,8 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
         return (Convert.ToHexString(computed).ToLowerInvariant(), etag);
     }
 
-    async ValueTask PromoteVerifiedAsync(SessionPayload payload, string verifiedDigest, ETag stagedETag, CancellationToken ct)
+    async ValueTask PromoteVerifiedAsync(SessionPayload payload, string verifiedDigest, ETag stagedETag,
+        CancellationToken ct)
     {
         var container = _client.GetBlobContainerClient(payload.Container);
         var source = container.GetBlobClient(payload.StagingKey);
@@ -351,9 +382,12 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
                 DestinationConditions = new BlobRequestConditions { IfNoneMatch = ETag.All }
             }, ct).ConfigureAwait(false);
         }
-        catch (RequestFailedException exception) when (exception.Status is 409 or 412 || exception.Status == 404 && exception.ErrorCode == "CannotVerifyCopySource")
+        catch (RequestFailedException exception) when (exception.Status is 409 or 412 ||
+                                                       exception.Status == 404 && exception.ErrorCode ==
+                                                       "CannotVerifyCopySource")
         {
-            if (await HeadAndVerifyAsync(payload.Container, payload.ObjectKey, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
+            if (await HeadAndVerifyAsync(payload.Container, payload.ObjectKey, payload.Sha256, payload.Length, ct)
+                    .ConfigureAwait(false))
             {
                 return;
             }
@@ -365,26 +399,31 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
             if (existing.Value)
             {
                 // The destination may have appeared since the first read.
-                if (await HeadAndVerifyAsync(payload.Container, payload.ObjectKey, payload.Sha256, payload.Length, ct).ConfigureAwait(false))
+                if (await HeadAndVerifyAsync(payload.Container, payload.ObjectKey, payload.Sha256, payload.Length, ct)
+                        .ConfigureAwait(false))
                     return;
-                throw new InvalidDataException("An object already exists at the immutable content key but failed verification.", exception);
+                throw new InvalidDataException(
+                    "An object already exists at the immutable content key but failed verification.", exception);
             }
 
             throw;
         }
     }
 
-    async ValueTask<bool> HeadAndVerifyAsync(string container, string objectKey, string sha256, long length, CancellationToken ct) =>
+    async ValueTask<bool> HeadAndVerifyAsync(string container, string objectKey, string sha256, long length,
+        CancellationToken ct) =>
         await GetVerifiedAsync(container, objectKey, sha256, length, ct).ConfigureAwait(false) is not null;
 
-    async ValueTask<BlobProperties?> GetVerifiedAsync(string container, string objectKey, string sha256, long length, CancellationToken ct)
+    async ValueTask<BlobProperties?> GetVerifiedAsync(string container, string objectKey, string sha256, long length,
+        CancellationToken ct)
     {
         try
         {
             var properties = (await _client.GetBlobContainerClient(container).GetBlobClient(objectKey)
                 .GetPropertiesAsync(cancellationToken: ct).ConfigureAwait(false)).Value;
             return properties.ContentLength == length &&
-                properties.Metadata.TryGetValue(DigestMetadata, out var digest) && string.Equals(digest, sha256, StringComparison.Ordinal)
+                   properties.Metadata.TryGetValue(DigestMetadata, out var digest) &&
+                   string.Equals(digest, sha256, StringComparison.Ordinal)
                 ? properties
                 : null;
         }
@@ -397,7 +436,8 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
     async ValueTask CleanupStagingAsync(SessionPayload payload, CancellationToken ct)
     {
         var staging = StagingBlock(payload);
-        var deleted = await staging.DeleteIfExistsAsync(DeleteSnapshotsOption.IncludeSnapshots, cancellationToken: ct).ConfigureAwait(false);
+        var deleted = await staging.DeleteIfExistsAsync(DeleteSnapshotsOption.IncludeSnapshots, cancellationToken: ct)
+            .ConfigureAwait(false);
         if (deleted.Value)
         {
             return;
@@ -407,11 +447,13 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
         // discards them immediately instead of waiting for Azure's garbage collection.
         try
         {
-            var blocks = await staging.GetBlockListAsync(BlockListTypes.Uncommitted, cancellationToken: ct).ConfigureAwait(false);
+            var blocks = await staging.GetBlockListAsync(BlockListTypes.Uncommitted, cancellationToken: ct)
+                .ConfigureAwait(false);
             if (blocks.Value.UncommittedBlocks.Any())
             {
                 await staging.CommitBlockListAsync([], cancellationToken: ct).ConfigureAwait(false);
-                await staging.DeleteIfExistsAsync(DeleteSnapshotsOption.IncludeSnapshots, cancellationToken: ct).ConfigureAwait(false);
+                await staging.DeleteIfExistsAsync(DeleteSnapshotsOption.IncludeSnapshots, cancellationToken: ct)
+                    .ConfigureAwait(false);
             }
         }
         catch (RequestFailedException exception) when (exception.Status == 404)
@@ -430,14 +472,16 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
         {
             await CleanupStagingAsync(payload, CancellationToken.None).ConfigureAwait(false);
         }
-        catch (Exception exception) when (exception is RequestFailedException or System.Net.Http.HttpRequestException or IOException or
-            TimeoutException or TaskCanceledException)
+        catch (Exception exception) when (exception is RequestFailedException or System.Net.Http.HttpRequestException
+                                              or IOException or
+                                              TimeoutException or TaskCanceledException)
         {
             // Best effort by design: the object is committed (or rejected) and staging expires by lifecycle rule.
         }
     }
 
-    async ValueTask<Uri> SignAsync(BlobClient blob, BlobSasPermissions permissions, DateTimeOffset expiresAt, string? encryptionScope, CancellationToken ct)
+    async ValueTask<Uri> SignAsync(BlobClient blob, BlobSasPermissions permissions, DateTimeOffset expiresAt,
+        string? encryptionScope, CancellationToken ct)
     {
         var builder = new BlobSasBuilder(permissions, expiresAt)
         {
@@ -463,15 +507,19 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
     async ValueTask<UserDelegationKey> GetDelegationKeyAsync(DateTimeOffset needUntil, CancellationToken ct)
     {
         var now = DateTimeOffset.UtcNow;
-        if (_delegationKey is { } cached && cached.SignedExpiresOn >= needUntil.AddMinutes(1) && cached.SignedStartsOn <= now)
+        if (_delegationKey is { } cached && cached.SignedExpiresOn >= needUntil.AddMinutes(1) &&
+            cached.SignedStartsOn <= now)
         {
             return cached;
         }
 
-        var expires = needUntil > now.Add(DelegationKeyLifetime) ? needUntil.AddMinutes(1) : now.Add(DelegationKeyLifetime);
+        var expires = needUntil > now.Add(DelegationKeyLifetime)
+            ? needUntil.AddMinutes(1)
+            : now.Add(DelegationKeyLifetime);
         try
         {
-            var key = (await _client.GetUserDelegationKeyAsync(now.Subtract(ClockSkew), expires, ct).ConfigureAwait(false)).Value;
+            var key = (await _client.GetUserDelegationKeyAsync(now.Subtract(ClockSkew), expires, ct)
+                .ConfigureAwait(false)).Value;
             _delegationKey = key;
             return key;
         }
@@ -511,8 +559,10 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
             {
                 var json = protector.Unprotect(token);
                 var payload = JsonSerializer.Deserialize(json, AzureUploadSessionJsonContext.Default.SessionPayload);
-                if (payload is null || string.IsNullOrWhiteSpace(payload.Container) || string.IsNullOrWhiteSpace(payload.EncryptionScope) ||
-                    string.IsNullOrWhiteSpace(payload.ObjectKey) || string.IsNullOrWhiteSpace(payload.StagingKey) || string.IsNullOrWhiteSpace(payload.Sha256) ||
+                if (payload is null || string.IsNullOrWhiteSpace(payload.Container) ||
+                    string.IsNullOrWhiteSpace(payload.EncryptionScope) ||
+                    string.IsNullOrWhiteSpace(payload.ObjectKey) || string.IsNullOrWhiteSpace(payload.StagingKey) ||
+                    string.IsNullOrWhiteSpace(payload.Sha256) ||
                     payload.Sha256.Length != 64 || !payload.Sha256.All(Uri.IsHexDigit) ||
                     payload.Length is < 0 or > ObjectStorageLimits.MaximumObjectLength || payload.ExpiresAt == default)
                 {
@@ -521,7 +571,8 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
 
                 return payload;
             }
-            catch (Exception exception) when (exception is FormatException or JsonException or ArgumentException or CryptographicException)
+            catch (Exception exception) when (exception is FormatException or JsonException or ArgumentException
+                                                  or CryptographicException)
             {
                 throw new ArgumentException("The upload session token is invalid.", nameof(token), exception);
             }
@@ -536,15 +587,34 @@ public sealed class AzureObjectStorage(BlobServiceClient client, IObjectStorageT
         public override bool CanSeek => false;
         public override bool CanWrite => false;
         public override long Length => throw new NotSupportedException();
-        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
         public override void Flush() => throw new NotSupportedException();
         public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
-        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) => _inner.ReadAsync(buffer, cancellationToken);
-        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => _inner.ReadAsync(buffer, offset, count, cancellationToken);
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+            _inner.ReadAsync(buffer, cancellationToken);
+
+        public override Task<int>
+            ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            _inner.ReadAsync(buffer, offset, count, cancellationToken);
+
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
-        protected override void Dispose(bool disposing) { if (disposing) _result.Dispose(); base.Dispose(disposing); }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+                _result.Dispose();
+            base.Dispose(disposing);
+        }
+
         public override ValueTask DisposeAsync()
         {
             Dispose();

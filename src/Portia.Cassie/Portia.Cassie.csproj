@@ -2,16 +2,17 @@
 
   <PropertyGroup>
     <Description>Cassie integration for Portia read-model projections.</Description>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Cntryl.Cassie" />
+    <PackageReference Include="Cntryl.Cassie"/>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../Portia.DependencyInjection/Portia.DependencyInjection.csproj" />
+    <ProjectReference Include="../Portia.DependencyInjection/Portia.DependencyInjection.csproj"/>
   </ItemGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="Portia.Tests" />
+    <InternalsVisibleTo Include="Portia.Tests"/>
   </ItemGroup>
 
 </Project>

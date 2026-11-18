@@ -3,6 +3,7 @@
     <IsTestProject>false</IsTestProject>
     <RootNamespace>Cntryl.Portia.Consumer</RootNamespace>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
   <ItemGroup>
     <Using Remove="Xunit"/>

@@ -73,7 +73,8 @@ public sealed class McpScenario : IAsyncDisposable
         new(GetPromptAsync(name, arguments, cancellationToken));
 
     /// <summary>Lists visible fixed resources.</summary>
-    public async Task<IReadOnlyList<McpResourceSnapshot>> ListResourcesAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<McpResourceSnapshot>> ListResourcesAsync(
+        CancellationToken cancellationToken = default)
     {
         var resources = await _client.ListResourcesAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         return resources.Select(resource => new McpResourceSnapshot(resource.Uri, resource.Name,
@@ -132,15 +133,16 @@ public sealed class McpScenario : IAsyncDisposable
     {
         var prompts = await _client.ListPromptsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         return prompts.Select(prompt => new McpPromptSnapshot(prompt.Name,
-            prompt.ProtocolPrompt.Arguments?.ToDictionary(argument => argument.Name, argument => argument.Required == true,
+            prompt.ProtocolPrompt.Arguments?.ToDictionary(argument => argument.Name,
+                argument => argument.Required == true,
                 StringComparer.Ordinal) ?? [with(StringComparer.Ordinal)])
         {
             Title = prompt.ProtocolPrompt.Title,
             Description = prompt.ProtocolPrompt.Description,
             Metadata = SnapshotJson(prompt.ProtocolPrompt.Meta),
             ArgumentDescriptions = prompt.ProtocolPrompt.Arguments?.ToDictionary(argument => argument.Name,
-                argument => argument.Description, StringComparer.Ordinal)
-                ?? [with(StringComparer.Ordinal)]
+                                       argument => argument.Description, StringComparer.Ordinal)
+                                   ?? [with(StringComparer.Ordinal)]
         }).ToArray();
     }
 
@@ -152,12 +154,13 @@ public sealed class McpScenario : IAsyncDisposable
         var result = await _client.GetPromptAsync(name, arguments, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         return result.Messages.Select(message => message.Content is TextContentBlock text
-            ? new McpPromptMessageSnapshot(message.Role.ToString(), text.Text)
-            {
-                Metadata = SnapshotJson(result.Meta),
-                ContentMetadata = SnapshotJson(text.Meta)
-            }
-            : throw new NotSupportedException($"MCP testing snapshots do not support prompt content '{message.Content.GetType().Name}'."))
+                ? new McpPromptMessageSnapshot(message.Role.ToString(), text.Text)
+                {
+                    Metadata = SnapshotJson(result.Meta),
+                    ContentMetadata = SnapshotJson(text.Meta)
+                }
+                : throw new NotSupportedException(
+                    $"MCP testing snapshots do not support prompt content '{message.Content.GetType().Name}'."))
             .ToArray();
     }
 
@@ -201,7 +204,8 @@ public sealed class McpScenario : IAsyncDisposable
             return null;
         var snapshot = new JsonObject();
         if (annotations.Audience is { } audience)
-            snapshot["audience"] = new JsonArray(audience.Select(role => (JsonNode?)JsonValue.Create(role.ToString().ToLowerInvariant())).ToArray());
+            snapshot["audience"] = new JsonArray(audience
+                .Select(role => (JsonNode?)JsonValue.Create(role.ToString().ToLowerInvariant())).ToArray());
         if (annotations.Priority is { } priority)
             snapshot["priority"] = JsonValue.Create(priority);
         if (annotations.LastModified is { } lastModified)

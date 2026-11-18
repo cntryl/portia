@@ -67,6 +67,7 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
             cursor = record.NextCursor;
             _ = Apply(active, record.Event);
         }
+
         await SaveSnapshotAsync(expected, cursor, active, ct).ConfigureAwait(false);
         foreach (var tenantId in active)
             yield return tenantId;
@@ -101,6 +102,7 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
                 if (!initial && change is { } delta)
                     yield return delta;
             }
+
             if ((initial || unsavedEvents >= SnapshotEventsPerWrite) &&
                 cursor != (savedCursor ?? EventCursor.Start))
             {
@@ -156,11 +158,12 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
             reconciledCursor = record.NextCursor;
             _ = Apply(reconciled, record.Event);
         }
+
         if (reconciledCursor != (current?.Cursor ?? EventCursor.Start))
         {
             _ = await _snapshotStore.TrySaveAsync(_pattern, current?.Cursor,
-                new TenantDirectorySnapshot(reconciledCursor,
-                    reconciled.OrderBy(tenant => tenant.Value, StringComparer.Ordinal).ToArray()), ct)
+                    new TenantDirectorySnapshot(reconciledCursor,
+                        reconciled.OrderBy(tenant => tenant.Value, StringComparer.Ordinal).ToArray()), ct)
                 .ConfigureAwait(false);
         }
     }
@@ -310,6 +313,7 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
                         _nextCursor = snapshot.Cursor;
                         _savedCursor = snapshot.Cursor;
                     }
+
                     _initialized = true;
                 }
 
@@ -336,6 +340,7 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
                         if (!_initial && change is { } delta)
                             yield return delta;
                     }
+
                     if ((_initial || _unsavedEvents >= SnapshotEventsPerWrite) &&
                         _nextCursor != (_savedCursor ?? EventCursor.Start))
                     {
@@ -370,12 +375,16 @@ public sealed class EventSourcedTenantDirectory<TStartEvent, TStopEvent>(
                 try
                 {
                     if (subscription is not null &&
-                        ReferenceEquals(Interlocked.CompareExchange(ref _subscription, null, subscription), subscription))
+                        ReferenceEquals(Interlocked.CompareExchange(ref _subscription, null, subscription),
+                            subscription))
                     {
                         await subscription.DisposeAsync().ConfigureAwait(false);
                     }
                 }
-                finally { Volatile.Write(ref _reading, 0); }
+                finally
+                {
+                    Volatile.Write(ref _reading, 0);
+                }
             }
         }
 

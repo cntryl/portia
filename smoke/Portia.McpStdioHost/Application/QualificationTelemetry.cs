@@ -50,6 +50,7 @@ sealed class QualificationTelemetry(string directory)
                     measurements.Add(string.Join('\t', metric.Name, count.ToString(CultureInfo.InvariantCulture),
                         string.Join(',', tags)));
                 }
+
             await WriteAsync("metrics.tsv", measurements, ct);
         }
     }

@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>Public contracts for the Portia event-sourcing and CQRS framework.</Description>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>

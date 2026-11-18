@@ -117,7 +117,8 @@ public static partial class PortiaHttpBinding
         string memberName,
         string fallbackName, bool nullable, bool hasDefault, TValue defaultValue)
     {
-        var binding = ResolveBodyMember(options, typeof(TRequest), typeof(TValue), memberIndex, memberName, fallbackName);
+        var binding = ResolveBodyMember(options, typeof(TRequest), typeof(TValue), memberIndex, memberName,
+            fallbackName);
         if (binding.Required && !TryGetBodyProperty(body, binding.Options, binding.Name, out _))
             throw new BadHttpRequestException($"Missing required property '{binding.Name}'.");
         if (!binding.Input)
@@ -182,7 +183,8 @@ public static partial class PortiaHttpBinding
     {
         if (body.ValueKind != JsonValueKind.Object)
             throw new BadHttpRequestException("Expected a JSON object.");
-        var binding = ResolveBodyMember(options, typeof(TRequest), typeof(TValue), memberIndex, memberName, fallbackName);
+        var binding = ResolveBodyMember(options, typeof(TRequest), typeof(TValue), memberIndex, memberName,
+            fallbackName);
         var present = TryGetBodyProperty(body, binding.Options, binding.Name, out _);
         if (binding.Required && !present)
             throw new BadHttpRequestException($"Missing required property '{binding.Name}'.");
@@ -207,9 +209,11 @@ public static partial class PortiaHttpBinding
     {
         if (body.ValueKind != JsonValueKind.Object)
             throw new BadHttpRequestException("Expected a JSON object.");
-        var binding = ResolveBodyMember(options, typeof(TRequest), typeof(TValue), memberIndex, memberName, fallbackName);
+        var binding = ResolveBodyMember(options, typeof(TRequest), typeof(TValue), memberIndex, memberName,
+            fallbackName);
         var comparison = binding.Options.PropertyNameCaseInsensitive
-            ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
         foreach (var property in body.EnumerateObject())
         {
             if (!string.Equals(property.Name, binding.Name, comparison))
@@ -246,10 +250,18 @@ public static partial class PortiaHttpBinding
         BindingCaches.GetValue(options, static current => new OptionsBindingCache(current))
             .Get(requestType, valueType, memberIndex, memberName, fallbackName);
 
-    readonly record struct BindingKey(Type RequestType, Type ValueType, int MemberIndex, string MemberName,
+    readonly record struct BindingKey(
+        Type RequestType,
+        Type ValueType,
+        int MemberIndex,
+        string MemberName,
         string FallbackName);
 
-    internal sealed record BindingMetadata(string Name, JsonSerializerOptions Options, bool Required = false, bool Input = true);
+    internal sealed record BindingMetadata(
+        string Name,
+        JsonSerializerOptions Options,
+        bool Required = false,
+        bool Input = true);
 
     sealed class OptionsBindingCache(JsonSerializerOptions options)
     {
@@ -280,11 +292,14 @@ public static partial class PortiaHttpBinding
             // associations retain declared identity; parameterless metadata can instead retain its
             // member provider. Reading that existing provider never enumerates request members.
             var identified = properties.Where(candidate => candidate.PropertyType == key.ValueType &&
-                string.Equals(DeclaredName(candidate), key.MemberName, StringComparison.OrdinalIgnoreCase))
+                                                           string.Equals(DeclaredName(candidate), key.MemberName,
+                                                               StringComparison.OrdinalIgnoreCase))
                 .ToArray();
-            var candidates = identified.Length > 0 ? identified : properties.Where(candidate =>
-                candidate.PropertyType == key.ValueType && candidate.Name == key.FallbackName &&
-                DeclaredName(candidate) is null).ToArray();
+            var candidates = identified.Length > 0
+                ? identified
+                : properties.Where(candidate =>
+                    candidate.PropertyType == key.ValueType && candidate.Name == key.FallbackName &&
+                    DeclaredName(candidate) is null).ToArray();
             var property = candidates.Length switch
             {
                 1 => candidates[0],
@@ -308,6 +323,5 @@ public static partial class PortiaHttpBinding
 
         static string? DeclaredName(JsonPropertyInfo property) =>
             property.AssociatedParameter?.Name ?? (property.AttributeProvider as MemberInfo)?.Name;
-
     }
 }

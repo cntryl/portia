@@ -44,6 +44,7 @@ public static class PortiaAdminMcpExtensions
                         await applicationConfiguration(context, server, ct).ConfigureAwait(false);
                     return;
                 }
+
                 SelectAdmin(server);
             };
         });
@@ -59,7 +60,8 @@ public static class PortiaAdminMcpExtensions
         _ = endpoints.ServiceProvider.GetRequiredService<AdminSurface>();
         _ = endpoints.ServiceProvider.GetRequiredService<IPortiaOperations>();
         _ = endpoints.ServiceProvider.GetRequiredService<IOptions<HttpServerTransportOptions>>().Value;
-        var builder = endpoints.MapMcp(pattern).WithMetadata(new AdminSurface(), new AdminBodyLimit()).RequireAuthorization();
+        var builder = endpoints.MapMcp(pattern).WithMetadata(new AdminSurface(), new AdminBodyLimit())
+            .RequireAuthorization();
         builder.Finally(endpoint =>
         {
             if (endpoint.RequestDelegate is { } next)
@@ -94,6 +96,7 @@ public static class PortiaAdminMcpExtensions
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             return;
         }
+
         var result = await ApproveAsync(context, planId, revoke).ConfigureAwait(false);
         await result.ExecuteAsync(context).ConfigureAwait(false);
     }
@@ -113,18 +116,28 @@ public static class PortiaAdminMcpExtensions
             var operations = context.RequestServices.GetRequiredService<IPortiaOperations>();
             if (revoke)
             {
-                await operations.RevokeRepairAsync(context.User, target, planId, context.RequestAborted).ConfigureAwait(false);
+                await operations.RevokeRepairAsync(context.User, target, planId, context.RequestAborted)
+                    .ConfigureAwait(false);
                 return Results.NoContent();
             }
+
             var approval = await operations.ApproveRepairAsync(context.User, target, planId, context.RequestAborted)
                 .ConfigureAwait(false);
             return Results.Json(approval, AdminJsonContext.Default.RepairApproval);
         }
-        catch (UnauthorizedAccessException) { return Results.StatusCode(StatusCodes.Status403Forbidden); }
-        catch (Exception ex) when (ex is ArgumentException or JsonException or InvalidOperationException or KeyNotFoundException)
-        { return Results.Conflict(); }
+        catch (UnauthorizedAccessException)
+        {
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        }
+        catch (Exception ex) when (ex is ArgumentException or JsonException or InvalidOperationException
+                                       or KeyNotFoundException)
+        {
+            return Results.Conflict();
+        }
         catch (Exception) when (!context.RequestAborted.IsCancellationRequested)
-        { return Results.StatusCode(StatusCodes.Status503ServiceUnavailable); }
+        {
+            return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
     }
 
     static IResult? OperatorAccessFailure(HttpContext context)
@@ -140,14 +153,20 @@ public static class PortiaAdminMcpExtensions
     // Deliberately stricter than the application's MCP endpoint, which honors its CORS policy: the
     // administrative surface accepts browser requests from its own origin only.
     static bool RejectOrigin(HttpContext context) => context.Request.Headers.Origin is { Count: > 0 } origins
-        && (origins.Count != 1 || !Uri.TryCreate(origins[0], UriKind.Absolute, out var origin)
-            || !string.Equals(origin.Scheme, context.Request.Scheme, StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(origin.Authority, context.Request.Host.Value, StringComparison.OrdinalIgnoreCase));
+                                                     && (origins.Count != 1 || !Uri.TryCreate(origins[0],
+                                                                                UriKind.Absolute, out var origin)
+                                                                            || !string.Equals(origin.Scheme,
+                                                                                context.Request.Scheme,
+                                                                                StringComparison.OrdinalIgnoreCase)
+                                                                            || !string.Equals(origin.Authority,
+                                                                                context.Request.Host.Value,
+                                                                                StringComparison.OrdinalIgnoreCase));
 
     static void SelectAdmin(McpServerOptions server)
     {
         server.ServerInfo = new Implementation { Name = "Portia administration", Version = "1" };
-        server.ServerInstructions = "Diagnose processing from durable evidence. Recovery approval is an operator action outside MCP. Processing completion is not a business consistency verdict.";
+        server.ServerInstructions =
+            "Diagnose processing from durable evidence. Recovery approval is an operator action outside MCP. Processing completion is not a business consistency verdict.";
         server.ToolCollection = null;
         server.ResourceCollection = null;
         server.PromptCollection = null;
@@ -222,21 +241,23 @@ public static class PortiaAdminMcpExtensions
         target ?? throw new ArgumentException("Target required.");
 
     static readonly JsonElement InputSchema = JsonElement.Parse("""
-        {"type":"object","properties":{
-          "scope":{"type":"object","properties":{"tenant":{"type":["string","null"]}},"required":["tenant"],"additionalProperties":false},
-          "target":{"type":"object","properties":{"processor":{"type":"string"},"pattern":{"type":"string"},
-             "scope":{"type":"object","properties":{"tenant":{"type":["string","null"]}},"required":["tenant"]},"rebuildId":{"type":["string","null"]}},"required":["processor","pattern","scope"]},
-          "attemptId":{"type":"string","format":"uuid"},"planId":{"type":"string","format":"uuid"}},
-          "required":["scope"],"additionalProperties":false}
-        """);
+                                                                {"type":"object","properties":{
+                                                                  "scope":{"type":"object","properties":{"tenant":{"type":["string","null"]}},"required":["tenant"],"additionalProperties":false},
+                                                                  "target":{"type":"object","properties":{"processor":{"type":"string"},"pattern":{"type":"string"},
+                                                                     "scope":{"type":"object","properties":{"tenant":{"type":["string","null"]}},"required":["tenant"]},"rebuildId":{"type":["string","null"]}},"required":["processor","pattern","scope"]},
+                                                                  "attemptId":{"type":"string","format":"uuid"},"planId":{"type":"string","format":"uuid"}},
+                                                                  "required":["scope"],"additionalProperties":false}
+                                                                """);
 
-    static async ValueTask<CallToolResult> CallAsync(ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call, CancellationToken ct)
+    static async ValueTask<CallToolResult> CallAsync(
+        ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call, CancellationToken ct)
     {
-        var tool = Array.Find(Tools, candidate => string.Equals(candidate.Name, call.Params.Name, StringComparison.Ordinal))
-            ?? throw new McpException("Administrative tool unavailable.");
+        var tool = Array.Find(Tools,
+                       candidate => string.Equals(candidate.Name, call.Params.Name, StringComparison.Ordinal))
+                   ?? throw new McpException("Administrative tool unavailable.");
         var services = call.Services ?? throw new McpException("Request services unavailable.");
         var context = services.GetRequiredService<IHttpContextAccessor>().HttpContext
-            ?? throw new McpException("Authenticated HTTP request required.");
+                      ?? throw new McpException("Authenticated HTTP request required.");
         try
         {
             var arguments = JsonSerializer.SerializeToElement(call.Params.Arguments,
@@ -245,7 +266,7 @@ public static class PortiaAdminMcpExtensions
                 || !scope.TryGetProperty("tenant", out _))
                 throw new ArgumentException("An exact tenant or global scope is required.");
             var input = arguments.Deserialize(AdminJsonContext.Default.AdminArguments)
-                ?? throw new ArgumentException("Arguments required.");
+                        ?? throw new ArgumentException("Arguments required.");
             if (input.Target is { } target && target.Scope != input.Scope)
                 throw new ArgumentException("The target and requested scope differ.");
             var operations = services.GetRequiredService<IPortiaOperations>();
@@ -254,13 +275,19 @@ public static class PortiaAdminMcpExtensions
             return new CallToolResult { IsError = false, Content = [new TextContentBlock { Text = json }] };
         }
         catch (Exception ex) when (ex is ArgumentException or JsonException or UnauthorizedAccessException
-            or InvalidOperationException or KeyNotFoundException)
+                                       or InvalidOperationException or KeyNotFoundException)
         {
             return new CallToolResult
             {
                 IsError = true,
-                Content = [new TextContentBlock
-                { Text = "Operational request denied or stale. Supply an authorized exact scope and current recorded identifiers." }]
+                Content =
+                [
+                    new TextContentBlock
+                    {
+                        Text =
+                            "Operational request denied or stale. Supply an authorized exact scope and current recorded identifiers."
+                    }
+                ]
             };
         }
 
@@ -269,23 +296,35 @@ public static class PortiaAdminMcpExtensions
             return new CallToolResult
             {
                 IsError = true,
-                Content = [new TextContentBlock
-                { Text = "Operational evidence is temporarily unavailable." }]
+                Content =
+                [
+                    new TextContentBlock
+                        { Text = "Operational evidence is temporarily unavailable." }
+                ]
             };
         }
     }
 
-    sealed record AdminTool(string Name, string Description, bool ReadOnly, bool Idempotent,
+    sealed record AdminTool(
+        string Name,
+        string Description,
+        bool ReadOnly,
+        bool Idempotent,
         Func<IPortiaOperations, ClaimsPrincipal, AdminArguments, CancellationToken, Task<string>> Invoke);
 
     sealed class AdminSurface;
+
     sealed class AdminBodyLimit : IRequestSizeLimitMetadata
     {
         public long? MaxRequestBodySize => 64 * 1024;
     }
 }
 
-sealed record AdminArguments(OperationalScope Scope, OperationalTarget? Target = null, Guid? AttemptId = null, Guid? PlanId = null);
+sealed record AdminArguments(
+    OperationalScope Scope,
+    OperationalTarget? Target = null,
+    Guid? AttemptId = null,
+    Guid? PlanId = null);
 
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
 [JsonSerializable(typeof(AdminArguments))]

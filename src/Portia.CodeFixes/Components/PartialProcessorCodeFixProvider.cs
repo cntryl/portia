@@ -42,19 +42,20 @@ public sealed class PartialProcessorCodeFixProvider : CodeFixProvider
                 if (containers.Length == 0)
                     continue;
                 context.RegisterCodeFix(CodeAction.Create("Make enclosing types partial",
-                    ct => AddPartialAsync(context.Document, containers, ct), "Portia.MakeContainersPartial"),
+                        ct => AddPartialAsync(context.Document, containers, ct), "Portia.MakeContainersPartial"),
                     diagnostic);
             }
             else if (!declaration.Modifiers.Any(SyntaxKind.PartialKeyword))
             {
                 context.RegisterCodeFix(CodeAction.Create("Make processor partial",
-                    ct => AddPartialAsync(context.Document, [declaration], ct), "Portia.MakeProcessorPartial"),
+                        ct => AddPartialAsync(context.Document, [declaration], ct), "Portia.MakeProcessorPartial"),
                     diagnostic);
             }
         }
     }
 
-    static async Task<Document> AddPartialAsync(Document document, IReadOnlyCollection<TypeDeclarationSyntax> declarations,
+    static async Task<Document> AddPartialAsync(Document document,
+        IReadOnlyCollection<TypeDeclarationSyntax> declarations,
         CancellationToken cancellationToken)
     {
         var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);

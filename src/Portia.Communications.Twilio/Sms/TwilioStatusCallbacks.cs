@@ -16,7 +16,8 @@ public static class TwilioStatusCallbackEndpointRouteBuilderExtensions
     /// <param name="endpoints">The endpoints.</param>
     /// <param name="pattern">The route prefix, such as <c>/twilio/status</c>.</param>
     /// <returns>A builder for further endpoint conventions.</returns>
-    public static IEndpointConventionBuilder MapTwilioStatusCallbacks(this IEndpointRouteBuilder endpoints, string pattern)
+    public static IEndpointConventionBuilder MapTwilioStatusCallbacks(this IEndpointRouteBuilder endpoints,
+        string pattern)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         ArgumentException.ThrowIfNullOrWhiteSpace(pattern);
@@ -33,7 +34,8 @@ static class TwilioStatusCallbacks
         if (address is null)
             return null;
         if (!address.IsAbsoluteUri || address.Scheme != Uri.UriSchemeHttps
-            || address.Query.Length != 0 || address.Fragment.Length != 0 || address.UserInfo.Length != 0)
+                                   || address.Query.Length != 0 || address.Fragment.Length != 0 ||
+                                   address.UserInfo.Length != 0)
             throw new ArgumentException(
                 "The status-callback address must be an absolute HTTPS address without a query, fragment or credentials.",
                 nameof(address));
@@ -50,7 +52,7 @@ static class TwilioStatusCallbacks
         var tenantSegment = request.RouteValues["tenant"] as string;
         var send = request.RouteValues["send"] as string;
         if (options.Address is null || !SendCorrelation.TryDecodeTenant(tenantSegment, out var tenant)
-            || !SendId.IsValid(send))
+                                    || !SendId.IsValid(send))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
@@ -68,8 +70,9 @@ static class TwilioStatusCallbacks
             .ResolveAsync(tenant, ct).ConfigureAwait(false);
         var signature = request.Headers["X-Twilio-Signature"];
         if (account?.AuthToken is not { Length: > 0 } token || signature.Count != 1
-            || !Verify(Address(options.Address, tenantSegment!, send), form, token, signature[0])
-            || form["AccountSid"] != account.AccountSid)
+                                                            || !Verify(Address(options.Address, tenantSegment!, send),
+                                                                form, token, signature[0])
+                                                            || form["AccountSid"] != account.AccountSid)
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
             return;
@@ -87,7 +90,7 @@ static class TwilioStatusCallbacks
         {
             var clock = context.RequestServices.GetService<TimeProvider>() ?? TimeProvider.System;
             await context.RequestServices.GetRequiredService<IDeliveryEventReceiver>().ReceiveAsync(
-                new DeliveryEvent(tenant, CommunicationChannel.Sms, new SendId(send), known, clock.GetUtcNow()), ct)
+                    new DeliveryEvent(tenant, CommunicationChannel.Sms, new SendId(send), known, clock.GetUtcNow()), ct)
                 .ConfigureAwait(false);
         }
 
@@ -110,8 +113,8 @@ static class TwilioStatusCallbacks
 #pragma warning restore CA5350
         Span<byte> provided = stackalloc byte[HMACSHA1.HashSizeInBytes];
         return Convert.TryFromBase64String(signature ?? string.Empty, provided, out var written)
-            && written == provided.Length
-            && CryptographicOperations.FixedTimeEquals(provided, expected);
+               && written == provided.Length
+               && CryptographicOperations.FixedTimeEquals(provided, expected);
     }
 }
 

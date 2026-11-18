@@ -11,17 +11,19 @@ static class PortiaJsonRequestOptions
 {
     static readonly ConditionalWeakTable<JsonSerializerOptions, JsonSerializerOptions> Cache = [];
 
-    internal static JsonSerializerOptions Strict(JsonSerializerOptions source) => Cache.GetValue(source, static current =>
-    {
-        var options = new JsonSerializerOptions(current)
+    internal static JsonSerializerOptions Strict(JsonSerializerOptions source) => Cache.GetValue(source,
+        static current =>
         {
-            RespectNullableAnnotations = true,
-            RespectRequiredConstructorParameters = true,
-            TypeInfoResolver = current.TypeInfoResolver!.WithAddedModifier(info => RequireNonNullableMembers(info, current))
-        };
-        options.MakeReadOnly();
-        return options;
-    });
+            var options = new JsonSerializerOptions(current)
+            {
+                RespectNullableAnnotations = true,
+                RespectRequiredConstructorParameters = true,
+                TypeInfoResolver =
+                    current.TypeInfoResolver!.WithAddedModifier(info => RequireNonNullableMembers(info, current))
+            };
+            options.MakeReadOnly();
+            return options;
+        });
 
     static void RequireNonNullableMembers(JsonTypeInfo info, JsonSerializerOptions facts)
     {
@@ -33,6 +35,7 @@ static class PortiaJsonRequestOptions
                 property.IsRequired = false;
                 continue;
             }
+
             property.IsGetNullable = property.IsSetNullable;
             if (property.AssociatedParameter is { HasDefaultValue: false, IsMemberInitializer: false } parameter)
             {
@@ -45,7 +48,8 @@ static class PortiaJsonRequestOptions
                     // Ask the resolver for raw metadata so an unconfigured getter-only JsonRequired
                     // contract is not configured using the original, less strict constructor options.
                     original ??= facts.TypeInfoResolver!.GetTypeInfo(info.Type, facts);
-                    property.IsRequired = original?.Properties.SingleOrDefault(candidate => candidate.Name == property.Name)?.IsRequired == true;
+                    property.IsRequired = original?.Properties
+                        .SingleOrDefault(candidate => candidate.Name == property.Name)?.IsRequired == true;
                 }
             }
         }

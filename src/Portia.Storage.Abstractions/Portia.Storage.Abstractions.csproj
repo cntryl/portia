@@ -1,15 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>Vendor-neutral tenant-scoped immutable object storage contracts for Portia.</Description>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="../Portia.Abstractions/Portia.Abstractions.csproj"/>
   </ItemGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="Portia.Storage.Aws" />
-    <InternalsVisibleTo Include="Portia.Storage.Azure" />
-    <InternalsVisibleTo Include="Portia.Storage.Gcp" />
+    <InternalsVisibleTo Include="Portia.Storage.Aws"/>
+    <InternalsVisibleTo Include="Portia.Storage.Azure"/>
+    <InternalsVisibleTo Include="Portia.Storage.Gcp"/>
   </ItemGroup>
 
 </Project>

@@ -15,7 +15,9 @@ public sealed class ReactorScenario
     readonly ScenarioRequestBus _requests = new();
 
     /// <summary>Creates a scenario for the default test tenant.</summary>
-    public ReactorScenario() : this(new TenantId("scenario")) { }
+    public ReactorScenario() : this(new TenantId("scenario"))
+    {
+    }
 
     /// <summary>Creates a scenario for a specific tenant's streams.</summary>
     /// <param name="tenant">The tenant to bind tenant-scoped reactors to.</param>

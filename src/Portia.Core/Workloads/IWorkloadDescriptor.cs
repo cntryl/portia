@@ -28,7 +28,8 @@ interface IWorkloadDescriptor
     /// <param name="componentName">The name the component is registered under.</param>
     void Validate(IServiceProvider services, string componentName);
 
-    ValueTask<ProjectionCheckpoint> LoadCheckpoint(IServiceProvider services, ProjectionRunOptions options, CancellationToken ct);
+    ValueTask<ProjectionCheckpoint> LoadCheckpoint(IServiceProvider services, ProjectionRunOptions options,
+        CancellationToken ct);
 
     ValueTask<ProjectionPassResult> RunPass(IServiceProvider services, ProjectionRunOptions options,
         CancellationToken ct);

@@ -5,6 +5,7 @@ public sealed record McpResourceInvocation(string UriTemplate) : RequestInvocati
 {
     /// <inheritdoc />
     public override string TransportName => "mcp-resource";
+
     /// <inheritdoc />
     public override RequestTraceRelationship TraceRelationship => RequestTraceRelationship.Parent;
 }
@@ -14,6 +15,7 @@ public sealed record McpPromptInvocation(string PromptName) : RequestInvocation
 {
     /// <inheritdoc />
     public override string TransportName => "mcp-prompt";
+
     /// <inheritdoc />
     public override RequestTraceRelationship TraceRelationship => RequestTraceRelationship.Parent;
 }

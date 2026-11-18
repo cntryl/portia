@@ -9,7 +9,8 @@ namespace Cntryl.Portia;
 
 // The serializer resolver and its description literals are composed together per application.
 // Copies of serializer options retain this resolver, without static registries or reflection scans.
-sealed class PortiaJsonDescriptionResolver(IJsonTypeInfoResolver inner,
+sealed class PortiaJsonDescriptionResolver(
+    IJsonTypeInfoResolver inner,
     PortiaContractMetadataRegistry contracts) : IJsonTypeInfoResolver
 {
     public JsonTypeInfo? GetTypeInfo(Type type, JsonSerializerOptions options) => inner.GetTypeInfo(type, options);
@@ -28,26 +29,33 @@ sealed class PortiaJsonDescriptionResolver(IJsonTypeInfoResolver inner,
     internal string? Find(Type type, string? member, JsonNamingPolicy? policy) => member is null
         ? PortiaJsonDescriptions.Description(contracts.Type(type))
         : PortiaJsonDescriptions.Description(contracts.Member(type, member, policy));
-
 }
 
 static class PortiaJsonDescriptions
 {
-    internal static IReadOnlyList<PortiaResolvedExample> Examples(JsonSerializerOptions options, Type type, bool input) =>
+    internal static IReadOnlyList<PortiaResolvedExample>
+        Examples(JsonSerializerOptions options, Type type, bool input) =>
         (options.TypeInfoResolver as PortiaJsonDescriptionResolver)?.Examples(options, type, input) ?? [];
 
     internal static PortiaContractMetadata? Metadata(JsonSerializerOptions options, Type type) =>
         (options.TypeInfoResolver as PortiaJsonDescriptionResolver)?.Metadata(type);
 
-    internal static PortiaContractMemberMetadata? MemberMetadata(JsonSerializerOptions options, Type? type, string name) =>
-        type is null ? null : (options.TypeInfoResolver as PortiaJsonDescriptionResolver)?.Member(type, name, options.PropertyNamingPolicy);
+    internal static PortiaContractMemberMetadata?
+        MemberMetadata(JsonSerializerOptions options, Type? type, string name) =>
+        type is null
+            ? null
+            : (options.TypeInfoResolver as PortiaJsonDescriptionResolver)?.Member(type, name,
+                options.PropertyNamingPolicy);
 
-    internal static PortiaContractMemberMetadata? PropertyMetadata(JsonSerializerOptions options, JsonPropertyInfo property)
+    internal static PortiaContractMemberMetadata? PropertyMetadata(JsonSerializerOptions options,
+        JsonPropertyInfo property)
     {
         var declared = property.AssociatedParameter?.Name ?? (property.AttributeProvider as MemberInfo)?.Name;
-        return declared is not null ? MemberMetadata(options, property.DeclaringType, declared)
+        return declared is not null
+            ? MemberMetadata(options, property.DeclaringType, declared)
             : property.DeclaringType is { } type && options.TypeInfoResolver is PortiaJsonDescriptionResolver resolver
-                ? resolver.WireMember(type, property.Name, options.PropertyNamingPolicy) : null;
+                ? resolver.WireMember(type, property.Name, options.PropertyNamingPolicy)
+                : null;
     }
 
     internal static string? Description(PortiaContractMetadata? metadata) =>
@@ -57,8 +65,11 @@ static class PortiaJsonDescriptions
         CombineDescription(metadata?.Description, metadata?.Deprecated == true ? metadata.DeprecationMessage : null);
 
     static string? CombineDescription(string? description, string? deprecation) =>
-        string.IsNullOrWhiteSpace(deprecation) ? description : string.IsNullOrWhiteSpace(description)
-            ? deprecation : description + "\n\nDeprecated: " + deprecation;
+        string.IsNullOrWhiteSpace(deprecation)
+            ? description
+            : string.IsNullOrWhiteSpace(description)
+                ? deprecation
+                : description + "\n\nDeprecated: " + deprecation;
 
     internal static void ApplyFacts(JsonObject schema, JsonSerializerOptions options, Type type,
         JsonPropertyInfo? property = null) =>
@@ -79,7 +90,8 @@ static class PortiaJsonDescriptions
 
     internal static string? Type(JsonSerializerOptions options, Type type) =>
         Find(options, type, null) ?? (Nullable.GetUnderlyingType(type) is { } underlying
-            ? Find(options, underlying, null) : null);
+            ? Find(options, underlying, null)
+            : null);
 
     internal static string? Member(JsonSerializerOptions options, Type? type, string member) =>
         type is null ? null : Find(options, type, member);
@@ -108,26 +120,33 @@ static class PortiaJsonDescriptions
             var property = info.Properties.FirstOrDefault(candidate => candidate.Name == name);
             var omit = property is null || (input
                 ? !property.IsRequired && !PortiaJsonConstraints.RequiresPresence(PropertyMetadata(options, property))
-                : property.ShouldSerialize is not null || options.DefaultIgnoreCondition == JsonIgnoreCondition.WhenWritingDefault ||
-                    options.DefaultIgnoreCondition == JsonIgnoreCondition.WhenWritingNull && (!property.PropertyType.IsValueType || Nullable.GetUnderlyingType(property.PropertyType) is not null));
+                : property.ShouldSerialize is not null ||
+                  options.DefaultIgnoreCondition == JsonIgnoreCondition.WhenWritingDefault ||
+                  options.DefaultIgnoreCondition == JsonIgnoreCondition.WhenWritingNull &&
+                  (!property.PropertyType.IsValueType ||
+                   Nullable.GetUnderlyingType(property.PropertyType) is not null));
             if (omit)
                 required.RemoveAt(index);
         }
+
         if (input)
         {
             foreach (var property in info.Properties)
                 if (properties.ContainsKey(property.Name) &&
-                    (property.IsRequired || PortiaJsonConstraints.RequiresPresence(PropertyMetadata(options, property))) &&
+                    (property.IsRequired ||
+                     PortiaJsonConstraints.RequiresPresence(PropertyMetadata(options, property))) &&
                     !required.Any(value => value?.GetValue<string>() == property.Name))
                     required.Add((JsonNode?)JsonValue.Create(property.Name));
         }
+
         if (required.Count == 0)
             _ = schema.Remove("required");
         else if (schema["required"] is null)
             schema["required"] = required;
     }
 
-    internal static JsonNode Apply(JsonSchemaExporterContext context, JsonNode node, JsonSerializerOptions options, bool input = false)
+    internal static JsonNode Apply(JsonSchemaExporterContext context, JsonNode node, JsonSerializerOptions options,
+        bool input = false)
     {
         node = node.GetValueKind() switch
         {
@@ -137,7 +156,8 @@ static class PortiaJsonDescriptions
         };
         var isProperty = context.PropertyInfo is { } property && context.Path.Length >= 2 &&
                          context.Path[^2] == "properties" && context.Path[^1] == property.Name;
-        var text = (isProperty ? Property(options, context.PropertyInfo!) : null) ?? Type(options, context.TypeInfo.Type);
+        var text = (isProperty ? Property(options, context.PropertyInfo!) : null) ??
+                   Type(options, context.TypeInfo.Type);
         if (text is not null)
         {
             node = node.GetValueKind() switch
@@ -149,6 +169,7 @@ static class PortiaJsonDescriptions
             if (node is JsonObject described)
                 described["description"] = text;
         }
+
         if (node is JsonObject schemaNode)
             ApplyFacts(schemaNode, options, context.TypeInfo.Type, isProperty ? context.PropertyInfo : null);
         // Some defaulted properties do not receive an exporter callback.
@@ -163,6 +184,7 @@ static class PortiaJsonDescriptions
                     childSchema["description"] = childText;
             }
         }
+
         if (node is JsonObject exampleSchema)
             ApplyExamples(exampleSchema, options, context.TypeInfo.Type, input);
         CompleteRequired(node, context.TypeInfo, options, input);

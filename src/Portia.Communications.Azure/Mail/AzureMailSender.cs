@@ -61,15 +61,17 @@ public sealed class AzureMailSender : IMailSender
         RequestFailedException { Status: 429 } throttled => throw new SendThrottledException(RetryAfter(throttled)),
         RequestFailedException { Status: 401 or 403 or 404 } refused => throw new InvalidOperationException(
             $"The message was not sent: Azure Communication Services refused the resource, credentials or sender (HTTP {refused.Status})."),
-        RequestFailedException { Status: >= 400 and < 500 and not 408 } => SendOutcome.Rejected(SendRejectionReason.Other),
+        RequestFailedException { Status: >= 400 and < 500 and not 408 } => SendOutcome.Rejected(SendRejectionReason
+            .Other),
         // A server error, no response, a timeout or a cancellation after dispatch: the service may have taken the message.
         _ => SendOutcome.Unknown,
     };
 
     static TimeSpan? RetryAfter(RequestFailedException exception) =>
         exception.GetRawResponse() is { } response && response.Headers.TryGetValue("Retry-After", out var text)
-        && int.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture,
-            out var seconds)
+                                                   && int.TryParse(text, System.Globalization.NumberStyles.None,
+                                                       System.Globalization.CultureInfo.InvariantCulture,
+                                                       out var seconds)
             ? TimeSpan.FromSeconds(seconds)
             : null;
 }

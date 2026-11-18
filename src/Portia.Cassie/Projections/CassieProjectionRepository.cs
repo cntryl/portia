@@ -80,24 +80,31 @@ public abstract class CassieProjectionRepository : IProjectionStore, IProjectorB
     protected string GetProjectionKey(CheckpointIdentity identity)
     {
         EnsureServes(identity);
-        return string.Concat(new[] { identity.ComponentName, identity.Pattern.Realm, identity.Pattern.Area,
-                identity.Pattern.Resource, identity.RebuildId }
-            .Select(static segment => segment is null ? "n;"
+        return string.Concat(new[]
+            {
+                identity.ComponentName, identity.Pattern.Realm, identity.Pattern.Area,
+                identity.Pattern.Resource, identity.RebuildId
+            }
+            .Select(static segment => segment is null
+                ? "n;"
                 : segment.Length.ToString(CultureInfo.InvariantCulture) + ":" + segment));
     }
 
     /// <inheritdoc />
-    public async ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity, CancellationToken ct = default)
+    public async ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
+        CancellationToken ct = default)
     {
         var key = GetProjectionKey(identity);
         await using var read = await OpenReadAsync(ct).ConfigureAwait(false);
-        await using var command = read.CreateCommand($"SELECT cursor FROM {_database.CheckpointTable} WHERE identity = @identity");
+        await using var command =
+            read.CreateCommand($"SELECT cursor FROM {_database.CheckpointTable} WHERE identity = @identity");
         _ = command.Parameters.Add(new CassieParameter { ParameterName = "identity", Value = key });
         var value = await command.ExecuteScalarAsync(ct).ConfigureAwait(false);
         if (value is null)
             return ProjectionCheckpoint.Start;
         if (value is not string cursor)
-            throw new NotSupportedException($"Cassie checkpoint table {_database.CheckpointTable} stores a cursor that is not text.");
+            throw new NotSupportedException(
+                $"Cassie checkpoint table {_database.CheckpointTable} stores a cursor that is not text.");
         return cursor.Length == 0 ? ProjectionCheckpoint.Start : new ProjectionCheckpoint(new EventCursor(cursor));
     }
 
@@ -115,11 +122,14 @@ public abstract class CassieProjectionRepository : IProjectionStore, IProjectorB
             await _database.InitializeAsync(ct).ConfigureAwait(false);
             connection = await _database.DataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
             await using (var create = Command(connection, null,
-                $"INSERT INTO {_database.CheckpointTable} (identity, cursor, revision) VALUES (@identity, '', 0) ON CONFLICT (identity) DO NOTHING", ("identity", key)))
+                             $"INSERT INTO {_database.CheckpointTable} (identity, cursor, revision) VALUES (@identity, '', 0) ON CONFLICT (identity) DO NOTHING",
+                             ("identity", key)))
                 _ = await create.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-            transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct).ConfigureAwait(false);
+            transaction = await connection.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct)
+                .ConfigureAwait(false);
             await using var read = Command(connection, transaction,
-                $"SELECT cursor, revision FROM {_database.CheckpointTable} WHERE identity = @identity", ("identity", key));
+                $"SELECT cursor, revision FROM {_database.CheckpointTable} WHERE identity = @identity",
+                ("identity", key));
             await using var values = await read.ExecuteReaderAsync(ct).ConfigureAwait(false);
             if (!await values.ReadAsync(ct).ConfigureAwait(false))
                 throw new InvalidOperationException("Cassie projection checkpoint metadata is missing.");
@@ -133,8 +143,14 @@ public abstract class CassieProjectionRepository : IProjectionStore, IProjectorB
         catch (Exception original)
         {
             try
-            { await ReleaseAsync(connection, transaction, committed: false).ConfigureAwait(false); }
-            catch (Exception cleanup) { original.Data["Portia.CleanupException"] = cleanup; }
+            {
+                await ReleaseAsync(connection, transaction, committed: false).ConfigureAwait(false);
+            }
+            catch (Exception cleanup)
+            {
+                original.Data["Portia.CleanupException"] = cleanup;
+            }
+
             _active = null;
             _activity.ExitBatch();
             throw;
@@ -152,7 +168,8 @@ public abstract class CassieProjectionRepository : IProjectionStore, IProjectorB
         GC.SuppressFinalize(this);
     }
 
-    Session Active => !_disposed && _active is { Finished: false } session ? session
+    Session Active => !_disposed && _active is { Finished: false } session
+        ? session
         : throw new NotSupportedException("Write through this repository only while its projection batch is open.");
 
     // Queries derive their keys from this repository's projector name, so a projector registered under
@@ -172,7 +189,8 @@ public abstract class CassieProjectionRepository : IProjectionStore, IProjectorB
     {
         ArgumentNullException.ThrowIfNull(identity);
         if (identity.ComponentName != _componentName || identity.Pattern.IsTenantTemplate)
-            throw new ArgumentException("Use this repository's registered projector name and a bound stream pattern.", nameof(identity));
+            throw new ArgumentException("Use this repository's registered projector name and a bound stream pattern.",
+                nameof(identity));
     }
 
     static CassieCommand Command(CassieConnection connection, CassieTransaction? transaction, string sql,
@@ -194,25 +212,48 @@ public abstract class CassieProjectionRepository : IProjectionStore, IProjectorB
             if (!committed)
             {
                 try
-                { await transaction.RollbackAsync().ConfigureAwait(false); }
-                catch (Exception ex) { failure = ex; }
+                {
+                    await transaction.RollbackAsync().ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    failure = ex;
+                }
             }
+
             try
-            { await transaction.DisposeAsync().ConfigureAwait(false); }
-            catch (Exception ex) { failure = failure is null ? ex : new AggregateException(failure, ex); }
+            {
+                await transaction.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                failure = failure is null ? ex : new AggregateException(failure, ex);
+            }
         }
+
         if (connection is not null)
         {
             try
-            { await connection.DisposeAsync().ConfigureAwait(false); }
-            catch (Exception ex) { failure = failure is null ? ex : new AggregateException(failure, ex); }
+            {
+                await connection.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                failure = failure is null ? ex : new AggregateException(failure, ex);
+            }
         }
+
         if (failure is not null)
             ExceptionDispatchInfo.Capture(failure).Throw();
     }
 
-    sealed class Session(CassieProjectionRepository owner, CassieConnection connection, CassieTransaction transaction,
-        CheckpointIdentity identity, string key, long revision) : IProjectionBatch
+    sealed class Session(
+        CassieProjectionRepository owner,
+        CassieConnection connection,
+        CassieTransaction transaction,
+        CheckpointIdentity identity,
+        string key,
+        long revision) : IProjectionBatch
     {
         int _disposed;
         bool _committed;
@@ -220,6 +261,7 @@ public abstract class CassieProjectionRepository : IProjectionStore, IProjectorB
         public CassieTransaction Transaction { get; } = transaction;
         public CheckpointIdentity Identity { get; } = identity;
         public bool Finished { get; private set; }
+
         public async ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
         {
             if (Finished || Volatile.Read(ref _disposed) != 0)
@@ -230,7 +272,8 @@ public abstract class CassieProjectionRepository : IProjectionStore, IProjectorB
                     $"UPDATE {owner._database.CheckpointTable} SET cursor = @cursor, revision = revision + 1 WHERE identity = @identity AND revision = @revision",
                     ("cursor", checkpoint.Cursor.Value ?? ""), ("identity", key), ("revision", revision));
                 if (await command.ExecuteNonQueryAsync(ct).ConfigureAwait(false) != 1)
-                    throw new ProjectionConcurrencyException("The Cassie projection checkpoint changed; reload progress.");
+                    throw new ProjectionConcurrencyException(
+                        "The Cassie projection checkpoint changed; reload progress.");
                 await Transaction.CommitAsync(ct).ConfigureAwait(false);
                 _committed = true;
             }
@@ -238,15 +281,21 @@ public abstract class CassieProjectionRepository : IProjectionStore, IProjectorB
             {
                 throw new ProjectionConcurrencyException("Cassie rejected a concurrent projection commit.", ex);
             }
-            finally { Finished = true; }
+            finally
+            {
+                Finished = true;
+            }
         }
+
         public async ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0)
                 return;
             Finished = true;
             try
-            { await ReleaseAsync(Connection, Transaction, _committed).ConfigureAwait(false); }
+            {
+                await ReleaseAsync(Connection, Transaction, _committed).ConfigureAwait(false);
+            }
             finally
             {
                 owner._active = null;

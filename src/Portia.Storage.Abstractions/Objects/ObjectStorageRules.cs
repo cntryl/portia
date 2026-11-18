@@ -8,7 +8,8 @@ static class ObjectStorageRules
     {
         if (lifetime <= TimeSpan.Zero || lifetime > ObjectStorageLimits.MaximumDownloadLifetime)
         {
-            throw new ArgumentOutOfRangeException(nameof(lifetime), $"Lifetime must be positive and no longer than {ObjectStorageLimits.MaximumDownloadLifetime}.");
+            throw new ArgumentOutOfRangeException(nameof(lifetime),
+                $"Lifetime must be positive and no longer than {ObjectStorageLimits.MaximumDownloadLifetime}.");
         }
 
         return lifetime;
@@ -25,7 +26,8 @@ static class ObjectStorageRules
     internal static string ObjectKey(IObjectStorageTenantResolver resolver, TenantId tenantId, ObjectDigest expected)
     {
         var key = resolver.GetObjectKey(tenantId, expected);
-        return !string.IsNullOrWhiteSpace(key) ? key
+        return !string.IsNullOrWhiteSpace(key)
+            ? key
             : throw new InvalidOperationException("The application must resolve a nonblank object key.");
     }
 
@@ -34,7 +36,8 @@ static class ObjectStorageRules
         var key = resolver.GetUploadKey(tenantId, Uuid.CreateVersion4());
         if (string.IsNullOrWhiteSpace(key) || string.Equals(key, objectKey, StringComparison.Ordinal) ||
             objectKey.StartsWith(key.TrimEnd('/') + "/", StringComparison.Ordinal))
-            throw new InvalidOperationException("The application must resolve a unique upload key disjoint from the object key.");
+            throw new InvalidOperationException(
+                "The application must resolve a unique upload key disjoint from the object key.");
         return key;
     }
 }

@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>JWT-backed IRequestActorValidator for Portia — re-validates a request's carried actor token, no ASP.NET Core dependency.</Description>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>

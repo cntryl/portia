@@ -2,15 +2,16 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
+    <LangVersion>15</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Build.Locator" />
-    <PackageReference Include="Microsoft.Build.Framework" ExcludeAssets="runtime" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.NET.StringTools" ExcludeAssets="runtime" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" />
-    <ProjectReference Include="../../src/Portia.CodeFixes/Portia.CodeFixes.csproj" />
-    <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj" />
+    <PackageReference Include="Microsoft.Build.Locator"/>
+    <PackageReference Include="Microsoft.Build.Framework" ExcludeAssets="runtime" PrivateAssets="all"/>
+    <PackageReference Include="Microsoft.NET.StringTools" ExcludeAssets="runtime" PrivateAssets="all"/>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces"/>
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild"/>
+    <ProjectReference Include="../../src/Portia.CodeFixes/Portia.CodeFixes.csproj"/>
+    <ProjectReference Include="../../src/Portia.Generators/Portia.Generators.csproj"/>
   </ItemGroup>
 </Project>

@@ -63,7 +63,8 @@ public class RequestDispatchContext : IRequestContext
         if (RequestMetadata.IdentityError(request, _identity.IsPropagated ? Metadata : null) is { } error)
             return Result<RequestDispatchContext>.Failure(error);
         return Result<RequestDispatchContext>.Success(request is not IIdentifiedRequest || _identity.IsPropagated
-            ? this : new RequestDispatchContext(this, RequestMetadata.FromRequest(request)));
+            ? this
+            : new RequestDispatchContext(this, RequestMetadata.FromRequest(request)));
     }
 
     /// <summary>Gets the logical metadata that can be forwarded with this same request.</summary>

@@ -35,9 +35,11 @@ public sealed class PortiaFitzBuilder
     {
         var route = FitzKvCheckpoints.Route(checkpointBaseRoute, nameof(checkpointBaseRoute));
         if (_checkpointRoute is not null || _operations
-            || _application.Services.Any(s => s.ServiceType == typeof(IProjectionCheckpointStore)
-                || s.ServiceType == typeof(IOperationalStore)))
-            throw new InvalidOperationException("Operations conflicts with an existing checkpoint or operational registration.");
+                                         || _application.Services.Any(s =>
+                                             s.ServiceType == typeof(IProjectionCheckpointStore)
+                                             || s.ServiceType == typeof(IOperationalStore)))
+            throw new InvalidOperationException(
+                "Operations conflicts with an existing checkpoint or operational registration.");
         var options = new OperationalOptions();
         configure?.Invoke(options);
         options.Validate();
@@ -47,9 +49,11 @@ public sealed class PortiaFitzBuilder
         _ = AddKvClient();
         var services = _application.Services;
         _ = services.AddSingleton(options);
-        _ = services.AddSingleton(provider => new FitzOperationalStore(provider.GetRequiredService<IKvClient>(), route));
+        _ = services.AddSingleton(provider =>
+            new FitzOperationalStore(provider.GetRequiredService<IKvClient>(), route));
         _ = services.AddSingleton<IOperationalStore>(p => p.GetRequiredService<FitzOperationalStore>());
-        _ = services.AddSingleton<IOperationalReactionCheckpointStore>(p => p.GetRequiredService<FitzOperationalStore>());
+        _ = services.AddSingleton<IOperationalReactionCheckpointStore>(p =>
+            p.GetRequiredService<FitzOperationalStore>());
         _ = services.AddSingleton<IProjectionCheckpointStore>(p => p.GetRequiredService<FitzOperationalStore>());
         services.TryAddSingleton<IApplicationTopology, GeneratedApplicationTopology>();
         services.TryAddSingleton<IPortiaOperations>(provider => PortiaOperations.Create(
@@ -75,6 +79,7 @@ public sealed class PortiaFitzBuilder
 
     internal IReadOnlyList<FitzWorkerDefinition> Workers => _workers.Value;
     internal FleetRunOptions? Fleet { get; private set; }
+
     internal string ProcessorStatusNamespace => _processorStatusNamespace ?? Fleet?.MembershipSelector
         ?? "lease://portia/portia-members/*";
 
@@ -225,7 +230,8 @@ public sealed class PortiaFitzBuilder
     public PortiaFitzBuilder UseProcessorStatusRpc(string applicationName)
     {
         if (!FleetRunOptions.IsSegment(applicationName))
-            throw new ArgumentException("A processor status application name must be an exact route segment.", nameof(applicationName));
+            throw new ArgumentException("A processor status application name must be an exact route segment.",
+                nameof(applicationName));
         var value = $"lease://{applicationName}/portia-members/*";
         if (_processorStatusNamespace is not null && _processorStatusNamespace != value)
             throw new InvalidOperationException("This application has conflicting processor status namespaces.");

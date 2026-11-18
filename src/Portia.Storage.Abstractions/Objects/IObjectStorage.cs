@@ -4,17 +4,20 @@ namespace Cntryl.Portia.Storage;
 public interface IObjectStorage
 {
     /// <summary>Starts a multipart upload for the content identified by its digest.</summary>
-    ValueTask<ObjectUploadSession> CreateUploadAsync(TenantId tenantId, ObjectDigest expected, CancellationToken ct = default);
+    ValueTask<ObjectUploadSession> CreateUploadAsync(TenantId tenantId, ObjectDigest expected,
+        CancellationToken ct = default);
 
     /// <summary>Creates a short-lived URL for one part of an active upload.</summary>
-    ValueTask<ObjectUploadPart> SignPartAsync(ObjectUploadSession session, int partNumber, TimeSpan lifetime, CancellationToken ct = default);
+    ValueTask<ObjectUploadPart> SignPartAsync(ObjectUploadSession session, int partNumber, TimeSpan lifetime,
+        CancellationToken ct = default);
 
     /// <summary>Completes, verifies, and promotes the upload to its immutable content key. Every nonfinal part must be at least <see cref="ObjectStorageLimits.MinimumNonfinalPartLength"/> bytes.</summary>
     /// <exception cref="InvalidDataException">
     /// The parts, their receipts, or the uploaded content were rejected. Rejected receipts or part sizes leave the
     /// session open for a corrected completion; content that fails length or SHA-256 verification ends the session.
     /// </exception>
-    ValueTask CompleteUploadAsync(ObjectUploadSession session, IReadOnlyList<ObjectPartReceipt> parts, CancellationToken ct = default);
+    ValueTask CompleteUploadAsync(ObjectUploadSession session, IReadOnlyList<ObjectPartReceipt> parts,
+        CancellationToken ct = default);
 
     /// <summary>Aborts an active multipart upload and removes any temporary data.</summary>
     ValueTask AbortUploadAsync(ObjectUploadSession session, CancellationToken ct = default);
@@ -23,7 +26,8 @@ public interface IObjectStorage
     ValueTask<bool> HeadAndVerifyAsync(TenantId tenantId, ObjectDigest expected, CancellationToken ct = default);
 
     /// <summary>Creates a short-lived download URL for an existing verified object.</summary>
-    ValueTask<ObjectDownload> CreateDownloadAsync(TenantId tenantId, ObjectDigest expected, TimeSpan lifetime, CancellationToken ct = default);
+    ValueTask<ObjectDownload> CreateDownloadAsync(TenantId tenantId, ObjectDigest expected, TimeSpan lifetime,
+        CancellationToken ct = default);
 
     /// <summary>Opens a stream for an existing verified object.</summary>
     ValueTask<Stream?> OpenReadAsync(TenantId tenantId, ObjectDigest expected, CancellationToken ct = default);

@@ -23,6 +23,11 @@ namespace Cntryl.Portia;
 ///     count when known. A bounded provider probe may leave both the source position and exact count unknown.
 /// </param>
 public sealed record EventStreamProgress(
-    [property: JsonConverter(typeof(EventCursorJsonConverter))] EventCursor Position,
-    [property: JsonConverter(typeof(EventCursorJsonConverter))] EventCursor? SourcePosition,
-    ulong? PendingEvents, bool? IsCaughtUp, DateTimeOffset ObservedAt, ulong? PendingEventsLowerBound = null);
+    [property: JsonConverter(typeof(EventCursorJsonConverter))]
+    EventCursor Position,
+    [property: JsonConverter(typeof(EventCursorJsonConverter))]
+    EventCursor? SourcePosition,
+    ulong? PendingEvents,
+    bool? IsCaughtUp,
+    DateTimeOffset ObservedAt,
+    ulong? PendingEventsLowerBound = null);

@@ -57,5 +57,4 @@ public sealed record McpPromptMessageSnapshot(string Role, string Text)
 
     /// <summary>Gets detached text content metadata, when supplied.</summary>
     public JsonElement? ContentMetadata { get; init; }
-
 }

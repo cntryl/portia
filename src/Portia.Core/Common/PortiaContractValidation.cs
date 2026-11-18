@@ -33,15 +33,18 @@ static class PortiaContractValidation
                 errors.Add("The request exceeds the supported validation graph size or depth.");
                 return;
             }
+
             if (value is null)
                 return;
-            var metadata = known ?? contracts.Type(value.GetType()) ?? (declaredType is null ? null : contracts.Type(declaredType));
+            var metadata = known ?? contracts.Type(value.GetType()) ??
+                (declaredType is null ? null : contracts.Type(declaredType));
             if (metadata?.HasValidation != true || !visited.Add(value))
                 return;
             foreach (var member in metadata.Members)
             {
                 ct.ThrowIfCancellationRequested();
-                if (!member.HasValidation || member.GetValue is null || use == PortiaContractUse.Output && !member.Output)
+                if (!member.HasValidation || member.GetValue is null ||
+                    use == PortiaContractUse.Output && !member.Output)
                     continue;
                 var memberValue = member.GetValue(value);
                 var memberPath = path.Length == 0 ? member.Name : path + "." + member.Name;
@@ -54,6 +57,7 @@ static class PortiaContractValidation
                 if (exhausted)
                     return;
             }
+
             if (metadata.Elements is { } elements)
             {
                 var index = 0;
@@ -76,6 +80,7 @@ static class PortiaContractValidation
             if (rule is MaxLengthAttribute maximum)
                 return maximum.Length == -1 || count(value) <= maximum.Length;
         }
+
         return rule.IsValid(value);
     }
 }

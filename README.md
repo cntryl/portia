@@ -33,7 +33,8 @@ The unit of value is not `command → handler → route`. It is the complete pat
   optimistic concurrency and stable event identities.
 - **Durable consequences.** Projectors atomically commit read-model changes with their checkpoints. Reactors run
   external effects at least once with preserved event causation. Failed work never silently advances progress.
-- **Inspectable processors.** Each hosted projector and reactor exposes one operator-only [status RPC](docs/projectors-and-reactors.md#operator-inspection-of-a-projector-or-reactor)
+- **Inspectable processors.** Each hosted projector and reactor exposes one
+  operator-only [status RPC](docs/projectors-and-reactors.md#operator-inspection-of-a-projector-or-reactor)
   for committed progress, source backlog, and available failure evidence.
 - **One composition, independent deployments.** An API and its workers share application setup but can be deployed and
   scaled separately. Workers support global, per-tenant, and fleet-coordinated ownership.
@@ -101,7 +102,8 @@ read-model engine for SQL, graph, time-series, and vector workloads.
 Neither is hidden behind a generic query language. A projector receives an ordinary application repository built on the
 backend's native client and schema. Read models are simple data contracts returned by repository
 queries; repositories own persistence behavior, and projectors apply events through them. That repository implements
-`IProjectionStore` and returns `IProjectionBatch` handles to give Portia the lifecycle and atomic read-model-plus-checkpoint
+`IProjectionStore` and returns `IProjectionBatch` handles to give Portia the lifecycle and atomic
+read-model-plus-checkpoint
 boundary it needs.
 
 PostgreSQL, Snowflake, or another store can therefore be added in userland without changing Portia, writing a custom
@@ -110,23 +112,27 @@ is modeled honestly as an at-least-once reactor effect instead.
 
 ## Choose the right Fitz primitive
 
-| Use | When |
-| --- | --- |
-| **Event streams** | Record ordered, authoritative aggregate decisions that must be rehydrated or replayed. Each append is atomic for one aggregate stream. |
-| **KV** | Store keyed current or derived state, such as projection data and processor checkpoints. KV is not the aggregate event history. |
-| **Queues** | Send work to one competing consumer, with optional initial delay, message TTL, and retry delay. Consumers must tolerate duplicates. Critical work needs durable intent and recovery because queue acceptance does not guarantee crash recovery. |
-| **Notices** | Fan out notifications to subscribers, such as waking interested workers. Each replica receives the notice; it is not competing queue work. |
-| **Schedules** | Trigger work by time or recurrence. Choose the provider's delivery policy deliberately; a received Fitz firing can be lost on process failure. |
+| Use               | When                                                                                                                                                                                                                                            |
+|-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| **Event streams** | Record ordered, authoritative aggregate decisions that must be rehydrated or replayed. Each append is atomic for one aggregate stream.                                                                                                          |
+| **KV**            | Store keyed current or derived state, such as projection data and processor checkpoints. KV is not the aggregate event history.                                                                                                                 |
+| **Queues**        | Send work to one competing consumer, with optional initial delay, message TTL, and retry delay. Consumers must tolerate duplicates. Critical work needs durable intent and recovery because queue acceptance does not guarantee crash recovery. |
+| **Notices**       | Fan out notifications to subscribers, such as waking interested workers. Each replica receives the notice; it is not competing queue work.                                                                                                      |
+| **Schedules**     | Trigger work by time or recurrence. Choose the provider's delivery policy deliberately; a received Fitz firing can be lost on process failure.                                                                                                  |
 
-See [application setup](docs/application-setup.md) and [Fitz integration](docs/fitz.md) for transport and durability details.
+See [application setup](docs/application-setup.md) and [Fitz integration](docs/fitz.md) for transport and durability
+details.
 
 ## Start here
 
 - **Build an application:** [getting started](docs/getting-started.md), [shared setup](docs/application-setup.md),
   and [project structure](docs/project-structure.md).
-- **Define contracts:** [attributes and validation](docs/contract-attributes.md), [OpenAPI descriptions](docs/openapi-descriptions.md),
-  [request pipeline](docs/request-pipeline.md), [execution context](docs/request-context.md), and [request identities](docs/request-identities.md).
-- **Process events:** [projectors and reactors](docs/projectors-and-reactors.md), [processor operations](docs/operations.md),
+- **Define
+  contracts:** [attributes and validation](docs/contract-attributes.md), [OpenAPI descriptions](docs/openapi-descriptions.md),
+  [request pipeline](docs/request-pipeline.md), [execution context](docs/request-context.md),
+  and [request identities](docs/request-identities.md).
+- **Process
+  events:** [projectors and reactors](docs/projectors-and-reactors.md), [processor operations](docs/operations.md),
   [Fitz integration](docs/fitz.md), and [Cassie repositories](docs/cassie-projections.md).
 - **Connect services:** [object storage](docs/object-storage.md), [mail and SMS](docs/communications.md),
   and [MCP tools, resources, and prompts](docs/mcp.md).
@@ -135,7 +141,8 @@ See [application setup](docs/application-setup.md) and [Fitz integration](docs/f
 - **Understand the boundaries:** [scope](docs/scope.md), [design decisions](docs/design-decisions.md),
   [validation authority](docs/validation-authority.md), and [platform boundaries](docs/platform-vision.md).
 
-Historical migration notes remain available in the [0.14.1 source tree](https://github.com/cntryl/portia/tree/v0.14.1/docs).
+Historical migration notes remain available in
+the [0.14.1 source tree](https://github.com/cntryl/portia/tree/v0.14.1/docs).
 
 ## Development
 

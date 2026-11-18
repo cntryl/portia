@@ -67,8 +67,8 @@ static class ApplicationStructureCommand
 
         var path = Path.GetFullPath(args[2]);
         if (!File.Exists(path) || Path.GetExtension(path) is not { } extension
-            || !string.Equals(extension, ".sln", StringComparison.OrdinalIgnoreCase)
-            && !string.Equals(extension, ".slnx", StringComparison.OrdinalIgnoreCase))
+                               || !string.Equals(extension, ".sln", StringComparison.OrdinalIgnoreCase)
+                               && !string.Equals(extension, ".slnx", StringComparison.OrdinalIgnoreCase))
             throw new ArgumentException($"Solution file not found or unsupported: {path}");
         return path;
     }
@@ -96,8 +96,8 @@ static class ApplicationStructureCommand
         if (remaining.Length > 0)
         {
             throw new InvalidOperationException("Some PORTIA200/201 diagnostics have no safe file operation. " +
-                "Resolve destination collisions, linked files, or project Compile-item rules, then retry.\n" +
-                string.Join(Environment.NewLine, remaining.Select(FormatDiagnostic)));
+                                                "Resolve destination collisions, linked files, or project Compile-item rules, then retry.\n" +
+                                                string.Join(Environment.NewLine, remaining.Select(FormatDiagnostic)));
         }
 
         return await FileOperationPlan.CreateAsync(original, changed, renameDiagnostics, cancellationToken)
@@ -109,30 +109,37 @@ static class ApplicationStructureCommand
         using (var workspace = await OpenWorkspaceAsync(solutionPath, cancellationToken).ConfigureAwait(false))
         {
             await VerifyDocumentPathsAsync(workspace.CurrentSolution, plan, cancellationToken).ConfigureAwait(false);
-            var diagnostics = await GetDiagnosticsAsync(workspace.CurrentSolution, cancellationToken).ConfigureAwait(false);
+            var diagnostics = await GetDiagnosticsAsync(workspace.CurrentSolution, cancellationToken)
+                .ConfigureAwait(false);
             if (diagnostics.Length > 0)
             {
                 throw new InvalidOperationException("Reloaded solution still reports PORTIA200/201:\n" +
-                    string.Join(Environment.NewLine, diagnostics.Select(FormatDiagnostic)));
+                                                    string.Join(Environment.NewLine,
+                                                        diagnostics.Select(FormatDiagnostic)));
             }
         }
 
         var build = await ProcessRunner.RunAsync("dotnet", ["build", solutionPath, "--no-restore"],
             Path.GetDirectoryName(solutionPath)!).ConfigureAwait(false);
         if (build.ExitCode != 0)
-            throw new InvalidOperationException("The solution build failed; file changes will be rolled back.\n" + build.Output);
+            throw new InvalidOperationException("The solution build failed; file changes will be rolled back.\n" +
+                                                build.Output);
 
         using var verifiedWorkspace = await OpenWorkspaceAsync(solutionPath, cancellationToken).ConfigureAwait(false);
-        await VerifyDocumentPathsAsync(verifiedWorkspace.CurrentSolution, plan, cancellationToken).ConfigureAwait(false);
-        var finalDiagnostics = await GetDiagnosticsAsync(verifiedWorkspace.CurrentSolution, cancellationToken).ConfigureAwait(false);
+        await VerifyDocumentPathsAsync(verifiedWorkspace.CurrentSolution, plan, cancellationToken)
+            .ConfigureAwait(false);
+        var finalDiagnostics = await GetDiagnosticsAsync(verifiedWorkspace.CurrentSolution, cancellationToken)
+            .ConfigureAwait(false);
         if (finalDiagnostics.Length > 0)
         {
-            throw new InvalidOperationException("The second solution pass is not idempotent; file changes will be rolled back.\n" +
+            throw new InvalidOperationException(
+                "The second solution pass is not idempotent; file changes will be rolled back.\n" +
                 string.Join(Environment.NewLine, finalDiagnostics.Select(FormatDiagnostic)));
         }
     }
 
-    static async Task VerifyDocumentPathsAsync(Solution solution, FileOperationPlan plan, CancellationToken cancellationToken)
+    static async Task VerifyDocumentPathsAsync(Solution solution, FileOperationPlan plan,
+        CancellationToken cancellationToken)
     {
         foreach (var operation in plan.Operations)
         {
@@ -142,22 +149,27 @@ static class ApplicationStructureCommand
 
             foreach (var project in projects)
             {
-                var destinationDocuments = project.Documents.Where(document => PathEquals(document.FilePath, operation.DestinationPath)).ToArray();
+                var destinationDocuments = project.Documents
+                    .Where(document => PathEquals(document.FilePath, operation.DestinationPath)).ToArray();
                 if (destinationDocuments.Length != 1)
                 {
-                    throw new InvalidOperationException($"Expected exactly one project document at '{operation.DestinationPath}', " +
+                    throw new InvalidOperationException(
+                        $"Expected exactly one project document at '{operation.DestinationPath}', " +
                         $"but the reloaded project contains {destinationDocuments.Length}. The operation was rolled back. " +
                         "Check SDK default Compile globs and explicit Compile items.");
                 }
 
                 var actualText = await destinationDocuments[0].GetTextAsync(cancellationToken).ConfigureAwait(false);
                 if (!string.Equals(actualText.ToString(), operation.ContentText, StringComparison.Ordinal))
-                    throw new InvalidOperationException($"The reloaded source differs from the planned content at '{operation.DestinationPath}'.");
+                    throw new InvalidOperationException(
+                        $"The reloaded source differs from the planned content at '{operation.DestinationPath}'.");
 
                 if (operation.SourcePath is { } sourcePath && !PathEquals(sourcePath, operation.DestinationPath)
-                    && project.Documents.Any(document => PathEquals(document.FilePath, sourcePath)))
+                                                           && project.Documents.Any(document =>
+                                                               PathEquals(document.FilePath, sourcePath)))
                 {
-                    throw new InvalidOperationException($"The old rename path '{sourcePath}' remains in the reloaded project. " +
+                    throw new InvalidOperationException(
+                        $"The old rename path '{sourcePath}' remains in the reloaded project. " +
                         "The operation was rolled back; check explicit Compile items.");
                 }
             }
@@ -175,13 +187,17 @@ static class ApplicationStructureCommand
         });
         try
         {
-            _ = await workspace.OpenSolutionAsync(solutionPath, cancellationToken: cancellationToken).ConfigureAwait(false);
+            _ = await workspace.OpenSolutionAsync(solutionPath, cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
             if (!loadFailures.IsEmpty)
             {
                 var diagnostics = loadFailures.Select(diagnostic => $"- {diagnostic.Message}");
-                throw new InvalidOperationException($"MSBuildWorkspace reported project load failures for '{solutionPath}'. " +
-                    "The CLI will not analyze or modify a partial solution:\n" + string.Join(Environment.NewLine, diagnostics));
+                throw new InvalidOperationException(
+                    $"MSBuildWorkspace reported project load failures for '{solutionPath}'. " +
+                    "The CLI will not analyze or modify a partial solution:\n" +
+                    string.Join(Environment.NewLine, diagnostics));
             }
+
             return workspace;
         }
         catch
@@ -205,29 +221,36 @@ static class ApplicationStructureCommand
                     groups[documentId] = grouping.ToImmutableArray();
             }
         }
+
         return groups;
     }
 
-    static async Task<ImmutableArray<Diagnostic>> GetDiagnosticsAsync(Solution solution, CancellationToken cancellationToken)
+    static async Task<ImmutableArray<Diagnostic>> GetDiagnosticsAsync(Solution solution,
+        CancellationToken cancellationToken)
     {
         var result = ImmutableArray.CreateBuilder<Diagnostic>();
         foreach (var project in solution.Projects)
         {
             var diagnostics = await GetProjectDiagnosticsAsync(project, cancellationToken).ConfigureAwait(false);
-            result.AddRange(diagnostics.Where(diagnostic => FileDiagnosticIds.Contains(diagnostic.Id, StringComparer.Ordinal)));
+            result.AddRange(diagnostics.Where(diagnostic =>
+                FileDiagnosticIds.Contains(diagnostic.Id, StringComparer.Ordinal)));
         }
+
         return result.ToImmutable();
     }
 
-    static async Task<ImmutableArray<Diagnostic>> GetProjectDiagnosticsAsync(Project project, CancellationToken cancellationToken)
+    static async Task<ImmutableArray<Diagnostic>> GetProjectDiagnosticsAsync(Project project,
+        CancellationToken cancellationToken)
     {
         var compilation = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false)
-            ?? throw new InvalidOperationException($"Could not load compilation for '{project.FilePath ?? project.Name}'.");
+                          ?? throw new InvalidOperationException(
+                              $"Could not load compilation for '{project.FilePath ?? project.Name}'.");
         var diagnostics = await compilation.WithAnalyzers([new ApplicationStructureAnalyzer()], project.AnalyzerOptions)
             .GetAnalyzerDiagnosticsAsync(cancellationToken).ConfigureAwait(false);
         var analyzerFailure = diagnostics.FirstOrDefault(diagnostic => diagnostic.Id == "AD0001");
         if (analyzerFailure is not null)
-            throw new InvalidOperationException($"Portia's application structure analyzer failed in '{project.Name}': {analyzerFailure}");
+            throw new InvalidOperationException(
+                $"Portia's application structure analyzer failed in '{project.Name}': {analyzerFailure}");
         return [.. diagnostics.Where(diagnostic => !diagnostic.IsSuppressed)];
     }
 
@@ -240,7 +263,9 @@ static class ApplicationStructureCommand
     }
 
     static bool PathEquals(string? left, string? right) => left is not null && right is not null
-        && string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), StringComparison.OrdinalIgnoreCase);
+                                                                            && string.Equals(Path.GetFullPath(left),
+                                                                                Path.GetFullPath(right),
+                                                                                StringComparison.OrdinalIgnoreCase);
 
     static void TryDelete(string? path)
     {
@@ -313,22 +338,28 @@ static class ApplicationStructureCommand
             foreach (var (documentId, diagnostics) in renameDiagnostics)
             {
                 var source = original.GetDocument(documentId)
-                    ?? throw new InvalidOperationException("A PORTIA201 source document disappeared before planning.");
+                             ?? throw new InvalidOperationException(
+                                 "A PORTIA201 source document disappeared before planning.");
                 if (source.FilePath is null || source.Project.FilePath is null)
-                    throw new InvalidOperationException("PORTIA201 requires a project-backed source file with a physical path.");
+                    throw new InvalidOperationException(
+                        "PORTIA201 requires a project-backed source file with a physical path.");
 
                 foreach (var diagnostic in diagnostics)
                 {
-                    if (!diagnostic.Properties.TryGetValue("ExpectedFileName", out var filename) || string.IsNullOrWhiteSpace(filename)
+                    if (!diagnostic.Properties.TryGetValue("ExpectedFileName", out var filename) ||
+                        string.IsNullOrWhiteSpace(filename)
                         || Path.GetFileName(filename) != filename)
                         throw new InvalidOperationException("PORTIA201 produced an invalid destination filename.");
 
                     var destination = Path.GetFullPath(Path.Combine(Path.GetDirectoryName(source.FilePath)!, filename));
                     var project = changed.GetProject(source.Project.Id)
-                        ?? throw new InvalidOperationException($"Project was not retained: {source.Project.FilePath}");
-                    var matches = project.Documents.Where(document => PathEquals(document.FilePath, destination)).ToArray();
+                                  ?? throw new InvalidOperationException(
+                                      $"Project was not retained: {source.Project.FilePath}");
+                    var matches = project.Documents.Where(document => PathEquals(document.FilePath, destination))
+                        .ToArray();
                     if (matches.Length != 1)
-                        throw new InvalidOperationException($"Expected one planned rename document at '{destination}', found {matches.Length}.");
+                        throw new InvalidOperationException(
+                            $"Expected one planned rename document at '{destination}', found {matches.Length}.");
 
                     var finalText = await matches[0].GetTextAsync(cancellationToken).ConfigureAwait(false);
                     var originalText = await source.GetTextAsync(cancellationToken).ConfigureAwait(false);
@@ -345,7 +376,8 @@ static class ApplicationStructureCommand
                 foreach (var removedId in projectChange.GetRemovedDocuments())
                 {
                     if (!renameRemovedIds.Contains(removedId))
-                        throw new InvalidOperationException("The planned file changes remove a document without a matching PORTIA201 rename.");
+                        throw new InvalidOperationException(
+                            "The planned file changes remove a document without a matching PORTIA201 rename.");
                 }
 
                 foreach (var addedId in projectChange.GetAddedDocuments())
@@ -353,9 +385,11 @@ static class ApplicationStructureCommand
                     if (renameAddedIds.Contains(addedId))
                         continue;
                     var document = changed.GetDocument(addedId)
-                        ?? throw new InvalidOperationException("A planned added document is missing from the changed solution.");
+                                   ?? throw new InvalidOperationException(
+                                       "A planned added document is missing from the changed solution.");
                     if (document.FilePath is null || document.Project.FilePath is null)
-                        throw new InvalidOperationException("PORTIA200 requires project-backed documents with physical paths.");
+                        throw new InvalidOperationException(
+                            "PORTIA200 requires project-backed documents with physical paths.");
                     var text = await document.GetTextAsync(cancellationToken).ConfigureAwait(false);
                     operations.Add(FileOperation.Create(document.Project.FilePath, document.FilePath, text));
                 }
@@ -365,16 +399,21 @@ static class ApplicationStructureCommand
                     if (renameRemovedIds.Contains(changedId))
                         continue;
                     var oldDocument = original.GetDocument(changedId)
-                        ?? throw new InvalidOperationException("A planned changed document is not present in the original solution.");
+                                      ?? throw new InvalidOperationException(
+                                          "A planned changed document is not present in the original solution.");
                     var newDocument = changed.GetDocument(changedId)
-                        ?? throw new InvalidOperationException("A planned changed document is missing from the changed solution.");
-                    if (oldDocument.FilePath is null || newDocument.FilePath is null || oldDocument.Project.FilePath is null)
-                        throw new InvalidOperationException("PORTIA200 requires project-backed documents with physical paths.");
+                                      ?? throw new InvalidOperationException(
+                                          "A planned changed document is missing from the changed solution.");
+                    if (oldDocument.FilePath is null || newDocument.FilePath is null ||
+                        oldDocument.Project.FilePath is null)
+                        throw new InvalidOperationException(
+                            "PORTIA200 requires project-backed documents with physical paths.");
                     if (!PathEquals(oldDocument.FilePath, newDocument.FilePath))
                         throw new InvalidOperationException("A document path changed without a PORTIA201 rename plan.");
                     var oldText = await oldDocument.GetTextAsync(cancellationToken).ConfigureAwait(false);
                     var newText = await newDocument.GetTextAsync(cancellationToken).ConfigureAwait(false);
-                    operations.Add(FileOperation.Replace(oldDocument.Project.FilePath, oldDocument.FilePath, oldText, newText));
+                    operations.Add(FileOperation.Replace(oldDocument.Project.FilePath, oldDocument.FilePath, oldText,
+                        newText));
                 }
             }
 
@@ -389,7 +428,8 @@ static class ApplicationStructureCommand
             foreach (var operation in Operations)
             {
                 if (!paths.Add(Path.GetFullPath(operation.DestinationPath)))
-                    throw new InvalidOperationException($"Multiple planned operations target '{operation.DestinationPath}'.");
+                    throw new InvalidOperationException(
+                        $"Multiple planned operations target '{operation.DestinationPath}'.");
 
                 if (operation.SourcePath is not { } sourcePath)
                 {
@@ -402,7 +442,8 @@ static class ApplicationStructureCommand
                 if (!File.Exists(sourcePath) || Directory.Exists(sourcePath))
                     throw new InvalidOperationException($"Source file is missing or is not a file: {sourcePath}");
                 if ((File.GetAttributes(sourcePath) & FileAttributes.ReparsePoint) != 0)
-                    throw new InvalidOperationException($"Linked or reparse-point source files are not changed: {sourcePath}");
+                    throw new InvalidOperationException(
+                        $"Linked or reparse-point source files are not changed: {sourcePath}");
 
                 var bytes = File.ReadAllBytes(sourcePath);
                 if (!TextMatches(bytes, operation.OriginalText!))
@@ -418,7 +459,8 @@ static class ApplicationStructureCommand
             {
                 var source = Path.GetFullPath(operation.SourcePath!);
                 if (paths.Contains(source) && !PathEquals(source, operation.DestinationPath))
-                    throw new InvalidOperationException($"A planned rename collides with another destination: {source}");
+                    throw new InvalidOperationException(
+                        $"A planned rename collides with another destination: {source}");
             }
         }
 
@@ -442,11 +484,13 @@ static class ApplicationStructureCommand
                         continue;
                     if (!File.Exists(sourcePath) || !CryptographicOperations.FixedTimeEquals(
                             SHA256.HashData(File.ReadAllBytes(sourcePath)), SHA256.HashData(operation.ExpectedBytes!)))
-                        throw new InvalidOperationException($"Source changed immediately before applying: {sourcePath}");
+                        throw new InvalidOperationException(
+                            $"Source changed immediately before applying: {sourcePath}");
 
                     _states[index].BackupPath = MoveToUniqueBackup(sourcePath,
                         () => UniqueSiblingPath(Path.GetDirectoryName(sourcePath)!, ".portia-backup"));
-                    if (!CryptographicOperations.FixedTimeEquals(SHA256.HashData(File.ReadAllBytes(_states[index].BackupPath!)),
+                    if (!CryptographicOperations.FixedTimeEquals(
+                            SHA256.HashData(File.ReadAllBytes(_states[index].BackupPath!)),
                             SHA256.HashData(operation.ExpectedBytes!)))
                     {
                         File.Move(_states[index].BackupPath!, sourcePath);
@@ -459,7 +503,8 @@ static class ApplicationStructureCommand
                 {
                     var operation = Operations[index];
                     if (File.Exists(operation.DestinationPath) || Directory.Exists(operation.DestinationPath))
-                        throw new InvalidOperationException($"Destination appeared while applying: {operation.DestinationPath}");
+                        throw new InvalidOperationException(
+                            $"Destination appeared while applying: {operation.DestinationPath}");
                     File.Move(_states[index].StagedPath!, operation.DestinationPath);
                     _states[index].StagedPath = null;
                     _states[index].Installed = true;
@@ -484,11 +529,14 @@ static class ApplicationStructureCommand
                     if (state.Installed && File.Exists(operation.DestinationPath))
                     {
                         var installedHash = SHA256.HashData(File.ReadAllBytes(operation.DestinationPath));
-                        if (!CryptographicOperations.FixedTimeEquals(installedHash, SHA256.HashData(operation.ContentBytes)))
+                        if (!CryptographicOperations.FixedTimeEquals(installedHash,
+                                SHA256.HashData(operation.ContentBytes)))
                         {
-                            failures.Add($"Changed destination was preserved: {operation.DestinationPath}; backup: {state.BackupPath ?? "none"}");
+                            failures.Add(
+                                $"Changed destination was preserved: {operation.DestinationPath}; backup: {state.BackupPath ?? "none"}");
                             continue;
                         }
+
                         File.Delete(operation.DestinationPath);
                     }
 
@@ -496,9 +544,11 @@ static class ApplicationStructureCommand
                     {
                         if (File.Exists(operation.SourcePath) || Directory.Exists(operation.SourcePath))
                         {
-                            failures.Add($"Original path was recreated and was preserved: {operation.SourcePath}; backup: {backupPath}");
+                            failures.Add(
+                                $"Original path was recreated and was preserved: {operation.SourcePath}; backup: {backupPath}");
                             continue;
                         }
+
                         File.Move(backupPath, operation.SourcePath!);
                         state.BackupPath = null;
                     }
@@ -514,7 +564,8 @@ static class ApplicationStructureCommand
             }
 
             if (failures.Count > 0)
-                throw new InvalidOperationException("File rollback was incomplete:\n" + string.Join(Environment.NewLine, failures));
+                throw new InvalidOperationException("File rollback was incomplete:\n" +
+                                                    string.Join(Environment.NewLine, failures));
         }
 
         internal void Commit()
@@ -530,11 +581,13 @@ static class ApplicationStructureCommand
                     }
                     catch (IOException exception)
                     {
-                        Console.Error.WriteLine($"Could not remove recovery backup '{backupPath}': {exception.Message}");
+                        Console.Error.WriteLine(
+                            $"Could not remove recovery backup '{backupPath}': {exception.Message}");
                     }
                     catch (UnauthorizedAccessException exception)
                     {
-                        Console.Error.WriteLine($"Could not remove recovery backup '{backupPath}': {exception.Message}");
+                        Console.Error.WriteLine(
+                            $"Could not remove recovery backup '{backupPath}': {exception.Message}");
                     }
                 }
             }
@@ -546,10 +599,10 @@ static class ApplicationStructureCommand
         static bool TextMatches(byte[] bytes, SourceText expected)
         {
             using var stream = new MemoryStream(bytes, writable: false);
-            using var reader = new StreamReader(stream, expected.Encoding ?? new UTF8Encoding(false), detectEncodingFromByteOrderMarks: true);
+            using var reader = new StreamReader(stream, expected.Encoding ?? new UTF8Encoding(false),
+                detectEncodingFromByteOrderMarks: true);
             return string.Equals(reader.ReadToEnd(), expected.ToString(), StringComparison.Ordinal);
         }
-
     }
 
     sealed class OperationState
@@ -561,7 +614,8 @@ static class ApplicationStructureCommand
 
     sealed class FileOperation
     {
-        FileOperation(string projectPath, string? sourcePath, string destinationPath, SourceText? originalText, SourceText finalText)
+        FileOperation(string projectPath, string? sourcePath, string destinationPath, SourceText? originalText,
+            SourceText finalText)
         {
             ProjectPath = Path.GetFullPath(projectPath);
             SourcePath = sourcePath is null ? null : Path.GetFullPath(sourcePath);
@@ -582,20 +636,24 @@ static class ApplicationStructureCommand
         internal static FileOperation Create(string projectPath, string path, SourceText text) =>
             new(projectPath, null, path, null, text);
 
-        internal static FileOperation Replace(string projectPath, string path, SourceText original, SourceText updated) =>
+        internal static FileOperation Replace(string projectPath, string path, SourceText original,
+            SourceText updated) =>
             new(projectPath, path, path, original, updated);
 
-        internal static FileOperation Rename(string projectPath, string source, string destination, SourceText original, SourceText updated) =>
+        internal static FileOperation Rename(string projectPath, string source, string destination, SourceText original,
+            SourceText updated) =>
             new(projectPath, source, destination, original, updated);
 
         static byte[] ToBytes(SourceText text)
         {
             using var stream = new MemoryStream();
-            using (var writer = new StreamWriter(stream, text.Encoding ?? new UTF8Encoding(false), 1024, leaveOpen: true))
+            using (var writer =
+                   new StreamWriter(stream, text.Encoding ?? new UTF8Encoding(false), 1024, leaveOpen: true))
             {
                 text.Write(writer);
                 writer.Flush();
             }
+
             return stream.ToArray();
         }
     }

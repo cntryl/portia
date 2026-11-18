@@ -20,8 +20,8 @@ static class HttpBindingShape
         // A struct always has an implicit parameterless constructor; it is never the binding constructor.
         var constructors = request.Constructors
             .Where(constructor => constructor.DeclaredAccessibility == Accessibility.Public && !constructor.IsStatic
-                                  && !(request.IsValueType && constructor.IsImplicitlyDeclared
-                                                           && constructor.Parameters.Length == 0))
+                && !(request.IsValueType && constructor.IsImplicitlyDeclared
+                                         && constructor.Parameters.Length == 0))
             .ToArray();
         return constructors.Length == 1 ? constructors[0] : null;
     }
@@ -35,12 +35,13 @@ static class HttpBindingShape
     public static bool HasUnsetRequiredMembers(INamedTypeSymbol request, IMethodSymbol constructor)
     {
         if (constructor.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString()
-                                                         == "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute"))
+                                                         ==
+                                                         "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute"))
             return false;
         for (var current = request; current is not null; current = current.BaseType)
         {
             if (current.GetMembers().Any(member => member is IPropertySymbol { IsRequired: true }
-                                             or IFieldSymbol { IsRequired: true }))
+                    or IFieldSymbol { IsRequired: true }))
                 return true;
         }
 
