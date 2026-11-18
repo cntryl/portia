@@ -16,6 +16,8 @@ sealed record CaseSpec(string Kind, string Operation, string Component = "all")
 
     public static CaseSpec[] All() =>
     [
+        .. ApplicationFixture.Edits.Select(edit => new CaseSpec("applications", edit)),
+        new("applications", "full"), new("applications", "analyze"),
         .. CompilerFixture.Edits.Select(edit => new CaseSpec("generators", edit)), new("generators", "cold"),
         new("generators", "negative"),
         .. CompilerHost.Generators.Select(type => new CaseSpec("generators", "body", type.Name)),
@@ -41,7 +43,7 @@ sealed record Sample(
     int Gen2,
     Evidence Evidence);
 
-sealed class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>> verify, IDisposable? owner = null)
+sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>> verify, IDisposable? owner = null)
     : IDisposable
 {
     static readonly string[] CombinedAnalyzerDiagnostics =
@@ -68,6 +70,7 @@ sealed class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>> verify,
     public static async Task<BenchmarkCase> PrepareAsync(CaseSpec spec, string size, CancellationToken ct = default) =>
         spec.Kind switch
         {
+            "applications" => PrepareApplication(spec, size, ct),
             "generators" => PrepareGenerators(spec, size, ct),
             "analyzers" => PrepareAnalyzers(spec, size, ct),
             "fixes" => await PrepareFixAsync(spec, size, ct).ConfigureAwait(false),

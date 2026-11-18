@@ -89,8 +89,14 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
             .Where(static component => component is not null)
             .Select(static (component, _) => component!)
             .Collect();
-        context.RegisterSourceOutput(requests.Combine(components),
-            static (sourceContext, pair) => Generate(sourceContext, pair.Left, pair.Right));
+        var hasBuilder = context.CompilationProvider.Select(static (compilation, _) =>
+            compilation.GetTypeByMetadataName("Cntryl.Portia.PortiaBuilder") is not null);
+        context.RegisterSourceOutput(requests.Combine(components).Combine(hasBuilder),
+            static (sourceContext, pair) =>
+            {
+                if (pair.Right)
+                    Generate(sourceContext, pair.Left.Left, pair.Left.Right);
+            });
     }
 
     static void Generate(

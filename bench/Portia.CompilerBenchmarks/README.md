@@ -13,16 +13,46 @@ dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchm
 ```
 
 Verification covers the shipped eight generators, five analyzers and three code-fix providers.
-The manifest currently has 86 cases: generator edits and isolated generators, analyzer compilation
+The manifest currently has 93 cases: seven representative application requests, generator edits and isolated generators, analyzer compilation
 and document requests, nine code-fix actions with six stages each, and eight project Fix All cases.
 The newer contract metadata path has a description edit and a `PORTIA031` activation control.
+The representative graph uses valid Common/Core/Api/Worker projects, compilation references, correct
+project convention options and no diagnostic controls. Its body/metadata/member edits include
+generation and changed-document syntax/semantic diagnostics; full graph diagnostics and consumer
+emission are checked after timing. `applications/all/full` measures generation plus full graph
+diagnostics; `applications/all/analyze` starts from generated input.
 Generator verification checks clean/incremental output parity, compilation of combined consumers,
 declared output-family changes, and stable tracked model steps. Code fixes use actual diagnostics,
 map portable locations to workspace trees, apply real operations and compile all affected projects.
 They must remove every targeted diagnostic. Small Fix All cases repair ten diagnostics; Standard
 and Large repair 100. The namespace fixture scales references to 1, 10 and 100 respectively.
 
-Run a bounded A/A check using two processes per pair with the same executable:
+Run A/A calibration using the same immutable executable on the macOS reference host:
+
+```sh
+dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll host
+dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll calibrate \
+  --case generators/all/body --size small --pairs 10 --samples 10 --warmup 3 --seconds 300 \
+  --output artifacts/compiler/calibration
+```
+
+Calibration requires at least ten process pairs and 100 operations per side. Both confidence bounds
+must lie within the declared positive/negative margin for median, P95 and allocations. An apparent
+speedup from drift also fails A/A. Warmup uses independent compilations of the measured size. A
+calibration verdict applies to its case, dimensions and recorded host; it does not qualify the full
+compiler matrix. Exit 2 means collection completed but calibration was inconclusive; exit 1 means
+collection or host acceptance failed.
+
+The controller requires a ten-second idle preflight and a one-second quiet interval before each
+worker. It samples host CPU/memory/thermal/power state while each managed worker runs, subtracting
+worker and controller CPU from observed host activity. Background CPU over 10%, increased swap,
+memory/thermal pressure, low-power mode or unavailable required telemetry stop collection. Rejected
+observations and already completed samples remain in the raw log. Linux supports counter inspection
+and correctness verification; thermal telemetry is currently unavailable there, so it cannot pass
+this reference-host timing policy. SDK subprocess workloads need separate process-tree accounting.
+The strict timing policy currently covers managed Roslyn workers.
+
+Run a bounded diagnostic A/A comparison using two processes per pair:
 
 ```sh
 dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll run \
@@ -62,6 +92,7 @@ DLL hashes, a fingerprint of the harness IL, reference hash and fixture hash. Mi
 incomplete
 pairs cannot produce a compatible comparison. Intentionally changed generated output needs review
 and a new comparison contract; the current protocol requires identical output hashes across revisions.
+The current report protocol is `portia-compiler-benchmarks-3`; prior reports are rejected.
 Workers also record the warm-up count and fixture size, and comparisons reject different warm-up
 configurations. The harness accepts only its current report protocol.
 
@@ -78,12 +109,10 @@ The harness rejects reuse of an independently prepared operation. Its tests also
 components/actions, stale/overbroad output changes and nonfinite comparisons, and verify allocations
 made on asynchronous worker threads. Ordinary CI runs correctness verification, not timing gates.
 
-The remaining design work includes full valid Common/Core/Api/Worker fixture graphs, more reference
-and metadata edits, runs without System.Text.Json, long edit-session retention, in-flight cancellation
-latency, first-load/build measurements, P95 comparison intervals, automatic host-pressure acceptance,
-profiling orchestration, and broader IDE workload coverage. Analyzer workloads currently include explicit
+The remaining design work includes more reference and metadata variations, runs without System.Text.Json, long edit-session retention, in-flight cancellation
+latency, first-load/build measurements, profiling orchestration, and broader IDE workload coverage. Analyzer workloads currently include explicit
 diagnostic controls and generated/prebound input; their totals are not a clean application's IDE
-latency. Until those paths and the host controls are implemented, use these results to investigate
+latency. Until those remaining paths are implemented, use these results to investigate
 individual operations and retain the broader qualification as open.
 
 A [VS Code host pilot](vscode/README.md) now covers diagnostic feedback and the partial-processor

@@ -17,7 +17,7 @@ static class Program
             if (args.Length == 0 || args[0] is "help" or "--help")
             {
                 Console.WriteLine(
-                    "list | references | editor-fixture | verify | run | compare; options: --case ID|all --size minimal|small|standard|large --output PATH --pairs N --samples N --warmup N --seconds N --baseline DLL --candidate DLL");
+                    "list | host | references | editor-fixture | verify | run | compare | calibrate; options: --case ID|all --size minimal|small|standard|large --output PATH --pairs N --samples N --warmup N --seconds N --baseline DLL --candidate DLL");
                 return 0;
             }
 
@@ -38,6 +38,9 @@ static class Program
             var warmup = Number(options, "warmup", 1, 0, 10);
             switch (args[0])
             {
+                case "host":
+                    Console.WriteLine(JsonSerializer.Serialize(HostCounters.Capture(), Campaign.Json));
+                    return 0;
                 case "editor-fixture":
                     await EditorFixture
                         .ExportAsync(Get(options, "output", "artifacts/compiler/editor-workspace"), cancellation.Token)
@@ -73,13 +76,14 @@ static class Program
                     return 0;
                 case "run":
                 case "compare":
+                case "calibrate":
                     var current = typeof(Program).Assembly.Location;
                     var baseline = Get(options, "baseline", current);
                     var candidate = Get(options, "candidate", current);
                     return await Campaign.RunAsync(baseline, candidate, cases, size,
                         Get(options, "output", "artifacts/compiler"),
-                        Number(options, "pairs", 5, 1, 100), samples, warmup, Number(options, "seconds", 300, 1, 86400),
-                        cancellation.Token).ConfigureAwait(false);
+                        Number(options, "pairs", args[0] == "calibrate" ? 10 : 5, 1, 100), samples, warmup, Number(options, "seconds", 300, 1, 86400),
+                        cancellation.Token, calibration: args[0] == "calibrate").ConfigureAwait(false);
                 default:
                     throw new ArgumentException("Unknown command: " + args[0]);
             }
