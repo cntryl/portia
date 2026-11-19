@@ -946,6 +946,37 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Empty(scheduler.Requests);
     }
 
+    /// <summary>A grouped create route must validate before startup work can run.</summary>
+    [Fact]
+    public async Task ShouldHoldStartupScheduleGivenInvalidGroupedCreateTemplate()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddFrameworkTests();
+        var scheduler = new RecordingStartupScheduler();
+        _ = builder.Services.AddSingleton<IRequestScheduler>(scheduler);
+        _ = builder.Services.AddPortia()
+            .AddRequestSchedule(new FitzHostedRequest(), new RequestScheduleSpec("0 0 * * *"),
+                new RequestRouteValues("started"), RequestActor.System)
+            .AddWorkers();
+        _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
+        _app = builder.Build();
+        _ = _app.MapGroup("/tenants/{tenant_id}")
+            .MapPortiaPost<CreateTemplateProbe, PortiaCreateOutcome<string>>("/widgets",
+                endpoint => endpoint.Created("/tenants/{tenant_id}/widgets/{missing}"));
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => _app.StartAsync());
+
+        // Assert
+        var failure = Assert.IsType<InvalidOperationException>(exception);
+        Assert.Contains("missing", failure.Message, StringComparison.Ordinal);
+        Assert.Empty(scheduler.Requests);
+    }
+
+    internal sealed record CreateTemplateProbe(string Name) : IRequest<PortiaCreateOutcome<string>>, ICallable;
+
     /// <summary>Root route sources are validated before a Portia startup schedule can run.</summary>
     [Fact]
     public async Task ShouldRejectRouteBeforeStartupScheduleGivenInvalidRootCustomRoute()

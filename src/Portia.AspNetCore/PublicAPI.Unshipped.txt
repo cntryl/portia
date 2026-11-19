@@ -1,1 +1,11 @@
 #nullable enable
+Cntryl.Portia.PortiaCreateOutcome<T>
+Cntryl.Portia.PortiaCreateOutcome<T>.IsCreated.get -> bool
+Cntryl.Portia.PortiaCreateOutcome<T>.Value.get -> T
+Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>.Created(string! uriTemplate) -> Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>!
+Cntryl.Portia.PortiaCreateOutcome<T>.PortiaCreateOutcome(T value, bool isCreated) -> void
+Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.ApplyMetadata(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Microsoft.AspNetCore.Builder.IEndpointConventionBuilder! builder, System.Collections.Generic.IReadOnlyDictionary<string!, System.Func<TRequest, object?>!>! requestMembers, bool createPayloadIsNullable) -> void
+static Cntryl.Portia.PortiaHttpBinding.ResolveCreatedLocation<TRequest>(Microsoft.AspNetCore.Http.HttpContext! context, TRequest request) -> string?
+static Cntryl.Portia.ResultHttpExtensions.ToCreatedHttpResult<T>(this Cntryl.Portia.Result<T> result, System.Text.Json.JsonSerializerOptions! options, string! location) -> Microsoft.AspNetCore.Http.IResult!
+static Cntryl.Portia.PortiaCreateOutcome<T>.Created(T value) -> Cntryl.Portia.PortiaCreateOutcome<T>!
+static Cntryl.Portia.PortiaCreateOutcome<T>.Repeated(T value) -> Cntryl.Portia.PortiaCreateOutcome<T>!

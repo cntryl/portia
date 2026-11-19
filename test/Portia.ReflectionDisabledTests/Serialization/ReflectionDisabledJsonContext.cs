@@ -8,4 +8,5 @@ namespace Cntryl.Portia.ReflectionDisabled;
 [JsonSerializable(typeof(CreateGreeting))]
 [JsonSerializable(typeof(GreetingCreated))]
 [JsonSerializable(typeof(string))]
+[JsonSerializable(typeof(PortiaCreateOutcome<string>))]
 sealed partial class ReflectionDisabledJsonContext : JsonSerializerContext;

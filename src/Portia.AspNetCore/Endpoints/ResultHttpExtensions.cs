@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Http;
 
@@ -33,6 +35,30 @@ public static class ResultHttpExtensions
     {
         ArgumentNullException.ThrowIfNull(typeInfo);
         return result.IsSuccess ? Results.Json(result.Value, typeInfo) : ToProblem(result.Error);
+    }
+
+    /// <summary>Maps a generated create endpoint's result using its resolved location.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public static IResult ToCreatedHttpResult<T>(this Result<T> result, JsonSerializerOptions options, string location)
+    {
+        if (!result.IsSuccess)
+            return ToProblem(result.Error);
+        if (result.Value is not IPortiaCreateOutcome outcome)
+            throw new InvalidOperationException("A successful Created response requires a non-null create outcome.");
+        return new CreatedOutcomeResult(outcome, outcome.PayloadTypeInfo(options), location);
+    }
+
+    sealed class CreatedOutcomeResult(IPortiaCreateOutcome outcome, JsonTypeInfo payloadTypeInfo, string location)
+        : IResult
+    {
+        public async Task ExecuteAsync(HttpContext context)
+        {
+            context.Response.StatusCode = outcome.IsCreated ? StatusCodes.Status201Created : StatusCodes.Status200OK;
+            context.Response.Headers.Location = location;
+            context.Response.ContentType = "application/json; charset=utf-8";
+            await JsonSerializer.SerializeAsync(context.Response.Body, outcome.UntypedValue, payloadTypeInfo,
+                context.RequestAborted).ConfigureAwait(false);
+        }
     }
 
     static RequestErrorResult ToProblem(RequestError error) => new(error);

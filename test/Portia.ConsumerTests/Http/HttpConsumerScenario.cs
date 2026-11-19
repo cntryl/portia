@@ -4,7 +4,8 @@ namespace Cntryl.Portia.Consumer;
 
 static class HttpConsumerScenario
 {
-    public static Assembly Compile(string declaration, string handle, string mapping, string configuration = "")
+    public static Assembly Compile(string declaration, string handle, string mapping, string configuration = "",
+        string resultType = "string")
         => GeneratorCompilation.Compile($$"""
                                           using System;
                                           using System.Globalization;
@@ -31,17 +32,22 @@ static class HttpConsumerScenario
                                               protected override JsonSerializerOptions? GeneratedSerializerOptions => null;
                                               public override JsonTypeInfo? GetTypeInfo(Type type) => new DefaultJsonTypeInfoResolver().GetTypeInfo(type, Options);
                                           }
-                                          public sealed class Handler : IRequestHandler<Binding, string>
+                                          public sealed class Handler : IRequestHandler<Binding, {{resultType}}>
                                           {
-                                              public ValueTask<Result<string>> HandleAsync(IRequestContext<Binding> context, CancellationToken ct)
+                                              public ValueTask<Result<{{resultType}}>> HandleAsync(IRequestContext<Binding> context, CancellationToken ct)
                                               {
                                                   var request = context.Request;
-                                                  return ValueTask.FromResult(Result<string>.Success({{handle}}));
+                                                  return ValueTask.FromResult(Result<{{resultType}}>.Success({{handle}}));
                                               }
                                           }
                                           public static class HttpScenario
                                           {
                                               public static async Task<(int, string)> Run(string path, string? json, bool snake, bool converter)
+                                              {
+                                                  var result = await RunWithLocation(path, json, snake, converter);
+                                                  return (result.Item1, result.Item2);
+                                              }
+                                              public static async Task<(int, string, string?)> RunWithLocation(string path, string? json, bool snake, bool converter)
                                               {
                                                   var builder = WebApplication.CreateBuilder();
                                                   builder.WebHost.UseTestServer();
@@ -62,7 +68,7 @@ static class HttpConsumerScenario
                                                   using var message = new HttpRequestMessage(json is null ? HttpMethod.Get : HttpMethod.Post, path);
                                                   if (json is not null) message.Content = new StringContent(json, Encoding.UTF8, "application/json");
                                                   using var response = await client.SendAsync(message);
-                                                  return ((int)response.StatusCode, await response.Content.ReadAsStringAsync());
+                                                  return ((int)response.StatusCode, await response.Content.ReadAsStringAsync(), response.Headers.Location?.ToString());
                                               }
                                           }
                                           public sealed class HexConverter : JsonConverter<int>
@@ -80,4 +86,9 @@ static class HttpConsumerScenario
         bool snake = false, bool converter = false)
         => (Task<(int, string)>)assembly.GetType("HttpScenario")!.GetMethod("Run")!.Invoke(null,
             [path, json, snake, converter])!;
+
+    public static Task<(int Status, string Body, string? Location)> RunWithLocationAsync(Assembly assembly,
+        string path, string? json = null)
+        => (Task<(int, string, string?)>)assembly.GetType("HttpScenario")!.GetMethod("RunWithLocation")!.Invoke(null,
+            [path, json, false, false])!;
 }

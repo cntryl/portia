@@ -182,6 +182,12 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         var resultType = resultTypeSymbol?.ToDisplayString(NullableTypeDisplayFormat);
         var resultRuntimeType = resultTypeSymbol?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var resultIsNullable = resultTypeSymbol is not null && IsNullableType(resultTypeSymbol);
+        var createPayload = configured && kind is CallKind.Send && resultTypeSymbol is INamedTypeSymbol outcome &&
+                            SymbolNames.Is(outcome, "Cntryl.Portia.PortiaCreateOutcome`1")
+            ? outcome.TypeArguments[0]
+            : null;
+        var createRequestMembers = createPayload is null ? null : CreateRequestMembers(requestType);
+        var createPayloadIsNullable = createPayload is not null && IsNullableType(createPayload);
 
         CallAnalysis? Mapping(ParameterModel[] parameters, bool hasDefaultBinder)
         {
@@ -195,7 +201,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     DiagnosticLocation.From(invocation.GetLocation()), ContainingScope(invocation),
                     context.SemanticModel.GetEnclosingSymbol(invocation.SpanStart, ct)?.ContainingType
                         ?.ToDisplayString() ?? "TopLevel",
-                    IsExcludedFromDescription(invocation), configured, hasDefaultBinder), null);
+                    IsExcludedFromDescription(invocation), configured, hasDefaultBinder,
+                    createRequestMembers, createPayloadIsNullable), null);
         }
 
         var primaryConstructor = HttpBindingShape.SinglePublicConstructor(requestType);
@@ -276,6 +283,35 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
     static bool IsNullableType(ITypeSymbol type) =>
         type.NullableAnnotation == NullableAnnotation.Annotated
         || type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T };
+
+    static string[] CreateRequestMembers(INamedTypeSymbol request)
+    {
+        var names = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (var type = request; type is not null; type = type.BaseType)
+        {
+            foreach (var member in type.GetMembers())
+            {
+                if (!member.CanBeReferencedByName || !seen.Add(member.Name) ||
+                    member is { IsStatic: true } or { DeclaredAccessibility: not Accessibility.Public })
+                    continue;
+                var memberType = member switch
+                {
+                    IPropertySymbol { IsIndexer: false, GetMethod.DeclaredAccessibility: Accessibility.Public } property
+                        => property.Type,
+                    IFieldSymbol { IsFixedSizeBuffer: false } field => field.Type,
+                    _ => null
+                };
+                if (memberType is null or { IsRefLikeType: true } or { TypeKind: TypeKind.Pointer or TypeKind.FunctionPointer }
+                    || member.GetAttributes().Any(attribute => attribute.AttributeClass is { } attributeType &&
+                        SymbolNames.Is(attributeType, "System.ObsoleteAttribute")))
+                    continue;
+                names.Add(member.Name);
+            }
+        }
+
+        return [.. names.OrderBy(name => name, StringComparer.Ordinal)];
+    }
 
     static string DefaultValue(IParameterSymbol parameter, string typeName) => parameter.ExplicitDefaultValue is null
         ? "default!"
@@ -464,6 +500,13 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         Add(call.Verb);
         Add(call.Configured.ToString());
         Add(call.HasDefaultBinder.ToString());
+        if (call.CreateRequestMembers is { } createMembers)
+        {
+            Add(call.CreatePayloadIsNullable.ToString());
+            Add(createMembers.Length.ToString(CultureInfo.InvariantCulture));
+            foreach (var name in createMembers)
+                Add(name);
+        }
         foreach (var parameter in call.Parameters)
         {
             Add(parameter.Name);
@@ -563,7 +606,19 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .Append("), ResultIsNullable = ")
             .Append(call.ResultIsNullable ? "true" : "false")
             .AppendLine(" });");
-        if (call.Configured)
+        if (call.CreateRequestMembers is { } createMembers)
+        {
+            _ = source.AppendLine("        configuration.ApplyMetadata(app, builder,")
+                .Append("            new global::System.Collections.Generic.Dictionary<string, global::System.Func<")
+                .Append(call.RequestTypeFullName).AppendLine(", object?>>")
+                .AppendLine("            {");
+            foreach (var name in createMembers)
+                _ = source.Append("                [").Append(Literal(name)).Append("] = static request => request.@")
+                    .Append(name).AppendLine(",");
+            _ = source.Append("            }, ").Append(call.CreatePayloadIsNullable ? "true" : "false")
+                .AppendLine(");");
+        }
+        else if (call.Configured)
             _ = source.AppendLine("        configuration.ApplyMetadata(app, builder);");
         _ = source.AppendLine("        return builder;").AppendLine();
 
@@ -947,6 +1002,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         if (call.Configured)
             _ = source.AppendLine("            }");
 
+        if (call.CreateRequestMembers is not null)
+            _ = source.AppendLine(
+                "            var createdLocation = global::Cntryl.Portia.PortiaHttpBinding.ResolveCreatedLocation(httpContext, request);");
+
         // The actor is never inferred beyond this point — httpContext.User is where "ambient"
         // stops and an explicit value starts, exactly like every other transport's call site.
         _ = source.AppendLine(
@@ -1005,6 +1064,9 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 .AppendLine("(request, context, ct).ConfigureAwait(false);")
                 .Append(call.Configured
                     ? "            if (configuration.ResultHandler is not null)\n            {\n                var replacement = await configuration.ResultHandler(httpContext, portiaResult, ct).ConfigureAwait(false);\n                if (replacement is not null) return replacement;\n            }\n"
+                    : string.Empty)
+                .Append(call.CreateRequestMembers is not null
+                    ? "            if (createdLocation is not null) return portiaResult.ToCreatedHttpResult(jsonOptions, createdLocation);\n"
                     : string.Empty)
                 .Append("            return portiaResult.ToHttpResult(")
                 .Append(call.ResultType is null
@@ -1093,7 +1155,9 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         string callingType,
         bool excludedFromDescription,
         bool configured,
-        bool hasDefaultBinder)
+        bool hasDefaultBinder,
+        string[]? createRequestMembers,
+        bool createPayloadIsNullable)
     {
         public string RequestTypeFullName { get; } = requestTypeFullName;
 
@@ -1123,6 +1187,14 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         public bool ExcludedFromDescription { get; } = excludedFromDescription;
         public bool Configured { get; } = configured;
         public bool HasDefaultBinder { get; } = hasDefaultBinder;
+        public string[]? CreateRequestMembers { get; } = createRequestMembers;
+        public bool CreatePayloadIsNullable { get; } = createPayloadIsNullable;
+
+        public bool HasSameCreateShape(CallModel other) =>
+            CreatePayloadIsNullable == other.CreatePayloadIsNullable &&
+            (CreateRequestMembers is { } members
+                ? other.CreateRequestMembers is { } otherMembers && members.SequenceEqual(otherMembers, StringComparer.Ordinal)
+                : other.CreateRequestMembers is null);
 
         public override bool Equals(object? obj) => obj is CallModel other && Equals(other);
 
@@ -1141,7 +1213,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             && CallingType == other.CallingType
             && ExcludedFromDescription == other.ExcludedFromDescription
             && Configured == other.Configured
-            && HasDefaultBinder == other.HasDefaultBinder;
+            && HasDefaultBinder == other.HasDefaultBinder
+            && HasSameCreateShape(other);
 
         public override int GetHashCode()
         {
@@ -1158,6 +1231,9 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(Verb);
                 foreach (var parameter in Parameters)
                     hash = (hash * 397) ^ parameter.GetHashCode();
+                hash = (hash * 397) ^ CreatePayloadIsNullable.GetHashCode();
+                foreach (var member in CreateRequestMembers ?? [])
+                    hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(member);
                 hash = (hash * 397) ^ Location.GetHashCode();
                 hash = (hash * 397) ^ DiagnosticLocation.GetHashCode();
                 hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(ContainingSymbol);
@@ -1184,6 +1260,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                                                                  && left.Verb == right.Verb &&
                                                                  left.Configured == right.Configured
                                                                  && left.HasDefaultBinder == right.HasDefaultBinder &&
+                                                                 left.HasSameCreateShape(right) &&
                                                                  left.Parameters.SequenceEqual(right.Parameters);
 
         public int GetHashCode(CallModel model) => StringComparer.Ordinal.GetHashCode(model.RequestTypeFullName);
