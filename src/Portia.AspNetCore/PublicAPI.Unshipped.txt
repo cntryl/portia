@@ -1,1 +1,8 @@
 #nullable enable
+Cntryl.Portia.PortiaCreateOutcome<T>
+Cntryl.Portia.PortiaCreateOutcome<T>.IsCreated.get -> bool
+Cntryl.Portia.PortiaCreateOutcome<T>.Value.get -> T
+Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>.Created(string! uriTemplate) -> Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>!
+static Cntryl.Portia.ResultHttpExtensions.ToHttpResult<T>(this Cntryl.Portia.Result<T> result, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>! typeInfo, Microsoft.AspNetCore.Http.HttpContext? context) -> Microsoft.AspNetCore.Http.IResult!
+static Cntryl.Portia.PortiaCreateOutcome<T>.Created(T value) -> Cntryl.Portia.PortiaCreateOutcome<T>!
+static Cntryl.Portia.PortiaCreateOutcome<T>.Repeated(T value) -> Cntryl.Portia.PortiaCreateOutcome<T>!

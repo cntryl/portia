@@ -49,6 +49,18 @@ public sealed class PortiaEndpointConfiguration<TRequest>
 public sealed class PortiaEndpointConfiguration<TRequest, TOut>
     : PortiaEndpointConfigurationBase<TRequest, PortiaEndpointConfiguration<TRequest, TOut>>
 {
+    /// <summary>Declares create responses whose location is built from matched route values.</summary>
+    /// <param name="uriTemplate">A URI reference template using matched route value names.</param>
+    /// <returns>This endpoint configuration.</returns>
+    public PortiaEndpointConfiguration<TRequest, TOut> Created(string uriTemplate)
+    {
+        if (!typeof(TOut).IsGenericType || typeof(TOut).GetGenericTypeDefinition() != typeof(PortiaCreateOutcome<>))
+            throw new InvalidOperationException(
+                "Created requires a handler whose result type is PortiaCreateOutcome<T>.");
+        ConfigureCreated(uriTemplate);
+        return this;
+    }
+
     /// <summary>Gets the result hook used by generated endpoint code.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public Func<HttpContext, Result<TOut>, CancellationToken, ValueTask<IResult?>>? ResultHandler { get; private set; }

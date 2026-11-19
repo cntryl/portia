@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Http;
 
@@ -29,10 +30,36 @@ public static class ResultHttpExtensions
     /// <param name="result">The outcome to map.</param>
     /// <param name="typeInfo">The application-owned source-generated metadata for the result value.</param>
     /// <returns>A 200 result carrying the value, or a problem-details result describing the error.</returns>
-    public static IResult ToHttpResult<T>(this Result<T> result, JsonTypeInfo<T> typeInfo)
+    public static IResult ToHttpResult<T>(this Result<T> result, JsonTypeInfo<T> typeInfo) =>
+        ToHttpResult(result, typeInfo, null);
+
+    /// <summary>Maps a result to HTTP, applying configured create status and location metadata from the current endpoint.</summary>
+    /// <typeparam name="T">The result payload type.</typeparam>
+    /// <param name="result">The handler outcome.</param>
+    /// <param name="typeInfo">The application-owned JSON metadata for the result type.</param>
+    /// <param name="context">The current HTTP context.</param>
+    /// <returns>The HTTP response for the result.</returns>
+    public static IResult ToHttpResult<T>(this Result<T> result, JsonTypeInfo<T> typeInfo, HttpContext? context)
     {
         ArgumentNullException.ThrowIfNull(typeInfo);
-        return result.IsSuccess ? Results.Json(result.Value, typeInfo) : ToProblem(result.Error);
+        if (!result.IsSuccess)
+            return ToProblem(result.Error);
+        if (result.Value is IPortiaCreateOutcome create && context?.GetEndpoint()?.Metadata.GetMetadata<PortiaCreatedLocation>() is { } location)
+            return new CreatedOutcomeResult(create, typeInfo.Options, location.Resolve(context));
+        return Results.Json(result.Value, typeInfo);
+    }
+
+    sealed class CreatedOutcomeResult(IPortiaCreateOutcome outcome, JsonSerializerOptions options, string location) : IResult
+    {
+        public async Task ExecuteAsync(HttpContext context)
+        {
+            context.Response.StatusCode = outcome.IsCreated ? StatusCodes.Status201Created : StatusCodes.Status200OK;
+            context.Response.Headers.Location = location;
+            context.Response.ContentType = "application/json; charset=utf-8";
+            var payloadInfo = outcome.PayloadTypeInfo(options);
+            await JsonSerializer.SerializeAsync(context.Response.Body, outcome.UntypedValue, payloadInfo,
+                context.RequestAborted).ConfigureAwait(false);
+        }
     }
 
     static RequestErrorResult ToProblem(RequestError error) => new(error);

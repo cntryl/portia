@@ -1009,7 +1009,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 .Append("            return portiaResult.ToHttpResult(")
                 .Append(call.ResultType is null
                     ? string.Empty
-                    : $"(global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<{call.ResultType}>)jsonOptions.GetTypeInfo(typeof({call.ResultRuntimeType}))")
+                    : $"(global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<{call.ResultType}>)jsonOptions.GetTypeInfo(typeof({call.ResultRuntimeType})), httpContext")
                 .AppendLine(");"),
             _ => throw new ArgumentOutOfRangeException(nameof(call))
         };

@@ -139,6 +139,9 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
     public void Validate(bool binderRequired = false, PortiaHttpMember[]? members = null) =>
         _state.Validate(binderRequired, members ?? []);
 
+    /// <summary>Configures an HTTP create response for a typed create outcome.</summary>
+    private protected void ConfigureCreated(string uriTemplate) => _state.Created(uriTemplate);
+
     /// <summary>Reports whether generated binding reads a request member only from the query string.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool IsQueryMember(int index) => _state.IsQueryMember(index);

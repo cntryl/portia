@@ -19,6 +19,7 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     string? _successDescription;
     bool _frozen;
     bool _hasResultHandler;
+    string? _createdTemplate;
     bool _noInput;
     bool[] _queryMemberFlags = [];
     public Func<HttpContext, CancellationToken, ValueTask<TRequest>>? Binder { get; private set; }
@@ -152,6 +153,19 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         _responses.Add(new ProducesResponseTypeMetadata(status, null, []));
     }
 
+    public void Created(string template)
+    {
+        EnsureMutable();
+        ArgumentException.ThrowIfNullOrWhiteSpace(template);
+        if (_hasResultHandler)
+            throw new InvalidOperationException("Created cannot be combined with OnResult.");
+        if (_createdTemplate is not null)
+            throw new InvalidOperationException("Created can only be configured once.");
+        _createdTemplate = template;
+        _responses.Add(new ProducesResponseTypeMetadata(201, null, []));
+        _responses.Add(new ProducesResponseTypeMetadata(200, null, []));
+    }
+
     public void Produces<TBody>(int status, string contentType)
     {
         EnsureMutable();
@@ -164,6 +178,8 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     public void RegisterResultHandler()
     {
         EnsureMutable();
+        if (_createdTemplate is not null)
+            throw new InvalidOperationException("Created cannot be combined with OnResult.");
         _hasResultHandler = true;
     }
 
@@ -257,6 +273,22 @@ sealed class PortiaEndpointConfigurationState<TRequest>
             [.. _requestExamples], [.. _responseExamples], [.. _responseHeaders])));
         foreach (var response in _responses)
             builder.Add(endpoint => endpoint.Metadata.Add(response));
+        if (_createdTemplate is { } createdTemplate)
+            builder.Add(endpoint =>
+            {
+                var route = (endpoint as RouteEndpointBuilder)?.RoutePattern ??
+                            throw new InvalidOperationException("Created requires route metadata.");
+                var names = route.Parameters.Select(parameter => parameter.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                const string placeholderPattern = "\\{([^{}]+)\\}";
+                var placeholders = System.Text.RegularExpressions.Regex.Matches(createdTemplate, placeholderPattern);
+                var remainder = System.Text.RegularExpressions.Regex.Replace(createdTemplate, placeholderPattern, string.Empty);
+                if (remainder.Contains('{') || remainder.Contains('}'))
+                    throw new InvalidOperationException("Created URI template contains malformed placeholders.");
+                foreach (System.Text.RegularExpressions.Match match in placeholders)
+                    if (!names.Contains(match.Groups[1].Value))
+                        throw new InvalidOperationException($"Created URI template placeholder '{match.Groups[1].Value}' is not in the complete route pattern.");
+                endpoint.Metadata.Add(new PortiaCreatedLocation(createdTemplate));
+            });
         if (_queryMembers.Count != 0)
             builder.Add(endpoint => endpoint.Metadata.Add(new PortiaQueryMembers([.. _queryMembers])));
         if (_hasResultHandler)

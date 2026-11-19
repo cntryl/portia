@@ -25,6 +25,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         cancellationToken.ThrowIfCancellationRequested();
         operation.Responses ??= [];
         var endpointMetadata = context.Description.ActionDescriptor.EndpointMetadata ?? [];
+        var createdLocation = endpointMetadata.OfType<PortiaCreatedLocation>().SingleOrDefault();
         var explicitResponses = endpointMetadata
             .OfType<IProducesResponseTypeMetadata>()
             .Select(item => new DeclaredResponse(item.StatusCode, item.Type, item.ContentTypes.ToArray(), false))
@@ -94,16 +95,20 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                     ? new Dictionary<string, IOpenApiMediaType>(content, StringComparer.Ordinal)
                     : null
             };
-            if (responseMetadata.Type is not null && responseMetadata.Type != typeof(void) &&
-                responseMetadata.ContentTypes.Count > 0)
+            var responseType = responseMetadata.Type;
+            if (createdLocation is not null && (status is "200" or "201") && metadata.ResultType is { IsGenericType: true } resultType &&
+                resultType.GetGenericTypeDefinition() == typeof(PortiaCreateOutcome<>))
+                responseType = resultType.GetGenericArguments()[0];
+            if (responseType is not null && responseType != typeof(void) &&
+                (responseMetadata.ContentTypes.Count > 0 || createdLocation is not null && (status is "200" or "201")))
             {
                 response.Content ??= new Dictionary<string, IOpenApiMediaType>(StringComparer.Ordinal);
-                foreach (var contentType in responseMetadata.ContentTypes.Distinct(StringComparer.OrdinalIgnoreCase))
+                foreach (var contentType in (responseMetadata.ContentTypes.Count == 0 ? ["application/json"] : responseMetadata.ContentTypes).Distinct(StringComparer.OrdinalIgnoreCase))
                 {
                     _ = response.Content.TryGetValue(contentType, out var media);
                     response.Content[contentType] = new OpenApiMediaType
                     {
-                        Schema = PortiaOpenApiSchemaGenerator.Create(responseMetadata.Type, jsonOptions,
+                        Schema = PortiaOpenApiSchemaGenerator.Create(responseType, jsonOptions,
                             context.Document!, schemaType,
                             schemaCollectionElementIsNullable: schemaCollectionElementIsNullable,
                             descriptions: descriptions),
@@ -117,6 +122,18 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 
             operation.Responses[status] = response;
         }
+
+        if (createdLocation is not null)
+            foreach (var status in new[] { "200", "201" })
+                if (operation.Responses.TryGetValue(status, out var createResponse) && createResponse is OpenApiResponse concrete)
+                {
+                    concrete.Headers ??= new Dictionary<string, IOpenApiHeader>(StringComparer.OrdinalIgnoreCase);
+                    concrete.Headers["Location"] = new OpenApiHeader
+                    {
+                        Description = "URI of the created resource.",
+                        Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uri-reference" }
+                    };
+                }
 
         var custom = endpointMetadata.OfType<PortiaCustomHttpContract>()
             .SingleOrDefault();
@@ -302,7 +319,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         {
             SetDefaultResponse("204", new OpenApiResponse { Description = "No Content" });
         }
-        else
+        else if (createdLocation is null)
         {
             var schema = PortiaOpenApiSchemaGenerator.Create(metadata.ResultType!, jsonOptions, context.Document!,
                 schemaType,
