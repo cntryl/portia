@@ -4,6 +4,13 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.14.6
+
+### Fixed
+
+- Created endpoint responses now document the payload's Portia schema for both 200 and 201. OpenAPI no longer includes
+  wrapper fields or a redundant ASP.NET-generated payload schema.
+
 ## 0.14.5
 
 ### Added

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.OpenApi;
 
 namespace Cntryl.Portia.Consumer;
 
@@ -369,6 +370,61 @@ public sealed class CreatedHttpResponseTests
                 .GetProperty("format").GetString());
         }
         Assert.DoesNotContain("PortiaCreateOutcome", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ShouldDocumentPayloadJsonContractGivenGenericCreateOutcome()
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            "public sealed record Binding(string Value) : IRequest<PortiaCreateOutcome<ThingResult>>, ICallable; public sealed record ThingResult([property: System.ComponentModel.Description(\"The id.\")][property: System.ComponentModel.DataAnnotations.Required] Guid ThingId);",
+            "PortiaCreateOutcome<ThingResult>.Created(new ThingResult(Guid.Parse(\"7a9d6df8-f6f8-4a27-9abe-4f6696de3a43\")))",
+            "app.MapPortiaPost<Binding, PortiaCreateOutcome<ThingResult>>(\"/things\", endpoint => endpoint.Created(\"/things/1\")); app.MapPortiaOpenApi();",
+            resultType: "PortiaCreateOutcome<ThingResult>");
+
+        // Act
+        var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/openapi/v1.json", snake: true);
+
+        // Assert
+        Assert.Equal(200, status);
+        Assert.Empty(OpenApiDocument.Parse(body).Diagnostic!.Errors);
+        Assert.DoesNotContain("PortiaCreateOutcome", body, StringComparison.Ordinal);
+        using var document = JsonDocument.Parse(body);
+        var responses = document.RootElement.GetProperty("paths").GetProperty("/things").GetProperty("post")
+            .GetProperty("responses");
+        var schema200 = responses.GetProperty("200").GetProperty("content").GetProperty("application/json")
+            .GetProperty("schema");
+        var schema201 = responses.GetProperty("201").GetProperty("content").GetProperty("application/json")
+            .GetProperty("schema");
+        Assert.Equal(schema200.GetRawText(), schema201.GetRawText());
+
+        var schemaName = schema201.GetProperty("$ref").GetString()!.Split('/').Last();
+        Assert.DoesNotContain("PortiaCreateOutcome", schemaName, StringComparison.Ordinal);
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        var payloadSchema = schemas.GetProperty(schemaName);
+        var properties = payloadSchema.GetProperty("properties");
+        Assert.Single(properties.EnumerateObject());
+        Assert.True(properties.TryGetProperty("thing_id", out _));
+        Assert.Equal("The id.", properties.GetProperty("thing_id").GetProperty("description").GetString());
+        var required = payloadSchema.GetProperty("required");
+        Assert.Equal(1, required.GetArrayLength());
+        Assert.Equal("thing_id", required[0].GetString());
+        var propertyNames = properties.EnumerateObject().Select(property => property.Name).ToHashSet();
+        Assert.All(required.EnumerateArray(), name => Assert.Contains(name.GetString()!, propertyNames));
+
+        foreach (var schema in schemas.EnumerateObject())
+        {
+            if (!schema.Value.TryGetProperty("properties", out var componentProperties))
+                continue;
+            Assert.False(componentProperties.TryGetProperty("thingId", out _), schema.Name);
+            if (schema.Value.TryGetProperty("required", out var componentRequired))
+            {
+                var componentPropertyNames = componentProperties.EnumerateObject()
+                    .Select(property => property.Name).ToHashSet();
+                Assert.All(componentRequired.EnumerateArray(),
+                    name => Assert.Contains(name.GetString()!, componentPropertyNames));
+            }
+        }
     }
 
     [Fact]
