@@ -16,6 +16,7 @@ alerts are as breaking to change as an API.
 ### Changed
 
 - Updated AWS SDK and Cntryl testing convention package pins to their latest stable releases.
+- Standardized all project root namespaces on `Cntryl.Portia` and fail builds that override the shared value.
 
 ## 0.14.4
 
