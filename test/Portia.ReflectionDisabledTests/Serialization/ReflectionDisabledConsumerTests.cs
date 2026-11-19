@@ -17,9 +17,9 @@ public sealed class ReflectionDisabledConsumerTests
         var serializer = new JsonRequestSerializer([], ReflectionDisabledJsonContext.Default.Options);
         var outcome = created ? PortiaCreateOutcome<string>.Created("Portia") :
             PortiaCreateOutcome<string>.Repeated("Portia");
-        var bytes = serializer.SerializeResult(Result<PortiaCreateOutcome<string>>.Success(outcome));
 
         // Act
+        var bytes = serializer.SerializeResult(Result<PortiaCreateOutcome<string>>.Success(outcome));
         var result = serializer.DeserializeResult<PortiaCreateOutcome<string>>(bytes);
 
         // Assert
@@ -36,9 +36,9 @@ public sealed class ReflectionDisabledConsumerTests
         // Arrange
         var serializer = new JsonRequestSerializer([], ReflectionDisabledJsonContext.Default.Options);
         var outcome = created ? PortiaCreateOutcome.Created() : PortiaCreateOutcome.Repeated();
-        var bytes = serializer.SerializeResult(Result<PortiaCreateOutcome>.Success(outcome));
 
         // Act
+        var bytes = serializer.SerializeResult(Result<PortiaCreateOutcome>.Success(outcome));
         var result = serializer.DeserializeResult<PortiaCreateOutcome>(bytes);
 
         // Assert
@@ -50,7 +50,6 @@ public sealed class ReflectionDisabledConsumerTests
     public void ShouldRoundTripRequestEnvelopeGivenReflectionDisabled()
     {
         // Arrange
-        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         var options = new JsonSerializerOptions(ReflectionDisabledJsonContext.Default.Options);
         var registration = new RequestTransportRegistration(typeof(CreateGreeting), [RequestTransportId.Callable],
             new RequestRouteAttribute("public", "greetings", "messages", "create"),
@@ -62,6 +61,7 @@ public sealed class ReflectionDisabledConsumerTests
         var envelope = requests.DeserializeEnvelope(bytes);
 
         // Assert
+        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         Assert.Equal(new CreateGreeting("Portia"), envelope.Request);
     }
 
@@ -69,7 +69,6 @@ public sealed class ReflectionDisabledConsumerTests
     public void ShouldRoundTripEventEnvelopeGivenReflectionDisabled()
     {
         // Arrange
-        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         var options = new JsonSerializerOptions(ReflectionDisabledJsonContext.Default.Options);
         var events = new JsonDomainEventSerializer(
             new DomainEventTypeCatalog().Register<GreetingCreated>(1, "greetings.created"), null, options);
@@ -82,6 +81,7 @@ public sealed class ReflectionDisabledConsumerTests
         var deserialized = events.Deserialize(persisted);
 
         // Assert
+        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         _ = Assert.IsType<GreetingCreated>(deserialized);
     }
 
@@ -89,7 +89,6 @@ public sealed class ReflectionDisabledConsumerTests
     public async Task ShouldAcceptValidPostGivenGeneratedHttpBindingWithoutReflection()
     {
         // Arrange
-        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         await using var app = await StartGreetingAppAsync();
         using var content = new StringContent(
             JsonSerializer.Serialize(new CreateGreeting("Portia"),
@@ -100,6 +99,7 @@ public sealed class ReflectionDisabledConsumerTests
         using var response = await app.GetTestClient().PostAsync("/greetings", content);
 
         // Assert
+        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("\"Hello, Portia!\"", await response.Content.ReadAsStringAsync());
     }
@@ -108,7 +108,6 @@ public sealed class ReflectionDisabledConsumerTests
     public async Task ShouldRejectInvalidPostGivenGeneratedHttpBindingWithoutReflection()
     {
         // Arrange
-        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         await using var app = await StartGreetingAppAsync();
         using var invalidContent = new StringContent(
             JsonSerializer.Serialize(new CreateGreeting(string.Empty),
@@ -119,6 +118,7 @@ public sealed class ReflectionDisabledConsumerTests
         using var invalid = await app.GetTestClient().PostAsync("/greetings", invalidContent);
 
         // Assert
+        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
         Assert.Contains("A name is required.", await invalid.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
@@ -127,13 +127,13 @@ public sealed class ReflectionDisabledConsumerTests
     public async Task ShouldServeOpenApiDocumentGivenGeneratedHttpBindingWithoutReflection()
     {
         // Arrange
-        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         await using var app = await StartGreetingAppAsync();
 
         // Act
         using var openApi = await app.GetTestClient().GetAsync("/openapi/v1.json");
 
         // Assert
+        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         Assert.Equal(HttpStatusCode.OK, openApi.StatusCode);
         var document = await openApi.Content.ReadAsStringAsync();
         Assert.Contains("\"openapi\": \"3.1.2\"", document, StringComparison.Ordinal);
@@ -144,7 +144,6 @@ public sealed class ReflectionDisabledConsumerTests
     public async Task ShouldReportEveryMissingRootGivenHostStartupWithUnregisteredRoots()
     {
         // Arrange
-        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         var builder = WebApplication.CreateBuilder();
         var portia = builder.Services.AddPortia();
         _ = portia.AddGeneratedRequest(Registration<MissingFirst>());
@@ -156,6 +155,7 @@ public sealed class ReflectionDisabledConsumerTests
         var thrown = await Record.ExceptionAsync(() => app.StartAsync());
 
         // Assert
+        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         var exception = Assert.IsType<InvalidOperationException>(thrown);
         Assert.Contains(typeof(MissingFirst).FullName!, exception.Message, StringComparison.Ordinal);
         Assert.Contains(typeof(MissingSecond).FullName!, exception.Message, StringComparison.Ordinal);

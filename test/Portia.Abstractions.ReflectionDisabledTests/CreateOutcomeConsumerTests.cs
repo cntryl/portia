@@ -36,17 +36,17 @@ public sealed class CreateOutcomeConsumerTests
     public void ShouldSerializeCreateOutcomeFromAbstractionsGivenReflectionDisabledConsumer()
     {
         // Arrange
-        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
-        Assert.Equal(typeof(IRequest<>).Assembly, typeof(PortiaCreateOutcome<>).Assembly);
         var expected = PortiaCreateOutcome<Account>.Created(new Account("server-id", "Portia"));
-        var typeInfo = Assert.IsAssignableFrom<JsonTypeInfo<PortiaCreateOutcome<Account>>>(
-            CreateAccountJsonContext.Default.GetTypeInfo(typeof(PortiaCreateOutcome<Account>)));
 
         // Act
+        var typeInfo = (JsonTypeInfo<PortiaCreateOutcome<Account>>)
+            CreateAccountJsonContext.Default.GetTypeInfo(typeof(PortiaCreateOutcome<Account>))!;
         var json = JsonSerializer.Serialize(expected, typeInfo);
         var actual = JsonSerializer.Deserialize(json, typeInfo);
 
         // Assert
+        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
+        Assert.Equal(typeof(IRequest<>).Assembly, typeof(PortiaCreateOutcome<>).Assembly);
         Assert.NotNull(actual);
         Assert.True(actual.IsCreated);
         Assert.Equal(new Account("server-id", "Portia"), actual.Value);
@@ -57,10 +57,10 @@ public sealed class CreateOutcomeConsumerTests
     {
         // Arrange
         var expected = PortiaCreateOutcome.Repeated();
-        var typeInfo = Assert.IsAssignableFrom<JsonTypeInfo<PortiaCreateOutcome>>(
-            CreateAccountJsonContext.Default.GetTypeInfo(typeof(PortiaCreateOutcome)));
 
         // Act
+        var typeInfo = (JsonTypeInfo<PortiaCreateOutcome>)
+            CreateAccountJsonContext.Default.GetTypeInfo(typeof(PortiaCreateOutcome))!;
         var json = JsonSerializer.Serialize(expected, typeInfo);
         var actual = JsonSerializer.Deserialize(json, typeInfo);
 
