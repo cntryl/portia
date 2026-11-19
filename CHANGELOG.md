@@ -4,6 +4,15 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.14.4
+
+### Added
+
+- HTTP routes can opt into `Created(uriTemplate)` with a `PortiaCreateOutcome<T>` handler result.
+  A first create returns 201 and a handler-confirmed identical repeat returns 200. Both return
+  the same payload shape and a `Location` built from route values and bound request members.
+  OpenAPI documents both responses.
+
 ## 0.14.3
 
 ### Added
