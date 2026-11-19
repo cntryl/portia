@@ -68,6 +68,153 @@ public sealed class CreatedHttpResponseTests
     }
 
     [Fact]
+    public async Task ShouldResolveLocationFromPayloadGivenServerGeneratedIdentifier()
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            "public sealed record Binding(string Name) : IRequest<PortiaCreateOutcome<Payload>>, ICallable; public sealed record Payload(string AccountId, string Name);",
+            "PortiaCreateOutcome<Payload>.Created(new Payload(\"server/id#1\", request.Name))",
+            "app.MapPortiaPost<Binding, PortiaCreateOutcome<Payload>>(\"/accounts\", endpoint => endpoint.Created(\"/accounts/{account_id}\"));",
+            resultType: "PortiaCreateOutcome<Payload>");
+
+        // Act
+        var (status, body, location) = await HttpConsumerScenario.RunWithLocationAsync(assembly, "/accounts",
+            "{\"name\":\"Portia\"}");
+
+        // Assert
+        Assert.Equal(201, status);
+        Assert.Equal("/accounts/server%2Fid%231", location);
+        Assert.Equal("{\"accountId\":\"server/id#1\",\"name\":\"Portia\"}", body);
+    }
+
+    [Fact]
+    public async Task ShouldPreferRequestMemberOverPayloadMemberGivenCollectionRoute()
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            "public sealed record Binding(string AccountId) : IRequest<PortiaCreateOutcome<Payload>>, ICallable; public sealed record Payload(string AccountId);",
+            "PortiaCreateOutcome<Payload>.Created(new Payload(\"payload-id\"))",
+            "app.MapPortiaPost<Binding, PortiaCreateOutcome<Payload>>(\"/accounts\", endpoint => endpoint.Created(\"/accounts/{account_id}\"));",
+            resultType: "PortiaCreateOutcome<Payload>");
+
+        // Act
+        var (status, _, location) = await HttpConsumerScenario.RunWithLocationAsync(assembly, "/accounts",
+            "{\"accountId\":\"request-id\"}");
+
+        // Assert
+        Assert.Equal(201, status);
+        Assert.Equal("/accounts/request-id", location);
+    }
+
+    [Fact]
+    public async Task ShouldPreferRouteValueOverRequestAndPayloadMembersGivenCreatedLocation()
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            "public sealed record Binding(string AccountId) : IRequest<PortiaCreateOutcome<Payload>>, ICallable; public sealed record Payload(string AccountId);",
+            "PortiaCreateOutcome<Payload>.Created(new Payload(\"payload-id\"))",
+            "app.MapPortiaPost<Binding, PortiaCreateOutcome<Payload>>(\"/accounts/{account_id}\", endpoint => endpoint.Created(\"/accounts/{account_id}\").OnBind(_ => new Binding(\"request-id\")).Parameter<string>(\"account_id\", PortiaHttpParameterLocation.Route));",
+            resultType: "PortiaCreateOutcome<Payload>");
+
+        // Act
+        var (status, _, location) = await HttpConsumerScenario.RunWithLocationAsync(assembly, "/accounts/route-id", "{}");
+
+        // Assert
+        Assert.Equal(201, status);
+        Assert.Equal("/accounts/route-id", location);
+    }
+
+    [Fact]
+    public async Task ShouldRejectMissingRequestMemberBeforeDispatchGivenPayloadFallback()
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            "public sealed record Binding(string? AccountId, string Value) : IRequest<PortiaCreateOutcome<Payload>>, ICallable; public sealed record Payload(string AccountId); public static class Probe { public static bool HandlerRan { get; private set; } public static Payload CreatePayload() { HandlerRan = true; return new Payload(\"payload-id\"); } }",
+            "PortiaCreateOutcome<Payload>.Created(Probe.CreatePayload())",
+            "app.MapPortiaPost<Binding, PortiaCreateOutcome<Payload>>(\"/accounts\", endpoint => endpoint.Created(\"/accounts/{account_id}\"));",
+            resultType: "PortiaCreateOutcome<Payload>");
+
+        // Act
+        var (status, body, location) = await HttpConsumerScenario.RunWithLocationAsync(assembly, "/accounts",
+            "{\"value\":\"same\"}");
+
+        // Assert
+        Assert.Equal(400, status);
+        Assert.Contains("account_id", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(location);
+        Assert.False((bool)assembly.GetType("Probe")!.GetProperty("HandlerRan")!.GetValue(null)!);
+    }
+
+    [Fact]
+    public async Task ShouldFailAfterDispatchGivenMissingPayloadLocationValue()
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            "public sealed record Binding(string Name) : IRequest<PortiaCreateOutcome<Payload>>, ICallable; public sealed record Payload(string? AccountId); public static class Probe { public static bool HandlerRan { get; private set; } public static Payload CreatePayload() { HandlerRan = true; return new Payload(null); } }",
+            "PortiaCreateOutcome<Payload>.Created(Probe.CreatePayload())",
+            "app.MapPortiaPost<Binding, PortiaCreateOutcome<Payload>>(\"/accounts\", endpoint => endpoint.Created(\"/accounts/{account_id}\"));",
+            resultType: "PortiaCreateOutcome<Payload>");
+
+        // Act
+        var (status, _, location) = await HttpConsumerScenario.RunWithLocationAsync(assembly,
+            "/accounts", "{\"name\":\"Portia\"}");
+
+        // Assert
+        Assert.Equal(500, status);
+        Assert.Null(location);
+        Assert.True((bool)assembly.GetType("Probe")!.GetProperty("HandlerRan")!.GetValue(null)!);
+    }
+
+    [Theory]
+    [InlineData(false, 201)]
+    [InlineData(true, 200)]
+    public async Task ShouldReturnPayloadlessCreatedOutcomeWithLocationGivenCreateOrRepeat(bool repeated, int expectedStatus)
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            "public sealed record Binding(string AccountId, bool Repeated) : IRequest<PortiaCreateOutcome>, ICallable;",
+            "request.Repeated ? PortiaCreateOutcome.Repeated() : PortiaCreateOutcome.Created()",
+            "app.MapPortiaPost<Binding, PortiaCreateOutcome>(\"/accounts\", endpoint => endpoint.Created(\"/accounts/{account_id}\"));",
+            resultType: "PortiaCreateOutcome");
+
+        // Act
+        var (status, body, location) = await HttpConsumerScenario.RunWithLocationAsync(assembly, "/accounts",
+            "{\"accountId\":\"client-id\",\"repeated\":" + (repeated ? "true" : "false") + "}");
+
+        // Assert
+        Assert.Equal(expectedStatus, status);
+        Assert.Equal("/accounts/client-id", location);
+        Assert.Empty(body);
+    }
+
+    [Fact]
+    public async Task ShouldDocumentPayloadlessCreatedResponsesWithoutContentGivenCreatedEndpoint()
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            "public sealed record Binding(string AccountId) : IRequest<PortiaCreateOutcome>, ICallable;",
+            "PortiaCreateOutcome.Created()",
+            "app.MapPortiaPost<Binding, PortiaCreateOutcome>(\"/accounts\", endpoint => endpoint.Created(\"/accounts/{account_id}\")); app.MapPortiaOpenApi();",
+            resultType: "PortiaCreateOutcome");
+
+        // Act
+        var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/openapi/v1.json");
+
+        // Assert
+        Assert.Equal(200, status);
+        using var document = JsonDocument.Parse(body);
+        var responses = document.RootElement.GetProperty("paths").GetProperty("/accounts").GetProperty("post")
+            .GetProperty("responses");
+        foreach (var code in new[] { "200", "201" })
+        {
+            var response = responses.GetProperty(code);
+            Assert.False(response.TryGetProperty("content", out _));
+            Assert.Equal("uri-reference", response.GetProperty("headers").GetProperty("Location")
+                .GetProperty("schema").GetProperty("format").GetString());
+        }
+    }
+
+    [Fact]
     public async Task ShouldRejectBeforeDispatchGivenOmittedCatchAllValue()
     {
         // Arrange

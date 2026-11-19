@@ -4,6 +4,20 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.14.5
+
+### Added
+
+- Create outcomes are available from `Cntryl.Portia.Abstractions`, allowing application request contracts and worker
+  hosts to use them without an ASP.NET Core dependency. Created locations can read public payload members after the
+  handler returns, after route and request members in precedence order. A payload-less outcome returns 201 or 200 with
+  `Location` and no body.
+
+### Changed
+
+- Updated AWS SDK and Cntryl testing convention package pins to their latest stable releases.
+- Standardized all project root namespaces on `Cntryl.Portia` and fail builds that override the shared value.
+
 ## 0.14.4
 
 ### Added

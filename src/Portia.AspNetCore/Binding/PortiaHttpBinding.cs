@@ -36,8 +36,8 @@ public static partial class PortiaHttpBinding
     public static JsonSerializerOptions GetJsonOptions(HttpContext context)
         => context.RequestServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
 
-    /// <summary>Resolves the configured create URI from this endpoint and the bound request before dispatch.</summary>
-    public static string? ResolveCreatedLocation<TRequest>(HttpContext context, TRequest request) =>
+    /// <summary>Prepares a configured create URI and validates route and request values before dispatch.</summary>
+    public static Func<object?, string>? ResolveCreatedLocation<TRequest>(HttpContext context, TRequest request) =>
         context.GetEndpoint()?.Metadata.GetMetadata<PortiaCreatedLocation<TRequest>>()?.Resolve(context, request);
 
     /// <summary>Ensures <c>AddHttp()</c> registered Portia's HTTP services before an endpoint is mapped.</summary>

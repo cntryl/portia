@@ -1,6 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <RootNamespace>Cntryl.Portia.Consumer</RootNamespace>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <InterceptorsNamespaces>$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
     <LangVersion>15</LangVersion>

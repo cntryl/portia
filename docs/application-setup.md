@@ -101,7 +101,9 @@ setup starts no queue, RPC, projector, or reactor worker. Configure HTTP authent
 and authorization using the application's normal ASP.NET setup.
 
 For a create endpoint, opt into `Location` with a URI template and return a
-`PortiaCreateOutcome<T>` from the handler:
+`PortiaCreateOutcome<T>` from the handler. The outcome contract is in
+`Cntryl.Portia.Abstractions`, so request contracts and handlers can use it without referencing
+ASP.NET Core:
 
 ```csharp
 app.MapPortiaPost<CreateAccount, PortiaCreateOutcome<Account>>(
@@ -112,13 +114,23 @@ app.MapPortiaPost<CreateAccount, PortiaCreateOutcome<Account>>(
 Return `PortiaCreateOutcome<Account>.Created(account)` after the create commits, or
 `Repeated(account)` only after the handler confirms that the earlier request is
 semantically identical. The first response is 201; the repeat is 200. Both serialize
-the same `Account` payload and include the same `Location`. A placeholder first matches
-a parameter in the full route, including route groups. Otherwise it matches a readable
-public member of the bound request, such as `AccountId` for `{account_id}`. Member
-matching ignores case and underscores. Portia escapes each substitution as a URI
-path segment. If a value is missing or empty, Portia returns 400 before invoking the
-handler. `Created` requires an endpoint whose output type is `PortiaCreateOutcome<T>`.
-Portia rejects a mismatched type when the route is configured.
+the same `Account` payload and include the same `Location`. A placeholder resolves in this
+order: a parameter in the full route, including route groups; a readable public member of
+the bound request; then a readable public member of the payload. For example,
+`{account_id}` can match `AccountId`. Member matching ignores case and underscores. Portia
+escapes each substitution as a URI path segment. A missing or empty route or request value
+returns 400 before invoking the handler. Payload members are known when the endpoint is
+configured, so a placeholder that matches no route, request, or payload member is rejected
+at startup. If the handler returns a successful create whose selected payload member is
+missing or empty, Portia reports a server error after dispatch; it cannot turn that result
+into a pre-write 400 because the handler may already have committed the create.
+
+When the response has no useful payload, use the non-generic `PortiaCreateOutcome` and
+return `Created()` or `Repeated()` from the handler. It returns 201 or 200 with `Location`
+and no response body. OpenAPI declares both statuses without a content schema. `Created`
+accepts only handlers that return
+`PortiaCreateOutcome<T>` or `PortiaCreateOutcome`; Portia rejects a mismatched type when the
+route is configured.
 
 `AddHttp()` registers the HTTP services every `MapPortia*` endpoint requires, including the CORS
 integration behind [cross-origin protection](getting-started.md#cross-origin-requests), and

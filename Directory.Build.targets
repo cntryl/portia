@@ -29,4 +29,9 @@
     <Error Condition="'$(PackageLicenseExpression)' == '' and '$(PackageLicenseFile)' == ''"
            Text="Packable projects must declare a license."/>
   </Target>
+
+  <Target Name="ValidatePortiaRootNamespace" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(RootNamespace)' != 'Cntryl.Portia'"
+           Text="All Portia projects must use RootNamespace 'Cntryl.Portia' from the repository Directory.Build.props."/>
+  </Target>
 </Project>

@@ -8,8 +8,36 @@ namespace Cntryl.Portia;
 interface IPortiaCreateOutcome
 {
     object? UntypedValue { get; }
-    JsonTypeInfo PayloadTypeInfo(JsonSerializerOptions options);
+    JsonTypeInfo? PayloadTypeInfo(JsonSerializerOptions options);
     bool IsCreated { get; }
+}
+
+/// <summary>Distinguishes a committed payload-less create from a handler-confirmed identical repeat.</summary>
+public sealed class PortiaCreateOutcome : IPortiaCreateOutcome
+{
+    /// <summary>Reconstructs the outcome from its serialized create marker.</summary>
+    [JsonConstructor]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public PortiaCreateOutcome(bool isCreated) => IsCreated = isCreated;
+
+    /// <summary>Whether this call committed a new resource.</summary>
+    public bool IsCreated { get; }
+
+    object? IPortiaCreateOutcome.UntypedValue => null;
+
+    JsonTypeInfo? IPortiaCreateOutcome.PayloadTypeInfo(JsonSerializerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        return null;
+    }
+
+#pragma warning disable CA1000
+    /// <summary>Creates a newly committed outcome with no response payload.</summary>
+    public static PortiaCreateOutcome Created() => new(true);
+
+    /// <summary>Creates an outcome after confirming an identical earlier request, with no response payload.</summary>
+    public static PortiaCreateOutcome Repeated() => new(false);
+#pragma warning restore CA1000
 }
 
 /// <summary>Distinguishes a committed create from a handler-confirmed identical repeat.</summary>
@@ -26,13 +54,18 @@ public sealed class PortiaCreateOutcome<T> : IPortiaCreateOutcome
 
     /// <summary>The response payload.</summary>
     public T Value { get; }
+
     /// <summary>Whether this call committed a new resource.</summary>
     public bool IsCreated { get; }
+
     object? IPortiaCreateOutcome.UntypedValue => Value;
-    JsonTypeInfo IPortiaCreateOutcome.PayloadTypeInfo(JsonSerializerOptions options) => options.GetTypeInfo<T>();
+
+    JsonTypeInfo? IPortiaCreateOutcome.PayloadTypeInfo(JsonSerializerOptions options) => options.GetTypeInfo<T>();
+
 #pragma warning disable CA1000
     /// <summary>Creates a newly committed outcome.</summary>
     public static PortiaCreateOutcome<T> Created(T value) => new(value, true);
+
     /// <summary>Creates an outcome after confirming an identical earlier request.</summary>
     public static PortiaCreateOutcome<T> Repeated(T value) => new(value, false);
 #pragma warning restore CA1000

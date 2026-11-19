@@ -5,7 +5,6 @@
     <IsTestProject>false</IsTestProject>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <InterceptorsNamespaces>$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
-    <RootNamespace>Cntryl.Portia.McpContracts</RootNamespace>
     <LangVersion>15</LangVersion>
   </PropertyGroup>
   <ItemGroup>

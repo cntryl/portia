@@ -1,1 +1,12 @@
 #nullable enable
+Cntryl.Portia.PortiaCreateOutcome
+Cntryl.Portia.PortiaCreateOutcome.IsCreated.get -> bool
+Cntryl.Portia.PortiaCreateOutcome.PortiaCreateOutcome(bool isCreated) -> void
+static Cntryl.Portia.PortiaCreateOutcome.Created() -> Cntryl.Portia.PortiaCreateOutcome!
+static Cntryl.Portia.PortiaCreateOutcome.Repeated() -> Cntryl.Portia.PortiaCreateOutcome!
+Cntryl.Portia.PortiaCreateOutcome<T>
+Cntryl.Portia.PortiaCreateOutcome<T>.IsCreated.get -> bool
+Cntryl.Portia.PortiaCreateOutcome<T>.Value.get -> T
+Cntryl.Portia.PortiaCreateOutcome<T>.PortiaCreateOutcome(T value, bool isCreated) -> void
+static Cntryl.Portia.PortiaCreateOutcome<T>.Created(T value) -> Cntryl.Portia.PortiaCreateOutcome<T>!
+static Cntryl.Portia.PortiaCreateOutcome<T>.Repeated(T value) -> Cntryl.Portia.PortiaCreateOutcome<T>!
