@@ -85,7 +85,7 @@ public sealed class ContractMemberMetadataTests
 
     /// <summary>The JSON body does not advertise members the binder ignores while reading.</summary>
     [Fact]
-    public async Task ShouldOmitJsonInputGivenWhenReadingIgnore()
+    public async Task ShouldOmitJsonInputGivenReadIgnoreAttribute()
     {
         // Arrange
         var builder = WebApplication.CreateBuilder();

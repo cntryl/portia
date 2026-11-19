@@ -38,6 +38,7 @@
     <Project Path="test/Portia.ConsumerTests/Portia.ConsumerTests.csproj"/>
     <Project Path="test/Portia.Operations.TestWorker/Portia.Operations.TestWorker.csproj"/>
     <Project Path="test/Portia.ReflectionDisabledTests/Portia.ReflectionDisabledTests.csproj"/>
+    <Project Path="test/Portia.Abstractions.ReflectionDisabledTests/Portia.Abstractions.ReflectionDisabledTests.csproj"/>
     <Project Path="test/Portia.McpTests/Portia.McpTests.csproj"/>
     <Project Path="test/Portia.McpContracts/Portia.McpContracts.csproj"/>
   </Folder>

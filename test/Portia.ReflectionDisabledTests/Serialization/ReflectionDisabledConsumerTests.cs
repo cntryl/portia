@@ -28,6 +28,24 @@ public sealed class ReflectionDisabledConsumerTests
         Assert.Equal(created, result.Value.IsCreated);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ShouldRoundTripPayloadlessCreateResultGivenSourceGeneratedRpcSerialization(bool created)
+    {
+        // Arrange
+        var serializer = new JsonRequestSerializer([], ReflectionDisabledJsonContext.Default.Options);
+        var outcome = created ? PortiaCreateOutcome.Created() : PortiaCreateOutcome.Repeated();
+        var bytes = serializer.SerializeResult(Result<PortiaCreateOutcome>.Success(outcome));
+
+        // Act
+        var result = serializer.DeserializeResult<PortiaCreateOutcome>(bytes);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal(created, result.Value.IsCreated);
+    }
+
     [Fact]
     public void ShouldRoundTripRequestEnvelopeGivenReflectionDisabled()
     {

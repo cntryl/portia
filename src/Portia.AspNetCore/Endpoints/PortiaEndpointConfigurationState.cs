@@ -19,7 +19,7 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     string? _successDescription;
     bool _frozen;
     bool _hasResultHandler;
-    (string Template, Type PayloadType)? _created;
+    (string Template, Type? PayloadType)? _created;
     bool _noInput;
     bool[] _queryMemberFlags = [];
     public Func<HttpContext, CancellationToken, ValueTask<TRequest>>? Binder { get; private set; }
@@ -153,7 +153,7 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         _responses.Add(new ProducesResponseTypeMetadata(status, null, []));
     }
 
-    public void Created(string template, Type payloadType)
+    public void Created(string template, Type? payloadType)
     {
         EnsureMutable();
         ArgumentException.ThrowIfNullOrWhiteSpace(template);
@@ -232,6 +232,7 @@ sealed class PortiaEndpointConfigurationState<TRequest>
 
     public void ApplyMetadata(IEndpointRouteBuilder app, IEndpointConventionBuilder builder,
         IReadOnlyDictionary<string, Func<TRequest, object?>>? requestMembers = null,
+        IReadOnlyDictionary<string, Func<object?, object?>>? payloadMembers = null,
         bool createPayloadIsNullable = false)
     {
         var validations = app.ServiceProvider.GetRequiredService<PortiaStartupValidationRegistry>();
@@ -283,11 +284,12 @@ sealed class PortiaEndpointConfigurationState<TRequest>
                             throw new InvalidOperationException("Created requires route metadata.");
                 endpoint.Metadata.Add(new PortiaCreatedLocation<TRequest>(created.Template, createPayloadIsNullable,
                     route, requestMembers ??
-                    throw new InvalidOperationException("Created requires generated request metadata.")));
+                    throw new InvalidOperationException("Created requires generated request metadata."), payloadMembers));
+                var contentTypes = created.PayloadType is null ? Array.Empty<string>() : ["application/json"];
                 endpoint.Metadata.Add(new ProducesResponseTypeMetadata(StatusCodes.Status200OK, created.PayloadType,
-                    ["application/json"]));
+                    contentTypes));
                 endpoint.Metadata.Add(new ProducesResponseTypeMetadata(StatusCodes.Status201Created, created.PayloadType,
-                    ["application/json"]));
+                    contentTypes));
             });
         if (_queryMembers.Count != 0)
             builder.Add(endpoint => endpoint.Metadata.Add(new PortiaQueryMembers([.. _queryMembers])));

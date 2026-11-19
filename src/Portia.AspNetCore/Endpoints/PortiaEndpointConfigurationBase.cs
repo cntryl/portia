@@ -140,7 +140,7 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
         _state.Validate(binderRequired, members ?? []);
 
     /// <summary>Configures an HTTP create response for a typed create outcome.</summary>
-    private protected void ConfigureCreated(string uriTemplate, Type payloadType) =>
+    private protected void ConfigureCreated(string uriTemplate, Type? payloadType) =>
         _state.Created(uriTemplate, payloadType);
 
     /// <summary>Reports whether generated binding reads a request member only from the query string.</summary>
@@ -155,8 +155,9 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
     /// <summary>Applies HTTP metadata with generated accessors for create URI placeholders.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public void ApplyMetadata(IEndpointRouteBuilder app, IEndpointConventionBuilder builder,
-        IReadOnlyDictionary<string, Func<TRequest, object?>> requestMembers, bool createPayloadIsNullable) =>
-        _state.ApplyMetadata(app, builder, requestMembers, createPayloadIsNullable);
+        IReadOnlyDictionary<string, Func<TRequest, object?>> requestMembers,
+        IReadOnlyDictionary<string, Func<object?, object?>>? payloadMembers, bool createPayloadIsNullable) =>
+        _state.ApplyMetadata(app, builder, requestMembers, payloadMembers, createPayloadIsNullable);
 
     /// <summary>Rejects mutation after endpoint mapping.</summary>
     private protected void EnsureMutable() => _state.EnsureMutable();

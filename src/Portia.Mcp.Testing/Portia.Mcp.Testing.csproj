@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Description>Framework-independent real-client testing helpers for Portia Streamable HTTP MCP tools.</Description>
-    <RootNamespace>Cntryl.Portia.Testing</RootNamespace>
     <LangVersion>15</LangVersion>
   </PropertyGroup>
   <ItemGroup>
