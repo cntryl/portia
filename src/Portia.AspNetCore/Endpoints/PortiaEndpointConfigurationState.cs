@@ -19,7 +19,7 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     string? _successDescription;
     bool _frozen;
     bool _hasResultHandler;
-    string? _createdTemplate;
+    (string Template, Type PayloadType)? _created;
     bool _noInput;
     bool[] _queryMemberFlags = [];
     public Func<HttpContext, CancellationToken, ValueTask<TRequest>>? Binder { get; private set; }
@@ -153,17 +153,15 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         _responses.Add(new ProducesResponseTypeMetadata(status, null, []));
     }
 
-    public void Created(string template)
+    public void Created(string template, Type payloadType)
     {
         EnsureMutable();
         ArgumentException.ThrowIfNullOrWhiteSpace(template);
         if (_hasResultHandler)
             throw new InvalidOperationException("Created cannot be combined with OnResult.");
-        if (_createdTemplate is not null)
+        if (_created is not null)
             throw new InvalidOperationException("Created can only be configured once.");
-        _createdTemplate = template;
-        _responses.Add(new ProducesResponseTypeMetadata(201, null, []));
-        _responses.Add(new ProducesResponseTypeMetadata(200, null, []));
+        _created = (template, payloadType);
     }
 
     public void Produces<TBody>(int status, string contentType)
@@ -178,7 +176,7 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     public void RegisterResultHandler()
     {
         EnsureMutable();
-        if (_createdTemplate is not null)
+        if (_created is not null)
             throw new InvalidOperationException("Created cannot be combined with OnResult.");
         _hasResultHandler = true;
     }
@@ -232,7 +230,9 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         _frozen = true;
     }
 
-    public void ApplyMetadata(IEndpointRouteBuilder app, IEndpointConventionBuilder builder)
+    public void ApplyMetadata(IEndpointRouteBuilder app, IEndpointConventionBuilder builder,
+        IReadOnlyDictionary<string, Func<TRequest, object?>>? requestMembers = null,
+        bool createPayloadIsNullable = false)
     {
         var validations = app.ServiceProvider.GetRequiredService<PortiaStartupValidationRegistry>();
         // RouteGroupBuilder.DataSources contains the group's unprefixed child sources. Building
@@ -273,44 +273,43 @@ sealed class PortiaEndpointConfigurationState<TRequest>
             [.. _requestExamples], [.. _responseExamples], [.. _responseHeaders])));
         foreach (var response in _responses)
             builder.Add(endpoint => endpoint.Metadata.Add(response));
-        if (_createdTemplate is { } createdTemplate)
+        var endpointValidation = Binder is not null || _created is not null
+            ? validations.BeginEndpointValidation()
+            : null;
+        if (_created is { } created)
             builder.Add(endpoint =>
             {
                 var route = (endpoint as RouteEndpointBuilder)?.RoutePattern ??
                             throw new InvalidOperationException("Created requires route metadata.");
-                var names = route.Parameters.Select(parameter => parameter.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                const string placeholderPattern = "\\{([^{}]+)\\}";
-                var placeholders = System.Text.RegularExpressions.Regex.Matches(createdTemplate, placeholderPattern);
-                var remainder = System.Text.RegularExpressions.Regex.Replace(createdTemplate, placeholderPattern, string.Empty);
-                if (remainder.Contains('{') || remainder.Contains('}'))
-                    throw new InvalidOperationException("Created URI template contains malformed placeholders.");
-                foreach (System.Text.RegularExpressions.Match match in placeholders)
-                    if (!names.Contains(match.Groups[1].Value))
-                        throw new InvalidOperationException($"Created URI template placeholder '{match.Groups[1].Value}' is not in the complete route pattern.");
-                endpoint.Metadata.Add(new PortiaCreatedLocation(createdTemplate));
+                endpoint.Metadata.Add(new PortiaCreatedLocation<TRequest>(created.Template, createPayloadIsNullable,
+                    route, requestMembers ??
+                    throw new InvalidOperationException("Created requires generated request metadata.")));
+                endpoint.Metadata.Add(new ProducesResponseTypeMetadata(StatusCodes.Status200OK, created.PayloadType,
+                    ["application/json"]));
+                endpoint.Metadata.Add(new ProducesResponseTypeMetadata(StatusCodes.Status201Created, created.PayloadType,
+                    ["application/json"]));
             });
         if (_queryMembers.Count != 0)
             builder.Add(endpoint => endpoint.Metadata.Add(new PortiaQueryMembers([.. _queryMembers])));
         if (_hasResultHandler)
             builder.Add(endpoint => endpoint.Metadata.Add(new PortiaCustomHttpResult(
                 [.. _responses.Select(ResponseStatus)])));
-        if (Binder is null)
-            return;
-        var endpointValidation = validations.BeginEndpointValidation();
-        builder.Add(endpoint =>
-        {
-            var route = (endpoint as RouteEndpointBuilder)?.RoutePattern ??
-                        throw new InvalidOperationException("Portia HTTP endpoints require route metadata.");
-            var routeNames = route.Parameters.Select(item => item.Name).ToArray();
-            var declared = _parameters.Where(item => item.Location == PortiaHttpParameterLocation.Route)
-                .Select(item => item.Name).ToArray();
-            if (routeNames.Length != declared.Length ||
-                routeNames.Any(name => !declared.Contains(name, StringComparer.Ordinal)))
-                throw new InvalidOperationException(
-                    "Custom route parameters must exactly match the complete route pattern, including route groups and casing.");
-            endpoint.Metadata.Add(new PortiaCustomHttpContract([.. _parameters]));
-        });
-        builder.Finally(_ => endpointValidation.Complete());
+        if (Binder is not null)
+            builder.Add(endpoint =>
+            {
+                var route = (endpoint as RouteEndpointBuilder)?.RoutePattern ??
+                            throw new InvalidOperationException("Portia HTTP endpoints require route metadata.");
+                var routeNames = route.Parameters.Select(item => item.Name).ToArray();
+                var declared = _parameters.Where(item => item.Location == PortiaHttpParameterLocation.Route)
+                    .Select(item => item.Name).ToArray();
+                if (routeNames.Length != declared.Length ||
+                    routeNames.Any(name => !declared.Contains(name, StringComparer.Ordinal)))
+                    throw new InvalidOperationException(
+                        "Custom route parameters must exactly match the complete route pattern, including route groups and casing.");
+                endpoint.Metadata.Add(new PortiaCustomHttpContract([.. _parameters]));
+            });
+        if (endpointValidation is not null)
+            builder.Finally(_ => endpointValidation.Complete());
     }
 
     void SetBinder(Func<HttpContext, CancellationToken, ValueTask<TRequest>> binder)

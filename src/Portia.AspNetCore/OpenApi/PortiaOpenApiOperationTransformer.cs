@@ -95,21 +95,19 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                     ? new Dictionary<string, IOpenApiMediaType>(content, StringComparer.Ordinal)
                     : null
             };
-            var responseType = responseMetadata.Type;
-            if (createdLocation is not null && (status is "200" or "201") && metadata.ResultType is { IsGenericType: true } resultType &&
-                resultType.GetGenericTypeDefinition() == typeof(PortiaCreateOutcome<>))
-                responseType = resultType.GetGenericArguments()[0];
-            if (responseType is not null && responseType != typeof(void) &&
-                (responseMetadata.ContentTypes.Count > 0 || createdLocation is not null && (status is "200" or "201")))
+            var rootIsNullable = status is "200" or "201" && createdLocation?.PayloadIsNullable == true;
+            if (responseMetadata.Type is { } responseType && responseType != typeof(void) &&
+                responseMetadata.ContentTypes.Count > 0)
             {
                 response.Content ??= new Dictionary<string, IOpenApiMediaType>(StringComparer.Ordinal);
-                foreach (var contentType in (responseMetadata.ContentTypes.Count == 0 ? ["application/json"] : responseMetadata.ContentTypes).Distinct(StringComparer.OrdinalIgnoreCase))
+                foreach (var contentType in responseMetadata.ContentTypes.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
                     _ = response.Content.TryGetValue(contentType, out var media);
                     response.Content[contentType] = new OpenApiMediaType
                     {
                         Schema = PortiaOpenApiSchemaGenerator.Create(responseType, jsonOptions,
                             context.Document!, schemaType,
+                            rootIsNullable: rootIsNullable,
                             schemaCollectionElementIsNullable: schemaCollectionElementIsNullable,
                             descriptions: descriptions),
                         Example = media?.Example,

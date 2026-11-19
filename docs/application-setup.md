@@ -100,23 +100,25 @@ can execute a command directly or publish work. Merely sharing the application
 setup starts no queue, RPC, projector, or reactor worker. Configure HTTP authentication
 and authorization using the application's normal ASP.NET setup.
 
-For a create endpoint, opt into `Location` with a route value template and return a
+For a create endpoint, opt into `Location` with a URI template and return a
 `PortiaCreateOutcome<T>` from the handler:
 
 ```csharp
 app.MapPortiaPost<CreateAccount, PortiaCreateOutcome<Account>>(
-    "/accounts/{account_id}",
+    "/accounts",
     endpoint => endpoint.Created("/accounts/{account_id}"));
 ```
 
 Return `PortiaCreateOutcome<Account>.Created(account)` after the create commits, or
 `Repeated(account)` only after the handler confirms that the earlier request is
 semantically identical. The first response is 201; the repeat is 200. Both serialize
-the same `Account` payload and include the same `Location`. Placeholders must match
-route values, including values supplied by route groups; each value is escaped as one
-URI path segment. Body and query values are not used. `Created` requires a result-bearing
-endpoint whose output type is `PortiaCreateOutcome<T>`; a mismatched type is rejected
-when the route is configured.
+the same `Account` payload and include the same `Location`. A placeholder first matches
+a parameter in the full route, including route groups. Otherwise it matches a readable
+public member of the bound request, such as `AccountId` for `{account_id}`. Member
+matching ignores case and underscores. Portia escapes each substitution as a URI
+path segment. If a value is missing or empty, Portia returns 400 before invoking the
+handler. `Created` requires an endpoint whose output type is `PortiaCreateOutcome<T>`.
+Portia rejects a mismatched type when the route is configured.
 
 `AddHttp()` registers the HTTP services every `MapPortia*` endpoint requires, including the CORS
 integration behind [cross-origin protection](getting-started.md#cross-origin-requests), and

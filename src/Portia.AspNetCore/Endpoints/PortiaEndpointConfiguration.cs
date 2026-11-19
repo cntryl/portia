@@ -49,15 +49,16 @@ public sealed class PortiaEndpointConfiguration<TRequest>
 public sealed class PortiaEndpointConfiguration<TRequest, TOut>
     : PortiaEndpointConfigurationBase<TRequest, PortiaEndpointConfiguration<TRequest, TOut>>
 {
-    /// <summary>Declares create responses whose location is built from matched route values.</summary>
-    /// <param name="uriTemplate">A URI reference template using matched route value names.</param>
+    /// <summary>Declares create responses with a location built from route values and bound request members.</summary>
+    /// <param name="uriTemplate">A URI reference template using route value or request member names.</param>
     /// <returns>This endpoint configuration.</returns>
     public PortiaEndpointConfiguration<TRequest, TOut> Created(string uriTemplate)
     {
-        if (!typeof(TOut).IsGenericType || typeof(TOut).GetGenericTypeDefinition() != typeof(PortiaCreateOutcome<>))
+        var outcomeType = typeof(TOut);
+        if (!outcomeType.IsGenericType || outcomeType.GetGenericTypeDefinition() != typeof(PortiaCreateOutcome<>))
             throw new InvalidOperationException(
                 "Created requires a handler whose result type is PortiaCreateOutcome<T>.");
-        ConfigureCreated(uriTemplate);
+        ConfigureCreated(uriTemplate, outcomeType.GenericTypeArguments[0]);
         return this;
     }
 

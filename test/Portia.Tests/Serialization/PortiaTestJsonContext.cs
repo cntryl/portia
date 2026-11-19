@@ -64,6 +64,8 @@ namespace Cntryl.Portia;
 [JsonSerializable(typeof(HttpOrderLine))]
 [JsonSerializable(typeof(List<HttpOrderLine>))]
 [JsonSerializable(typeof(HttpGetWidget))]
+[JsonSerializable(typeof(HttpBindingTests.CreateTemplateProbe))]
+[JsonSerializable(typeof(PortiaCreateOutcome<string>))]
 [JsonSerializable(typeof(HttpTenantProbe))]
 [JsonSerializable(typeof(HttpTenantBodyProbe))]
 [JsonSerializable(typeof(HttpGuardedAction))]

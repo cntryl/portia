@@ -8,6 +8,26 @@ namespace Cntryl.Portia.ReflectionDisabled;
 
 public sealed class ReflectionDisabledConsumerTests
 {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ShouldRoundTripCreateResultGivenSourceGeneratedRpcSerialization(bool created)
+    {
+        // Arrange
+        var serializer = new JsonRequestSerializer([], ReflectionDisabledJsonContext.Default.Options);
+        var outcome = created ? PortiaCreateOutcome<string>.Created("Portia") :
+            PortiaCreateOutcome<string>.Repeated("Portia");
+        var bytes = serializer.SerializeResult(Result<PortiaCreateOutcome<string>>.Success(outcome));
+
+        // Act
+        var result = serializer.DeserializeResult<PortiaCreateOutcome<string>>(bytes);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal("Portia", result.Value.Value);
+        Assert.Equal(created, result.Value.IsCreated);
+    }
+
     [Fact]
     public void ShouldRoundTripRequestEnvelopeGivenReflectionDisabled()
     {

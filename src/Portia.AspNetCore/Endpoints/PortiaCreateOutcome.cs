@@ -1,4 +1,6 @@
+using System.ComponentModel;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 
 namespace Cntryl.Portia;
@@ -13,7 +15,15 @@ interface IPortiaCreateOutcome
 /// <summary>Distinguishes a committed create from a handler-confirmed identical repeat.</summary>
 public sealed class PortiaCreateOutcome<T> : IPortiaCreateOutcome
 {
-    PortiaCreateOutcome(T value, bool created) { Value = value; IsCreated = created; }
+    /// <summary>Reconstructs the outcome from its serialized value and create marker.</summary>
+    [JsonConstructor]
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public PortiaCreateOutcome(T value, bool isCreated)
+    {
+        Value = value;
+        IsCreated = isCreated;
+    }
+
     /// <summary>The response payload.</summary>
     public T Value { get; }
     /// <summary>Whether this call committed a new resource.</summary>

@@ -43,6 +43,110 @@ public sealed class CreatedHttpResponseTests
     }
 
     [Fact]
+    public async Task ShouldUseBoundRequestMemberGivenCollectionRoute()
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            """
+            public sealed record Binding(string AccountId) : IRequest<PortiaCreateOutcome<string>>, ICallable;
+            """,
+            "PortiaCreateOutcome<string>.Created(request.AccountId)",
+            """
+            app.MapGroup("/tenants/{tenant_id}")
+                .MapPortiaPost<Binding, PortiaCreateOutcome<string>>("/accounts",
+                    endpoint => endpoint.Created("/tenants/{tenant_id}/accounts/{account_id}"));
+            """,
+            resultType: "PortiaCreateOutcome<string>");
+
+        // Act
+        var (status, _, location) = await HttpConsumerScenario.RunWithLocationAsync(assembly,
+            "/tenants/alpha%20beta/accounts", """{"accountId":"a/b#c"}""");
+
+        // Assert
+        Assert.Equal(201, status);
+        Assert.Equal("/tenants/alpha%20beta/accounts/a%2Fb%23c", location);
+    }
+
+    [Fact]
+    public async Task ShouldRejectBeforeDispatchGivenOmittedCatchAllValue()
+    {
+        // Arrange
+        var assembly = CreateScenario(
+            """
+            app.MapPortiaPost<Binding, PortiaCreateOutcome<Payload>>("/folders/{**parent}",
+                endpoint => endpoint.Created("/folders/{parent}"));
+            """,
+            """
+            request.Value == "same" ? throw new InvalidOperationException("The handler must not run.") :
+                PortiaCreateOutcome<Payload>.Created(new Payload(request.Value))
+            """);
+
+        // Act
+        var (status, body, location) = await HttpConsumerScenario.RunWithLocationAsync(assembly,
+            "/folders", """{"id":"folder","value":"same"}""");
+
+        // Assert
+        Assert.Equal(400, status);
+        Assert.Contains("parent", body, StringComparison.Ordinal);
+        Assert.Null(location);
+    }
+
+    [Fact]
+    public async Task ShouldFailGivenNullCreateOutcome()
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            "public sealed record Binding(string Value) : IRequest<PortiaCreateOutcome<string>?>, ICallable;",
+            "null",
+            """
+            app.MapPortiaPost<Binding, PortiaCreateOutcome<string>?>("/accounts",
+                endpoint => endpoint.Created("/accounts/1"));
+            """,
+            resultType: "PortiaCreateOutcome<string>?");
+
+        // Act
+        var (status, _, location) = await HttpConsumerScenario.RunWithLocationAsync(assembly,
+            "/accounts", """{"value":"same"}""");
+
+        // Assert
+        Assert.Equal(500, status);
+        Assert.Null(location);
+    }
+
+    [Fact]
+    public async Task ShouldDocumentNullablePayloadGivenCreateOutcomeOfNullableString()
+    {
+        // Arrange
+        var assembly = HttpConsumerScenario.Compile(
+            "public sealed record Binding(string Value) : IRequest<PortiaCreateOutcome<string?>>, ICallable;",
+            "PortiaCreateOutcome<string?>.Created(null)",
+            """
+            app.MapPortiaPost<Binding, PortiaCreateOutcome<string?>>("/accounts",
+                endpoint => endpoint.Created("/accounts/1"));
+            app.MapPortiaOpenApi();
+            """,
+            resultType: "PortiaCreateOutcome<string?>");
+
+        // Act
+        var (status, body) = await HttpConsumerScenario.RunAsync(assembly, "/openapi/v1.json");
+
+        // Assert
+        Assert.Equal(200, status);
+        using var document = JsonDocument.Parse(body);
+        var responses = document.RootElement.GetProperty("paths").GetProperty("/accounts").GetProperty("post")
+            .GetProperty("responses");
+        foreach (var code in new[] { "200", "201" })
+        {
+            var type = responses.GetProperty(code).GetProperty("content").GetProperty("application/json")
+                .GetProperty("schema").GetProperty("type");
+            Assert.Equal(JsonValueKind.Array, type.ValueKind);
+            var types = type.EnumerateArray().Select(value => value.GetString()).ToArray();
+            Assert.Contains("string", types);
+            Assert.Contains("null", types);
+        }
+    }
+
+    [Fact]
     public async Task ShouldRejectUnknownLocationPlaceholderGivenCreatedEndpoint()
     {
         // Arrange

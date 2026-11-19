@@ -66,20 +66,11 @@ sealed record PortiaOpenApiEnrichment(
             };
         }
 
-        var createLocation = endpoint.OfType<PortiaCreatedLocation>().SingleOrDefault();
-        var resultType = metadata.ResultType;
-        if (createLocation is not null && resultType is { IsGenericType: true } createType &&
-            createType.GetGenericTypeDefinition() == typeof(PortiaCreateOutcome<>))
-            resultType = createType.GetGenericArguments()[0];
-
         var responseTypes = endpoint.OfType<IProducesResponseTypeMetadata>().Where(item => item.Type is not null)
             .GroupBy(item => item.StatusCode).ToDictionary(group => group.Key, group => group.Last().Type!);
-        if (resultType is not null && !metadata.JsonStream && !metadata.ServerSentEvents && !metadata.NoContent)
-        {
+        if (metadata.ResultType is { } resultType && !metadata.JsonStream && !metadata.ServerSentEvents &&
+            !metadata.NoContent)
             _ = responseTypes.TryAdd(200, resultType);
-            if (createLocation is not null)
-                _ = responseTypes.TryAdd(201, resultType);
-        }
         foreach (var (status, type) in responseTypes)
         {
             var key = status.ToString(CultureInfo.InvariantCulture);
@@ -94,9 +85,7 @@ sealed record PortiaOpenApiEnrichment(
 
         foreach (var example in Responses)
         {
-            var declared = createLocation is not null && (example.Status is 200 or 201)
-                               ? resultType
-                               : endpoint.OfType<IProducesResponseTypeMetadata>()
+            var declared = endpoint.OfType<IProducesResponseTypeMetadata>()
                                .LastOrDefault(item => item.StatusCode == example.Status)?.Type ??
                            (example.Status == 200 && !metadata.NoContent && !metadata.JsonStream &&
                             !metadata.ServerSentEvents
