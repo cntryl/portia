@@ -38,6 +38,9 @@ sealed class PortiaOpenApiDocumentCache(IServiceProvider services, string docume
         await context.Response.Body.WriteAsync(payload, context.RequestAborted).ConfigureAwait(false);
     }
 
+    internal async ValueTask<ReadOnlyMemory<byte>> GetYamlAsync(CancellationToken ct) =>
+        (await GetAsync(ct).ConfigureAwait(false)).Yaml;
+
     async ValueTask<RenderedDocument> GetAsync(CancellationToken ct)
     {
         if (Volatile.Read(ref _rendered) is { } cached)

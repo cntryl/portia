@@ -464,6 +464,22 @@ if (app.Environment.IsDevelopment())
 app.MapOpenApi("/internal/openapi/{documentName}.json").RequireAuthorization("ops");
 ```
 
+### Export YAML to disk
+
+To write the composed YAML document to disk without starting the web server, build the application,
+map its endpoints, then call `WritePortiaOpenApiYamlAsync`. The call uses the same cached `v1`
+document and YAML rendering as `MapPortiaOpenApi()`, so the OpenAPI route does not need to be mapped:
+
+```csharp
+var app = builder.Build();
+app.MapGet("/health", () => Results.Ok()).WithName("health");
+await app.WritePortiaOpenApiYamlAsync();
+```
+
+The default output is `openapi.yml` in the current working directory. Pass a path for another
+location; relative paths also resolve from the current working directory, and the destination's
+parent directory must already exist.
+
 Composing the document is not cheap: it walks every described endpoint and resolves a schema for
 each parameter and response. Because endpoints are fixed once the host starts, Portia composes it
 on the first request and serves the rendered bytes from then on, so later requests only copy them.
