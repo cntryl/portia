@@ -66,10 +66,12 @@ sealed record PortiaOpenApiEnrichment(
             };
         }
 
-        var responseTypes = endpoint.OfType<IProducesResponseTypeMetadata>().Where(item => item.Type is not null)
+        var responseTypes = endpoint.OfType<IProducesResponseTypeMetadata>()
+            .Select(item => (item.StatusCode, Type: ResponseType(item)))
+            .Where(item => item.Type is not null)
             .GroupBy(item => item.StatusCode).ToDictionary(group => group.Key, group => group.Last().Type!);
         if (metadata.ResultType is { } resultType && !metadata.JsonStream && !metadata.ServerSentEvents &&
-            !metadata.NoContent)
+            !metadata.NoContent && !endpoint.OfType<PortiaCreatedResponseMetadata>().Any())
             _ = responseTypes.TryAdd(200, resultType);
         foreach (var (status, type) in responseTypes)
         {
@@ -85,12 +87,13 @@ sealed record PortiaOpenApiEnrichment(
 
         foreach (var example in Responses)
         {
-            var declared = endpoint.OfType<IProducesResponseTypeMetadata>()
-                               .LastOrDefault(item => item.StatusCode == example.Status)?.Type ??
-                           (example.Status == 200 && !metadata.NoContent && !metadata.JsonStream &&
-                            !metadata.ServerSentEvents
-                               ? metadata.ResultType
-                               : null);
+            var declaredMetadata = endpoint.OfType<IProducesResponseTypeMetadata>()
+                .LastOrDefault(item => item.StatusCode == example.Status);
+            var declared = declaredMetadata is not null ? ResponseType(declaredMetadata) :
+                example.Status == 200 && !metadata.NoContent && !metadata.JsonStream &&
+                !metadata.ServerSentEvents && !endpoint.OfType<PortiaCreatedResponseMetadata>().Any()
+                    ? metadata.ResultType
+                    : null;
             if (declared != example.Example.Type)
                 throw new InvalidOperationException(
                     $"Response example '{example.Example.Name}' must use the declared response type '{declared}'.");
@@ -169,6 +172,9 @@ sealed record PortiaOpenApiEnrichment(
             Add(media, example with { Value = value });
         }
     }
+
+    static Type? ResponseType(IProducesResponseTypeMetadata metadata) =>
+        metadata is PortiaCreatedResponseMetadata created ? created.PayloadType : metadata.Type;
 
     internal static JsonNode? Scalar(object? value, JsonNode? fallback, IOpenApiSchema? schema) => value switch
     {

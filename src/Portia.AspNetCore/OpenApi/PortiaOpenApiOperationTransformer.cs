@@ -28,7 +28,9 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         var createdLocation = endpointMetadata.OfType<PortiaCreatedLocation>().SingleOrDefault();
         var explicitResponses = endpointMetadata
             .OfType<IProducesResponseTypeMetadata>()
-            .Select(item => new DeclaredResponse(item.StatusCode, item.Type, item.ContentTypes.ToArray(), false))
+            .Select(item => new DeclaredResponse(item.StatusCode,
+                item is PortiaCreatedResponseMetadata created ? created.PayloadType : item.Type,
+                item.ContentTypes.ToArray(), false))
             .Concat(endpointMetadata.OfType<PortiaStreamProducesMetadata>()
                 .Select(item => new DeclaredResponse(item.StatusCode, item.Type, item.ContentTypes, true)))
             .ToArray();

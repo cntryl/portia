@@ -286,9 +286,9 @@ sealed class PortiaEndpointConfigurationState<TRequest>
                     route, requestMembers ??
                     throw new InvalidOperationException("Created requires generated request metadata."), payloadMembers));
                 var contentTypes = created.PayloadType is null ? Array.Empty<string>() : ["application/json"];
-                endpoint.Metadata.Add(new ProducesResponseTypeMetadata(StatusCodes.Status200OK, created.PayloadType,
+                endpoint.Metadata.Add(new PortiaCreatedResponseMetadata(StatusCodes.Status200OK, created.PayloadType,
                     contentTypes));
-                endpoint.Metadata.Add(new ProducesResponseTypeMetadata(StatusCodes.Status201Created, created.PayloadType,
+                endpoint.Metadata.Add(new PortiaCreatedResponseMetadata(StatusCodes.Status201Created, created.PayloadType,
                     contentTypes));
             });
         if (_queryMembers.Count != 0)
