@@ -206,6 +206,7 @@ public sealed class CreatedHttpResponseTests
         using var document = JsonDocument.Parse(body);
         var responses = document.RootElement.GetProperty("paths").GetProperty("/accounts").GetProperty("post")
             .GetProperty("responses");
+        Assert.Equal(2, responses.EnumerateObject().Count(response => response.Name.StartsWith('2')));
         foreach (var code in new[] { "200", "201" })
         {
             var response = responses.GetProperty(code);

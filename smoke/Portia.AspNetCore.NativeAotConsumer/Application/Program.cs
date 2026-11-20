@@ -40,6 +40,7 @@ _ = builder.Services.AddPortia().ConfigureJson(options =>
     .AddRequestHandler<SmokeExternalHandler>()
     .AddRequestHandler<SmokeUploadHandler>()
     .AddRequestHandler<SmokeBindingHandler>()
+    .AddRequestHandler<SmokeCreateHandler>()
     .AddRequestPipelineBehavior<SmokeRequestBehavior>()
     .AddRequestGuard<SmokeRequestGuard>();
 _ = builder.Services.AddCors(options => options.AddPolicy("smoke", policy => policy.WithOrigins("https://trusted.example")));
@@ -61,6 +62,8 @@ _ = app.MapPortiaGet<SmokeRequest, SmokePayload>("/smoke", endpoint => endpoint
     .Describe(x => x.Name, "Requested name.").DescribeResponse("Native response."));
 _ = app.MapPortiaPost<SmokeBinding, string>("/smoke-binding", endpoint => endpoint.Describe(x => x.A, "First value.")
     .RequestExample("binding", new SmokeBinding(11, 22)).ResponseExample(200, "binding", "11,22"));
+_ = app.MapGroup("/native").MapPortiaPost<SmokeCreate, PortiaCreateOutcome>("/resources",
+    endpoint => endpoint.Created("/native/resources/1"));
 _ = app.MapPortiaPost<SmokeUpload, int>("/smoke-upload", endpoint => endpoint
     .Accepts<Stream>("application/octet-stream")
     .OnBind(async (http, ct) =>
@@ -86,6 +89,16 @@ if (JsonSerializer.Serialize(new App_A.FirstPayload("contracts"), firstType) != 
 await app.StartAsync();
 using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
 {
+    foreach (var (repeated, expected) in new[] { (false, HttpStatusCode.Created), (true, HttpStatusCode.OK) })
+    {
+        using var createBody = new StringContent(repeated ? """{"repeated":true}""" : """{"repeated":false}""",
+            Encoding.UTF8, "application/json");
+        using var create = await client.PostAsync("/native/resources", createBody);
+        if (create.StatusCode != expected || create.Headers.Location?.OriginalString != "/native/resources/1" ||
+            (await create.Content.ReadAsStringAsync()).Length != 0)
+            throw new InvalidOperationException($"Unexpected bodyless create response: {(int)create.StatusCode}.");
+    }
+
     using var bindingBody = new StringContent("{\"wire_a\":11,\"wire_b\":22}", Encoding.UTF8, "application/json");
     using var bindingResponse = await client.PostAsync("/smoke-binding", bindingBody);
     var bindingResult = await bindingResponse.Content.ReadAsStringAsync();
@@ -170,6 +183,18 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     var recursiveId = properties.GetProperty("next_node").GetProperty("properties").GetProperty("next_node").GetProperty("$ref").GetString()!.Split('/')[^1];
     if (!components.GetProperty(recursiveId).GetProperty("properties").TryGetProperty("display_name", out _))
         throw new InvalidOperationException($"Recursive Portia schema does not resolve: {document}");
+    var createResponses = openApi.RootElement.GetProperty("paths").GetProperty("/native/resources")
+        .GetProperty("post").GetProperty("responses");
+    if (createResponses.EnumerateObject().Count(response => response.Name.StartsWith('2')) != 2)
+        throw new InvalidOperationException("Bodyless create must document exactly two success responses.");
+    foreach (var status in new[] { "200", "201" })
+    {
+        var createResponse = createResponses.GetProperty(status);
+        if (createResponse.TryGetProperty("content", out _) ||
+            !createResponse.GetProperty("headers").TryGetProperty("Location", out _))
+            throw new InvalidOperationException($"Unexpected bodyless create OpenAPI response: {createResponse}.");
+    }
+
     var uploadOperation = openApi.RootElement.GetProperty("paths").GetProperty("/smoke-upload").GetProperty("post");
     var uploadRequestSchema = uploadOperation.GetProperty("requestBody").GetProperty("content")
         .GetProperty("application/octet-stream").GetProperty("schema");
@@ -342,6 +367,18 @@ sealed class SmokeUploadHandler : IRequestHandler<SmokeUpload, int>
         ValueTask.FromResult(Result<int>.Success(context.Request.Length));
 }
 
+[Discriminator("portia.smoke.native-aot.create")]
+[RequestRoute("portia-smoke", "requests", "native-aot", "create")]
+sealed record SmokeCreate(bool Repeated) : IRequest<PortiaCreateOutcome>, ICallable;
+
+sealed class SmokeCreateHandler : IRequestHandler<SmokeCreate, PortiaCreateOutcome>
+{
+    public ValueTask<Result<PortiaCreateOutcome>> HandleAsync(IRequestContext<SmokeCreate> context,
+        CancellationToken ct) =>
+        ValueTask.FromResult(Result<PortiaCreateOutcome>.Success(
+            context.Request.Repeated ? PortiaCreateOutcome.Repeated() : PortiaCreateOutcome.Created()));
+}
+
 interface ISmokeRequest : IRequestBase;
 
 sealed class SmokeRequestGuard(SmokeGuardProbe probe) : IRequestGuard<ISmokeRequest>
@@ -375,6 +412,8 @@ sealed class SmokeGuardProbe
 [JsonSerializable(typeof(SmokeCount))]
 [JsonSerializable(typeof(SmokeVariant))]
 [JsonSerializable(typeof(SmokeUpload))]
+[JsonSerializable(typeof(SmokeCreate))]
+[JsonSerializable(typeof(PortiaCreateOutcome))]
 [JsonSerializable(typeof(SmokeBinding))]
 [JsonSerializable(typeof(SmokeCatalogChanged))]
 [JsonSerializable(typeof(SmokeCatalogConfirmed))]

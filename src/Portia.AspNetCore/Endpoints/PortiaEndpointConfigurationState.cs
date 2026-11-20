@@ -288,6 +288,13 @@ sealed class PortiaEndpointConfigurationState<TRequest>
                 endpoint.Metadata.Add(new PortiaCreatedLocation<TRequest>(created.Template, createPayloadIsNullable,
                     route, requestMembers ??
                     throw new InvalidOperationException("Created requires generated request metadata."), payloadMembers));
+                var operation = endpoint.Metadata.OfType<PortiaOpenApiOperation>().Single();
+                endpoint.Metadata[endpoint.Metadata.IndexOf(operation)] = operation with
+                {
+                    ResultType = created.PayloadType,
+                    NoContent = created.PayloadType is null,
+                    ResultIsNullable = createPayloadIsNullable
+                };
                 var contentTypes = created.PayloadType is null ? Array.Empty<string>() : ["application/json"];
                 endpoint.Metadata.Add(new PortiaCreatedResponseMetadata(StatusCodes.Status200OK, created.PayloadType,
                     contentTypes));
