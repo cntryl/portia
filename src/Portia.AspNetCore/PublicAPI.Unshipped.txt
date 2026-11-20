@@ -15,3 +15,15 @@ Cntryl.Portia.PortiaHttpMemberSources.Header(int index) -> string?
 Cntryl.Portia.PortiaHttpMemberSources.Query(int index) -> bool
 static Cntryl.Portia.PortiaHttpBinding.ResolveMemberSources<TRequest>(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Cntryl.Portia.PortiaHttpMember![]! members) -> Cntryl.Portia.PortiaHttpMemberSources!
 static Cntryl.Portia.PortiaHttpBinding.ValidateRequiredWhen<TRequest>(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Cntryl.Portia.PortiaHttpMember![]! members, Cntryl.Portia.PortiaHttpMemberSources! sources, bool hasCustomBinder) -> void
+Cntryl.Portia.PortiaPutBodyExtensions
+static Cntryl.Portia.PortiaPutBodyExtensions.MapPortiaPutByBody(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, string! operationId, string! selector, params string![]! queryMembers) -> Cntryl.Portia.PortiaPutBodyCases!
+static Cntryl.Portia.PortiaPutBodyExtensions.MapPortiaPutByBody<TOut>(this Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, string! pattern, string! operationId, string! selector, params string![]! queryMembers) -> Cntryl.Portia.PortiaPutBodyCases<TOut>!
+Cntryl.Portia.PortiaPutBodyCases
+Cntryl.Portia.PortiaPutBodyCases.Case<TRequest>(string! value) -> Cntryl.Portia.PortiaPutBodyCases!
+Cntryl.Portia.PortiaPutBodyCases<TOut>
+Cntryl.Portia.PortiaPutBodyCases<TOut>.Case<TRequest>(string! value) -> Cntryl.Portia.PortiaPutBodyCases<TOut>!
+Cntryl.Portia.PortiaPutBodyCasesBase
+Cntryl.Portia.PortiaPutBodyCasesBase.Add(System.Action<Microsoft.AspNetCore.Builder.EndpointBuilder!>! convention) -> void
+Cntryl.Portia.PortiaPutBodyCasesBase.Finally(System.Action<Microsoft.AspNetCore.Builder.EndpointBuilder!>! finallyConvention) -> void
+Cntryl.Portia.PortiaPutBodyCasesBase.ResolveSources<TRequest>(Cntryl.Portia.PortiaHttpMember![]! members, bool hasConditional) -> Cntryl.Portia.PortiaHttpMemberSources!
+Cntryl.Portia.PortiaPutBodyCasesBase.AddGeneratedCase<TRequest>(string! value, Cntryl.Portia.PortiaOpenApiParameter![]! parameters, Cntryl.Portia.PortiaHttpMemberSources! sources, bool resultIsNullable, System.Func<Microsoft.AspNetCore.Http.HttpContext!, Cntryl.Portia.IRequestBus!, System.Text.Json.JsonElement, System.Threading.CancellationToken, System.Threading.Tasks.Task<Microsoft.AspNetCore.Http.IResult!>!>! handle) -> void

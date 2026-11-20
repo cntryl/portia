@@ -287,7 +287,11 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
             if (iface.TypeArguments.Length == 2)
                 _ = body.Append(", ").Append(Type(iface.TypeArguments[1]));
 
-            _ = body.Append(">(").Append(Permission(request, diagnostic, consumerAssembly)).AppendLine("));");
+            var staticPermission = StaticPermission(request);
+            _ = body.Append(">(").Append(staticPermission is null ? Permission(request, diagnostic, consumerAssembly) : "null").Append(')');
+            if (staticPermission is not null)
+                _ = body.Append(" { StaticPermission = ").Append(SyntaxFactory.Literal(staticPermission).Text).Append(" }");
+            _ = body.AppendLine(");");
             var contractMetadata = JsonDescriptionEmission.Body(iface.TypeArguments);
             if (contractMetadata != "return null;")
                 body.Append("_ = builder.AddGeneratedContractMetadata(static type => { ")
@@ -588,6 +592,14 @@ public sealed class RegistrationCallInterceptorGenerator : IIncrementalGenerator
         var source = new StringBuilder();
         RequestTransportRegistrationEmitter.AppendConstruction(source, transport);
         return source.ToString();
+    }
+
+    static string? StaticPermission(ITypeSymbol request)
+    {
+        var value = request.GetAttributes().FirstOrDefault(attribute =>
+                attribute.AttributeClass is { } type && SymbolNames.Is(type, "Cntryl.Portia.RequiresPermissionAttribute"))
+            ?.ConstructorArguments.FirstOrDefault().Value as string;
+        return value is not null && !PermissionTokenPattern.IsMatch(value) ? value : null;
     }
 
     static string Permission(ITypeSymbol request, RegistrationDiagnostic? diagnostic,

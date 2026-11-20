@@ -37,7 +37,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
     static readonly HashSet<string> MappingMethodNames =
     [
         "MapPortiaGet", "MapPortiaPost", "MapPortiaPut", "MapPortiaPatch", "MapPortiaDelete",
-        "MapPortiaGetStream", "MapPortiaGetSse"
+        "MapPortiaGetStream", "MapPortiaGetSse", "Case"
     ];
 
     static readonly SymbolDisplayFormat NullableTypeDisplayFormat =
@@ -67,7 +67,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             }
 
             foreach (var duplicate in calls.Where(call => call.Model is not null).Select(call => call.Model!)
-                         .Where(call => !call.ExcludedFromDescription)
+                         .Where(call => !call.ExcludedFromDescription && call.BodyCasesType is null)
                          .GroupBy(call => call.OperationId, StringComparer.Ordinal)
                          .Where(group =>
                              group.Select(call => call.RequestTypeFullName).Distinct(StringComparer.Ordinal).Count() > 1
@@ -110,9 +110,13 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         ExpressionSyntax expression = name.Parent is MemberAccessExpressionSyntax access && access.Name == name
             ? access
             : name;
-        if (context.SemanticModel.GetSymbolInfo(expression, ct).Symbol is not IMethodSymbol method
-            || !SymbolNames.Is(method.ContainingType, "Cntryl.Portia.PortiaEndpointRouteBuilderExtensions")
-            || method.TypeArguments.Length is not (1 or 2))
+        if (context.SemanticModel.GetSymbolInfo(expression, ct).Symbol is not IMethodSymbol method ||
+            method.TypeArguments.Length is not (1 or 2))
+            return null;
+        var bodyCase = name.Identifier.ValueText == "Case" &&
+                       (SymbolNames.Is(method.ContainingType, "Cntryl.Portia.PortiaPutBodyCases") ||
+                        SymbolNames.Is(method.ContainingType, "Cntryl.Portia.PortiaPutBodyCases`1"));
+        if (!bodyCase && !SymbolNames.Is(method.ContainingType, "Cntryl.Portia.PortiaEndpointRouteBuilderExtensions"))
             return null;
         if (expression.Parent is not InvocationExpressionSyntax invocation || invocation.Expression != expression)
             return Invalid(expression, "mapping method groups are unsupported; use a concrete direct mapping call");
@@ -130,7 +134,25 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
         var operation = context.SemanticModel.GetOperation(invocation, ct) as IInvocationOperation;
         var configured = operation?.Arguments.Any(argument => argument.Parameter?.Name == "configure") == true;
-        var constant = operation?.Arguments.FirstOrDefault(a => a.Parameter?.Name == "pattern")?.Value.ConstantValue;
+        var mapping = operation;
+        if (bodyCase)
+        {
+            var receiver = expression is MemberAccessExpressionSyntax member ? member.Expression : null;
+            while (receiver is InvocationExpressionSyntax earlier &&
+                   earlier.Expression is MemberAccessExpressionSyntax previous &&
+                   previous.Name.Identifier.ValueText == "Case")
+                receiver = previous.Expression;
+            mapping = receiver is null ? null : context.SemanticModel.GetOperation(receiver, ct) as IInvocationOperation;
+            if (mapping?.TargetMethod.Name != "MapPortiaPutByBody" ||
+                !SymbolNames.Is(mapping.TargetMethod.ContainingType, "Cntryl.Portia.PortiaPutBodyExtensions") ||
+                mapping.Arguments.FirstOrDefault(argument => argument.Parameter?.Name == "operationId")
+                    ?.Value.ConstantValue is not { HasValue: true, Value: string } ||
+                mapping.Arguments.FirstOrDefault(argument => argument.Parameter?.Name == "selector")
+                    ?.Value.ConstantValue is not { HasValue: true, Value: string })
+                return Invalid(invocation, "chain typed cases directly from MapPortiaPutByBody with a literal route, operation ID and selector");
+        }
+
+        var constant = mapping?.Arguments.FirstOrDefault(a => a.Parameter?.Name == "pattern")?.Value.ConstantValue;
         if (constant is not { HasValue: true, Value: string pattern })
             return Invalid(invocation, "the route must be a compile-time string constant");
 
@@ -147,7 +169,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         {
             "MapPortiaGet" or "MapPortiaGetStream" or "MapPortiaGetSse" => "Get",
             "MapPortiaPost" => "Post",
-            "MapPortiaPut" => "Put",
+            "MapPortiaPut" or "Case" => "Put",
             "MapPortiaPatch" => "Patch",
             "MapPortiaDelete" => "Delete",
             _ => null
@@ -166,7 +188,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         {
             "MapPortiaGetStream" => CallKind.Stream,
             "MapPortiaGetSse" => CallKind.Sse,
-            _ when verb != "Get" && isQueuable => CallKind.Queue,
+            _ when !bodyCase && verb != "Get" && isQueuable => CallKind.Queue,
             _ => CallKind.Send
         };
 
@@ -176,9 +198,9 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 "asynchronous queue dispatch requires a no-result IRequest; remove IQueuable from a result-bearing request");
         }
 
-        var resultTypeSymbol = kind is CallKind.Queue || method.TypeArguments.Length != 2
-            ? null
-            : method.TypeArguments[1];
+        var resultTypeSymbol = bodyCase ? method.ContainingType.TypeArguments.FirstOrDefault() :
+            kind is CallKind.Queue || method.TypeArguments.Length != 2 ? null : method.TypeArguments[1];
+        var bodyCasesType = bodyCase ? method.ContainingType.ToDisplayString(NullableTypeDisplayFormat) : null;
         var resultType = resultTypeSymbol?.ToDisplayString(NullableTypeDisplayFormat);
         var resultRuntimeType = resultTypeSymbol?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var resultIsNullable = resultTypeSymbol is not null && IsNullableType(resultTypeSymbol);
@@ -210,7 +232,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                         ?.ToDisplayString() ?? "TopLevel",
                     IsExcludedFromDescription(invocation), configured, hasDefaultBinder,
                     createOutcome, createRequestMembers, createPayloadType, createPayloadMembers,
-                    createPayloadIsNullable), null);
+                    createPayloadIsNullable, bodyCasesType), null);
         }
 
         var conditionalMembers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -483,15 +505,24 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                         .AppendLine(")]");
                 var callModel = binding.Key;
                 var implementation = implementations[callModel];
-                source.Append(
-                        "        public static global::Microsoft.AspNetCore.Builder.IEndpointConventionBuilder Call_")
-                    .Append(implementation)
-                    .Append("(this global::Microsoft.AspNetCore.Routing.IEndpointRouteBuilder app, string pattern")
-                    .Append(callModel.Configured
-                        ? ", global::System.Action<" + ConfigurationType(callModel) + "> configure"
-                        : string.Empty)
-                    .Append(") => PortiaHttpBinding_").Append(implementation).Append(".Map(app, pattern")
-                    .Append(callModel.Configured ? ", configure" : string.Empty).AppendLine(");");
+                if (callModel.BodyCasesType is { } bodyCases)
+                {
+                    source.Append("        public static ").Append(bodyCases).Append(" Call_").Append(implementation)
+                        .Append("(this ").Append(bodyCases).Append(" cases, string value) => PortiaHttpBinding_")
+                        .Append(implementation).AppendLine(".Map(cases, value);");
+                }
+                else
+                {
+                    source.Append(
+                            "        public static global::Microsoft.AspNetCore.Builder.IEndpointConventionBuilder Call_")
+                        .Append(implementation)
+                        .Append("(this global::Microsoft.AspNetCore.Routing.IEndpointRouteBuilder app, string pattern")
+                        .Append(callModel.Configured
+                            ? ", global::System.Action<" + ConfigurationType(callModel) + "> configure"
+                            : string.Empty)
+                        .Append(") => PortiaHttpBinding_").Append(implementation).Append(".Map(app, pattern")
+                        .Append(callModel.Configured ? ", configure" : string.Empty).AppendLine(");");
+                }
             }
 
             source.AppendLine("    }").AppendLine("}");
@@ -524,6 +555,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         Add(call.Verb);
         Add(call.Configured.ToString());
         Add(call.HasDefaultBinder.ToString());
+        Add(call.BodyCasesType);
         Add(call.IsCreateOutcome.ToString());
         if (call.CreateRequestMembers is { } createMembers)
         {
@@ -551,6 +583,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             Add(parameter.IsEnum.ToString());
             Add(parameter.ParseKind.ToString());
             Add(parameter.FormBindable.ToString());
+            Add(parameter.JsonOnly.ToString());
         }
 
         return GeneratedSource.Identity(key.ToString());
@@ -566,24 +599,32 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
     static void AppendImplementation(StringBuilder source, CallModel call)
     {
+        var isBodyCase = call.BodyCasesType is not null;
+        var bodyElement = isBodyCase ? "bodyRoot" : "body.RootElement";
         var bodyParameters = call.Parameters.Where(p => p.Source == ParameterSource.Body).ToArray();
         var hasBody = bodyParameters.Length > 0;
         var checksRoutedBody = call.Verb is "Post" or "Put" or "Patch" or "Delete" &&
                                call.Parameters.Any(parameter => parameter.Source == ParameterSource.Route);
         var hasConditional = call.Parameters.Any(parameter => parameter.JsonOnly);
-        var formBindable = hasBody && !hasConditional && bodyParameters.All(p => p.FormBindable);
-        var readsForm = !hasConditional && (formBindable || checksRoutedBody && !hasBody);
+        var formBindable = !isBodyCase && hasBody && !hasConditional && bodyParameters.All(p => p.FormBindable);
+        var readsForm = !isBodyCase && !hasConditional && (formBindable || checksRoutedBody && !hasBody);
         var configurationType = ConfigurationType(call);
 
-        _ = source
-            .Append("    public static global::Microsoft.AspNetCore.Builder.IEndpointConventionBuilder Map")
-            .Append("(this global::Microsoft.AspNetCore.Routing.IEndpointRouteBuilder app, string pattern")
-            .Append(call.Configured
-                ? $", global::System.Action<{configurationType}> configure"
-                : string.Empty)
-            .AppendLine(")")
-            .AppendLine("    {")
-            .AppendLine("        global::Cntryl.Portia.PortiaHttpBinding.RequireHttpServices(app);");
+        if (isBodyCase)
+            _ = source.Append("    public static ").Append(call.BodyCasesType).Append(" Map(")
+                .Append(call.BodyCasesType).AppendLine(" cases, string value)").AppendLine("    {");
+        else
+        {
+            _ = source
+                .Append("    public static global::Microsoft.AspNetCore.Builder.IEndpointConventionBuilder Map")
+                .Append("(this global::Microsoft.AspNetCore.Routing.IEndpointRouteBuilder app, string pattern")
+                .Append(call.Configured
+                    ? $", global::System.Action<{configurationType}> configure"
+                    : string.Empty)
+                .AppendLine(")")
+                .AppendLine("    {")
+                .AppendLine("        global::Cntryl.Portia.PortiaHttpBinding.RequireHttpServices(app);");
+        }
         if (call.Configured || call.HasDefaultBinder)
         {
             _ = source.AppendLine("        var httpMembers = new global::Cntryl.Portia.PortiaHttpMember[]")
@@ -613,88 +654,107 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         if (call.HasDefaultBinder)
         {
             _ = source.Append("        var memberSources = ")
-                .Append(call.Configured
-                    ? "configuration.ResolveMemberSources(app, httpMembers)"
-                    : $"global::Cntryl.Portia.PortiaHttpBinding.ResolveMemberSources<{call.RequestTypeFullName}>(app, httpMembers)")
+                .Append(isBodyCase ? $"cases.ResolveSources<{call.RequestTypeFullName}>(httpMembers, {(hasConditional ? "true" : "false")})"
+                    : call.Configured
+                        ? "configuration.ResolveMemberSources(app, httpMembers)"
+                        : $"global::Cntryl.Portia.PortiaHttpBinding.ResolveMemberSources<{call.RequestTypeFullName}>(app, httpMembers)")
                 .AppendLine(";");
         }
 
-        if (hasConditional)
+        if (hasConditional && !isBodyCase)
             _ = source.Append("        global::Cntryl.Portia.PortiaHttpBinding.ValidateRequiredWhen<")
                 .Append(call.RequestTypeFullName).Append(">(app, httpMembers, memberSources, ")
                 .Append(call.Configured ? "configuration.Binder is not null" : "false").AppendLine(");");
 
-        _ = source
-            // Mapping the handler as a RequestDelegate keeps RequestDelegateFactory — and the
-            // reflection it needs to bind parameters — out of the consumer's AOT build. That
-            // overload adds no MethodInfo, and ApiExplorer describes only endpoints that carry
-            // one, so the handler's own metadata is supplied explicitly beside Portia's.
-            .AppendLine("        global::Microsoft.AspNetCore.Http.RequestDelegate handler = Dispatch;")
-            .Append("        var builder = app.MapMethods(pattern, new[] { \"").Append(call.Verb.ToUpperInvariant())
-            .Append("\" }, handler)")
-            .AppendLine()
-            .Append("            .WithMetadata(handler.Method, ")
-            .Append(formBindable ? "new global::Cntryl.Portia.PortiaFormBindableBody(), " : string.Empty)
-            .Append("new global::Cntryl.Portia.PortiaOpenApiOperation(")
-            .Append(Literal(call.OperationId)).Append(", ")
-            .Append(call.ResultRuntimeType is null ? "null" : $"typeof({call.ResultRuntimeType})").Append(", ")
-            .Append(call.ResultType is null && call.Kind is CallKind.Send or CallKind.Queue ? "true" : "false")
-            .Append(", ")
-            .Append(call.Kind == CallKind.Stream ? "true" : "false").Append(", ")
-            .Append(call.Kind == CallKind.Sse ? "true" : "false").Append(", ")
-            .Append(call.Kind == CallKind.Queue ? "true" : "false")
-            .AppendLine(", new global::Cntryl.Portia.PortiaOpenApiParameter[]")
-            .AppendLine("            {");
-        foreach (var parameter in call.Parameters)
+        if (isBodyCase)
         {
-            var wireNameExpression = parameter.Source == ParameterSource.Route ? Literal(parameter.RouteToken!)
-                : parameter.JsonName is not null ? Literal(parameter.JsonName) : "default(string)";
-            _ = source.Append("                new(").Append(Literal(parameter.Name)).Append(", typeof(")
-                .Append(parameter.RuntimeType).Append("), ")
-                .Append(Literal(parameter.Source.ToString().ToLowerInvariant())).Append(", ")
-                .Append(!parameter.Nullable && parameter.Default is null ? "true" : "false").Append(", ")
-                .Append(parameter.Default is not null ? "true" : "false").Append(", ")
-                .Append(parameter.Default ?? "null").Append(", ").Append(wireNameExpression)
-                .Append(") { IsNullable = ").Append(parameter.Nullable ? "true" : "false").AppendLine(" },");
+            _ = source.Append("        cases.AddGeneratedCase<").Append(call.RequestTypeFullName)
+                .AppendLine(">(value, new global::Cntryl.Portia.PortiaOpenApiParameter[]").AppendLine("        {");
+            AppendOpenApiParameters();
+            _ = source.Append("        }, memberSources, ").Append(call.ResultIsNullable ? "true" : "false")
+                .AppendLine(", Handle);").AppendLine("        return cases;").AppendLine();
         }
-
-        _ = source.Append("            }) { RequestType = typeof(").Append(call.RequestTypeFullName)
-            .Append("), ResultIsNullable = ")
-            .Append(call.ResultIsNullable ? "true" : "false")
-            .AppendLine(" });");
-        if (call.HasDefaultBinder)
-            _ = source.AppendLine("        memberSources.ApplyMetadata(builder);");
-        if (call.IsCreateOutcome && call.CreateRequestMembers is { } createMembers)
+        else
         {
-            _ = source.AppendLine("        configuration.ApplyMetadata(app, builder,")
-                .Append("            new global::System.Collections.Generic.Dictionary<string, global::System.Func<")
-                .Append(call.RequestTypeFullName).AppendLine(", object?>>")
+            _ = source
+                // Mapping the handler as a RequestDelegate keeps RequestDelegateFactory — and the
+                // reflection it needs to bind parameters — out of the consumer's AOT build. That
+                // overload adds no MethodInfo, and ApiExplorer describes only endpoints that carry
+                // one, so the handler's own metadata is supplied explicitly beside Portia's.
+                .AppendLine("        global::Microsoft.AspNetCore.Http.RequestDelegate handler = Dispatch;")
+                .Append("        var builder = app.MapMethods(pattern, new[] { \"").Append(call.Verb.ToUpperInvariant())
+                .Append("\" }, handler)")
+                .AppendLine()
+                .Append("            .WithMetadata(handler.Method, ")
+                .Append(formBindable ? "new global::Cntryl.Portia.PortiaFormBindableBody(), " : string.Empty)
+                .Append("new global::Cntryl.Portia.PortiaOpenApiOperation(")
+                .Append(Literal(call.OperationId)).Append(", ")
+                .Append(call.ResultRuntimeType is null ? "null" : $"typeof({call.ResultRuntimeType})").Append(", ")
+                .Append(call.ResultType is null && call.Kind is CallKind.Send or CallKind.Queue ? "true" : "false")
+                .Append(", ")
+                .Append(call.Kind == CallKind.Stream ? "true" : "false").Append(", ")
+                .Append(call.Kind == CallKind.Sse ? "true" : "false").Append(", ")
+                .Append(call.Kind == CallKind.Queue ? "true" : "false")
+                .AppendLine(", new global::Cntryl.Portia.PortiaOpenApiParameter[]")
                 .AppendLine("            {");
-            foreach (var name in createMembers)
-                _ = source.Append("                [").Append(Literal(name)).Append("] = static request => request.@")
-                    .Append(name).AppendLine(",");
-            _ = source.AppendLine("            },");
-            if (call.CreatePayloadTypeFullName is { } payloadTypeName)
+            AppendOpenApiParameters();
+
+            _ = source.Append("            }) { RequestType = typeof(").Append(call.RequestTypeFullName)
+                .Append("), ResultIsNullable = ")
+                .Append(call.ResultIsNullable ? "true" : "false")
+                .AppendLine(" });");
+            if (call.HasDefaultBinder)
+                _ = source.AppendLine("        memberSources.ApplyMetadata(builder);");
+            if (call.IsCreateOutcome && call.CreateRequestMembers is { } createMembers)
             {
-                _ = source.AppendLine(
-                    "            new global::System.Collections.Generic.Dictionary<string, global::System.Func<object?, object?>>")
+                _ = source.AppendLine("        configuration.ApplyMetadata(app, builder,")
+                    .Append("            new global::System.Collections.Generic.Dictionary<string, global::System.Func<")
+                    .Append(call.RequestTypeFullName).AppendLine(", object?>>")
                     .AppendLine("            {");
-                foreach (var name in call.CreatePayloadMembers ?? [])
-                    _ = source.Append("                [").Append(Literal(name))
-                        .Append("] = static payload => ((").Append(payloadTypeName).Append(")payload!).@")
+                foreach (var name in createMembers)
+                    _ = source.Append("                [").Append(Literal(name)).Append("] = static request => request.@")
                         .Append(name).AppendLine(",");
                 _ = source.AppendLine("            },");
+                if (call.CreatePayloadTypeFullName is { } payloadTypeName)
+                {
+                    _ = source.AppendLine(
+                        "            new global::System.Collections.Generic.Dictionary<string, global::System.Func<object?, object?>>")
+                        .AppendLine("            {");
+                    foreach (var name in call.CreatePayloadMembers ?? [])
+                        _ = source.Append("                [").Append(Literal(name))
+                            .Append("] = static payload => ((").Append(payloadTypeName).Append(")payload!).@")
+                            .Append(name).AppendLine(",");
+                    _ = source.AppendLine("            },");
+                }
+                else
+                {
+                    _ = source.AppendLine("            null,");
+                }
+
+                _ = source.AppendLine(call.CreatePayloadIsNullable ? "            true);" : "            false);");
             }
-            else
+            else if (call.Configured)
+                _ = source.AppendLine("        configuration.ApplyMetadata(app, builder);");
+            _ = source.AppendLine("        return builder;").AppendLine();
+
+        }
+
+        void AppendOpenApiParameters()
+        {
+            foreach (var parameter in call.Parameters)
             {
-                _ = source.AppendLine("            null,");
+                var wireNameExpression = parameter.Source == ParameterSource.Route ? Literal(parameter.RouteToken!)
+                    : parameter.JsonName is not null ? Literal(parameter.JsonName) : "default(string)";
+                _ = source.Append("                new(").Append(Literal(parameter.Name)).Append(", typeof(")
+                    .Append(parameter.RuntimeType).Append("), ")
+                    .Append(Literal(parameter.Source.ToString().ToLowerInvariant())).Append(", ")
+                    .Append(!parameter.Nullable && parameter.Default is null ? "true" : "false").Append(", ")
+                    .Append(parameter.Default is not null ? "true" : "false").Append(", ")
+                    .Append(parameter.Default ?? "null").Append(", ").Append(wireNameExpression)
+                    .Append(") { IsNullable = ").Append(parameter.Nullable ? "true" : "false").AppendLine(" },");
             }
 
-            _ = source.AppendLine(call.CreatePayloadIsNullable ? "            true);" : "            false);");
         }
-        else if (call.Configured)
-            _ = source.AppendLine("        configuration.ApplyMetadata(app, builder);");
-        _ = source.AppendLine("        return builder;").AppendLine();
 
         var extraParameters = call.Kind is CallKind.Queue
             ? ", global::Cntryl.Portia.IRequestQueuePublisher queue"
@@ -717,94 +777,99 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             ? "throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"Malformed request.\");"
             : "return global::Cntryl.Portia.PortiaHttpBinding.Problem(400, \"Malformed request.\");";
 
-        _ = source
-            .AppendLine(
-                "        async global::System.Threading.Tasks.Task Dispatch(global::Microsoft.AspNetCore.Http.HttpContext httpContext)")
-            .AppendLine("        {")
-            .AppendLine("            try")
-            .AppendLine("            {");
-        if (!string.Equals(call.Verb, "Get", StringComparison.Ordinal))
+        if (!isBodyCase)
         {
-            // A state-changing request is refused before binding reads anything from it.
             _ = source
                 .AppendLine(
-                    "                if (global::Cntryl.Portia.PortiaHttpBinding.RejectCrossOrigin(httpContext) is { } crossOrigin)")
-                .AppendLine("                {")
-                .AppendLine("                    await crossOrigin.ExecuteAsync(httpContext).ConfigureAwait(false);")
-                .AppendLine("                    return;")
-                .AppendLine("                }");
+                    "        async global::System.Threading.Tasks.Task Dispatch(global::Microsoft.AspNetCore.Http.HttpContext httpContext)")
+                .AppendLine("        {")
+                .AppendLine("            try")
+                .AppendLine("            {");
+            if (!string.Equals(call.Verb, "Get", StringComparison.Ordinal))
+            {
+                // A state-changing request is refused before binding reads anything from it.
+                _ = source
+                    .AppendLine(
+                        "                if (global::Cntryl.Portia.PortiaHttpBinding.RejectCrossOrigin(httpContext) is { } crossOrigin)")
+                    .AppendLine("                {")
+                    .AppendLine("                    await crossOrigin.ExecuteAsync(httpContext).ConfigureAwait(false);")
+                    .AppendLine("                    return;")
+                    .AppendLine("                }");
+            }
+
+            _ = source
+                .AppendLine(
+                    "                var bus = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Cntryl.Portia.IRequestBus>(httpContext.RequestServices);");
+            if (call.Kind == CallKind.Queue)
+            {
+                _ = source.AppendLine(
+                    "                var queue = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Cntryl.Portia.IRequestQueuePublisher>(httpContext.RequestServices);");
+            }
+
+            _ = source.Append("                var result = ");
+            if (call.Kind is CallKind.Send or CallKind.Queue || call.Configured)
+                _ = source.Append("await ");
+
+            _ = source.Append("Handle(httpContext, bus")
+                .Append(call.Kind is CallKind.Queue ? ", queue" : string.Empty)
+                .AppendLine(", httpContext.RequestAborted);")
+                .AppendLine("                await result.ExecuteAsync(httpContext).ConfigureAwait(false);")
+                .AppendLine("            }")
+                .AppendLine(
+                    "            catch (global::Cntryl.Portia.HttpPayloadTooLargeException ex) when (!httpContext.Response.HasStarted)")
+                .AppendLine("            {")
+                .AppendLine(
+                    "                await global::Cntryl.Portia.PortiaHttpBinding.Problem(413, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
+                .AppendLine("            }")
+                .AppendLine(
+                    "            catch (global::Cntryl.Portia.HttpUnsupportedMediaTypeException ex) when (!httpContext.Response.HasStarted)")
+                .AppendLine("            {")
+                .AppendLine(
+                    "                await global::Cntryl.Portia.PortiaHttpBinding.Problem(415, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
+                .AppendLine("            }")
+                .AppendLine(
+                    "            catch (global::Microsoft.AspNetCore.Antiforgery.AntiforgeryValidationException) when (!httpContext.Response.HasStarted)")
+                .AppendLine("            {")
+                .AppendLine(
+                    "                await global::Cntryl.Portia.PortiaHttpBinding.Problem(400, \"Invalid antiforgery token.\").ExecuteAsync(httpContext).ConfigureAwait(false);")
+                .AppendLine("            }")
+                .AppendLine(
+                    "            catch (global::Microsoft.AspNetCore.Http.BadHttpRequestException ex) when (!httpContext.Response.HasStarted)")
+                .AppendLine("            {")
+                .AppendLine(
+                    "                await global::Cntryl.Portia.PortiaHttpBinding.Problem(400, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
+                .AppendLine("            }")
+                .AppendLine(
+                    "            catch (global::Cntryl.Portia.EventStreamConcurrencyException) when (!httpContext.Response.HasStarted)")
+                .AppendLine("            {")
+                .AppendLine(
+                    "                await global::Cntryl.Portia.ResultHttpExtensions.ToHttpResult(global::Cntryl.Portia.Result.Failure(new global::Cntryl.Portia.RequestError(global::Cntryl.Portia.RequestErrorKind.Conflict, \"The request conflicted with a concurrent update.\", true))).ExecuteAsync(httpContext).ConfigureAwait(false);")
+                .AppendLine("            }")
+                // A client abort is requested cancellation, not a fault, and nobody can receive a response.
+                .AppendLine(
+                    "            catch (global::System.OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)")
+                .AppendLine("            {")
+                .AppendLine("                httpContext.Abort();")
+                .AppendLine("            }")
+                .AppendLine("            catch (global::System.Exception ex) when (!httpContext.Response.HasStarted)")
+                .AppendLine("            {")
+                .AppendLine(
+                    "                await global::Cntryl.Portia.PortiaHttpBinding.Unexpected(httpContext, ex).ExecuteAsync(httpContext).ConfigureAwait(false);")
+                .AppendLine("            }")
+                .AppendLine("            catch (global::System.Exception)")
+                .AppendLine("            {")
+                .AppendLine("                httpContext.Abort();")
+                .AppendLine("            }")
+                .AppendLine("        }")
+                .AppendLine();
+
         }
-
-        _ = source
-            .AppendLine(
-                "                var bus = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Cntryl.Portia.IRequestBus>(httpContext.RequestServices);");
-        if (call.Kind == CallKind.Queue)
-        {
-            _ = source.AppendLine(
-                "                var queue = global::Microsoft.Extensions.DependencyInjection.ServiceProviderServiceExtensions.GetRequiredService<global::Cntryl.Portia.IRequestQueuePublisher>(httpContext.RequestServices);");
-        }
-
-        _ = source.Append("                var result = ");
-        if (call.Kind is CallKind.Send or CallKind.Queue || call.Configured)
-            _ = source.Append("await ");
-
-        _ = source.Append("Handle(httpContext, bus")
-            .Append(call.Kind is CallKind.Queue ? ", queue" : string.Empty)
-            .AppendLine(", httpContext.RequestAborted);")
-            .AppendLine("                await result.ExecuteAsync(httpContext).ConfigureAwait(false);")
-            .AppendLine("            }")
-            .AppendLine(
-                "            catch (global::Cntryl.Portia.HttpPayloadTooLargeException ex) when (!httpContext.Response.HasStarted)")
-            .AppendLine("            {")
-            .AppendLine(
-                "                await global::Cntryl.Portia.PortiaHttpBinding.Problem(413, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
-            .AppendLine("            }")
-            .AppendLine(
-                "            catch (global::Cntryl.Portia.HttpUnsupportedMediaTypeException ex) when (!httpContext.Response.HasStarted)")
-            .AppendLine("            {")
-            .AppendLine(
-                "                await global::Cntryl.Portia.PortiaHttpBinding.Problem(415, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
-            .AppendLine("            }")
-            .AppendLine(
-                "            catch (global::Microsoft.AspNetCore.Antiforgery.AntiforgeryValidationException) when (!httpContext.Response.HasStarted)")
-            .AppendLine("            {")
-            .AppendLine(
-                "                await global::Cntryl.Portia.PortiaHttpBinding.Problem(400, \"Invalid antiforgery token.\").ExecuteAsync(httpContext).ConfigureAwait(false);")
-            .AppendLine("            }")
-            .AppendLine(
-                "            catch (global::Microsoft.AspNetCore.Http.BadHttpRequestException ex) when (!httpContext.Response.HasStarted)")
-            .AppendLine("            {")
-            .AppendLine(
-                "                await global::Cntryl.Portia.PortiaHttpBinding.Problem(400, ex.Message).ExecuteAsync(httpContext).ConfigureAwait(false);")
-            .AppendLine("            }")
-            .AppendLine(
-                "            catch (global::Cntryl.Portia.EventStreamConcurrencyException) when (!httpContext.Response.HasStarted)")
-            .AppendLine("            {")
-            .AppendLine(
-                "                await global::Cntryl.Portia.ResultHttpExtensions.ToHttpResult(global::Cntryl.Portia.Result.Failure(new global::Cntryl.Portia.RequestError(global::Cntryl.Portia.RequestErrorKind.Conflict, \"The request conflicted with a concurrent update.\", true))).ExecuteAsync(httpContext).ConfigureAwait(false);")
-            .AppendLine("            }")
-            // A client abort is requested cancellation, not a fault, and nobody can receive a response.
-            .AppendLine(
-                "            catch (global::System.OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)")
-            .AppendLine("            {")
-            .AppendLine("                httpContext.Abort();")
-            .AppendLine("            }")
-            .AppendLine("            catch (global::System.Exception ex) when (!httpContext.Response.HasStarted)")
-            .AppendLine("            {")
-            .AppendLine(
-                "                await global::Cntryl.Portia.PortiaHttpBinding.Unexpected(httpContext, ex).ExecuteAsync(httpContext).ConfigureAwait(false);")
-            .AppendLine("            }")
-            .AppendLine("            catch (global::System.Exception)")
-            .AppendLine("            {")
-            .AppendLine("                httpContext.Abort();")
-            .AppendLine("            }")
-            .AppendLine("        }")
-            .AppendLine();
 
         _ = source
             .Append("        ").Append(handlePrefix).Append(returnType).Append(" Handle(")
             .Append("global::Microsoft.AspNetCore.Http.HttpContext httpContext, global::Cntryl.Portia.IRequestBus bus")
             .Append(extraParameters)
+            .Append(isBodyCase ? ", global::System.Text.Json.JsonElement bodyRoot" : string.Empty)
             .AppendLine(", global::System.Threading.CancellationToken ct)")
             .AppendLine("        {");
 
@@ -890,9 +955,9 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             }
             else
             {
-                if (hasBody)
+                if (hasBody && !isBodyCase)
                     _ = source.Append("                ").AppendLine(jsonBody);
-                else if (checksRoutedBody)
+                else if (checksRoutedBody && !isBodyCase)
                     _ = source.Append(
                             "                using var body = httpContext.Request.HasJsonContentType() ? await global::Cntryl.Portia.PortiaHttpBinding.ReadJsonBodyAsync(httpContext, false, ct).ConfigureAwait(false) : global::System.Text.Json.JsonDocument.Parse(\"{}\");")
                         .AppendLine();
@@ -920,20 +985,19 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     {
                         if (cascade)
                         {
-                            _ = source.Append(pad)
-                                .Append($"if (header{i} is null && !memberSources.Query({i}) && ")
-                                .Append("global::Cntryl.Portia.PortiaHttpBinding.HasBodyMember<")
-                                .Append(call.RequestTypeFullName).Append(", ").Append(parameter.Type)
-                                .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ")
-                                .Append(Literal(parameter.Name)).Append(", ").Append(name)
-                                .AppendLine("))")
-                                .Append(pad).AppendLine("{");
+                            _ = source.Append(pad).Append($"if (header{i} is null && !memberSources.Query({i})");
+                            if (!isBodyCase)
+                                _ = source.Append(" && global::Cntryl.Portia.PortiaHttpBinding.HasBodyMember<")
+                                    .Append(call.RequestTypeFullName).Append(", ").Append(parameter.Type)
+                                    .Append(">(").Append(bodyElement).Append(", jsonOptions, ").Append(i).Append(", ")
+                                    .Append(Literal(parameter.Name)).Append(", ").Append(name).Append(')');
+                            _ = source.AppendLine(")").Append(pad).AppendLine("{");
                         }
 
                         _ = source.Append(cascade ? pad + "    " : pad).Append("value").Append(i)
                             .Append(" = global::Cntryl.Portia.PortiaHttpBinding.ReadBody<")
                             .Append(call.RequestTypeFullName).Append(", ").Append(parameter.Type)
-                            .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ")
+                            .Append(">(").Append(bodyElement).Append(", jsonOptions, ").Append(i).Append(", ")
                             .Append(Literal(parameter.Name))
                             .Append(", ").Append(name)
                             .Append(parameter.Nullable ? ", true" : ", false")
@@ -969,7 +1033,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                         {
                             var inBody = form
                                 ? $"global::Cntryl.Portia.PortiaHttpBinding.ReadForm(form, {name}, false) is not null"
-                                : $"global::Cntryl.Portia.PortiaHttpBinding.HasBodyProperty<{call.RequestTypeFullName}, {parameter.Type}>(body.RootElement, jsonOptions, {i}, {Literal(parameter.Name)}, {name})";
+                                : $"global::Cntryl.Portia.PortiaHttpBinding.HasBodyProperty<{call.RequestTypeFullName}, {parameter.Type}>({bodyElement}, jsonOptions, {i}, {Literal(parameter.Name)}, {name})";
                             _ = source.Append(pad).Append("if ((header").Append(i)
                                 .Append(" is not null || memberSources.Query(").Append(i).Append(")) && ")
                                 .Append(inBody).AppendLine(")")
@@ -1036,7 +1100,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     if (parameter.Source == ParameterSource.Route && checksRoutedBody && !form)
                         _ = source.Append(pad).Append("global::Cntryl.Portia.PortiaHttpBinding.ValidateRoutedBody<")
                             .Append(call.RequestTypeFullName).Append(", ").Append(parameter.Type)
-                            .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ")
+                            .Append(">(").Append(bodyElement).Append(", jsonOptions, ").Append(i).Append(", ")
                             .Append(Literal(parameter.Name)).Append(", ").Append(name)
                             .Append(", value").Append(i).AppendLine(");");
                     if (parameter.Source == ParameterSource.Route && checksRoutedBody && form)
@@ -1267,7 +1331,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         string[]? createRequestMembers,
         string? createPayloadTypeFullName,
         string[]? createPayloadMembers,
-        bool createPayloadIsNullable)
+        bool createPayloadIsNullable,
+        string? bodyCasesType)
     {
         public string RequestTypeFullName { get; } = requestTypeFullName;
 
@@ -1302,6 +1367,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         public string? CreatePayloadTypeFullName { get; } = createPayloadTypeFullName;
         public string[]? CreatePayloadMembers { get; } = createPayloadMembers;
         public bool CreatePayloadIsNullable { get; } = createPayloadIsNullable;
+        public string? BodyCasesType { get; } = bodyCasesType;
 
         public bool HasSameCreateShape(CallModel other) =>
             IsCreateOutcome == other.IsCreateOutcome &&
@@ -1333,6 +1399,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             && ExcludedFromDescription == other.ExcludedFromDescription
             && Configured == other.Configured
             && HasDefaultBinder == other.HasDefaultBinder
+            && BodyCasesType == other.BodyCasesType
             && HasSameCreateShape(other);
 
         public override int GetHashCode()
@@ -1364,6 +1431,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                 hash = (hash * 397) ^ StringComparer.Ordinal.GetHashCode(ContainingSymbol);
                 hash = (hash * 397) ^ ExcludedFromDescription.GetHashCode();
                 hash = (hash * 397) ^ Configured.GetHashCode();
+                hash = (hash * 397) ^ (BodyCasesType is null ? 0 : StringComparer.Ordinal.GetHashCode(BodyCasesType));
                 return (hash * 397) ^ HasDefaultBinder.GetHashCode();
             }
         }
@@ -1375,6 +1443,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
 
         public bool Equals(CallModel? left, CallModel? right) => ReferenceEquals(left, right)
                                                                  || left is not null && right is not null
+                                                                 && left.BodyCasesType == right.BodyCasesType
                                                                  && left.RequestTypeFullName ==
                                                                  right.RequestTypeFullName
                                                                  && left.RequestTypeName == right.RequestTypeName

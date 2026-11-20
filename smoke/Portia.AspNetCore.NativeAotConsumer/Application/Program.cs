@@ -42,6 +42,8 @@ _ = builder.Services.AddPortia().ConfigureJson(options =>
     .AddRequestHandler<SmokeBindingHandler>()
     .AddRequestHandler<SmokeQuoteHandler>()
     .AddRequestHandler<SmokeScheduleHandler>()
+    .AddRequestHandler<SmokeRenameHandler>()
+    .AddRequestHandler<SmokeArchiveHandler>()
     .AddRequestHandler<SmokeCreateHandler>()
     .AddRequestHandler<SmokeReplaceHandler>()
     .AddRequestPipelineBehavior<SmokeRequestBehavior>()
@@ -71,6 +73,8 @@ _ = app.MapPortiaPut<SmokeReplace, PortiaCreateOutcome<SmokeResource>>("/native/
     endpoint => endpoint.Created("/native/resources/{id}", includePayload: false));
 _ = app.MapPortiaGet<SmokeQuote, DecimalString>("/smoke-quotes/{amount}");
 _ = app.MapPortiaPost<SmokeSchedule, string>("/smoke-schedule");
+_ = app.MapPortiaPutByBody("/smoke-assets/{id}", "smokeAsset", "mode")
+    .Case<SmokeRename>("rename").Case<SmokeArchive>("archive");
 _ = app.MapPortiaPost<SmokeUpload, int>("/smoke-upload", endpoint => endpoint
     .Accepts<Stream>("application/octet-stream")
     .OnBind(async (http, ct) =>
@@ -128,6 +132,15 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     using var scheduleSuccess = await client.PostAsync("/smoke-schedule", manual);
     if (scheduleSuccess.StatusCode != HttpStatusCode.OK)
         throw new InvalidOperationException("Native conditional validation rejected an inactive condition.");
+
+    using var renameBody = new StringContent("""{"mode":"rename","name":"Native"}""", Encoding.UTF8, "application/json");
+    using var rename = await client.PutAsync("/smoke-assets/1", renameBody);
+    if (rename.StatusCode != HttpStatusCode.NoContent)
+        throw new InvalidOperationException("Native typed PUT case did not bind and dispatch.");
+    using var unknownBody = new StringContent("""{"mode":"unknown"}""", Encoding.UTF8, "application/json");
+    using var unknown = await client.PutAsync("/smoke-assets/1", unknownBody);
+    if (unknown.StatusCode != HttpStatusCode.BadRequest)
+        throw new InvalidOperationException("Native typed PUT accepted an unknown selector.");
 
     using var bindingBody = new StringContent("{\"wire_a\":11,\"wire_b\":22}", Encoding.UTF8, "application/json");
     using var bindingResponse = await client.PostAsync("/smoke-binding", bindingBody);
@@ -425,6 +438,24 @@ sealed class SmokeScheduleHandler : IRequestHandler<SmokeSchedule, string>
         ValueTask.FromResult(Result<string>.Success(context.Request.Mode));
 }
 
+sealed record SmokeRename(int Id, string Name) : IRequest;
+
+sealed record SmokeArchive(int Id) : IRequest;
+
+sealed class SmokeRenameHandler : IRequestHandler<SmokeRename>
+{
+    public ValueTask<Result> HandleAsync(IRequestContext<SmokeRename> context, CancellationToken ct) =>
+        ValueTask.FromResult(context.Request.Id == 1 && context.Request.Name == "Native"
+            ? Result.Success
+            : Result.Failure(RequestError.Validation("Unexpected native case values.")));
+}
+
+sealed class SmokeArchiveHandler : IRequestHandler<SmokeArchive>
+{
+    public ValueTask<Result> HandleAsync(IRequestContext<SmokeArchive> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result.Success);
+}
+
 [Discriminator("portia.smoke.native-aot.create")]
 [RequestRoute("portia-smoke", "requests", "native-aot", "create")]
 sealed record SmokeCreate(bool Repeated) :
@@ -493,6 +524,8 @@ sealed class SmokeGuardProbe
 [JsonSerializable(typeof(SmokeQuote))]
 [JsonSerializable(typeof(DecimalString))]
 [JsonSerializable(typeof(SmokeSchedule))]
+[JsonSerializable(typeof(SmokeRename))]
+[JsonSerializable(typeof(SmokeArchive))]
 [JsonSerializable(typeof(SmokeCreate))]
 [JsonSerializable(typeof(SmokeReplace))]
 [JsonSerializable(typeof(PortiaCreateOutcome<SmokeResource>))]
