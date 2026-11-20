@@ -105,6 +105,22 @@ public static partial class PortiaHttpBinding
                 : throw new BadHttpRequestException($"Expected one value for '{name}'.");
     }
 
+    /// <summary>Reads one HTTP header value, distinguishing omission from an empty value.</summary>
+    /// <param name="context">The current HTTP request.</param>
+    /// <param name="name">The header to read.</param>
+    /// <returns>The single value, or <see langword="null" /> when the header was not sent.</returns>
+    /// <exception cref="BadHttpRequestException">The header was sent more than once.</exception>
+    public static string? ReadHeader(HttpContext context, string name)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return !context.Request.Headers.TryGetValue(name, out var values)
+            ? null
+            : values.Count == 1
+                ? values[0]
+                : throw new BadHttpRequestException($"Expected one value for '{name}'.");
+    }
+
     /// <summary>Reads a constructor-bound property using the application's request JSON metadata.</summary>
     /// <typeparam name="TRequest">The request type whose JSON contract names the member.</typeparam>
     /// <typeparam name="TValue">The member's type.</typeparam>

@@ -65,7 +65,21 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
     /// <returns>This configuration.</returns>
     public TConfiguration FromQuery<TMember>(Expression<Func<TRequest, TMember>> member)
     {
-        _state.FromQuery(MemberName(member));
+        _state.FromQuery(MemberName(member, nameof(FromQuery)));
+        return (TConfiguration)this;
+    }
+
+    /// <summary>
+    ///     Binds a request member from one HTTP header and describes that header in OpenAPI.
+    ///     The member must be a scalar value supported by Portia's text binder.
+    /// </summary>
+    /// <typeparam name="TMember">The member's type.</typeparam>
+    /// <param name="member">The request member, such as <c>x =&gt; x.TenantId</c>.</param>
+    /// <param name="name">The HTTP header name, such as <c>Tenant-Id</c>.</param>
+    /// <returns>This configuration.</returns>
+    public TConfiguration FromHeader<TMember>(Expression<Func<TRequest, TMember>> member, string name)
+    {
+        _state.FromHeader(MemberName(member, nameof(FromHeader)), name);
         return (TConfiguration)this;
     }
 
@@ -147,6 +161,14 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public bool IsQueryMember(int index) => _state.IsQueryMember(index);
 
+    /// <summary>Reports whether generated binding reads a request member from an HTTP header.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public bool IsHeaderMember(int index) => _state.IsHeaderMember(index);
+
+    /// <summary>Gets the configured header name for a generated request member.</summary>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    public string? HeaderName(int index) => _state.HeaderName(index);
+
     /// <summary>Applies HTTP contract metadata.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public void ApplyMetadata(IEndpointRouteBuilder app, IEndpointConventionBuilder builder) =>
@@ -168,7 +190,7 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
         _state.EnsureResultHandlerResponse(success, response);
 
     // The selector is inspected, never compiled, so it stays trimming- and Native AOT-safe.
-    static string MemberName<TMember>(Expression<Func<TRequest, TMember>> member)
+    static string MemberName<TMember>(Expression<Func<TRequest, TMember>> member, string source)
     {
         ArgumentNullException.ThrowIfNull(member);
         var body = member.Body is UnaryExpression { NodeType: ExpressionType.Convert } convert
@@ -177,7 +199,7 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
         return body is MemberExpression { Member: PropertyInfo or FieldInfo } access &&
                access.Expression == member.Parameters[0]
             ? access.Member.Name
-            : throw new ArgumentException("FromQuery requires a direct request member, such as x => x.Name.",
+            : throw new ArgumentException($"{source} requires a direct request member, such as x => x.Name.",
                 nameof(member));
     }
 }

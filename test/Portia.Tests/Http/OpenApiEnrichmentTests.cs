@@ -191,6 +191,47 @@ public sealed class OpenApiEnrichmentTests
             parameters.Single(parameter => parameter.Name == "count").Examples!["converted"].Value!.GetValue<int>());
     }
 
+    /// <summary>A header-bound member is published as a header parameter and leaves the body and query.</summary>
+    [Fact]
+    public async Task ShouldPublishHeaderParameterGivenFromHeaderMember()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia().AddHttp()
+            .AddRequestHandler<ContractExampleHandler>().AddRequestHandler<EnumExampleHandler>();
+        await using var app = builder.Build();
+        _ = app.MapPortiaOpenApi();
+        _ = app.MapPortiaPost<ContractExampleRequest, ContractMetadataModel>("/headers/{id}", configuration =>
+            configuration
+                .FromHeader(request => request.PageSize, "Page-Size")
+                .RequestExample("create", new ContractExampleRequest(7, Example("Endpoint"), 25)));
+        _ = app.MapPortiaGet<EnumExampleRequest, string>("/required-header", configuration => configuration
+            .FromHeader(request => request.Mode, "Example-Mode"));
+        await app.StartAsync();
+
+        // Act
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+
+        // Assert
+        var operation = document["paths"]!["/headers/{id}"]!["post"]!;
+        var parameters = operation["parameters"]!.AsArray();
+        var header = Assert.Single(parameters, parameter => parameter!["name"]!.GetValue<string>() == "Page-Size")!;
+        Assert.Equal("header", header["in"]!.GetValue<string>());
+        Assert.NotEqual(true, header["required"]?.GetValue<bool>());
+        Assert.Contains("integer", header["schema"]!["type"]!.ToJsonString(), StringComparison.Ordinal);
+        Assert.Equal(25, header["examples"]!["create"]!["value"]!.GetValue<int>());
+        Assert.DoesNotContain(parameters, parameter => parameter!["name"]!.GetValue<string>() == "page_size");
+        var body = operation["requestBody"]!["content"]!["application/json"]!;
+        Assert.NotNull(body["schema"]!["properties"]!["payload"]);
+        Assert.Null(body["schema"]!["properties"]!["page_size"]);
+        Assert.Null(body["examples"]!["create"]!["value"]!["page_size"]);
+        var required = Assert.Single(document["paths"]!["/required-header"]!["get"]!["parameters"]!.AsArray())!;
+        Assert.Equal("Example-Mode", required["name"]!.GetValue<string>());
+        Assert.Equal("header", required["in"]!.GetValue<string>());
+        Assert.True(required["required"]!.GetValue<bool>());
+    }
+
     /// <summary>Enum parameter examples retain the representation advertised by their scalar schema.</summary>
     [Theory]
     [InlineData(false)]

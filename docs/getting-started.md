@@ -521,6 +521,18 @@ described as a query parameter. The member must be a string, enum, or `TryParse`
 route does not already bind, and `FromQuery` cannot be combined with `OnBind`; mapping the route
 throws otherwise.
 
+For a value that belongs in an HTTP header, use `FromHeader`:
+
+```csharp
+app.MapPortiaGet<GetTenant, TenantView>("/v1/tenant", endpoint => endpoint
+    .FromHeader(request => request.TenantId, "Tenant-Id"));
+```
+
+The member is omitted from the body and query schemas and appears as an OpenAPI header parameter.
+The header is required when its request member is non-nullable and has no default. Portia rejects a
+duplicate value in the body or query string. As with `FromQuery`, `FromHeader` uses the default
+generated binder and cannot be combined with `OnBind`.
+
 An absent body is treated as `{}` unless a required complex member needs it. Bodies are bounded
 to 10 MiB by default; configure `PortiaHttpOptions.MaxJsonBodyBytes` through standard options
 registration. Exceeding the bound returns `413 application/problem+json`. A body must declare a JSON

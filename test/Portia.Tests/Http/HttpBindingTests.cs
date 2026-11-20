@@ -359,6 +359,155 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Contains("more than once", duplicate.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    ///     Verifies <c>FromHeader</c> binds a request member only from its HTTP header, for JSON, form,
+    ///     and bodiless requests, while the remaining members keep the route, body, query cascade.
+    /// </summary>
+    [Fact]
+    public async Task ShouldBindMemberOnlyFromHeaderGivenFromHeaderMember()
+    {
+        // Arrange
+        var client = await StartAsync(app =>
+        {
+            _ = app.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}", endpoint => endpoint
+                .FromHeader(x => x.DryRun, "Dry-Run")
+                .FromHeader(x => x.Priority, "Widget-Priority")).DisableAntiforgery();
+            _ = app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}", endpoint => endpoint
+                .FromHeader(x => x.IncludeArchived, "Include-Archived"));
+        });
+        var widgetId = Uuid.CreateVersion4();
+
+        var jsonHeaders = await client.SendAsync(WithHeaders(HttpMethod.Post, $"/widgets/{widgetId}",
+            JsonContent.Create(new { name = "gear", quantity = 1, active = true }),
+            ("Dry-Run", "true"), ("Widget-Priority", "2")));
+        var jsonDefaults = await client.PostAsJsonAsync($"/widgets/{widgetId}",
+            new { name = "gear", quantity = 1, active = true });
+        var formHeaders = await client.SendAsync(WithHeaders(HttpMethod.Post, $"/widgets/{widgetId}",
+            Form(("name", "cog"), ("quantity", "2")), ("dry-run", "true"), ("Widget-Priority", "3")));
+        var bodiless = await client.SendAsync(WithHeaders(HttpMethod.Get, $"/widgets/{widgetId}", null,
+            ("Include-Archived", "true")));
+
+        // Act
+        var invalidHeader = await client.SendAsync(WithHeaders(HttpMethod.Post, $"/widgets/{widgetId}",
+            JsonContent.Create(new { name = "gear", quantity = 1, active = true }), ("Dry-Run", "maybe")));
+
+        // Assert
+        Assert.Equal($"{widgetId} gear 1 True 2 dry-run", await ReadSuccess(jsonHeaders));
+        Assert.Equal($"{widgetId} gear 1 True none", await ReadSuccess(jsonDefaults));
+        Assert.Equal($"{widgetId} cog 2 False 3 dry-run", await ReadSuccess(formHeaders));
+        Assert.Equal($"{widgetId} (archived: True)", await ReadSuccess(bodiless));
+        Assert.Equal(HttpStatusCode.BadRequest, invalidHeader.StatusCode);
+    }
+
+    /// <summary>
+    ///     Verifies a header-bound value is rejected when it also arrives in the body or query string,
+    ///     or when its header is repeated, rather than one copy being silently ignored.
+    /// </summary>
+    [Theory]
+    [InlineData("json")]
+    [InlineData("form")]
+    [InlineData("query")]
+    [InlineData("repeated")]
+    public async Task ShouldRejectRequestGivenHeaderBoundValueSentTwice(string duplicate)
+    {
+        // Arrange
+        var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>("/widgets/{widget_id}",
+            endpoint => endpoint.FromHeader(x => x.DryRun, "Dry-Run")).DisableAntiforgery());
+        var uri = $"/widgets/{Uuid.CreateVersion4()}" + (duplicate == "query" ? "?dry_run=true" : string.Empty);
+        HttpContent content = duplicate switch
+        {
+            "json" => JsonContent.Create(new { name = "gear", quantity = 1, active = true, dry_run = true }),
+            "form" => Form(("name", "gear"), ("quantity", "1"), ("dry_run", "true")),
+            _ => JsonContent.Create(new { name = "gear", quantity = 1, active = true })
+        };
+        using var request = WithHeaders(HttpMethod.Post, uri, content, ("Dry-Run", "true"));
+        if (duplicate == "repeated")
+            request.Headers.Add("Dry-Run", "false");
+
+        // Act
+        var response = await client.SendAsync(request);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    /// <summary>
+    ///     Verifies a required <c>FromHeader</c> member is satisfied only by its header, including a
+    ///     form Boolean, which an absent checkbox would otherwise default to false.
+    /// </summary>
+    [Fact]
+    public async Task ShouldRequireMemberInHeaderGivenFromHeaderMember()
+    {
+        // Arrange
+        var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>(
+            "/required-header/{widget_id}", endpoint => endpoint
+                .FromHeader(x => x.Quantity, "Widget-Quantity")
+                .FromHeader(x => x.Active, "Widget-Active")).DisableAntiforgery());
+        var widgetId = Uuid.CreateVersion4();
+
+        var missingJson = await client.SendAsync(WithHeaders(HttpMethod.Post, $"/required-header/{widgetId}",
+            JsonContent.Create(new { name = "gear" }), ("Widget-Active", "true")));
+        var missingFormBoolean = await client.SendAsync(WithHeaders(HttpMethod.Post,
+            $"/required-header/{widgetId}", Form(("name", "gear")), ("Widget-Quantity", "4")));
+        var suppliedForm = await client.SendAsync(WithHeaders(HttpMethod.Post, $"/required-header/{widgetId}",
+            Form(("name", "cog")), ("Widget-Quantity", "5"), ("Widget-Active", "false")));
+
+        // Act
+        var supplied = await client.SendAsync(WithHeaders(HttpMethod.Post, $"/required-header/{widgetId}",
+            JsonContent.Create(new { name = "gear" }), ("Widget-Quantity", "4"), ("Widget-Active", "true")));
+
+        // Assert
+        Assert.Equal(HttpStatusCode.BadRequest, missingJson.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, missingFormBoolean.StatusCode);
+        Assert.Equal($"{widgetId} cog 5 False none", await ReadSuccess(suppliedForm));
+        Assert.Equal($"{widgetId} gear 4 True none", await ReadSuccess(supplied));
+    }
+
+    /// <summary>Verifies misdeclared <c>FromHeader</c> members fail when the route is mapped.</summary>
+    [Fact]
+    public void ShouldRejectDeclarationGivenInvalidFromHeaderMemberWhenMapping()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.Services.AddFrameworkTests();
+        _app = builder.Build();
+
+        // Act
+        var route = Record.Exception(() => _app.MapPortiaPost<HttpUpdateWidget, string>(
+            "/route/{widget_id}", endpoint => endpoint.FromHeader(x => x.WidgetId, "Widget-Id")));
+        var complex = Record.Exception(() => _app.MapPortiaPost<HttpCreateOrder, Uuid>(
+            "/complex", endpoint => endpoint.FromHeader(x => x.Lines, "Lines")));
+        var custom = Record.Exception(() => _app.MapPortiaPost<HttpOptionalBody, string>(
+            "/custom", endpoint => endpoint.FromHeader(x => x.Value, "Value").OnBind(_ => new HttpOptionalBody())));
+        var both = Record.Exception(() => _app.MapPortiaGet<HttpGetWidget, string>(
+            "/both/{widget_id}", endpoint => endpoint
+                .FromQuery(x => x.IncludeArchived).FromHeader(x => x.IncludeArchived, "Include-Archived")));
+        var nested = Record.Exception(() => new PortiaEndpointConfiguration<HttpGetWidget, string>()
+            .FromHeader(x => x.WidgetId.ToString(), "Widget-Id"));
+        var blank = Record.Exception(() => new PortiaEndpointConfiguration<HttpGetWidget, string>()
+            .FromHeader(x => x.IncludeArchived, " "));
+        var duplicateMember = Record.Exception(() => new PortiaEndpointConfiguration<HttpGetWidget, string>()
+            .FromHeader(x => x.IncludeArchived, "Archived").FromHeader(x => x.IncludeArchived, "Include-Archived"));
+        var duplicateHeader = Record.Exception(() => new PortiaEndpointConfiguration<HttpUpdateWidget, string>()
+            .FromHeader(x => x.DryRun, "Widget-Flag").FromHeader(x => x.Active, "widget-flag"));
+
+        // Assert
+        Assert.Contains("already bound from the route",
+            Assert.IsType<InvalidOperationException>(route).Message, StringComparison.Ordinal);
+        Assert.Contains("must be a string, enum, or TryParse scalar",
+            Assert.IsType<InvalidOperationException>(complex).Message, StringComparison.Ordinal);
+        Assert.Contains("OnBind", Assert.IsType<InvalidOperationException>(custom).Message, StringComparison.Ordinal);
+        Assert.Contains("both a query parameter and an HTTP header",
+            Assert.IsType<InvalidOperationException>(both).Message, StringComparison.Ordinal);
+        Assert.Contains("FromHeader requires a direct request member",
+            Assert.IsType<ArgumentException>(nested).Message, StringComparison.Ordinal);
+        _ = Assert.IsType<ArgumentException>(blank);
+        Assert.Contains("more than once for 'IncludeArchived'",
+            Assert.IsType<InvalidOperationException>(duplicateMember).Message, StringComparison.Ordinal);
+        Assert.Contains("HTTP header 'widget-flag' is declared more than once",
+            Assert.IsType<InvalidOperationException>(duplicateHeader).Message, StringComparison.Ordinal);
+    }
+
     /// <summary>Verifies form fields get the same validation as query values.</summary>
     [Theory]
     [InlineData("name=gear")]
@@ -514,6 +663,15 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     static FormUrlEncodedContent Form(params (string Name, string Value)[] fields) =>
         new(fields.Select(field => new KeyValuePair<string, string>(field.Name, field.Value)));
+
+    static HttpRequestMessage WithHeaders(HttpMethod method, string uri, HttpContent? content,
+        params (string Name, string Value)[] headers)
+    {
+        var request = new HttpRequestMessage(method, uri) { Content = content };
+        foreach (var (name, value) in headers)
+            request.Headers.Add(name, value);
+        return request;
+    }
 
     static async Task<string?> ReadSuccess(HttpResponseMessage response)
     {

@@ -872,7 +872,9 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                         if (cascade)
                         {
                             _ = source.Append(pad)
-                                .Append(call.Configured ? $"if (!configuration.IsQueryMember({i}) && " : "if (")
+                                .Append(call.Configured
+                                    ? $"if (!configuration.IsQueryMember({i}) && !configuration.IsHeaderMember({i}) && "
+                                    : "if (")
                                 .Append("global::Cntryl.Portia.PortiaHttpBinding.HasBodyMember<")
                                 .Append(call.RequestTypeFullName).Append(", ").Append(parameter.Type)
                                 .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ")
@@ -916,6 +918,43 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                         _ => $"global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name})"
                     };
 
+                    // Validate rejects FromHeader on a routed member, so only body and query members can be header-bound.
+                    if (call.Configured && parameter.Source != ParameterSource.Route)
+                    {
+                        _ = source.Append(indent)
+                            .Append("if (configuration.IsHeaderMember(").Append(i).AppendLine("))")
+                            .Append(indent).AppendLine("{")
+                            .Append(indent).Append("    if (global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, ")
+                            .Append(name).AppendLine(") is not null)")
+                            .Append(indent).AppendLine("        throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"A header-bound value cannot also appear in the query string.\");")
+                            .Append(indent).AppendLine("}");
+                        raw = $"configuration.IsHeaderMember({i}) ? " +
+                              $"global::Cntryl.Portia.PortiaHttpBinding.ReadHeader(httpContext, configuration.HeaderName({i})!) : " +
+                              raw;
+                        if (parameter.Source == ParameterSource.Body && (form || cascade))
+                        {
+                            _ = source.Append(indent)
+                                .Append("if (configuration.IsHeaderMember(").Append(i).AppendLine("))")
+                                .Append(indent).AppendLine("{");
+                            if (form)
+                            {
+                                _ = source.Append(indent).Append("    if (global::Cntryl.Portia.PortiaHttpBinding.ReadForm(form, ")
+                                    .Append(name).AppendLine(", false) is not null)")
+                                    .Append(indent).AppendLine("        throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"A header-bound value cannot also appear in the request body.\");");
+                            }
+                            else
+                            {
+                                _ = source.Append(indent).Append("    if (global::Cntryl.Portia.PortiaHttpBinding.HasBodyMember<")
+                                    .Append(call.RequestTypeFullName).Append(", ").Append(parameter.Type)
+                                    .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ")
+                                    .Append(Literal(parameter.Name)).Append(", ").Append(name).AppendLine("))")
+                                    .Append(indent).AppendLine("        throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"A header-bound value cannot also appear in the request body.\");");
+                            }
+
+                            _ = source.Append(indent).AppendLine("}");
+                        }
+                    }
+
                     // Browsers omit an unchecked checkbox, so an absent required form Boolean is false.
                     var formBoolean = form && parameter.Source == ParameterSource.Body &&
                                       IsBoolean(parameter.UnderlyingType);
@@ -928,7 +967,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                         ? source.Append(pad).Append("    value").Append(i).Append(" = ")
                             .Append(parameter.Default ?? "default").AppendLine(";")
                         : formBoolean && call.Configured
-                            ? source.Append(pad).Append("    if (configuration.IsQueryMember(").Append(i).Append(")) ")
+                            ? source.Append(pad).Append("    if (configuration.IsQueryMember(").Append(i)
+                                .Append(") || configuration.IsHeaderMember(").Append(i).Append(")) ")
                                 .AppendLine(missing)
                                 .Append(pad).Append("    value").Append(i).AppendLine(" = false;")
                             : formBoolean

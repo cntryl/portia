@@ -160,14 +160,40 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 
         var queryMembers = endpointMetadata.OfType<PortiaQueryMembers>()
             .SingleOrDefault()?.Names ?? [];
+        var headerMembers = endpointMetadata.OfType<PortiaHeaderMembers>()
+            .SingleOrDefault()?.Members ?? [];
+        foreach (var headerMember in headerMembers)
+        {
+            var parameter = metadata.Parameters.Single(item =>
+                string.Equals(item.ClrName, headerMember.MemberName, StringComparison.OrdinalIgnoreCase));
+            var contractMember = PortiaJsonDescriptions.MemberMetadata(jsonOptions, metadata.RequestType,
+                parameter.ClrName);
+            var schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!,
+                schemaType, parameter.IsNullable, schemaCollectionElementIsNullable, descriptions, contractMember,
+                input: true);
+            operation.Parameters.Add(new OpenApiParameter
+            {
+                Description = MemberDescription(parameter, headerMember.Name),
+                Name = headerMember.Name,
+                In = ParameterLocation.Header,
+                Required = parameter.Required,
+                Schema = schema
+            });
+        }
+
+        bool IsHeaderMember(string memberName) => headerMembers.Any(item =>
+            string.Equals(item.MemberName, memberName, StringComparison.OrdinalIgnoreCase));
 
         bool IsBody(PortiaOpenApiParameter parameter)
         {
             return parameter.Source == "body" &&
-                   !queryMembers.Contains(parameter.ClrName, StringComparer.OrdinalIgnoreCase);
+                   !queryMembers.Contains(parameter.ClrName, StringComparer.OrdinalIgnoreCase) &&
+                   !IsHeaderMember(parameter.ClrName);
         }
 
-        foreach (var parameter in custom is null ? metadata.Parameters.Where(parameter => !IsBody(parameter)) : [])
+        foreach (var parameter in custom is null
+                     ? metadata.Parameters.Where(parameter => !IsBody(parameter) && !IsHeaderMember(parameter.ClrName))
+                     : [])
         {
             var contractMember =
                 PortiaJsonDescriptions.MemberMetadata(jsonOptions, metadata.RequestType, parameter.ClrName);
