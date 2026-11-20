@@ -1150,7 +1150,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     ? "            if (configuration.ResultHandler is not null)\n            {\n                var replacement = await configuration.ResultHandler(httpContext, portiaResult, ct).ConfigureAwait(false);\n                if (replacement is not null) return replacement;\n            }\n"
                     : string.Empty)
                 .Append(call.IsCreateOutcome
-                    ? "            if (createdLocation is not null) return portiaResult.ToCreatedHttpResult(jsonOptions, createdLocation);\n"
+                    ? "            if (createdLocation is not null) return portiaResult.ToCreatedHttpResult(jsonOptions, createdLocation, httpContext);\n"
                     : string.Empty)
                 .Append("            return portiaResult.ToHttpResult(")
                 .Append(call.ResultType is null

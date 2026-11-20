@@ -26,7 +26,8 @@ _ = builder.Services.AddPortia().AddHttp();
 await using var app = builder.Build();
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapPortiaPost<OpenAccount>("/tenants/{tenant}/accounts/{account_id}/open");
+app.MapPortiaPost<OpenAccount, PortiaCreateOutcome<AccountCreated>>("/tenants/{tenant}/accounts/{account_id}/open",
+    endpoint => endpoint.Created("/tenants/{tenant}/accounts/{account_id}", includePayload: false));
 app.MapPortiaPost<DepositFunds>("/tenants/{tenant}/accounts/{account_id}/deposits");
 app.MapPortiaGet<GetAccount, AccountReadModel>("/tenants/{tenant}/accounts/{account_id}");
 app.MapPortiaOpenApi();

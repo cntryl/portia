@@ -51,8 +51,9 @@ public sealed class PortiaEndpointConfiguration<TRequest, TOut>
 {
     /// <summary>Declares create responses with a location built from route values, request members, or payload members.</summary>
     /// <param name="uriTemplate">A URI reference template using route value, request member, or payload member names.</param>
+    /// <param name="includePayload">Whether to serialize the payload in the HTTP response.</param>
     /// <returns>This endpoint configuration.</returns>
-    public PortiaEndpointConfiguration<TRequest, TOut> Created(string uriTemplate)
+    public PortiaEndpointConfiguration<TRequest, TOut> Created(string uriTemplate, bool includePayload = true)
     {
         var outcomeType = typeof(TOut);
         var payloadType = outcomeType == typeof(PortiaCreateOutcome)
@@ -61,7 +62,7 @@ public sealed class PortiaEndpointConfiguration<TRequest, TOut>
                 ? outcomeType.GenericTypeArguments[0]
                 : throw new InvalidOperationException(
                     "Created requires a handler whose result type is PortiaCreateOutcome or PortiaCreateOutcome<T>.");
-        ConfigureCreated(uriTemplate, payloadType);
+        ConfigureCreated(uriTemplate, includePayload ? payloadType : null);
         return this;
     }
 

@@ -55,6 +55,9 @@ public abstract class Aggregate(
     /// <summary>Gets the next physical offset in the raised-event stream. Audit sessions never advance this OCC position.</summary>
     public ulong CommittedStreamPosition { get; private set; }
 
+    /// <summary>Whether the aggregate has no committed state events. Read after hydration.</summary>
+    public bool IsNew { get; private set; } = true;
+
     internal IReadOnlyList<DomainEvent> UncommittedEvents => _uncommittedEvents;
 
     internal IReadOnlyList<DomainEvent> UncommittedAudits => _uncommittedAudits;
@@ -127,6 +130,7 @@ public abstract class Aggregate(
             }
 
             Version++;
+            IsNew = false;
         }
 
         CommittedStreamPosition = streamPosition ?? checked(CommittedStreamPosition + (ulong)committedEvents.Length);
@@ -257,6 +261,8 @@ public abstract class Aggregate(
     internal void Save()
     {
         CommittedStreamPosition = checked(CommittedStreamPosition + (ulong)_uncommittedEvents.Count);
+        if (_uncommittedEvents.Count != 0)
+            IsNew = false;
         // Committed history is not retained: an aggregate may replay a whole stream and be caught
         // up in place for the life of the process, and Version and CommittedStreamPosition already
         // carry everything the framework needs from it. Both lists' IDs entered the issued set when

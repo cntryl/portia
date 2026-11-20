@@ -40,7 +40,7 @@ public static class ResultHttpExtensions
     /// <summary>Maps a generated create endpoint's result using its resolved location.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
     public static IResult ToCreatedHttpResult<T>(this Result<T> result, JsonSerializerOptions options,
-        Func<object?, string> locationResolver)
+        Func<object?, string> locationResolver, HttpContext context)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(locationResolver);
@@ -48,16 +48,25 @@ public static class ResultHttpExtensions
             return ToProblem(result.Error);
         if (result.Value is not IPortiaCreateOutcome outcome)
             throw new InvalidOperationException("A successful Created response requires a non-null create outcome.");
-        return new CreatedOutcomeResult(outcome, outcome.PayloadTypeInfo(options),
-            locationResolver(outcome.UntypedValue));
+        var includePayload = context.GetEndpoint()?.Metadata.GetMetadata<PortiaCreatedLocation>()?.IncludePayload == true;
+        var payloadTypeInfo = includePayload ? outcome.PayloadTypeInfo(options) : null;
+        var status = outcome.Kind switch
+        {
+            PortiaCreateOutcomeKind.Created => StatusCodes.Status201Created,
+            PortiaCreateOutcomeKind.Repeated => StatusCodes.Status200OK,
+            PortiaCreateOutcomeKind.Replaced when HttpMethods.IsPut(context.Request.Method) =>
+                payloadTypeInfo is null ? StatusCodes.Status204NoContent : StatusCodes.Status200OK,
+            _ => throw new InvalidOperationException("The resource write outcome is not supported by this HTTP method.")
+        };
+        return new CreatedOutcomeResult(outcome, payloadTypeInfo, locationResolver(outcome.UntypedValue), status);
     }
 
-    sealed class CreatedOutcomeResult(IPortiaCreateOutcome outcome, JsonTypeInfo? payloadTypeInfo, string location)
+    sealed class CreatedOutcomeResult(IPortiaCreateOutcome outcome, JsonTypeInfo? payloadTypeInfo, string location, int status)
         : IResult
     {
         public async Task ExecuteAsync(HttpContext context)
         {
-            context.Response.StatusCode = outcome.IsCreated ? StatusCodes.Status201Created : StatusCodes.Status200OK;
+            context.Response.StatusCode = status;
             context.Response.Headers.Location = location;
             if (payloadTypeInfo is not null)
             {

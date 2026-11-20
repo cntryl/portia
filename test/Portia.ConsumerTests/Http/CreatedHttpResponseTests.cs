@@ -25,6 +25,29 @@ public sealed class CreatedHttpResponseTests
         Assert.Equal("{\"name\":\"same\"}", body);
     }
 
+    [Theory]
+    [InlineData(true, 200, """{"name":"replacement"}""")]
+    [InlineData(false, 204, "")]
+    public async Task ShouldReturnReplacementGivenPutOutcome(bool includePayload, int expectedStatus, string expectedBody)
+    {
+        // Arrange
+        var assembly = CreateScenario(
+            $$"""
+            app.MapPortiaPut<Binding, PortiaCreateOutcome<Payload>>("/accounts/{id}",
+                endpoint => endpoint.Created("/accounts/{id}", includePayload: {{(includePayload ? "true" : "false")}}));
+            """,
+            "PortiaCreateOutcome<Payload>.Replaced(new Payload(request.Value))");
+
+        // Act
+        var (status, body, location) = await HttpConsumerScenario.RunWithLocationAsync(assembly, "/accounts/a",
+            """{"value":"replacement"}""", method: "PUT");
+
+        // Assert
+        Assert.Equal(expectedStatus, status);
+        Assert.Equal("/accounts/a", location);
+        Assert.Equal(expectedBody, body);
+    }
+
     [Fact]
     public async Task ShouldResolveGroupedRouteValuesGivenCreatedLocationTemplate()
     {
@@ -68,14 +91,19 @@ public sealed class CreatedHttpResponseTests
         Assert.Equal("/tenants/alpha%20beta/accounts/a%2Fb%23c", location);
     }
 
-    [Fact]
-    public async Task ShouldResolveLocationFromPayloadGivenServerGeneratedIdentifier()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ShouldResolveLocationFromPayloadGivenServerGeneratedIdentifier(bool includePayload)
     {
         // Arrange
         var assembly = HttpConsumerScenario.Compile(
             "public sealed record Binding(string Name) : IRequest<PortiaCreateOutcome<Payload>>, ICallable; public sealed record Payload(string AccountId, string Name);",
             "PortiaCreateOutcome<Payload>.Created(new Payload(\"server/id#1\", request.Name))",
-            "app.MapPortiaPost<Binding, PortiaCreateOutcome<Payload>>(\"/accounts\", endpoint => endpoint.Created(\"/accounts/{account_id}\"));",
+            $$"""
+            app.MapPortiaPost<Binding, PortiaCreateOutcome<Payload>>("/accounts",
+                endpoint => endpoint.Created("/accounts/{account_id}", includePayload: {{(includePayload ? "true" : "false")}}));
+            """,
             resultType: "PortiaCreateOutcome<Payload>");
 
         // Act
@@ -85,7 +113,7 @@ public sealed class CreatedHttpResponseTests
         // Assert
         Assert.Equal(201, status);
         Assert.Equal("/accounts/server%2Fid%231", location);
-        Assert.Equal("{\"accountId\":\"server/id#1\",\"name\":\"Portia\"}", body);
+        Assert.Equal(includePayload ? """{"accountId":"server/id#1","name":"Portia"}""" : string.Empty, body);
     }
 
     [Fact]

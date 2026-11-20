@@ -6,17 +6,17 @@ using Microsoft.AspNetCore.Routing.Patterns;
 
 namespace Cntryl.Portia;
 
-abstract record PortiaCreatedLocation(bool PayloadIsNullable);
+abstract record PortiaCreatedLocation(bool PayloadIsNullable, bool IncludePayload);
 
 sealed partial record PortiaCreatedLocation<TRequest> : PortiaCreatedLocation
 {
     readonly string _template;
     readonly Placeholder[] _placeholders;
 
-    public PortiaCreatedLocation(string template, bool payloadIsNullable, RoutePattern route,
+    public PortiaCreatedLocation(string template, bool payloadIsNullable, bool includePayload, RoutePattern route,
         IReadOnlyDictionary<string, Func<TRequest, object?>> requestMembers,
         IReadOnlyDictionary<string, Func<object?, object?>>? payloadMembers)
-        : base(payloadIsNullable)
+        : base(payloadIsNullable, includePayload)
     {
         _template = template;
         var pattern = PlaceholderPattern();

@@ -47,6 +47,7 @@ public sealed class AggregateSaveConcurrencyTests
 
         Assert.Equal(1, store.AppendCalls);
         Assert.Equal(operation == "audit" ? 0UL : 1UL, aggregate.CommittedStreamPosition);
+        Assert.Equal(operation == "audit", aggregate.IsNew);
     }
 
     [Theory]
@@ -118,6 +119,32 @@ public sealed class AggregateSaveConcurrencyTests
 
         // Assert
         Assert.Equal(0, store.AppendCalls);
+    }
+
+    [Fact]
+    public async Task ShouldKeepLosingCreateNewGivenTwoHydratedInstancesWithoutHistory()
+    {
+        // Arrange
+        var store = new ControlledStore();
+        await using var provider = CreateProvider(store);
+        await using var scope = provider.CreateAsyncScope();
+        var repository = scope.ServiceProvider.Aggregates();
+        var id = Uuid.CreateVersion4();
+        var winner = await repository.HydrateAsync(new Account(id));
+        var contender = await repository.HydrateAsync(new Account(id));
+        winner.Deposit(1);
+        contender.Deposit(2);
+        await repository.SaveAsync(winner, _saveContext);
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => repository.SaveAsync(contender, _saveContext).AsTask());
+
+        // Assert
+        Assert.IsType<EventStreamConcurrencyException>(exception);
+        Assert.False(winner.IsNew);
+        Assert.True(contender.IsNew);
+        var reloaded = await repository.HydrateAsync(new Account(id));
+        Assert.False(reloaded.IsNew);
     }
 
     static ServiceProvider CreateProvider(IEventStore store)

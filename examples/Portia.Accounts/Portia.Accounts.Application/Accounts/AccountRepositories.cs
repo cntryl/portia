@@ -4,7 +4,7 @@ namespace Portia.Accounts;
 public interface IAccountCommandRepository
 {
     /// <summary>Opens an account and commits its event on success.</summary>
-    ValueTask<Result> OpenAsync(OpenAccount request, IRequestContext context, CancellationToken ct);
+    ValueTask<Result<PortiaCreateOutcome<AccountCreated>>> OpenAsync(OpenAccount request, IRequestContext context, CancellationToken ct);
 
     /// <summary>Deposits funds and commits the event on success.</summary>
     ValueTask<Result> DepositAsync(DepositFunds request, IRequestContext context, CancellationToken ct);
@@ -14,9 +14,25 @@ public interface IAccountCommandRepository
 public sealed class AccountCommandRepository(IAggregateExecutor aggregates) : IAccountCommandRepository
 {
     /// <inheritdoc />
-    public ValueTask<Result> OpenAsync(OpenAccount request, IRequestContext context, CancellationToken ct) =>
-        aggregates.ExecuteAsync(new Account(request.Tenant, request.AccountId), account =>
-            AggregateOutcome.CommitOnSuccess(account.Open(request.InitialBalanceCents)), context, ct);
+    public ValueTask<Result<PortiaCreateOutcome<AccountCreated>>> OpenAsync(OpenAccount request, IRequestContext context, CancellationToken ct) =>
+        aggregates.ExecuteAsync<Account, PortiaCreateOutcome<AccountCreated>>(
+            new Account(request.Tenant, request.AccountId), account =>
+            {
+                var created = new AccountCreated(account.Id);
+                if (!account.IsNew)
+                {
+                    Result<PortiaCreateOutcome<AccountCreated>> repeat = account.OpeningBalanceCents == request.InitialBalanceCents
+                        ? PortiaCreateOutcome<AccountCreated>.Repeated(created)
+                        : RequestError.Conflict("The account was opened with a different starting balance.");
+                    return AggregateOutcome.Discard(repeat);
+                }
+
+                var result = account.Open(request.InitialBalanceCents);
+                Result<PortiaCreateOutcome<AccountCreated>> outcome = result.IsSuccess
+                    ? PortiaCreateOutcome<AccountCreated>.Created(created)
+                    : result.Error;
+                return AggregateOutcome.CommitOnSuccess(outcome);
+            }, context, ct);
 
     /// <inheritdoc />
     public ValueTask<Result> DepositAsync(DepositFunds request, IRequestContext context, CancellationToken ct) =>

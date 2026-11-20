@@ -10,14 +10,14 @@ namespace Cntryl.Portia.ReflectionDisabled;
 public sealed class ReflectionDisabledConsumerTests
 {
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ShouldRoundTripCreateResultGivenSourceGeneratedRpcSerialization(bool created)
+    [InlineData(PortiaCreateOutcomeKind.Created)]
+    [InlineData(PortiaCreateOutcomeKind.Repeated)]
+    [InlineData(PortiaCreateOutcomeKind.Replaced)]
+    public void ShouldRoundTripCreateResultGivenSourceGeneratedRpcSerialization(PortiaCreateOutcomeKind kind)
     {
         // Arrange
         var serializer = new JsonRequestSerializer([], ReflectionDisabledJsonContext.Default.Options);
-        var outcome = created ? PortiaCreateOutcome<string>.Created("Portia") :
-            PortiaCreateOutcome<string>.Repeated("Portia");
+        var outcome = new PortiaCreateOutcome<string>("Portia", kind);
 
         // Act
         var bytes = serializer.SerializeResult(Result<PortiaCreateOutcome<string>>.Success(outcome));
@@ -26,17 +26,18 @@ public sealed class ReflectionDisabledConsumerTests
         // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal("Portia", result.Value.Value);
-        Assert.Equal(created, result.Value.IsCreated);
+        Assert.Equal(kind, result.Value.Kind);
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ShouldRoundTripPayloadlessCreateResultGivenSourceGeneratedRpcSerialization(bool created)
+    [InlineData(PortiaCreateOutcomeKind.Created)]
+    [InlineData(PortiaCreateOutcomeKind.Repeated)]
+    [InlineData(PortiaCreateOutcomeKind.Replaced)]
+    public void ShouldRoundTripPayloadlessCreateResultGivenSourceGeneratedRpcSerialization(PortiaCreateOutcomeKind kind)
     {
         // Arrange
         var serializer = new JsonRequestSerializer([], ReflectionDisabledJsonContext.Default.Options);
-        var outcome = created ? PortiaCreateOutcome.Created() : PortiaCreateOutcome.Repeated();
+        var outcome = new PortiaCreateOutcome(kind);
 
         // Act
         var bytes = serializer.SerializeResult(Result<PortiaCreateOutcome>.Success(outcome));
@@ -44,7 +45,23 @@ public sealed class ReflectionDisabledConsumerTests
 
         // Assert
         Assert.True(result.IsSuccess);
-        Assert.Equal(created, result.Value.IsCreated);
+        Assert.Equal(kind, result.Value.Kind);
+    }
+
+    [Theory]
+    [InlineData("""{"isCreated":true}""")]
+    [InlineData("""{"kind":0}""")]
+    [InlineData("""{"kind":47}""")]
+    public void ShouldRejectInvalidWriteOutcomeGivenSourceGeneratedJson(string json)
+    {
+        // Arrange
+        var type = ReflectionDisabledJsonContext.Default.PortiaCreateOutcome;
+
+        // Act
+        var exception = Record.Exception(() => JsonSerializer.Deserialize(json, type));
+
+        // Assert
+        Assert.IsType<JsonException>(exception);
     }
 
     [Fact]

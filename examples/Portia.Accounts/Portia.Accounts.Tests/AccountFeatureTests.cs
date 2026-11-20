@@ -51,6 +51,29 @@ public sealed class AccountFeatureTests
         Assert.True(serves);
     }
 
+    /// <summary>A repeat matches the opening balance even after later state changes.</summary>
+    [Fact]
+    public async Task ShouldConfirmIdenticalOpenGivenAccountWithLaterDeposits()
+    {
+        // Arrange
+        await using var services = CreateServices(new RecordingAccountLifecycle(), available: true);
+        var scenario = RequestScenario.For(services).GivenActor(AccountActor(AccountId));
+        var request = new OpenAccount(Tenant, AccountId, 500);
+        var payload = new AccountCreated(AccountId);
+        var opened = await scenario.When(request);
+        await scenario.When(new DepositFunds(Tenant, AccountId, 125)).ExpectSuccess();
+
+        // Act
+        var repeated = await scenario.When(request);
+        var different = await scenario.When(request with { InitialBalanceCents = 625 });
+
+        // Assert
+        Assert.Equal(PortiaCreateOutcomeKind.Created, opened.Value.Kind);
+        Assert.Equal(PortiaCreateOutcomeKind.Repeated, repeated.Value.Kind);
+        Assert.Equal(payload, repeated.Value.Value);
+        Assert.Equal(RequestErrorKind.Conflict, different.Error?.Kind);
+    }
+
     /// <summary>Authorization, behavior, guard, and handler run in the declared order.</summary>
     [Fact]
     public async Task ShouldRunPipelineStagesInOrderGivenOpenAccountWhenDepositing()

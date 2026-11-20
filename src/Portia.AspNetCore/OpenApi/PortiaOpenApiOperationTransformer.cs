@@ -124,13 +124,13 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         }
 
         if (createdLocation is not null)
-            foreach (var status in new[] { "200", "201" })
+            foreach (var status in new[] { "200", "201", "204" })
                 if (operation.Responses.TryGetValue(status, out var createResponse) && createResponse is OpenApiResponse concrete)
                 {
                     concrete.Headers ??= new Dictionary<string, IOpenApiHeader>(StringComparer.OrdinalIgnoreCase);
                     concrete.Headers["Location"] = new OpenApiHeader
                     {
-                        Description = "URI of the created resource.",
+                        Description = "URI of the resource.",
                         Schema = new OpenApiSchema { Type = JsonSchemaType.String, Format = "uri-reference" }
                     };
                 }

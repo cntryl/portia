@@ -1,12 +1,19 @@
 #nullable enable
 Cntryl.Portia.PortiaCreateOutcome
-Cntryl.Portia.PortiaCreateOutcome.IsCreated.get -> bool
-Cntryl.Portia.PortiaCreateOutcome.PortiaCreateOutcome(bool isCreated) -> void
+Cntryl.Portia.PortiaCreateOutcome.Kind.get -> Cntryl.Portia.PortiaCreateOutcomeKind
+Cntryl.Portia.PortiaCreateOutcome.PortiaCreateOutcome(Cntryl.Portia.PortiaCreateOutcomeKind kind) -> void
 static Cntryl.Portia.PortiaCreateOutcome.Created() -> Cntryl.Portia.PortiaCreateOutcome!
 static Cntryl.Portia.PortiaCreateOutcome.Repeated() -> Cntryl.Portia.PortiaCreateOutcome!
 Cntryl.Portia.PortiaCreateOutcome<T>
-Cntryl.Portia.PortiaCreateOutcome<T>.IsCreated.get -> bool
+Cntryl.Portia.PortiaCreateOutcome<T>.Kind.get -> Cntryl.Portia.PortiaCreateOutcomeKind
 Cntryl.Portia.PortiaCreateOutcome<T>.Value.get -> T
-Cntryl.Portia.PortiaCreateOutcome<T>.PortiaCreateOutcome(T value, bool isCreated) -> void
+Cntryl.Portia.PortiaCreateOutcome<T>.PortiaCreateOutcome(T value, Cntryl.Portia.PortiaCreateOutcomeKind kind) -> void
 static Cntryl.Portia.PortiaCreateOutcome<T>.Created(T value) -> Cntryl.Portia.PortiaCreateOutcome<T>!
 static Cntryl.Portia.PortiaCreateOutcome<T>.Repeated(T value) -> Cntryl.Portia.PortiaCreateOutcome<T>!
+Cntryl.Portia.Aggregate.IsNew.get -> bool
+Cntryl.Portia.PortiaCreateOutcomeKind
+Cntryl.Portia.PortiaCreateOutcomeKind.Created = 1 -> Cntryl.Portia.PortiaCreateOutcomeKind
+Cntryl.Portia.PortiaCreateOutcomeKind.Repeated = 2 -> Cntryl.Portia.PortiaCreateOutcomeKind
+Cntryl.Portia.PortiaCreateOutcomeKind.Replaced = 3 -> Cntryl.Portia.PortiaCreateOutcomeKind
+static Cntryl.Portia.PortiaCreateOutcome.Replaced() -> Cntryl.Portia.PortiaCreateOutcome!
+static Cntryl.Portia.PortiaCreateOutcome<T>.Replaced(T value) -> Cntryl.Portia.PortiaCreateOutcome<T>!

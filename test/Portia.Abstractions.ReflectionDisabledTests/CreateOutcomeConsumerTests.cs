@@ -48,7 +48,7 @@ public sealed class CreateOutcomeConsumerTests
         Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         Assert.Equal(typeof(IRequest<>).Assembly, typeof(PortiaCreateOutcome<>).Assembly);
         Assert.NotNull(actual);
-        Assert.True(actual.IsCreated);
+        Assert.Equal(PortiaCreateOutcomeKind.Created, actual.Kind);
         Assert.Equal(new Account("server-id", "Portia"), actual.Value);
     }
 
@@ -66,6 +66,6 @@ public sealed class CreateOutcomeConsumerTests
 
         // Assert
         Assert.NotNull(actual);
-        Assert.False(actual.IsCreated);
+        Assert.Equal(PortiaCreateOutcomeKind.Repeated, actual.Kind);
     }
 }
