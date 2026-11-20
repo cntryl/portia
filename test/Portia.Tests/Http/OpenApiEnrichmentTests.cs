@@ -220,6 +220,7 @@ public sealed class OpenApiEnrichmentTests
         Assert.Equal("header", header["in"]!.GetValue<string>());
         Assert.NotEqual(true, header["required"]?.GetValue<bool>());
         Assert.Contains("integer", header["schema"]!["type"]!.ToJsonString(), StringComparison.Ordinal);
+        Assert.Equal(5, header["schema"]!["default"]!.GetValue<int>());
         Assert.Equal(25, header["examples"]!["create"]!["value"]!.GetValue<int>());
         Assert.DoesNotContain(parameters, parameter => parameter!["name"]!.GetValue<string>() == "page_size");
         var body = operation["requestBody"]!["content"]!["application/json"]!;

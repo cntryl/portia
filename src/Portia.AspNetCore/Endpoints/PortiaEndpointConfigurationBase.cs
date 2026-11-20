@@ -77,6 +77,14 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
     /// <param name="member">The request member, such as <c>x =&gt; x.TenantId</c>.</param>
     /// <param name="name">The HTTP header name, such as <c>Tenant-Id</c>.</param>
     /// <returns>This configuration.</returns>
+    /// <remarks>
+    ///     Mapping the route fails when the member is bound from the route, is also declared
+    ///     <c>FromQuery</c>, is not a constructor-bound scalar, or the endpoint uses <c>OnBind</c>.
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    ///     The selector is not a direct member, or the name is not a bindable HTTP header name.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">The member or the header is already declared.</exception>
     public TConfiguration FromHeader<TMember>(Expression<Func<TRequest, TMember>> member, string name)
     {
         _state.FromHeader(PortiaHttpMemberSelector.Name(member,

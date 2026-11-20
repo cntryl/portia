@@ -541,10 +541,12 @@ app.MapPortiaGet<GetOrders, OrdersView>("/v1/orders");
 ```
 
 The binding always applies. Mapping an endpoint that would bind the member another way — a route
-token, `FromQuery`, or a different header — throws, as does a request whose contract member is not
-a constructor parameter. An endpoint that uses `OnBind` owns its inputs and is unaffected.
+token in the mapped pattern, `FromQuery`, or a different header — throws, as does a request that
+has no scalar constructor parameter with the contract member's name. An endpoint that uses `OnBind`
+owns its inputs and is unaffected.
 
-For a header that only one endpoint reads, declare it where the route is mapped:
+For a header that only one endpoint reads, declare it where the route is mapped. Like `FromQuery`,
+this form belongs to the default binder and cannot be combined with `OnBind`:
 
 ```csharp
 app.MapPortiaGet<GetRegion, RegionView>("/v1/region", endpoint => endpoint
@@ -552,16 +554,18 @@ app.MapPortiaGet<GetRegion, RegionView>("/v1/region", endpoint => endpoint
 ```
 
 Either way the header name is always explicit, and the member must be a string, enum, or `TryParse`
-scalar sent as a single header value. The member is left out of the body and query schemas and
-described as an OpenAPI header parameter, required when the member is non-nullable and has no
-default. The name must be a valid HTTP header name. `Authorization`, `Proxy-Authorization` and
-`Cookie` are refused because a bound request is queued and stored under `Prefer: respond-async`;
-`Accept`, `Content-Type` and `Prefer` are refused because OpenAPI or Portia already gives them
-meaning.
+scalar sent as a single header value; a Boolean header is `true` or `false` whatever the body's
+content type. The member is left out of the body and query schemas and described as an OpenAPI
+header parameter with the same default and required rules as a query parameter. The name must be a
+valid HTTP header name. `Authorization`, `Proxy-Authorization` and `Cookie` are refused; `Accept`,
+`Content-Type` and `Prefer` are refused because OpenAPI or Portia already gives them meaning. A
+bound request is queued and stored under `Prefer: respond-async`, so never bind any header that
+carries a credential or token, including your own API-key or antiforgery headers.
 
-A `FromQuery` or `FromHeader` member has exactly one source. Sending its value anywhere else — in
-the JSON or form body, or for a header member in the query string — returns 400 rather than being
-ignored.
+A `FromQuery` or `FromHeader` member has exactly one source. On POST, PUT and PATCH, sending its
+value in the JSON or form body returns 400 rather than being ignored, and a header member sent in
+the query string returns 400 on every verb. GET and DELETE never bind members from a body, so a
+body sent with them is not inspected.
 
 A header is asserted by the caller. Binding a tenant from `Tenant-Id` does not prove the caller may
 act for that tenant; authorizers decide that. Browser clients also need the header allowed by your

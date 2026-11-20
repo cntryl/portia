@@ -947,7 +947,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                         {
                             var inBody = form
                                 ? $"global::Cntryl.Portia.PortiaHttpBinding.ReadForm(form, {name}, false) is not null"
-                                : $"global::Cntryl.Portia.PortiaHttpBinding.HasBodyMember<{call.RequestTypeFullName}, {parameter.Type}>(body.RootElement, jsonOptions, {i}, {Literal(parameter.Name)}, {name})";
+                                : $"global::Cntryl.Portia.PortiaHttpBinding.HasBodyProperty<{call.RequestTypeFullName}, {parameter.Type}>(body.RootElement, jsonOptions, {i}, {Literal(parameter.Name)}, {name})";
                             _ = source.Append(pad).Append("if ((header").Append(i)
                                 .Append(" is not null || memberSources.Query(").Append(i).Append(")) && ")
                                 .Append(inBody).AppendLine(")")
@@ -989,8 +989,15 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     }
                     else
                     {
+                        // A checkbox's "on" is a form convention: a header means the same thing whatever
+                        // the body's content type, so a header-supplied Boolean parses as a plain scalar.
+                        var headerBoolean = IsBoolean(parameter.UnderlyingType) && form && redirectable;
+                        if (headerBoolean)
+                            _ = source.Append(pad).Append("    bool parsed").Append(i).AppendLine(";");
                         var parse = parameter.IsEnum
                             ? $"global::System.Enum.TryParse<{parameter.UnderlyingType}>(raw{i}, true, out var parsed{i})"
+                            : headerBoolean
+                                ? $"(header{i} is not null ? bool.TryParse(raw{i}, out parsed{i}) : global::Cntryl.Portia.PortiaHttpBinding.TryParseFormBoolean(raw{i}, out parsed{i}))"
                             : IsBoolean(parameter.UnderlyingType) && form
                                 ? $"global::Cntryl.Portia.PortiaHttpBinding.TryParseFormBoolean(raw{i}, out var parsed{i})"
                                 : $"{parameter.UnderlyingType}.TryParse(raw{i}, " +

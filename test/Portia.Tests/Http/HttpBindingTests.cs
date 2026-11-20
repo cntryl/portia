@@ -324,11 +324,16 @@ public sealed class HttpBindingTests : IAsyncDisposable
         HttpContent content = body == "json"
             ? JsonContent.Create(new { name = "gear", quantity = 1, active = true, dry_run = true })
             : Form(("name", "gear"), ("quantity", "1"), ("dry_run", "true"));
+        HttpContent withoutCopy = body == "json"
+            ? JsonContent.Create(new { name = "gear", quantity = 1, active = true })
+            : Form(("name", "gear"), ("quantity", "1"));
+        var control = await client.PostAsync(uri, withoutCopy);
 
         // Act
         var response = await client.PostAsync(uri, content);
 
         // Assert
+        Assert.True(control.IsSuccessStatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -449,11 +454,14 @@ public sealed class HttpBindingTests : IAsyncDisposable
         using var request = WithHeaders(HttpMethod.Post, uri, content, ("Dry-Run", "true"));
         if (duplicate == "repeated")
             request.Headers.Add("Dry-Run", "false");
+        var control = await client.SendAsync(WithHeaders(HttpMethod.Post, $"/widgets/{Uuid.CreateVersion4()}",
+            JsonContent.Create(new { name = "gear", quantity = 1, active = true }), ("Dry-Run", "true")));
 
         // Act
         var response = await client.SendAsync(request);
 
         // Assert
+        Assert.True(control.IsSuccessStatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
@@ -487,6 +495,29 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Equal(HttpStatusCode.BadRequest, missingFormBoolean.StatusCode);
         Assert.Equal($"{widgetId} cog 5 False none", await ReadSuccess(suppliedForm));
         Assert.Equal($"{widgetId} gear 4 True none", await ReadSuccess(supplied));
+    }
+
+    /// <summary>
+    ///     Verifies a header-bound Boolean means the same thing whatever the body's content type: a
+    ///     checkbox's <c>on</c> is a form convention and is not accepted from a header.
+    /// </summary>
+    [Theory]
+    [InlineData("true", HttpStatusCode.OK)]
+    [InlineData("on", HttpStatusCode.BadRequest)]
+    public async Task ShouldParseHeaderBooleanAsScalarGivenFormBody(string value, HttpStatusCode status)
+    {
+        // Arrange
+        var client = await StartAsync(app => app.MapPortiaPost<HttpUpdateWidget, string>(
+            "/header-boolean/{widget_id}", endpoint => endpoint
+                .FromHeader(x => x.Active, "Widget-Active")).DisableAntiforgery());
+        using var request = WithHeaders(HttpMethod.Post, $"/header-boolean/{Uuid.CreateVersion4()}",
+            Form(("name", "gear"), ("quantity", "1")), ("Widget-Active", value));
+
+        // Act
+        var response = await client.SendAsync(request);
+
+        // Assert
+        Assert.Equal(status, response.StatusCode);
     }
 
     /// <summary>Verifies misdeclared <c>FromHeader</c> members fail when the route is mapped.</summary>
@@ -595,10 +626,14 @@ public sealed class HttpBindingTests : IAsyncDisposable
             _ => JsonContent.Create(new { name = "gear" })
         };
 
+        var control = await client.SendAsync(WithHeaders(HttpMethod.Post, "/scoped",
+            JsonContent.Create(new { name = "gear" }), ("Tenant-Id", "acme")));
+
         // Act
         var response = await client.SendAsync(WithHeaders(HttpMethod.Post, uri, content, ("Tenant-Id", "acme")));
 
         // Assert
+        Assert.True(control.IsSuccessStatusCode);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 

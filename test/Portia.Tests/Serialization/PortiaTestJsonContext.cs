@@ -43,6 +43,7 @@ namespace Cntryl.Portia;
 [JsonSerializable(typeof(EnumExampleRequest))]
 [JsonSerializable(typeof(ContractMetadataInputRequest))]
 [JsonSerializable(typeof(RequiredPresenceRequest))]
+[JsonSerializable(typeof(RequiredHeaderPresenceRequest))]
 [JsonSerializable(typeof(ContractMetadataModel))]
 [JsonSerializable(typeof(ContractMetadataRequest))]
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web, PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]

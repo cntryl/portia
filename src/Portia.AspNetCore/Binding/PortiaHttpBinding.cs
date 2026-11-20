@@ -230,6 +230,29 @@ public static partial class PortiaHttpBinding
         return binding.Input && present;
     }
 
+    /// <summary>
+    ///     Reports whether a JSON object body carries the identified member at all, without applying the
+    ///     member's own presence rules. Generated binding uses it to refuse a body copy of a member that
+    ///     binds from the query string or a header.
+    /// </summary>
+    /// <typeparam name="TRequest">The request type whose JSON contract names the member.</typeparam>
+    /// <typeparam name="TValue">The member's type.</typeparam>
+    /// <param name="body">The parsed request body.</param>
+    /// <param name="options">The application's frozen Portia JSON options.</param>
+    /// <param name="memberIndex">The member's position in the request's public constructor.</param>
+    /// <param name="memberName">The constructor parameter's declared name.</param>
+    /// <param name="fallbackName">The wire name to use when JSON metadata is unavailable.</param>
+    /// <returns>Whether the body is an object containing the member, including as JSON null.</returns>
+    public static bool HasBodyProperty<TRequest, TValue>(JsonElement body, JsonSerializerOptions options,
+        int memberIndex, string memberName, string fallbackName)
+    {
+        if (body.ValueKind != JsonValueKind.Object)
+            return false;
+        var binding = ResolveBodyMember(options, typeof(TRequest), typeof(TValue), memberIndex, memberName,
+            fallbackName);
+        return TryGetBodyProperty(body, binding.Options, binding.Name, out _);
+    }
+
     /// <summary>Rejects a supplied JSON member that disagrees with its authoritative routed value.</summary>
     /// <typeparam name="TRequest">The request whose member metadata names the duplicate.</typeparam>
     /// <typeparam name="TValue">The routed member type.</typeparam>

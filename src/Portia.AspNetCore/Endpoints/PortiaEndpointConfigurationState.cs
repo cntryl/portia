@@ -111,7 +111,6 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     public void FromHeader(string member, string name)
     {
         EnsureMutable();
-        EnsureInput();
         PortiaHttpHeaderName.Validate(name);
         if (_headerMembers.ContainsKey(member))
             throw new InvalidOperationException($"FromHeader is declared more than once for '{member}'.");
@@ -163,7 +162,7 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     public void NoInput()
     {
         EnsureMutable();
-        if (BodyType is not null || _parameters.Count != 0 || _headerMembers.Count != 0)
+        if (BodyType is not null || _parameters.Count != 0)
             throw new InvalidOperationException("NoInput cannot be combined with custom input declarations.");
         _noInput = true;
     }
