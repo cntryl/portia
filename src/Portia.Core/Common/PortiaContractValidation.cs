@@ -4,6 +4,8 @@ namespace Cntryl.Portia;
 
 static class PortiaContractValidation
 {
+    static readonly RequiredAttribute Required = new();
+
     internal static RequestError? Validate(PortiaContractMetadataRegistry? contracts, object request,
         CancellationToken ct, Type? declaredType = null, PortiaContractUse use = PortiaContractUse.Both)
     {
@@ -51,6 +53,10 @@ static class PortiaContractValidation
                 foreach (var rule in member.Rules)
                     if (!IsValid(member, rule, memberValue))
                         errors.Add(memberPath + ": " + rule.FormatErrorMessage(member.Title ?? member.Name));
+                if (member.RequiredWhen.Count != 0 && use != PortiaContractUse.Output && !Required.IsValid(memberValue) &&
+                    member.RequiredWhen.Any(rule =>
+                        string.Equals(rule.GetSelector(value), rule.Value, StringComparison.Ordinal)))
+                    errors.Add(memberPath + ": " + Required.FormatErrorMessage(member.Title ?? member.Name));
                 if (errors.Count >= 256)
                     exhausted = true;
                 Visit(memberValue, member.Type, memberPath, depth + 1);

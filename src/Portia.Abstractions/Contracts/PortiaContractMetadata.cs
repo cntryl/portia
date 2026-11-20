@@ -79,6 +79,9 @@ public sealed class PortiaContractMemberMetadata(string name, Type type)
     /// <summary>Gets validation rules constructed from standard attributes at compile time.</summary>
     public IReadOnlyList<ValidationAttribute> Rules { get; init; } = [];
 
+    /// <summary>Gets conditional input requirements declared on this member.</summary>
+    public IReadOnlyList<PortiaRequiredWhen> RequiredWhen { get; init; } = [];
+
     /// <summary>Gets whether a documentation default was declared.</summary>
     public bool HasDefault { get; init; }
 
@@ -99,4 +102,21 @@ public sealed class PortiaContractMemberMetadata(string name, Type type)
 
     /// <summary>Gets whether declared serializer annotations permit the member in output.</summary>
     public bool Output { get; init; } = true;
+}
+
+/// <summary>A generated condition that activates input validation when its selector matches.</summary>
+/// <param name="selector">The CLR name of the selector member.</param>
+/// <param name="value">The value which activates the condition.</param>
+/// <param name="getSelector">The generated selector accessor.</param>
+[EditorBrowsable(EditorBrowsableState.Never)]
+public sealed class PortiaRequiredWhen(string selector, string value, Func<object, string?> getSelector)
+{
+    /// <summary>Gets the CLR name of the selector member.</summary>
+    public string Selector { get; } = selector;
+
+    /// <summary>Gets the value which activates the condition.</summary>
+    public string Value { get; } = value;
+
+    /// <summary>Gets the generated selector accessor.</summary>
+    public Func<object, string?> GetSelector { get; } = getSelector;
 }

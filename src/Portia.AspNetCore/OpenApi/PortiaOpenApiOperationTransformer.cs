@@ -234,6 +234,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             var properties = new Dictionary<string, IOpenApiSchema>();
             var formProperties = new Dictionary<string, IOpenApiSchema>();
             var jsonRequired = new HashSet<string>();
+            var jsonNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var formRequired = new HashSet<string>();
             foreach (var (parameter, index) in body)
             {
@@ -250,8 +251,11 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                     PortiaJsonDescriptions.MemberMetadata(jsonOptions, metadata.RequestType, parameter.ClrName),
                     input: true);
                 if (member.Input)
+                {
+                    jsonNames[parameter.ClrName] = member.Name;
                     properties[member.Name] = PortiaOpenApiDescriptions.Annotate(memberSchema,
                         MemberDescription(parameter, member.Name));
+                }
                 // Forms and queries use generated scalar parsing and their declared field names.
                 // JSON member converters and resolver renames apply only to the JSON body.
                 formProperties[fallbackName] = ReferenceEquals(member.Options, jsonOptions)
@@ -282,6 +286,38 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 Properties = properties,
                 Required = jsonRequired.Count == 0 ? null : jsonRequired
             };
+            if (metadata.RequestType is { } conditionalType &&
+                PortiaJsonDescriptions.Metadata(jsonOptions, conditionalType) is { } contract)
+            {
+                foreach (var member in contract.Members)
+                    foreach (var condition in member.RequiredWhen)
+                    {
+                        var selector = jsonNames[condition.Selector];
+                        var target = jsonNames[member.Name];
+                        (schema.AllOf ??= []).Add(new OpenApiSchema
+                        {
+                            If = new OpenApiSchema
+                            {
+                                Required = new HashSet<string>(StringComparer.Ordinal) { selector },
+                                Properties = new Dictionary<string, IOpenApiSchema>(StringComparer.Ordinal)
+                                {
+                                    [selector] = new OpenApiSchema { Const = condition.Value }
+                                }
+                            },
+                            Then = new OpenApiSchema
+                            {
+                                Required = new HashSet<string>(StringComparer.Ordinal) { target },
+                                Properties = new Dictionary<string, IOpenApiSchema>(StringComparer.Ordinal)
+                                {
+                                    [target] = member.Type == typeof(string)
+                                        ? new OpenApiSchema { Type = JsonSchemaType.String, Pattern = PortiaJsonConstraints.RequiredTextPattern }
+                                        : new OpenApiSchema { Not = new OpenApiSchema { Type = JsonSchemaType.Null } }
+                                }
+                            }
+                        });
+                    }
+            }
+
             Dictionary<string, IOpenApiMediaType> content = new()
             { ["application/json"] = new OpenApiMediaType { Schema = schema } };
             if (endpointMetadata.OfType<PortiaFormBindableBody>().Any() &&

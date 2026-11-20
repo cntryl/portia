@@ -213,9 +213,22 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     createPayloadIsNullable), null);
         }
 
+        var conditionalMembers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var member in requestType.GetMembers().OfType<IPropertySymbol>())
+        {
+            foreach (var attribute in RequiredWhenShape.Attributes(member))
+            {
+                var condition = RequiredWhenShape.Resolve(requestType, member, attribute);
+                if (condition is null)
+                    return Invalid(invocation, "RequiredWhen needs readable constructor-bound members, a nullable target and an ordinal string selector without a default");
+                _ = conditionalMembers.Add(member.Name);
+                _ = conditionalMembers.Add(condition.Selector);
+            }
+        }
+
         var primaryConstructor = HttpBindingShape.SinglePublicConstructor(requestType);
         if (primaryConstructor is null)
-            return configured
+            return configured && conditionalMembers.Count == 0
                 ? Mapping([], false)
                 : Invalid(invocation, "the request must expose exactly one public constructor");
         if (!configured && HttpBindingShape.HasUnsetRequiredMembers(requestType, primaryConstructor))
@@ -265,13 +278,16 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     jsonName,
                     underlying.TypeKind == TypeKind.Enum,
                     HttpBindingShape.GetTextParseKind(underlying),
-                    HttpBindingShape.IsSupportedParameter(parameter, true));
+                    HttpBindingShape.IsSupportedParameter(parameter, true),
+                    conditionalMembers.Contains(parameter.Name));
             })
             .ToArray();
 
         for (var i = 0; i < parameters.Length; i++)
         {
             var parameter = primaryConstructor.Parameters[i];
+            if (parameters[i].JsonOnly && parameters[i].Source != ParameterSource.Body)
+                return Invalid(invocation, $"RequiredWhen member '{parameter.Name}' must bind from the JSON body");
             if (!HttpBindingShape.IsSupportedParameter(parameter, parameters[i].Source != ParameterSource.Body))
             {
                 return configured
@@ -554,8 +570,9 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         var hasBody = bodyParameters.Length > 0;
         var checksRoutedBody = call.Verb is "Post" or "Put" or "Patch" or "Delete" &&
                                call.Parameters.Any(parameter => parameter.Source == ParameterSource.Route);
-        var formBindable = hasBody && bodyParameters.All(p => p.FormBindable);
-        var readsForm = formBindable || checksRoutedBody && !hasBody;
+        var hasConditional = call.Parameters.Any(parameter => parameter.JsonOnly);
+        var formBindable = hasBody && !hasConditional && bodyParameters.All(p => p.FormBindable);
+        var readsForm = !hasConditional && (formBindable || checksRoutedBody && !hasBody);
         var configurationType = ConfigurationType(call);
 
         _ = source
@@ -601,6 +618,11 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     : $"global::Cntryl.Portia.PortiaHttpBinding.ResolveMemberSources<{call.RequestTypeFullName}>(app, httpMembers)")
                 .AppendLine(";");
         }
+
+        if (hasConditional)
+            _ = source.Append("        global::Cntryl.Portia.PortiaHttpBinding.ValidateRequiredWhen<")
+                .Append(call.RequestTypeFullName).Append(">(app, httpMembers, memberSources, ")
+                .Append(call.Configured ? "configuration.Binder is not null" : "false").AppendLine(");");
 
         _ = source
             // Mapping the handler as a RequestDelegate keeps RequestDelegateFactory — and the
@@ -893,7 +915,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     var bodyRead = parameter.Source == ParameterSource.Body && !form;
                     // Binding cascades route, body, then query: a scalar member the body omits is
                     // looked up in the query string before its default or missing rule applies.
-                    var cascade = bodyRead && parameter.FormBindable;
+                    var cascade = bodyRead && parameter.FormBindable && !parameter.JsonOnly;
                     if (bodyRead)
                     {
                         if (cascade)
@@ -1222,7 +1244,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         string? JsonName,
         bool IsEnum,
         HttpBindingShape.TextParseKind ParseKind,
-        bool FormBindable);
+        bool FormBindable,
+        bool JsonOnly);
 
     sealed class CallModel(
         string requestTypeFullName,

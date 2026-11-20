@@ -44,3 +44,14 @@ override Cntryl.Portia.DecimalString.GetHashCode() -> int
 ~override Cntryl.Portia.DecimalString.Equals(object obj) -> bool
 Cntryl.Portia.DecimalString.Equals(Cntryl.Portia.DecimalString other) -> bool
 Cntryl.Portia.DecimalString.Deconstruct(out decimal Value) -> void
+Cntryl.Portia.RequiredWhenAttribute
+Cntryl.Portia.RequiredWhenAttribute.RequiredWhenAttribute(string! selector, string! value) -> void
+Cntryl.Portia.RequiredWhenAttribute.Selector.get -> string!
+Cntryl.Portia.RequiredWhenAttribute.Value.get -> string!
+Cntryl.Portia.PortiaContractMemberMetadata.RequiredWhen.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.PortiaRequiredWhen!>!
+Cntryl.Portia.PortiaContractMemberMetadata.RequiredWhen.init -> void
+Cntryl.Portia.PortiaRequiredWhen
+Cntryl.Portia.PortiaRequiredWhen.PortiaRequiredWhen(string! selector, string! value, System.Func<object!, string?>! getSelector) -> void
+Cntryl.Portia.PortiaRequiredWhen.GetSelector.get -> System.Func<object!, string?>!
+Cntryl.Portia.PortiaRequiredWhen.Selector.get -> string!
+Cntryl.Portia.PortiaRequiredWhen.Value.get -> string!

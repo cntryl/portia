@@ -52,6 +52,23 @@ invariants or authoritative participant outcomes; see [validation authority](val
 Purely local requests do not require JSON roots. Requests that cross a JSON boundary still require
 explicit serializer roots on a `[PortiaJsonContext]`.
 
+## Conditional input requirements
+
+Use `RequiredWhen` on a readable constructor-bound nullable input whose omitted value is null.
+The selector is a separate constructor-bound string with no default. The match is ordinal.
+
+```csharp
+public sealed record ScheduleJob(
+    string Mode,
+    [RequiredWhen(nameof(ScheduleJob.Mode), "scheduled")] DateTimeOffset? SendAt = null)
+    : IRequest;
+```
+
+A scheduled job must supply `SendAt`. For strings, the requirement also rejects empty and
+whitespace-only values. Other selector values leave the property optional. HTTP keeps both members
+in the generated JSON body. The generated input schema uses each member's effective JSON name in
+`if` and `then`.
+
 ## Supported facts
 
 | Annotation | Meaning |
