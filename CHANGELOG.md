@@ -4,6 +4,22 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.14.7
+
+### Added
+
+- Request members can bind from HTTP headers. `AddHttp(http => http.FromHeader<TContract>(x => x.Member, "Name"))`
+  binds a contract member on every endpoint whose request implements the contract, with no per-endpoint
+  configuration; `FromHeader(x => x.Member, "Name")` on an endpoint binds one. Header members are published as
+  OpenAPI header parameters. Credential headers, `Accept`, `Content-Type` and `Prefer` are refused.
+
+### Changed
+
+- **Breaking:** a `FromQuery` member now has exactly one source. On POST, PUT and PATCH, sending its value in the
+  JSON or form body returns 400; previously the body copy was ignored. `FromHeader` members follow the same rule.
+- **Breaking:** `PortiaEndpointConfigurationBase.IsQueryMember`, used only by generated code, is removed. Generated
+  binding now resolves member sources once per mapped endpoint.
+
 ## 0.14.6
 
 ### Fixed

@@ -467,7 +467,7 @@ app.MapOpenApi("/internal/openapi/{documentName}.json").RequireAuthorization("op
 ### Export YAML to disk
 
 To write the composed YAML document to disk without starting the web server, build the application,
-map its endpoints, then call `WritePortiaOpenApiYamlAsync`. The call uses the same cached `v1`
+map all endpoints, then call `WritePortiaOpenApiYamlAsync`. The call uses the same cached `v1`
 document and YAML rendering as `MapPortiaOpenApi()`, so the OpenAPI route does not need to be mapped:
 
 ```csharp
@@ -478,11 +478,12 @@ await app.WritePortiaOpenApiYamlAsync();
 
 The default output is `openapi.yml` in the current working directory. Pass a path for another
 location; relative paths also resolve from the current working directory, and the destination's
-parent directory must already exist.
+parent directory must already exist. The first successful render captures the endpoint descriptions
+shared with the HTTP OpenAPI routes. An export replaces the destination after the file is written.
 
 Composing the document is not cheap: it walks every described endpoint and resolves a schema for
-each parameter and response. Because endpoints are fixed once the host starts, Portia composes it
-on the first request and serves the rendered bytes from then on, so later requests only copy them.
+each parameter and response. Portia composes it on the first export or HTTP OpenAPI request and
+reuses the rendered bytes.
 Composition happens on first use rather than during startup, which keeps the cost off the critical
 path of a host that never serves the document. A document that cannot be composed — a duplicated
 operation ID, say — fails every request rather than being cached as a failure.
@@ -536,6 +537,56 @@ A `FromQuery` member binds only from the query string, is left out of the body s
 described as a query parameter. The member must be a string, enum, or `TryParse` scalar that the
 route does not already bind, and `FromQuery` cannot be combined with `OnBind`; mapping the route
 throws otherwise.
+
+A context value that belongs in an HTTP header, such as a tenant or region, is declared once for the
+whole application. Define a contract in your own code, bind its member in `AddHttp`, and every
+request that implements the contract reads that member from the header on every endpoint:
+
+```csharp
+public interface ITenantRequest
+{
+    string TenantId { get; }
+}
+
+builder.Services.AddPortia().AddHttp(http => http
+    .FromHeader<ITenantRequest>(x => x.TenantId, "Tenant-Id"));
+
+public sealed record GetOrders(string TenantId, int Page = 1)
+    : IRequest<OrdersView>, ICallable, ITenantRequest;
+
+app.MapPortiaGet<GetOrders, OrdersView>("/v1/orders");
+```
+
+The binding always applies. Mapping an endpoint that would bind the member another way — a route
+token in the mapped pattern, `FromQuery`, or a different header — throws, as does a request that
+has no scalar constructor parameter with the contract member's name. An endpoint that uses `OnBind`
+owns its inputs and is unaffected.
+
+For a header that only one endpoint reads, declare it where the route is mapped. Like `FromQuery`,
+this form belongs to the default binder and cannot be combined with `OnBind`:
+
+```csharp
+app.MapPortiaGet<GetRegion, RegionView>("/v1/region", endpoint => endpoint
+    .FromHeader(x => x.Region, "Region"));
+```
+
+Either way the header name is always explicit, and the member must be a string, enum, or `TryParse`
+scalar sent as a single header value; a Boolean header is `true` or `false` whatever the body's
+content type. The member is left out of the body and query schemas and described as an OpenAPI
+header parameter with the same default and required rules as a query parameter. The name must be a
+valid HTTP header name. `Authorization`, `Proxy-Authorization` and `Cookie` are refused; `Accept`,
+`Content-Type` and `Prefer` are refused because OpenAPI or Portia already gives them meaning. A
+bound request is queued and stored under `Prefer: respond-async`, so never bind any header that
+carries a credential or token, including your own API-key or antiforgery headers.
+
+A `FromQuery` or `FromHeader` member has exactly one source. On POST, PUT and PATCH, sending its
+value in the JSON or form body returns 400 rather than being ignored, and a header member sent in
+the query string returns 400 on every verb. GET and DELETE never bind members from a body, so a
+body sent with them is not inspected.
+
+A header is asserted by the caller. Binding a tenant from `Tenant-Id` does not prove the caller may
+act for that tenant; authorizers decide that. Browser clients also need the header allowed by your
+ASP.NET Core CORS policy (`WithHeaders` or `AllowAnyHeader`).
 
 An absent body is treated as `{}` unless a required complex member needs it. Bodies are bounded
 to 10 MiB by default; configure `PortiaHttpOptions.MaxJsonBodyBytes` through standard options

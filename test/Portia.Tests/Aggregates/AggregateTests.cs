@@ -44,6 +44,7 @@ public sealed class AggregateTests
         Assert.Equal(42, aggregate.Value);
         Assert.Equal(1UL, aggregate.Version);
         Assert.Equal(0UL, aggregate.CommittedStreamPosition);
+        Assert.True(aggregate.IsNew);
     }
 
     /// <summary>

@@ -6,7 +6,7 @@ namespace Cntryl.Portia;
 ///     <see cref="IRequestAuthorizer{TRequest}" />). A stream has no single outcome to wrap in a
 ///     <see cref="Result" /> the way
 ///     <see
-///         cref="RequestBusExtensions.SendAsync(IRequestBus, IRequest, System.Security.Claims.ClaimsPrincipal, CancellationToken)" />
+///         cref="RequestBusExtensions.SendAsync(IRequestBus, IUnaryRequest, System.Security.Claims.ClaimsPrincipal, CancellationToken)" />
 ///     does, so a failed authorization simply ends the stream with this exception instead — same as
 ///     any other failure in an <see cref="IAsyncEnumerable{T}" /> producer.
 /// </summary>

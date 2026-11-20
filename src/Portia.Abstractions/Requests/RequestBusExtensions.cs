@@ -5,12 +5,12 @@ namespace Cntryl.Portia;
 /// <summary>
 ///     The ergonomic way to dispatch a request. These build on <see cref="IRequestBus" />'s dispatch
 ///     primitives and its <see cref="IRequestBus.CreateContext" />, so every implementation gets the
-///     same behaviour — including its own clock — instead of each reimplementing these six overloads.
+///     same behaviour — including its own clock — instead of each reimplementing the convenience overloads.
 /// </summary>
 public static class RequestBusExtensions
 {
     /// <summary>
-    ///     Dispatches a no-result command caused by a reaction and requires it to succeed before the
+    ///     Dispatches a unary command caused by a reaction and requires it to succeed before the
     ///     reaction may checkpoint. This is an optional convenience for reactions whose effect is
     ///     naturally expressed as application request handling; reactors may also invoke injected
     ///     integration services directly.
@@ -20,7 +20,7 @@ public static class RequestBusExtensions
     /// <param name="reaction">The triggering reaction execution.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The command outcome, returned by the reactor handler so Portia can apply its retry policy.</returns>
-    public static ValueTask<Result> SendReactionAsync(this IRequestBus bus, IRequest command,
+    public static ValueTask<Result> SendReactionAsync(this IRequestBus bus, IUnaryRequest command,
         IReactorContext reaction, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(bus);
@@ -29,7 +29,7 @@ public static class RequestBusExtensions
         return bus.SendAsync(command, reaction, ct);
     }
 
-    /// <summary>Dispatches a request that produces no result to its handler.</summary>
+    /// <summary>Dispatches a unary request under the given actor and returns its success or failure.</summary>
     /// <param name="bus">The bus to dispatch through.</param>
     /// <param name="request">The request to dispatch.</param>
     /// <param name="actor">
@@ -39,15 +39,20 @@ public static class RequestBusExtensions
     /// </param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of handling the request.</returns>
-    public static ValueTask<Result> SendAsync(this IRequestBus bus, IRequest request, ClaimsPrincipal actor,
+    public static ValueTask<Result> SendAsync(this IRequestBus bus, IUnaryRequest request, ClaimsPrincipal actor,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(bus);
         if (RequestMetadata.IdentityError(request) is { } error)
             return ValueTask.FromResult(Result.Failure(error));
-        return bus.DispatchAsync(request,
+        return DispatchUnaryAsync(bus, request,
             bus.CreateContext(actor, request is IIdentifiedRequest ? RequestMetadata.FromRequest(request) : null), ct);
     }
+
+    static ValueTask<Result> DispatchUnaryAsync(IRequestBus bus, IUnaryRequest request,
+        RequestDispatchContext context, CancellationToken ct) =>
+        request is IRequest noValue ? bus.DispatchAsync(noValue, context, ct) :
+        request.DispatchWithoutValueAsync(bus, context, ct);
 
     /// <summary>Dispatches a request that produces a result to its handler.</summary>
     /// <typeparam name="TOut">The type of the value produced on success.</typeparam>
@@ -81,21 +86,21 @@ public static class RequestBusExtensions
             bus.CreateContext(actor, request is IIdentifiedRequest ? RequestMetadata.FromRequest(request) : null), ct);
     }
 
-    /// <summary>Dispatches a new child request, inheriting actor and correlation from an explicit parent.</summary>
+    /// <summary>Dispatches a unary child request, inheriting actor and correlation from an explicit parent.</summary>
     /// <param name="bus">The bus to dispatch through.</param>
     /// <param name="request">The request to dispatch.</param>
     /// <param name="parent">The execution causing this request.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of handling the request.</returns>
-    public static ValueTask<Result> SendAsync(this IRequestBus bus, IRequest request, IExecutionContext parent,
+    public static ValueTask<Result> SendAsync(this IRequestBus bus, IUnaryRequest request, IExecutionContext parent,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(bus);
         ArgumentNullException.ThrowIfNull(parent);
         if (RequestMetadata.IdentityError(request) is { } error)
             return ValueTask.FromResult(Result.Failure(error));
-        return bus.DispatchAsync(request, bus.CreateContext(parent.Actor, RequestMetadata.FromRequest(request, parent)),
-            ct);
+        return DispatchUnaryAsync(bus, request,
+            bus.CreateContext(parent.Actor, RequestMetadata.FromRequest(request, parent)), ct);
     }
 
     /// <summary>Dispatches a new result-bearing child request with explicit causal inheritance.</summary>

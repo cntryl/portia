@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.OpenApi;
 using Microsoft.OpenApi.Reader;
 
@@ -70,6 +72,52 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
         }
     }
 
+    /// <summary>Pre-start export and the running endpoint serve identical bytes.</summary>
+    [Fact]
+    public async Task ShouldServeSameYamlGivenExportBeforeHostStartup()
+    {
+        // Arrange
+        var path = Path.Combine(Path.GetTempPath(), $"portia-openapi-{Guid.NewGuid():N}.yml");
+        var app = CreateApp();
+        _app = app;
+        var group = app.MapGroup("/ops");
+        _ = group.MapGet("/health", () => Results.Ok()).WithName("opsHealth");
+        _ = app.MapPortiaOpenApi();
+        try
+        {
+            // Act
+            await app.WritePortiaOpenApiYamlAsync(path);
+            await app.StartAsync();
+            using var client = app.GetTestClient();
+            var served = await client.GetByteArrayAsync("/openapi/v1.yml");
+
+            // Assert
+            Assert.Equal(await File.ReadAllBytesAsync(path), served);
+            Assert.Contains("/ops/health:", await File.ReadAllTextAsync(path), StringComparison.Ordinal);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>Invalid paths are rejected before document composition.</summary>
+    [Fact]
+    public async Task ShouldRejectInvalidPathGivenConfiguredDocument()
+    {
+        // Arrange
+        var composed = false;
+        var app = CreateApp(options => options.OpenApi.ConfigureDocument = _ => composed = true);
+        _app = app;
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => app.WritePortiaOpenApiYamlAsync(" "));
+
+        // Assert
+        Assert.IsType<ArgumentException>(exception);
+        Assert.False(composed);
+    }
+
     /// <summary>Export explains when HTTP services were not registered.</summary>
     [Fact]
     public async Task ShouldExplainMissingHttpRegistrationGivenYamlExport()
@@ -116,6 +164,31 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
         }
     }
 
+    /// <summary>Cancellation during the export preserves the previous destination.</summary>
+    [Fact]
+    public async Task ShouldPreserveExistingFileGivenCancellationDuringComposition()
+    {
+        // Arrange
+        var path = Path.Combine(Path.GetTempPath(), $"portia-openapi-{Guid.NewGuid():N}.yml");
+        await File.WriteAllTextAsync(path, "previous document");
+        using var cancellation = new CancellationTokenSource();
+        var app = CreateApp(options => options.OpenApi.ConfigureDocument = _ => cancellation.Cancel());
+        _app = app;
+        try
+        {
+            // Act
+            var exception = await Record.ExceptionAsync(() => app.WritePortiaOpenApiYamlAsync(path, cancellation.Token));
+
+            // Assert
+            Assert.IsAssignableFrom<OperationCanceledException>(exception);
+            Assert.Equal("previous document", await File.ReadAllTextAsync(path));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     /// <inheritdoc />
     public ValueTask DisposeAsync() => DisposeAppAsync();
 
@@ -131,6 +204,7 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
     static WebApplication CreateApp(Action<PortiaHttpOptions>? configure = null)
     {
         var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddPortia().AddHttp(configure);
         return builder.Build();
     }

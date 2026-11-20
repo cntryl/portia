@@ -38,6 +38,11 @@ static class FrameworkTestRegistration
         _ = portia.AddRequestHandler<AllocationProbeActionHandler>();
         _ = portia.AddRequestHandler<AllocationProbeQueryHandler>();
         _ = portia.AddRequestHandler<HttpListWidgetsHandler>();
+        _ = portia.AddRequestHandler<HttpTenantScopedGetHandler>();
+        _ = portia.AddRequestHandler<HttpTenantScopedUpdateHandler>();
+        _ = portia.AddRequestHandler<HttpTenantScopedComputedHandler>();
+        _ = portia.AddRequestHandler<HttpTenantScopedListHandler>();
+        _ = portia.AddRequestHandler<HttpTenantScopedCommandHandler>();
         _ = portia.AddRequestHandler<HttpStallingStreamHandler>();
         _ = portia.AddRequestHandler<UniversalActionHandler>();
         _ = portia.AddRequestHandler<CustomTransportRequestHandler>();

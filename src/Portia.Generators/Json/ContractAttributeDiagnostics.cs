@@ -48,7 +48,7 @@ static class ContractAttributeDiagnostics
             return null;
         var name = constructor.ContainingType.ToDisplayString();
         if (!JsonDescriptionEmission.IsValidationAttribute(name) &&
-            name != "System.ComponentModel.DefaultValueAttribute")
+            name != "System.ComponentModel.DefaultValueAttribute" && name != RequiredWhenShape.AttributeName)
             return null;
         var owner = syntax.Parent?.Parent;
         var symbol = owner is FieldDeclarationSyntax field
@@ -62,6 +62,14 @@ static class ContractAttributeDiagnostics
             return null;
         var args = attribute.ConstructorArguments;
         string? reason = null;
+        if (name == RequiredWhenShape.AttributeName && symbol?.ContainingType is { } contract)
+        {
+            var property = symbol as IPropertySymbol ?? contract.GetMembers().OfType<IPropertySymbol>()
+                .FirstOrDefault(member => string.Equals(member.Name, symbol.Name, StringComparison.OrdinalIgnoreCase));
+            if (property is null || RequiredWhenShape.Resolve(contract, property, attribute) is null)
+                reason = "RequiredWhen needs a readable constructor-bound nullable member with a null omitted value and a separate readable string selector without a default.";
+        }
+
         if (name is "System.ComponentModel.DataAnnotations.RangeAttribute"
                 or "System.ComponentModel.DefaultValueAttribute" &&
             args.FirstOrDefault().Kind == TypedConstantKind.Type)
@@ -126,6 +134,16 @@ static class ContractAttributeDiagnostics
                 or "System.ComponentModel.DataAnnotations.MaxLengthAttribute" &&
             memberType is not null && JsonDescriptionEmission.CountExpression(memberType) is null)
             reason = "Length validation needs a string, array, ICollection<T> or IReadOnlyCollection<T>.";
+        if (name == "Cntryl.Portia.DecimalStringRangeAttribute" && memberType is not null)
+        {
+            var scalar = memberType is INamedTypeSymbol
+            {
+                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
+            } nullable ? nullable.TypeArguments[0] : memberType;
+            if (scalar is not INamedTypeSymbol named || !SymbolNames.Is(named, "Cntryl.Portia.DecimalString"))
+                reason = "DecimalStringRange requires a DecimalString or nullable DecimalString member.";
+        }
+
         var containingType = symbol as INamedTypeSymbol ?? symbol?.ContainingType;
         return reason is null || containingType is null
             ? null

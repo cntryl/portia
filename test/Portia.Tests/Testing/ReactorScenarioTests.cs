@@ -100,6 +100,41 @@ public sealed class ReactorScenarioTests
         Assert.Contains(nameof(GetValue), error.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>An exact request script takes precedence over a default for its result type.</summary>
+    [Theory]
+    [InlineData(false, 42)]
+    [InlineData(true, 5)]
+    public async Task ShouldResolveExplicitTypedDefaultGivenUnscriptedRequest(bool exact, int expected)
+    {
+        // Arrange
+        var scenario = new ReactorScenario().RespondByDefault<int>(Result<int>.Success(42));
+        if (exact)
+            _ = scenario.RespondTo<GetValue, int>(Result<int>.Success(5));
+
+        // Act
+        var result = await scenario.Requests.SendAsync(new GetValue(), RequestActor.System);
+
+        // Assert
+        Assert.Equal(expected, result.Value);
+    }
+
+    /// <summary>A type-erased unary send still uses the typed request path and preserves failure.</summary>
+    [Fact]
+    public async Task ShouldPreserveFailureGivenTypeErasedUnaryRequest()
+    {
+        // Arrange
+        var error = RequestError.Conflict("Participant unavailable.");
+        var scenario = new ReactorScenario().RespondTo<GetValue, int>(Result<int>.Failure(error));
+        IUnaryRequest request = new GetValue();
+
+        // Act
+        var result = await scenario.Requests.SendAsync(request, RequestActor.System);
+
+        // Assert
+        Assert.Same(error, result.Error);
+        Assert.Equal<IRequestBase>([request], scenario.SentRequests);
+    }
+
     /// <summary>A stream request yields the items scripted for it.</summary>
     [Fact]
     public async Task ShouldYieldScriptedItemsGivenStreamRequest()

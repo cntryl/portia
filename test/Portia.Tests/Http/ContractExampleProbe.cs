@@ -30,7 +30,13 @@ enum ExampleMode
     Second = 2
 }
 
-sealed record EnumExampleRequest(ExampleMode Mode) : IRequest<string>, ICallable;
+/// <summary>An application contract whose mode can be bound from a header application-wide.</summary>
+interface IExampleModeScoped
+{
+    ExampleMode Mode { get; }
+}
+
+sealed record EnumExampleRequest(ExampleMode Mode) : IRequest<string>, ICallable, IExampleModeScoped;
 
 sealed class EnumExampleHandler : IRequestHandler<EnumExampleRequest, string>
 {

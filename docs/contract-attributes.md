@@ -52,6 +52,23 @@ invariants or authoritative participant outcomes; see [validation authority](val
 Purely local requests do not require JSON roots. Requests that cross a JSON boundary still require
 explicit serializer roots on a `[PortiaJsonContext]`.
 
+## Conditional input requirements
+
+Use `RequiredWhen` on a readable constructor-bound nullable input whose omitted value is null.
+The selector is a separate constructor-bound string with no default. The match is ordinal.
+
+```csharp
+public sealed record ScheduleJob(
+    string Mode,
+    [RequiredWhen(nameof(ScheduleJob.Mode), "scheduled")] DateTimeOffset? SendAt = null)
+    : IRequest;
+```
+
+A scheduled job must supply `SendAt`. For strings, the requirement also rejects empty and
+whitespace-only values. Other selector values leave the property optional. HTTP keeps both members
+in the generated JSON body. The generated input schema uses each member's effective JSON name in
+`if` and `then`.
+
 ## Supported facts
 
 | Annotation | Meaning |
@@ -107,6 +124,23 @@ Type-converter overloads such as `Range(Type, string, string)` and `DefaultValue
 resource-backed validation messages, require explicit typed application validation instead of
 reflection-dependent conversion. `PORTIA031` reports these declarations on Portia contracts.
 Literal `ErrorMessage` is supported. Resource-backed display text remains application-owned.
+
+## Exact decimal strings
+
+Declare a `DecimalString` when a decimal must travel without binary floating-point conversion.
+JSON carries a quoted base-ten decimal. Route and query values use the same invariant parser.
+The syntax permits a leading minus, an integer, and an optional decimal point followed by digits.
+The value must fit in `decimal` exactly. Exponents, grouping, leading integer zeros, and values
+that would round are rejected. The scalar exposes its `decimal Value` to the application.
+
+```csharp
+public sealed record SetRate(
+    [DecimalStringRange("0", "1", MinimumIsExclusive = true)] DecimalString Rate)
+    : IRequest;
+```
+
+The generated schema publishes a string pattern and keeps exact range bounds and exclusivity in
+`x-portia-range`. Monetary units, arithmetic, and rounding belong to the application.
 
 ## Typed examples
 
@@ -196,3 +230,28 @@ an anonymous alternative. OpenAPI cannot infer arbitrary policy assertions.
 
 Output requiredness is conservative when a custom `ShouldSerialize` predicate can omit a property.
 The serializer remains authoritative for conditional omission.
+
+## Typed PUT body cases
+
+Map one operation when several typed updates share a PUT route. Each case declares its permission
+on its request type and uses the ordinary request authorizers and handler.
+
+```csharp
+[RequiresPermission("assets:rename")]
+public sealed record RenameAsset(Uuid AssetId, string Name) : IRequest;
+
+[RequiresPermission("assets:archive")]
+public sealed record ArchiveAsset(Uuid AssetId) : IRequest;
+
+// In the HTTP host:
+app.MapPortiaPutByBody("/assets/{asset_id}", "updateAsset", "mode")
+    .Case<RenameAsset>("rename")
+    .Case<ArchiveAsset>("archive")
+    .RequireAuthorization("asset-editor");
+```
+
+Describe a shared credential scheme with the existing security configuration. OpenAPI references
+each case schema in `oneOf` and publishes its generated static permission as
+`x-portia-permission`. The selector value is required on the wire. Its value is compared ordinally.
+A typed map such as `MapPortiaPutByBody<AssetUpdate>` requires every case to return `AssetUpdate`.
+Use an ordinary map for a single request contract.

@@ -38,10 +38,10 @@ sealed class PortiaOpenApiDocumentCache(IServiceProvider services, string docume
         await context.Response.Body.WriteAsync(payload, context.RequestAborted).ConfigureAwait(false);
     }
 
-    internal async ValueTask<ReadOnlyMemory<byte>> GetYamlAsync(CancellationToken ct) =>
-        (await GetAsync(ct).ConfigureAwait(false)).Yaml;
+    internal async ValueTask<ReadOnlyMemory<byte>> GetYamlAsync(Action registerEndpoints, CancellationToken ct) =>
+        (await GetAsync(ct, registerEndpoints).ConfigureAwait(false)).Yaml;
 
-    async ValueTask<RenderedDocument> GetAsync(CancellationToken ct)
+    async ValueTask<RenderedDocument> GetAsync(CancellationToken ct, Action? registerEndpoints = null)
     {
         if (Volatile.Read(ref _rendered) is { } cached)
         {
@@ -57,6 +57,7 @@ sealed class PortiaOpenApiDocumentCache(IServiceProvider services, string docume
                 return current;
             }
 
+            registerEndpoints?.Invoke();
             var document = await services.GetRequiredKeyedService<IOpenApiDocumentProvider>(documentName)
                 .GetOpenApiDocumentAsync(ct).ConfigureAwait(false);
 

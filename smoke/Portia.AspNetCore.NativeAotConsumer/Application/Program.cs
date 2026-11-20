@@ -40,6 +40,12 @@ _ = builder.Services.AddPortia().ConfigureJson(options =>
     .AddRequestHandler<SmokeExternalHandler>()
     .AddRequestHandler<SmokeUploadHandler>()
     .AddRequestHandler<SmokeBindingHandler>()
+    .AddRequestHandler<SmokeQuoteHandler>()
+    .AddRequestHandler<SmokeScheduleHandler>()
+    .AddRequestHandler<SmokeRenameHandler>()
+    .AddRequestHandler<SmokeArchiveHandler>()
+    .AddRequestHandler<SmokeCreateHandler>()
+    .AddRequestHandler<SmokeReplaceHandler>()
     .AddRequestPipelineBehavior<SmokeRequestBehavior>()
     .AddRequestGuard<SmokeRequestGuard>();
 _ = builder.Services.AddCors(options => options.AddPolicy("smoke", policy => policy.WithOrigins("https://trusted.example")));
@@ -61,6 +67,14 @@ _ = app.MapPortiaGet<SmokeRequest, SmokePayload>("/smoke", endpoint => endpoint
     .Describe(x => x.Name, "Requested name.").DescribeResponse("Native response."));
 _ = app.MapPortiaPost<SmokeBinding, string>("/smoke-binding", endpoint => endpoint.Describe(x => x.A, "First value.")
     .RequestExample("binding", new SmokeBinding(11, 22)).ResponseExample(200, "binding", "11,22"));
+_ = app.MapGroup("/native").MapPortiaPost<SmokeCreate, PortiaCreateOutcome<SmokeResource>>("/resources",
+    endpoint => endpoint.Created("/native/resources/{id}", includePayload: false));
+_ = app.MapPortiaPut<SmokeReplace, PortiaCreateOutcome<SmokeResource>>("/native/resources/{resource}",
+    endpoint => endpoint.Created("/native/resources/{id}", includePayload: false));
+_ = app.MapPortiaGet<SmokeQuote, DecimalString>("/smoke-quotes/{amount}");
+_ = app.MapPortiaPost<SmokeSchedule, string>("/smoke-schedule");
+_ = app.MapPortiaPutByBody("/smoke-assets/{id}", "smokeAsset", "mode")
+    .Case<SmokeRename>("rename").Case<SmokeArchive>("archive");
 _ = app.MapPortiaPost<SmokeUpload, int>("/smoke-upload", endpoint => endpoint
     .Accepts<Stream>("application/octet-stream")
     .OnBind(async (http, ct) =>
@@ -83,9 +97,66 @@ if (JsonSerializer.Serialize(new App_A.FirstPayload("contracts"), firstType) != 
     || JsonSerializer.Deserialize("{\"value\":42}", secondType)?.Value != 42)
     throw new InvalidOperationException("Referenced JSON context composition failed.");
 
+var yamlPath = Path.Combine(Path.GetTempPath(), $"portia-native-openapi-{Guid.NewGuid():N}.yml");
+string exportedYaml;
+try
+{
+    await app.WritePortiaOpenApiYamlAsync(yamlPath);
+    exportedYaml = await File.ReadAllTextAsync(yamlPath);
+}
+finally
+{
+    File.Delete(yamlPath);
+}
+
 await app.StartAsync();
 using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
 {
+    if (!string.Equals(exportedYaml, await client.GetStringAsync("/openapi/v1.yml"), StringComparison.Ordinal))
+        throw new InvalidOperationException("Exported native OpenAPI YAML differs from the served document.");
+
+    foreach (var (repeated, expected) in new[] { (false, HttpStatusCode.Created), (true, HttpStatusCode.OK) })
+    {
+        using var createBody = new StringContent(repeated ? """{"repeated":true}""" : """{"repeated":false}""",
+            Encoding.UTF8, "application/json");
+        using var create = await client.PostAsync("/native/resources", createBody);
+        if (create.StatusCode != expected || create.Headers.Location?.OriginalString != "/native/resources/1" ||
+            (await create.Content.ReadAsStringAsync()).Length != 0)
+            throw new InvalidOperationException($"Unexpected bodyless create response: {(int)create.StatusCode}.");
+    }
+
+    using var replaceBody = new StringContent("{}", Encoding.UTF8, "application/json");
+    using var replace = await client.PutAsync("/native/resources/1", replaceBody);
+    if (replace.StatusCode != HttpStatusCode.NoContent || replace.Headers.Location?.OriginalString != "/native/resources/1" ||
+        (await replace.Content.ReadAsStringAsync()).Length != 0)
+        throw new InvalidOperationException($"Unexpected bodyless replace response: {(int)replace.StatusCode}.");
+
+    using var quote = await client.GetAsync("/smoke-quotes/1.0000000000000000000000000001");
+    if (quote.StatusCode != HttpStatusCode.OK ||
+        await quote.Content.ReadAsStringAsync() != "\"1.0000000000000000000000000001\"")
+        throw new InvalidOperationException("Native decimal string lost precision.");
+    using var rounded = await client.GetAsync("/smoke-quotes/1.00000000000000000000000000001");
+    if (rounded.StatusCode != HttpStatusCode.BadRequest)
+        throw new InvalidOperationException("Native decimal string accepted a rounded value.");
+
+    using var missingSchedule = new StringContent("""{"plan":"scheduled"}""", Encoding.UTF8, "application/json");
+    using var scheduleFailure = await client.PostAsync("/smoke-schedule", missingSchedule);
+    if (scheduleFailure.StatusCode != HttpStatusCode.BadRequest)
+        throw new InvalidOperationException("Native conditional validation accepted a missing value.");
+    using var manual = new StringContent("""{"plan":"manual"}""", Encoding.UTF8, "application/json");
+    using var scheduleSuccess = await client.PostAsync("/smoke-schedule", manual);
+    if (scheduleSuccess.StatusCode != HttpStatusCode.OK)
+        throw new InvalidOperationException("Native conditional validation rejected an inactive condition.");
+
+    using var renameBody = new StringContent("""{"mode":"rename","name":"Native"}""", Encoding.UTF8, "application/json");
+    using var rename = await client.PutAsync("/smoke-assets/1", renameBody);
+    if (rename.StatusCode != HttpStatusCode.NoContent)
+        throw new InvalidOperationException("Native typed PUT case did not bind and dispatch.");
+    using var unknownBody = new StringContent("""{"mode":"unknown"}""", Encoding.UTF8, "application/json");
+    using var unknown = await client.PutAsync("/smoke-assets/1", unknownBody);
+    if (unknown.StatusCode != HttpStatusCode.BadRequest)
+        throw new InvalidOperationException("Native typed PUT accepted an unknown selector.");
+
     using var bindingBody = new StringContent("{\"wire_a\":11,\"wire_b\":22}", Encoding.UTF8, "application/json");
     using var bindingResponse = await client.PostAsync("/smoke-binding", bindingBody);
     var bindingResult = await bindingResponse.Content.ReadAsStringAsync();
@@ -170,6 +241,18 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     var recursiveId = properties.GetProperty("next_node").GetProperty("properties").GetProperty("next_node").GetProperty("$ref").GetString()!.Split('/')[^1];
     if (!components.GetProperty(recursiveId).GetProperty("properties").TryGetProperty("display_name", out _))
         throw new InvalidOperationException($"Recursive Portia schema does not resolve: {document}");
+    var createResponses = openApi.RootElement.GetProperty("paths").GetProperty("/native/resources")
+        .GetProperty("post").GetProperty("responses");
+    if (createResponses.EnumerateObject().Count(response => response.Name.StartsWith('2')) != 2)
+        throw new InvalidOperationException("Bodyless create must document exactly two success responses.");
+    foreach (var status in new[] { "200", "201" })
+    {
+        var createResponse = createResponses.GetProperty(status);
+        if (createResponse.TryGetProperty("content", out _) ||
+            !createResponse.GetProperty("headers").TryGetProperty("Location", out _))
+            throw new InvalidOperationException($"Unexpected bodyless create OpenAPI response: {createResponse}.");
+    }
+
     var uploadOperation = openApi.RootElement.GetProperty("paths").GetProperty("/smoke-upload").GetProperty("post");
     var uploadRequestSchema = uploadOperation.GetProperty("requestBody").GetProperty("content")
         .GetProperty("application/octet-stream").GetProperty("schema");
@@ -217,6 +300,10 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
 await using (var scope = app.Services.CreateAsyncScope())
 {
     var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
+    IUnaryRequest unary = new SmokeRequest("unary");
+    var unaryOutcome = await bus.SendAsync(unary, RequestActor.System);
+    if (!unaryOutcome.IsSuccess)
+        throw new InvalidOperationException("Native unary dispatch failed.");
     var retained = await bus.SendAsync(new SmokeRequest("retain-continuation"), RequestActor.System);
     if (!retained.IsSuccess)
         throw new InvalidOperationException("Retaining smoke behavior failed.");
@@ -342,6 +429,80 @@ sealed class SmokeUploadHandler : IRequestHandler<SmokeUpload, int>
         ValueTask.FromResult(Result<int>.Success(context.Request.Length));
 }
 
+[Discriminator("portia.smoke.native-aot.quote")]
+[RequestRoute("portia-smoke", "requests", "native-aot", "quote")]
+sealed record SmokeQuote([property: DecimalStringRange("1", "2", MinimumIsExclusive = true)] DecimalString Amount)
+    : IRequest<DecimalString>, ICallable;
+
+sealed class SmokeQuoteHandler : IRequestHandler<SmokeQuote, DecimalString>
+{
+    public ValueTask<Result<DecimalString>> HandleAsync(IRequestContext<SmokeQuote> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result<DecimalString>.Success(context.Request.Amount));
+}
+
+[Discriminator("portia.smoke.native-aot.schedule")]
+[RequestRoute("portia-smoke", "requests", "native-aot", "schedule")]
+sealed record SmokeSchedule(
+    [property: JsonPropertyName("plan")] string Mode,
+    [property: RequiredWhen(nameof(SmokeSchedule.Mode), "scheduled")] string? Schedule = null) :
+    IRequest<string>, ICallable;
+
+sealed class SmokeScheduleHandler : IRequestHandler<SmokeSchedule, string>
+{
+    public ValueTask<Result<string>> HandleAsync(IRequestContext<SmokeSchedule> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result<string>.Success(context.Request.Mode));
+}
+
+sealed record SmokeRename(int Id, string Name) : IRequest;
+
+sealed record SmokeArchive(int Id) : IRequest;
+
+sealed class SmokeRenameHandler : IRequestHandler<SmokeRename>
+{
+    public ValueTask<Result> HandleAsync(IRequestContext<SmokeRename> context, CancellationToken ct) =>
+        ValueTask.FromResult(context.Request.Id == 1 && context.Request.Name == "Native"
+            ? Result.Success
+            : Result.Failure(RequestError.Validation("Unexpected native case values.")));
+}
+
+sealed class SmokeArchiveHandler : IRequestHandler<SmokeArchive>
+{
+    public ValueTask<Result> HandleAsync(IRequestContext<SmokeArchive> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result.Success);
+}
+
+[Discriminator("portia.smoke.native-aot.create")]
+[RequestRoute("portia-smoke", "requests", "native-aot", "create")]
+sealed record SmokeCreate(bool Repeated) :
+    IRequest<PortiaCreateOutcome<SmokeResource>>, ICallable;
+
+sealed record SmokeResource(string Id);
+
+sealed class SmokeCreateHandler : IRequestHandler<SmokeCreate, PortiaCreateOutcome<SmokeResource>>
+{
+    public ValueTask<Result<PortiaCreateOutcome<SmokeResource>>> HandleAsync(
+        IRequestContext<SmokeCreate> context, CancellationToken ct)
+    {
+        var resource = new SmokeResource("1");
+        var outcome = context.Request.Repeated
+            ? PortiaCreateOutcome<SmokeResource>.Repeated(resource)
+            : PortiaCreateOutcome<SmokeResource>.Created(resource);
+        return ValueTask.FromResult(Result<PortiaCreateOutcome<SmokeResource>>.Success(outcome));
+    }
+}
+
+[Discriminator("portia.smoke.native-aot.replace")]
+[RequestRoute("portia-smoke", "requests", "native-aot", "replace")]
+sealed record SmokeReplace(string Resource) : IRequest<PortiaCreateOutcome<SmokeResource>>, ICallable;
+
+sealed class SmokeReplaceHandler : IRequestHandler<SmokeReplace, PortiaCreateOutcome<SmokeResource>>
+{
+    public ValueTask<Result<PortiaCreateOutcome<SmokeResource>>> HandleAsync(
+        IRequestContext<SmokeReplace> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result<PortiaCreateOutcome<SmokeResource>>.Success(
+            PortiaCreateOutcome<SmokeResource>.Replaced(new SmokeResource(context.Request.Resource))));
+}
+
 interface ISmokeRequest : IRequestBase;
 
 sealed class SmokeRequestGuard(SmokeGuardProbe probe) : IRequestGuard<ISmokeRequest>
@@ -375,6 +536,14 @@ sealed class SmokeGuardProbe
 [JsonSerializable(typeof(SmokeCount))]
 [JsonSerializable(typeof(SmokeVariant))]
 [JsonSerializable(typeof(SmokeUpload))]
+[JsonSerializable(typeof(SmokeQuote))]
+[JsonSerializable(typeof(DecimalString))]
+[JsonSerializable(typeof(SmokeSchedule))]
+[JsonSerializable(typeof(SmokeRename))]
+[JsonSerializable(typeof(SmokeArchive))]
+[JsonSerializable(typeof(SmokeCreate))]
+[JsonSerializable(typeof(SmokeReplace))]
+[JsonSerializable(typeof(PortiaCreateOutcome<SmokeResource>))]
 [JsonSerializable(typeof(SmokeBinding))]
 [JsonSerializable(typeof(SmokeCatalogChanged))]
 [JsonSerializable(typeof(SmokeCatalogConfirmed))]

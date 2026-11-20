@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 
 namespace Cntryl.Portia.ReflectionDisabled;
@@ -9,14 +10,14 @@ namespace Cntryl.Portia.ReflectionDisabled;
 public sealed class ReflectionDisabledConsumerTests
 {
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ShouldRoundTripCreateResultGivenSourceGeneratedRpcSerialization(bool created)
+    [InlineData(PortiaCreateOutcomeKind.Created)]
+    [InlineData(PortiaCreateOutcomeKind.Repeated)]
+    [InlineData(PortiaCreateOutcomeKind.Replaced)]
+    public void ShouldRoundTripCreateResultGivenSourceGeneratedRpcSerialization(PortiaCreateOutcomeKind kind)
     {
         // Arrange
         var serializer = new JsonRequestSerializer([], ReflectionDisabledJsonContext.Default.Options);
-        var outcome = created ? PortiaCreateOutcome<string>.Created("Portia") :
-            PortiaCreateOutcome<string>.Repeated("Portia");
+        var outcome = new PortiaCreateOutcome<string>("Portia", kind);
 
         // Act
         var bytes = serializer.SerializeResult(Result<PortiaCreateOutcome<string>>.Success(outcome));
@@ -25,17 +26,18 @@ public sealed class ReflectionDisabledConsumerTests
         // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal("Portia", result.Value.Value);
-        Assert.Equal(created, result.Value.IsCreated);
+        Assert.Equal(kind, result.Value.Kind);
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void ShouldRoundTripPayloadlessCreateResultGivenSourceGeneratedRpcSerialization(bool created)
+    [InlineData(PortiaCreateOutcomeKind.Created)]
+    [InlineData(PortiaCreateOutcomeKind.Repeated)]
+    [InlineData(PortiaCreateOutcomeKind.Replaced)]
+    public void ShouldRoundTripPayloadlessCreateResultGivenSourceGeneratedRpcSerialization(PortiaCreateOutcomeKind kind)
     {
         // Arrange
         var serializer = new JsonRequestSerializer([], ReflectionDisabledJsonContext.Default.Options);
-        var outcome = created ? PortiaCreateOutcome.Created() : PortiaCreateOutcome.Repeated();
+        var outcome = new PortiaCreateOutcome(kind);
 
         // Act
         var bytes = serializer.SerializeResult(Result<PortiaCreateOutcome>.Success(outcome));
@@ -43,7 +45,60 @@ public sealed class ReflectionDisabledConsumerTests
 
         // Assert
         Assert.True(result.IsSuccess);
-        Assert.Equal(created, result.Value.IsCreated);
+        Assert.Equal(kind, result.Value.Kind);
+    }
+
+    [Theory]
+    [InlineData("""{"isCreated":true}""")]
+    [InlineData("""{"kind":0}""")]
+    [InlineData("""{"kind":47}""")]
+    public void ShouldRejectInvalidWriteOutcomeGivenSourceGeneratedJson(string json)
+    {
+        // Arrange
+        var type = ReflectionDisabledJsonContext.Default.PortiaCreateOutcome;
+
+        // Act
+        var exception = Record.Exception(() => JsonSerializer.Deserialize(json, type));
+
+        // Assert
+        Assert.IsType<JsonException>(exception);
+    }
+
+    [Fact]
+    public async Task ShouldDescribeEffectiveResultsGivenGroupedConfiguredEndpoints()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia().AddHttp();
+        await using var app = builder.Build();
+        var group = app.MapGroup("/api");
+        _ = group.MapPortiaPost<BodylessCreate, PortiaCreateOutcome>("/bodyless",
+            endpoint => endpoint.Created("/api/bodyless/1"));
+        _ = group.MapPortiaPost<NullableCreate, PortiaCreateOutcome<string?>>("/nullable",
+            endpoint => endpoint.Created("/api/nullable/1"));
+        _ = group.MapPortiaPost<OrdinaryCreate, PortiaCreateOutcome<string?>>("/ordinary",
+            endpoint => endpoint.DescribeResponse("Ordinary result."));
+
+        // Act
+        var operations = ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints)
+            .Cast<RouteEndpoint>().ToDictionary(endpoint => endpoint.RoutePattern.RawText!,
+                endpoint => endpoint.Metadata.GetOrderedMetadata<PortiaOpenApiOperation>());
+
+        // Assert
+        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
+        var bodyless = Assert.Single(operations["/api/bodyless"]);
+        Assert.Null(bodyless.ResultType);
+        Assert.True(bodyless.NoContent);
+        Assert.False(bodyless.ResultIsNullable);
+        var nullable = Assert.Single(operations["/api/nullable"]);
+        Assert.Equal(typeof(string), nullable.ResultType);
+        Assert.False(nullable.NoContent);
+        Assert.True(nullable.ResultIsNullable);
+        var ordinary = Assert.Single(operations["/api/ordinary"]);
+        Assert.Equal(typeof(PortiaCreateOutcome<string>), ordinary.ResultType);
+        Assert.False(ordinary.NoContent);
+        Assert.False(ordinary.ResultIsNullable);
     }
 
     [Fact]
@@ -182,3 +237,15 @@ public sealed class ReflectionDisabledConsumerTests
         new RequestRouteAttribute("test", "missing", "roots", typeof(T).Name),
         new DiscriminatorAttribute(typeof(T).Name));
 }
+
+[Discriminator("test.bodyless-create")]
+[RequestRoute("test", "http", "create", "bodyless")]
+sealed record BodylessCreate : IRequest<PortiaCreateOutcome>, ICallable;
+
+[Discriminator("test.nullable-create")]
+[RequestRoute("test", "http", "create", "nullable")]
+sealed record NullableCreate : IRequest<PortiaCreateOutcome<string?>>, ICallable;
+
+[Discriminator("test.ordinary-create")]
+[RequestRoute("test", "http", "create", "ordinary")]
+sealed record OrdinaryCreate : IRequest<PortiaCreateOutcome<string?>>, ICallable;

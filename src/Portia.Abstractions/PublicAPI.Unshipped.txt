@@ -1,12 +1,57 @@
 #nullable enable
 Cntryl.Portia.PortiaCreateOutcome
-Cntryl.Portia.PortiaCreateOutcome.IsCreated.get -> bool
-Cntryl.Portia.PortiaCreateOutcome.PortiaCreateOutcome(bool isCreated) -> void
+Cntryl.Portia.PortiaCreateOutcome.Kind.get -> Cntryl.Portia.PortiaCreateOutcomeKind
+Cntryl.Portia.PortiaCreateOutcome.PortiaCreateOutcome(Cntryl.Portia.PortiaCreateOutcomeKind kind) -> void
 static Cntryl.Portia.PortiaCreateOutcome.Created() -> Cntryl.Portia.PortiaCreateOutcome!
 static Cntryl.Portia.PortiaCreateOutcome.Repeated() -> Cntryl.Portia.PortiaCreateOutcome!
 Cntryl.Portia.PortiaCreateOutcome<T>
-Cntryl.Portia.PortiaCreateOutcome<T>.IsCreated.get -> bool
+Cntryl.Portia.PortiaCreateOutcome<T>.Kind.get -> Cntryl.Portia.PortiaCreateOutcomeKind
 Cntryl.Portia.PortiaCreateOutcome<T>.Value.get -> T
-Cntryl.Portia.PortiaCreateOutcome<T>.PortiaCreateOutcome(T value, bool isCreated) -> void
+Cntryl.Portia.PortiaCreateOutcome<T>.PortiaCreateOutcome(T value, Cntryl.Portia.PortiaCreateOutcomeKind kind) -> void
 static Cntryl.Portia.PortiaCreateOutcome<T>.Created(T value) -> Cntryl.Portia.PortiaCreateOutcome<T>!
 static Cntryl.Portia.PortiaCreateOutcome<T>.Repeated(T value) -> Cntryl.Portia.PortiaCreateOutcome<T>!
+Cntryl.Portia.Aggregate.IsNew.get -> bool
+Cntryl.Portia.PortiaCreateOutcomeKind
+Cntryl.Portia.PortiaCreateOutcomeKind.Created = 1 -> Cntryl.Portia.PortiaCreateOutcomeKind
+Cntryl.Portia.PortiaCreateOutcomeKind.Repeated = 2 -> Cntryl.Portia.PortiaCreateOutcomeKind
+Cntryl.Portia.PortiaCreateOutcomeKind.Replaced = 3 -> Cntryl.Portia.PortiaCreateOutcomeKind
+static Cntryl.Portia.PortiaCreateOutcome.Replaced() -> Cntryl.Portia.PortiaCreateOutcome!
+static Cntryl.Portia.PortiaCreateOutcome<T>.Replaced(T value) -> Cntryl.Portia.PortiaCreateOutcome<T>!
+Cntryl.Portia.IUnaryRequest
+Cntryl.Portia.DecimalString
+Cntryl.Portia.DecimalString.DecimalString(decimal Value) -> void
+Cntryl.Portia.DecimalString.Value.get -> decimal
+Cntryl.Portia.DecimalString.Value.init -> void
+override Cntryl.Portia.DecimalString.ToString() -> string!
+static Cntryl.Portia.DecimalString.TryParse(string? text, out Cntryl.Portia.DecimalString value) -> bool
+Cntryl.Portia.DecimalStringJsonConverter
+Cntryl.Portia.DecimalStringJsonConverter.DecimalStringJsonConverter() -> void
+override Cntryl.Portia.DecimalStringJsonConverter.Read(ref System.Text.Json.Utf8JsonReader reader, System.Type! typeToConvert, System.Text.Json.JsonSerializerOptions! options) -> Cntryl.Portia.DecimalString
+override Cntryl.Portia.DecimalStringJsonConverter.Write(System.Text.Json.Utf8JsonWriter! writer, Cntryl.Portia.DecimalString value, System.Text.Json.JsonSerializerOptions! options) -> void
+Cntryl.Portia.DecimalStringRangeAttribute
+Cntryl.Portia.DecimalStringRangeAttribute.DecimalStringRangeAttribute(string! minimum, string! maximum) -> void
+Cntryl.Portia.DecimalStringRangeAttribute.Maximum.get -> string!
+Cntryl.Portia.DecimalStringRangeAttribute.MaximumIsExclusive.get -> bool
+Cntryl.Portia.DecimalStringRangeAttribute.MaximumIsExclusive.init -> void
+Cntryl.Portia.DecimalStringRangeAttribute.Minimum.get -> string!
+Cntryl.Portia.DecimalStringRangeAttribute.MinimumIsExclusive.get -> bool
+Cntryl.Portia.DecimalStringRangeAttribute.MinimumIsExclusive.init -> void
+override Cntryl.Portia.DecimalStringRangeAttribute.IsValid(object? value) -> bool
+Cntryl.Portia.DecimalString.DecimalString() -> void
+static Cntryl.Portia.DecimalString.operator !=(Cntryl.Portia.DecimalString left, Cntryl.Portia.DecimalString right) -> bool
+static Cntryl.Portia.DecimalString.operator ==(Cntryl.Portia.DecimalString left, Cntryl.Portia.DecimalString right) -> bool
+override Cntryl.Portia.DecimalString.GetHashCode() -> int
+~override Cntryl.Portia.DecimalString.Equals(object obj) -> bool
+Cntryl.Portia.DecimalString.Equals(Cntryl.Portia.DecimalString other) -> bool
+Cntryl.Portia.DecimalString.Deconstruct(out decimal Value) -> void
+Cntryl.Portia.RequiredWhenAttribute
+Cntryl.Portia.RequiredWhenAttribute.RequiredWhenAttribute(string! selector, string! value) -> void
+Cntryl.Portia.RequiredWhenAttribute.Selector.get -> string!
+Cntryl.Portia.RequiredWhenAttribute.Value.get -> string!
+Cntryl.Portia.PortiaContractMemberMetadata.RequiredWhen.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.PortiaRequiredWhen!>!
+Cntryl.Portia.PortiaContractMemberMetadata.RequiredWhen.init -> void
+Cntryl.Portia.PortiaRequiredWhen
+Cntryl.Portia.PortiaRequiredWhen.PortiaRequiredWhen(string! selector, string! value, System.Func<object!, string?>! getSelector) -> void
+Cntryl.Portia.PortiaRequiredWhen.GetSelector.get -> System.Func<object!, string?>!
+Cntryl.Portia.PortiaRequiredWhen.Selector.get -> string!
+Cntryl.Portia.PortiaRequiredWhen.Value.get -> string!

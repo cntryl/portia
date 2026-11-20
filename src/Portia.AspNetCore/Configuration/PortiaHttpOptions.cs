@@ -1,3 +1,5 @@
+using System.Linq.Expressions;
+
 namespace Cntryl.Portia;
 
 /// <summary>Controls Portia's generated HTTP boundary.</summary>
@@ -37,6 +39,40 @@ public sealed class PortiaHttpOptions
     ///     representation's element or value type.
     /// </remarks>
     public Func<Type, Type, bool?>? OpenApiSchemaCollectionElementIsNullable { get; set; }
+
+    /// <summary>
+    ///     Binds a member of an application contract from one HTTP header on every Portia endpoint whose
+    ///     request implements that contract, and describes the header in OpenAPI.
+    /// </summary>
+    /// <typeparam name="TContract">The application's contract, such as <c>ITenantRequest</c>.</typeparam>
+    /// <param name="member">The contract member, such as <c>x =&gt; x.TenantId</c>.</param>
+    /// <param name="name">The HTTP header name, such as <c>Tenant-Id</c>.</param>
+    /// <returns>These options.</returns>
+    /// <remarks>
+    ///     The binding always applies: mapping fails when an endpoint binds the member from its route,
+    ///     declares it <c>FromQuery</c>, or names a different header. An endpoint with <c>OnBind</c>
+    ///     owns its inputs and is unaffected. The member must be a string, enum, or <c>TryParse</c>
+    ///     scalar. Declare bindings before mapping endpoints.
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    ///     The selector is not a direct member, or the name is not a bindable HTTP header name.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">The contract member is already bound.</exception>
+    public PortiaHttpOptions FromHeader<TContract>(Expression<Func<TContract, object?>> member, string name)
+        where TContract : class
+    {
+        var memberName = PortiaHttpMemberSelector.Name(member,
+            "FromHeader requires a direct contract member, such as x => x.TenantId.");
+        PortiaHttpHeaderName.Validate(name);
+        if (HeaderBindings.Any(item => item.Contract == typeof(TContract) &&
+                                       string.Equals(item.Member, memberName, StringComparison.Ordinal)))
+            throw new InvalidOperationException(
+                $"FromHeader for '{typeof(TContract).Name}.{memberName}' is declared more than once.");
+        HeaderBindings.Add(new PortiaHeaderBinding(typeof(TContract), memberName, name));
+        return this;
+    }
+
+    internal List<PortiaHeaderBinding> HeaderBindings { get; } = [];
 
     /// <summary>Gets or sets the maximum JSON request-body size.</summary>
     public long MaxJsonBodyBytes { get; set; } = DefaultMaxJsonBodyBytes;

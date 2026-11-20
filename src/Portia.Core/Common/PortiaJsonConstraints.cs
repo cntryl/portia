@@ -9,6 +9,8 @@ namespace Cntryl.Portia;
 // pretending that a different regex engine or a format annotation enforces the runtime rule.
 static class PortiaJsonConstraints
 {
+    internal const string RequiredTextPattern = @"[^\u0009-\u000D\u0020\u0085\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000]";
+
     internal static void Apply(JsonObject schema, PortiaContractMemberMetadata member, JsonSerializerOptions options)
     {
         if (!member.Input && member.Output)
@@ -36,6 +38,16 @@ static class PortiaJsonConstraints
                         schema["x-portia-reject-whitespace"] = true;
                     }
 
+                    break;
+                case DecimalStringRangeAttribute decimalRange:
+                    schema["x-portia-range"] = new JsonObject
+                    {
+                        ["minimum"] = decimalRange.Minimum,
+                        ["maximum"] = decimalRange.Maximum,
+                        ["operandType"] = typeof(DecimalString).FullName,
+                        ["minimumIsExclusive"] = decimalRange.MinimumIsExclusive,
+                        ["maximumIsExclusive"] = decimalRange.MaximumIsExclusive
+                    };
                     break;
                 case RangeAttribute range:
                     schema["x-portia-range"] = new JsonObject

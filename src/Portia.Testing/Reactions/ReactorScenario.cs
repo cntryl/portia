@@ -73,10 +73,20 @@ public sealed class ReactorScenario
     /// <typeparam name="TOut">The result the request produces.</typeparam>
     /// <param name="result">The result to return, successful or failed.</param>
     /// <returns>This scenario, for chaining.</returns>
-    /// <remarks>A result-bearing request has no default answer; sending one that was not scripted fails the run.</remarks>
+    /// <remarks>An exact script takes precedence over a default for the result type.</remarks>
     public ReactorScenario RespondTo<TRequest, TOut>(Result<TOut> result) where TRequest : IRequest<TOut>
     {
         _requests.Script(Concrete<TRequest>(), result);
+        return this;
+    }
+
+    /// <summary>Scripts a fallback for result-bearing requests with the specified result type.</summary>
+    /// <typeparam name="TOut">The result type.</typeparam>
+    /// <param name="result">The result to return, successful or failed.</param>
+    /// <returns>This scenario.</returns>
+    public ReactorScenario RespondByDefault<TOut>(Result<TOut> result)
+    {
+        _requests.ScriptDefault(result);
         return this;
     }
 

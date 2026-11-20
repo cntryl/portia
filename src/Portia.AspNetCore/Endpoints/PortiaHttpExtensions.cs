@@ -87,9 +87,10 @@ public static class PortiaHttpExtensions
     }
 
     /// <summary>Writes the configured application's OpenAPI 3.1 document as YAML without starting the app.</summary>
-    /// <param name="app">The built web application with its endpoints mapped.</param>
+    /// <param name="app">The built web application after all endpoints have been mapped.</param>
     /// <param name="path">The output path, relative to the current working directory when not rooted.</param>
     /// <param name="cancellationToken">A token that cancels document generation or file writing.</param>
+    /// <remarks>The first successful render fixes the document shared with the HTTP OpenAPI endpoints.</remarks>
     /// <exception cref="InvalidOperationException"><c>AddHttp()</c> was not called.</exception>
     public static async Task WritePortiaOpenApiYamlAsync(this WebApplication app, string path = "openapi.yml",
         CancellationToken cancellationToken = default)
@@ -99,10 +100,26 @@ public static class PortiaHttpExtensions
             throw new InvalidOperationException(
                 "Writing Portia's OpenAPI YAML requires AddHttp() in the shared Portia application composition.");
 
-        RegisterEndpointDataSources(app);
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var destination = Path.GetFullPath(path);
+        cancellationToken.ThrowIfCancellationRequested();
         var cache = app.Services.GetRequiredService<PortiaOpenApiDocumentCache>();
-        var yaml = await cache.GetYamlAsync(cancellationToken).ConfigureAwait(false);
-        await File.WriteAllBytesAsync(path, yaml, cancellationToken).ConfigureAwait(false);
+        var yaml = await cache.GetYamlAsync(() => RegisterEndpointDataSources(app), cancellationToken)
+            .ConfigureAwait(false);
+        var temporary = Path.Combine(Path.GetDirectoryName(destination)!, $".portia-openapi-{Guid.NewGuid():N}.tmp");
+        var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096,
+            FileOptions.Asynchronous);
+        try
+        {
+            await using (stream.ConfigureAwait(false))
+                await stream.WriteAsync(yaml, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            File.Move(temporary, destination, overwrite: true);
+        }
+        finally
+        {
+            File.Delete(temporary);
+        }
     }
 
     static void RegisterEndpointDataSources(WebApplication app)

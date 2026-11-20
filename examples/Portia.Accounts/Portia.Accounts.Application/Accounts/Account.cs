@@ -22,6 +22,7 @@ public sealed class Account : Aggregate
         On<AccountOpened>(ev =>
         {
             IsOpen = true;
+            OpeningBalanceCents = ev.InitialBalanceCents;
             BalanceCents = ev.InitialBalanceCents;
         });
         On<FundsDeposited>(ev => BalanceCents = checked(BalanceCents + ev.AmountCents));
@@ -29,6 +30,8 @@ public sealed class Account : Aggregate
 
     /// <summary>Gets whether the account has been opened.</summary>
     public bool IsOpen { get; private set; }
+
+    internal long OpeningBalanceCents { get; private set; }
 
     /// <summary>Gets the current balance in cents.</summary>
     public long BalanceCents { get; private set; }

@@ -62,10 +62,10 @@ public sealed class AccountRequestBehavior(IAccountLifecycleObserver lifecycle)
 
 /// <summary>Opens an account through the ordinary account repository.</summary>
 public sealed class OpenAccountHandler(IAccountCommandRepository accounts, IAccountLifecycleObserver lifecycle)
-    : IRequestHandler<OpenAccount>
+    : IRequestHandler<OpenAccount, PortiaCreateOutcome<AccountCreated>>
 {
     /// <inheritdoc />
-    public ValueTask<Result> HandleAsync(IRequestContext<OpenAccount> context, CancellationToken ct)
+    public ValueTask<Result<PortiaCreateOutcome<AccountCreated>>> HandleAsync(IRequestContext<OpenAccount> context, CancellationToken ct)
     {
         lifecycle.Record("handler.open");
         return accounts.OpenAsync(context.Request, context, ct);
