@@ -1,3 +1,1 @@
 #nullable enable
-Cntryl.Portia.RequestHandlerRegistration.StaticPermission.get -> string?
-Cntryl.Portia.RequestHandlerRegistration.StaticPermission.init -> void
