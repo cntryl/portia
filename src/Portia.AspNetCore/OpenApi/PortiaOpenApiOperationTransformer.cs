@@ -307,10 +307,9 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             };
         }
 
-        if (replacesDefaultSuccess)
+        if (replacesDefaultSuccess || createdLocation is not null)
         {
-            // The configured result hook owns the declared success response. Portia's normal
-            // failure responses remain available, but its JSON/no-content success does not.
+            // Explicit create and custom result responses replace the default success response.
         }
         else if (metadata.JsonStream || metadata.ServerSentEvents)
         {
@@ -327,7 +326,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         {
             SetDefaultResponse("204", new OpenApiResponse { Description = "No Content" });
         }
-        else if (createdLocation is null)
+        else
         {
             var schema = PortiaOpenApiSchemaGenerator.Create(metadata.ResultType!, jsonOptions, context.Document!,
                 schemaType,

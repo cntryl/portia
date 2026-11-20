@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.TestHost;
 
 namespace Cntryl.Portia.ReflectionDisabled;
@@ -44,6 +45,43 @@ public sealed class ReflectionDisabledConsumerTests
         // Assert
         Assert.True(result.IsSuccess);
         Assert.Equal(created, result.Value.IsCreated);
+    }
+
+    [Fact]
+    public async Task ShouldDescribeEffectiveResultsGivenGroupedConfiguredEndpoints()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia().AddHttp();
+        await using var app = builder.Build();
+        var group = app.MapGroup("/api");
+        _ = group.MapPortiaPost<BodylessCreate, PortiaCreateOutcome>("/bodyless",
+            endpoint => endpoint.Created("/api/bodyless/1"));
+        _ = group.MapPortiaPost<NullableCreate, PortiaCreateOutcome<string?>>("/nullable",
+            endpoint => endpoint.Created("/api/nullable/1"));
+        _ = group.MapPortiaPost<OrdinaryCreate, PortiaCreateOutcome<string?>>("/ordinary",
+            endpoint => endpoint.DescribeResponse("Ordinary result."));
+
+        // Act
+        var operations = ((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints)
+            .Cast<RouteEndpoint>().ToDictionary(endpoint => endpoint.RoutePattern.RawText!,
+                endpoint => endpoint.Metadata.GetOrderedMetadata<PortiaOpenApiOperation>());
+
+        // Assert
+        Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
+        var bodyless = Assert.Single(operations["/api/bodyless"]);
+        Assert.Null(bodyless.ResultType);
+        Assert.True(bodyless.NoContent);
+        Assert.False(bodyless.ResultIsNullable);
+        var nullable = Assert.Single(operations["/api/nullable"]);
+        Assert.Equal(typeof(string), nullable.ResultType);
+        Assert.False(nullable.NoContent);
+        Assert.True(nullable.ResultIsNullable);
+        var ordinary = Assert.Single(operations["/api/ordinary"]);
+        Assert.Equal(typeof(PortiaCreateOutcome<string>), ordinary.ResultType);
+        Assert.False(ordinary.NoContent);
+        Assert.False(ordinary.ResultIsNullable);
     }
 
     [Fact]
@@ -182,3 +220,15 @@ public sealed class ReflectionDisabledConsumerTests
         new RequestRouteAttribute("test", "missing", "roots", typeof(T).Name),
         new DiscriminatorAttribute(typeof(T).Name));
 }
+
+[Discriminator("test.bodyless-create")]
+[RequestRoute("test", "http", "create", "bodyless")]
+sealed record BodylessCreate : IRequest<PortiaCreateOutcome>, ICallable;
+
+[Discriminator("test.nullable-create")]
+[RequestRoute("test", "http", "create", "nullable")]
+sealed record NullableCreate : IRequest<PortiaCreateOutcome<string?>>, ICallable;
+
+[Discriminator("test.ordinary-create")]
+[RequestRoute("test", "http", "create", "ordinary")]
+sealed record OrdinaryCreate : IRequest<PortiaCreateOutcome<string?>>, ICallable;
