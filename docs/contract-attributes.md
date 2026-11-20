@@ -230,3 +230,28 @@ an anonymous alternative. OpenAPI cannot infer arbitrary policy assertions.
 
 Output requiredness is conservative when a custom `ShouldSerialize` predicate can omit a property.
 The serializer remains authoritative for conditional omission.
+
+## Typed PUT body cases
+
+Map one operation when several typed updates share a PUT route. Each case declares its permission
+on its request type and uses the ordinary request authorizers and handler.
+
+```csharp
+[RequiresPermission("assets:rename")]
+public sealed record RenameAsset(Uuid AssetId, string Name) : IRequest;
+
+[RequiresPermission("assets:archive")]
+public sealed record ArchiveAsset(Uuid AssetId) : IRequest;
+
+// In the HTTP host:
+app.MapPortiaPutByBody("/assets/{asset_id}", "updateAsset", "mode")
+    .Case<RenameAsset>("rename")
+    .Case<ArchiveAsset>("archive")
+    .RequireAuthorization("asset-editor");
+```
+
+Describe a shared credential scheme with the existing security configuration. OpenAPI references
+each case schema in `oneOf` and publishes its generated static permission as
+`x-portia-permission`. The selector value is required on the wire. Its value is compared ordinally.
+A typed map such as `MapPortiaPutByBody<AssetUpdate>` requires every case to return `AssetUpdate`.
+Use an ordinary map for a single request contract.

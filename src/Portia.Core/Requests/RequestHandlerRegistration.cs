@@ -22,7 +22,10 @@ public abstract class RequestHandlerRegistration(
     /// <summary>Gets the unary result or streaming item type, when the request produces one.</summary>
     public Type? ResultType { get; } = resultType;
 
-    internal Func<IRequestBase, string>? Permission { get; } = permission;
+    /// <summary>Gets the generated static permission enforced by the request bus.</summary>
+    public string? StaticPermission { get; init; }
+
+    internal Func<IRequestBase, string>? Permission => StaticPermission is { } value ? _ => value : permission;
 
     // The request contract this registration serves, as an application reads it in its own code.
     internal abstract string Shape { get; }
