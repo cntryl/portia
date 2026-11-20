@@ -129,15 +129,18 @@ sealed record PortiaOpenApiEnrichment(
                         $"Request example '{example.Name}' requires an object for generated member binding.");
                 var body = new JsonObject();
                 var queries = endpoint.OfType<PortiaQueryMembers>().SingleOrDefault()?.Names ?? [];
+                var headers = endpoint.OfType<PortiaHeaderMembers>().SingleOrDefault()?.Members ?? [];
                 for (var index = 0; index < metadata.Parameters.Count; index++)
                 {
                     var parameter = metadata.Parameters[index];
+                    var header = headers.SingleOrDefault(item =>
+                        string.Equals(item.MemberName, parameter.ClrName, StringComparison.OrdinalIgnoreCase));
                     var fallback = parameter.WireName ??
                                    json.PropertyNamingPolicy?.ConvertName(parameter.ClrName) ?? parameter.ClrName;
                     var member = PortiaHttpBinding.ResolveBodyMember(json, requestType!, parameter.Type, index,
                         parameter.ClrName, fallback);
                     if (parameter.Source == "body" &&
-                        !queries.Contains(parameter.ClrName, StringComparer.OrdinalIgnoreCase))
+                        !queries.Contains(parameter.ClrName, StringComparer.OrdinalIgnoreCase) && header is null)
                     {
                         if (member.Input && obj.TryGetPropertyValue(member.Name, out var item))
                             body[member.Name] = item?.DeepClone();
@@ -145,7 +148,7 @@ sealed record PortiaOpenApiEnrichment(
                     else if (obj.TryGetPropertyValue(member.Name, out var item))
                     {
                         var target = operation.Parameters?.OfType<OpenApiParameter>()
-                            .SingleOrDefault(item => item.Name == fallback);
+                            .SingleOrDefault(item => item.Name == (header?.Name ?? fallback));
                         if (target is not null)
                         {
                             target.Examples ??= new Dictionary<string, IOpenApiExample>(StringComparer.Ordinal);

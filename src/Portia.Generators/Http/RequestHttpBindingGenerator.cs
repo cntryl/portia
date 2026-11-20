@@ -540,6 +540,10 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
         return GeneratedSource.Identity(key.ToString());
     }
 
+    static bool Redirectable(ParameterModel parameter) => parameter.Source != ParameterSource.Route &&
+                                                                     (parameter.Source != ParameterSource.Body ||
+                                                                      parameter.FormBindable);
+
     static string ConfigurationType(CallModel call) => call.Kind is CallKind.Stream or CallKind.Sse
         ? $"global::Cntryl.Portia.PortiaStreamingEndpointConfiguration<{call.RequestTypeFullName}>"
         : $"global::Cntryl.Portia.PortiaEndpointConfiguration<{call.RequestTypeFullName}{(call.ResultType is not null ? ", " + call.ResultType : string.Empty)}>";
@@ -563,23 +567,39 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .AppendLine(")")
             .AppendLine("    {")
             .AppendLine("        global::Cntryl.Portia.PortiaHttpBinding.RequireHttpServices(app);");
+        if (call.Configured || call.HasDefaultBinder)
+        {
+            _ = source.AppendLine("        var httpMembers = new global::Cntryl.Portia.PortiaHttpMember[]")
+                .AppendLine("        {");
+            foreach (var parameter in call.Parameters)
+            {
+                _ = source.Append("            new(").Append(Literal(parameter.Name)).Append(", ")
+                    .Append(Literal(parameter.Source.ToString().ToLowerInvariant())).Append(", ")
+                    .Append(Redirectable(parameter) || parameter.Source == ParameterSource.Route ? "true" : "false")
+                    .AppendLine("),");
+            }
+
+            _ = source.AppendLine("        };");
+        }
+
         if (call.Configured)
         {
             _ = source.Append("        var configuration = new ").Append(configurationType).AppendLine("();")
                 .AppendLine("        configure(configuration);")
                 .Append("        configuration.Validate(")
                 .Append(call.HasDefaultBinder ? "false" : "true")
-                .AppendLine(", new global::Cntryl.Portia.PortiaHttpMember[]")
-                .AppendLine("        {");
-            foreach (var parameter in call.Parameters)
-            {
-                _ = source.Append("            new(").Append(Literal(parameter.Name)).Append(", ")
-                    .Append(Literal(parameter.Source.ToString().ToLowerInvariant())).Append(", ")
-                    .Append(parameter.Source != ParameterSource.Body || parameter.FormBindable ? "true" : "false")
-                    .AppendLine("),");
-            }
+                .AppendLine(", httpMembers);");
+        }
 
-            _ = source.AppendLine("        });");
+        // Application-wide header bindings reach endpoints mapped without configuration, so every
+        // default-binder endpoint resolves its member sources once, when it is mapped.
+        if (call.HasDefaultBinder)
+        {
+            _ = source.Append("        var memberSources = ")
+                .Append(call.Configured
+                    ? "configuration.ResolveMemberSources(app, httpMembers)"
+                    : $"global::Cntryl.Portia.PortiaHttpBinding.ResolveMemberSources<{call.RequestTypeFullName}>(app, httpMembers)")
+                .AppendLine(";");
         }
 
         _ = source
@@ -620,6 +640,8 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
             .Append("), ResultIsNullable = ")
             .Append(call.ResultIsNullable ? "true" : "false")
             .AppendLine(" });");
+        if (call.HasDefaultBinder)
+            _ = source.AppendLine("        memberSources.ApplyMetadata(builder);");
         if (call.IsCreateOutcome && call.CreateRequestMembers is { } createMembers)
         {
             _ = source.AppendLine("        configuration.ApplyMetadata(app, builder,")
@@ -863,6 +885,11 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                         ? Literal(parameter.JsonName)
                         : $"(jsonOptions.PropertyNamingPolicy?.ConvertName({Literal(parameter.Name)}) ?? {Literal(parameter.Name)})";
                     var pad = indent;
+                    // A scalar member outside the route can be redirected to the query string or a header.
+                    var redirectable = Redirectable(parameter);
+                    if (redirectable)
+                        _ = source.Append(indent).Append("var header").Append(i).Append(" = memberSources.Header(")
+                            .Append(i).AppendLine(");");
                     var bodyRead = parameter.Source == ParameterSource.Body && !form;
                     // Binding cascades route, body, then query: a scalar member the body omits is
                     // looked up in the query string before its default or missing rule applies.
@@ -872,7 +899,7 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                         if (cascade)
                         {
                             _ = source.Append(pad)
-                                .Append(call.Configured ? $"if (!configuration.IsQueryMember({i}) && " : "if (")
+                                .Append($"if (header{i} is null && !memberSources.Query({i}) && ")
                                 .Append("global::Cntryl.Portia.PortiaHttpBinding.HasBodyMember<")
                                 .Append(call.RequestTypeFullName).Append(", ").Append(parameter.Type)
                                 .Append(">(body.RootElement, jsonOptions, ").Append(i).Append(", ")
@@ -904,17 +931,38 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                             $"(httpContext.Request.RouteValues[{Literal(parameter.RouteToken!)}] is null ? null : global::System.Convert.ToString(httpContext.Request.RouteValues[{Literal(parameter.RouteToken!)}], global::System.Globalization.CultureInfo.InvariantCulture))",
                         // An empty form field is how a browser submits a blank non-text input.
                         ParameterSource.Body when form && IsBoolean(parameter.UnderlyingType) =>
-                            (call.Configured
-                                ? $"configuration.IsQueryMember({i}) ? global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name}) : "
-                                : string.Empty) +
+                            $"memberSources.Query({i}) ? global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name}) : " +
                             $"(global::Cntryl.Portia.PortiaHttpBinding.ReadFormBoolean(form, {name}) ?? global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name}))",
                         ParameterSource.Body when form =>
-                            (call.Configured
-                                ? $"configuration.IsQueryMember({i}) ? global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name}) : "
-                                : string.Empty) +
+                            $"memberSources.Query({i}) ? global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name}) : " +
                             $"(global::Cntryl.Portia.PortiaHttpBinding.ReadForm(form, {name}, {(IsString(parameter.UnderlyingType) ? "false" : "true")}) ?? global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name}))",
                         _ => $"global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, {name})"
                     };
+
+                    if (redirectable)
+                    {
+                        // A redirected member has one source: its value anywhere else is refused rather
+                        // than silently ignored.
+                        if (parameter.Source == ParameterSource.Body)
+                        {
+                            var inBody = form
+                                ? $"global::Cntryl.Portia.PortiaHttpBinding.ReadForm(form, {name}, false) is not null"
+                                : $"global::Cntryl.Portia.PortiaHttpBinding.HasBodyProperty<{call.RequestTypeFullName}, {parameter.Type}>(body.RootElement, jsonOptions, {i}, {Literal(parameter.Name)}, {name})";
+                            _ = source.Append(pad).Append("if ((header").Append(i)
+                                .Append(" is not null || memberSources.Query(").Append(i).Append(")) && ")
+                                .Append(inBody).AppendLine(")")
+                                .Append(pad).AppendLine(
+                                    "    throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"A value bound from the query string or a header cannot also appear in the request body.\");");
+                        }
+
+                        _ = source.Append(pad).Append("if (header").Append(i)
+                            .Append(" is not null && global::Cntryl.Portia.PortiaHttpBinding.ReadQuery(httpContext, ")
+                            .Append(name).AppendLine(") is not null)")
+                            .Append(pad).AppendLine(
+                                "    throw new global::Microsoft.AspNetCore.Http.BadHttpRequestException(\"A value bound from a header cannot also appear in the query string.\");");
+                        raw = $"header{i} is not null ? global::Cntryl.Portia.PortiaHttpBinding.ReadHeader(httpContext, header{i}) : " +
+                              raw;
+                    }
 
                     // Browsers omit an unchecked checkbox, so an absent required form Boolean is false.
                     var formBoolean = form && parameter.Source == ParameterSource.Body &&
@@ -927,13 +975,12 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     _ = parameter.Default is not null || parameter.Nullable
                         ? source.Append(pad).Append("    value").Append(i).Append(" = ")
                             .Append(parameter.Default ?? "default").AppendLine(";")
-                        : formBoolean && call.Configured
-                            ? source.Append(pad).Append("    if (configuration.IsQueryMember(").Append(i).Append(")) ")
+                        : formBoolean
+                            ? source.Append(pad).Append("    if (header").Append(i)
+                                .Append(" is not null || memberSources.Query(").Append(i).Append(")) ")
                                 .AppendLine(missing)
                                 .Append(pad).Append("    value").Append(i).AppendLine(" = false;")
-                            : formBoolean
-                                ? source.Append(pad).Append("    value").Append(i).AppendLine(" = false;")
-                                : source.Append(pad).Append("    ").AppendLine(missing);
+                            : source.Append(pad).Append("    ").AppendLine(missing);
                     _ = source.Append(pad).AppendLine("}").Append(pad).AppendLine("else")
                         .Append(pad).AppendLine("{");
                     if (IsString(parameter.UnderlyingType))
@@ -942,8 +989,15 @@ public sealed class RequestHttpBindingGenerator : IIncrementalGenerator
                     }
                     else
                     {
+                        // A checkbox's "on" is a form convention: a header means the same thing whatever
+                        // the body's content type, so a header-supplied Boolean parses as a plain scalar.
+                        var headerBoolean = IsBoolean(parameter.UnderlyingType) && form && redirectable;
+                        if (headerBoolean)
+                            _ = source.Append(pad).Append("    bool parsed").Append(i).AppendLine(";");
                         var parse = parameter.IsEnum
                             ? $"global::System.Enum.TryParse<{parameter.UnderlyingType}>(raw{i}, true, out var parsed{i})"
+                            : headerBoolean
+                                ? $"(header{i} is not null ? bool.TryParse(raw{i}, out parsed{i}) : global::Cntryl.Portia.PortiaHttpBinding.TryParseFormBoolean(raw{i}, out parsed{i}))"
                             : IsBoolean(parameter.UnderlyingType) && form
                                 ? $"global::Cntryl.Portia.PortiaHttpBinding.TryParseFormBoolean(raw{i}, out var parsed{i})"
                                 : $"{parameter.UnderlyingType}.TryParse(raw{i}, " +

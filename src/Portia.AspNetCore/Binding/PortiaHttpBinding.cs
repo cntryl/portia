@@ -8,6 +8,7 @@ using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Cntryl.Portia;
 
@@ -49,6 +50,24 @@ public static partial class PortiaHttpBinding
         if (app.ServiceProvider.GetService<PortiaHttpExtensions.PortiaOpenApiMarker>() is null)
             throw new InvalidOperationException(
                 "Portia HTTP endpoints require AddHttp() in the shared Portia application composition.");
+    }
+
+    /// <summary>
+    ///     Resolves where generated binding reads each member of a request mapped without endpoint
+    ///     configuration, applying the application-wide header bindings its contracts declare.
+    /// </summary>
+    /// <typeparam name="TRequest">The mapped request type.</typeparam>
+    /// <param name="app">The endpoint route builder.</param>
+    /// <param name="members">The request's constructor-bound members, in constructor order.</param>
+    /// <returns>The resolved member sources.</returns>
+    /// <exception cref="InvalidOperationException">An application-wide binding cannot apply to the request.</exception>
+    public static PortiaHttpMemberSources ResolveMemberSources<TRequest>(IEndpointRouteBuilder app,
+        PortiaHttpMember[] members)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(members);
+        return PortiaHttpMemberSources.Resolve(typeof(TRequest), members, [], new Dictionary<string, string>(),
+            app.ServiceProvider.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.HeaderBindings);
     }
 
     /// <summary>Reports whether an exact RFC 7240 preference token requests asynchronous handling.</summary>
@@ -99,6 +118,22 @@ public static partial class PortiaHttpBinding
     public static string? ReadQuery(HttpContext context, string name)
     {
         return !context.Request.Query.TryGetValue(name, out var values)
+            ? null
+            : values.Count == 1
+                ? values[0]
+                : throw new BadHttpRequestException($"Expected one value for '{name}'.");
+    }
+
+    /// <summary>Reads one HTTP header value, distinguishing omission from an empty value.</summary>
+    /// <param name="context">The current HTTP request.</param>
+    /// <param name="name">The header to read.</param>
+    /// <returns>The single value, or <see langword="null" /> when the header was not sent.</returns>
+    /// <exception cref="BadHttpRequestException">The header was sent more than once.</exception>
+    public static string? ReadHeader(HttpContext context, string name)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        return !context.Request.Headers.TryGetValue(name, out var values)
             ? null
             : values.Count == 1
                 ? values[0]
@@ -193,6 +228,29 @@ public static partial class PortiaHttpBinding
         if (binding.Required && !present)
             throw new BadHttpRequestException($"Missing required property '{binding.Name}'.");
         return binding.Input && present;
+    }
+
+    /// <summary>
+    ///     Reports whether a JSON object body carries the identified member at all, without applying the
+    ///     member's own presence rules. Generated binding uses it to refuse a body copy of a member that
+    ///     binds from the query string or a header.
+    /// </summary>
+    /// <typeparam name="TRequest">The request type whose JSON contract names the member.</typeparam>
+    /// <typeparam name="TValue">The member's type.</typeparam>
+    /// <param name="body">The parsed request body.</param>
+    /// <param name="options">The application's frozen Portia JSON options.</param>
+    /// <param name="memberIndex">The member's position in the request's public constructor.</param>
+    /// <param name="memberName">The constructor parameter's declared name.</param>
+    /// <param name="fallbackName">The wire name to use when JSON metadata is unavailable.</param>
+    /// <returns>Whether the body is an object containing the member, including as JSON null.</returns>
+    public static bool HasBodyProperty<TRequest, TValue>(JsonElement body, JsonSerializerOptions options,
+        int memberIndex, string memberName, string fallbackName)
+    {
+        if (body.ValueKind != JsonValueKind.Object)
+            return false;
+        var binding = ResolveBodyMember(options, typeof(TRequest), typeof(TValue), memberIndex, memberName,
+            fallbackName);
+        return TryGetBodyProperty(body, binding.Options, binding.Name, out _);
     }
 
     /// <summary>Rejects a supplied JSON member that disagrees with its authoritative routed value.</summary>

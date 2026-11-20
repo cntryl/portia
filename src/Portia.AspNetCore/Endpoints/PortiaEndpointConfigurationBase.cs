@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Linq.Expressions;
-using System.Reflection;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -65,7 +64,31 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
     /// <returns>This configuration.</returns>
     public TConfiguration FromQuery<TMember>(Expression<Func<TRequest, TMember>> member)
     {
-        _state.FromQuery(MemberName(member));
+        _state.FromQuery(PortiaHttpMemberSelector.Name(member,
+            "FromQuery requires a direct request member, such as x => x.Name."));
+        return (TConfiguration)this;
+    }
+
+    /// <summary>
+    ///     Binds a request member from one HTTP header and describes that header in OpenAPI.
+    ///     The member must be a scalar value supported by Portia's text binder.
+    /// </summary>
+    /// <typeparam name="TMember">The member's type.</typeparam>
+    /// <param name="member">The request member, such as <c>x =&gt; x.TenantId</c>.</param>
+    /// <param name="name">The HTTP header name, such as <c>Tenant-Id</c>.</param>
+    /// <returns>This configuration.</returns>
+    /// <remarks>
+    ///     Mapping the route fails when the member is bound from the route, is also declared
+    ///     <c>FromQuery</c>, is not a constructor-bound scalar, or the endpoint uses <c>OnBind</c>.
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    ///     The selector is not a direct member, or the name is not a bindable HTTP header name.
+    /// </exception>
+    /// <exception cref="InvalidOperationException">The member or the header is already declared.</exception>
+    public TConfiguration FromHeader<TMember>(Expression<Func<TRequest, TMember>> member, string name)
+    {
+        _state.FromHeader(PortiaHttpMemberSelector.Name(member,
+            "FromHeader requires a direct request member, such as x => x.Name."), name);
         return (TConfiguration)this;
     }
 
@@ -143,9 +166,10 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
     private protected void ConfigureCreated(string uriTemplate, Type? payloadType) =>
         _state.Created(uriTemplate, payloadType);
 
-    /// <summary>Reports whether generated binding reads a request member only from the query string.</summary>
+    /// <summary>Resolves where generated binding reads each request member for this endpoint.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public bool IsQueryMember(int index) => _state.IsQueryMember(index);
+    public PortiaHttpMemberSources ResolveMemberSources(IEndpointRouteBuilder app, PortiaHttpMember[] members) =>
+        _state.ResolveMemberSources(app, members);
 
     /// <summary>Applies HTTP contract metadata.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
@@ -166,18 +190,4 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
 
     private protected IResult? EnsureResultHandlerResponse(bool success, IResult? response) =>
         _state.EnsureResultHandlerResponse(success, response);
-
-    // The selector is inspected, never compiled, so it stays trimming- and Native AOT-safe.
-    static string MemberName<TMember>(Expression<Func<TRequest, TMember>> member)
-    {
-        ArgumentNullException.ThrowIfNull(member);
-        var body = member.Body is UnaryExpression { NodeType: ExpressionType.Convert } convert
-            ? convert.Operand
-            : member.Body;
-        return body is MemberExpression { Member: PropertyInfo or FieldInfo } access &&
-               access.Expression == member.Parameters[0]
-            ? access.Member.Name
-            : throw new ArgumentException("FromQuery requires a direct request member, such as x => x.Name.",
-                nameof(member));
-    }
 }

@@ -160,13 +160,20 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 
         var queryMembers = endpointMetadata.OfType<PortiaQueryMembers>()
             .SingleOrDefault()?.Names ?? [];
+        var headerMembers = endpointMetadata.OfType<PortiaHeaderMembers>()
+            .SingleOrDefault()?.Members ?? [];
+        string? HeaderName(string memberName) => headerMembers.FirstOrDefault(item =>
+            string.Equals(item.MemberName, memberName, StringComparison.OrdinalIgnoreCase))?.Name;
 
         bool IsBody(PortiaOpenApiParameter parameter)
         {
             return parameter.Source == "body" &&
-                   !queryMembers.Contains(parameter.ClrName, StringComparer.OrdinalIgnoreCase);
+                   !queryMembers.Contains(parameter.ClrName, StringComparer.OrdinalIgnoreCase) &&
+                   HeaderName(parameter.ClrName) is null;
         }
 
+        // Route, query and header members share one description so their schema, default and
+        // required-ness cannot drift apart.
         foreach (var parameter in custom is null ? metadata.Parameters.Where(parameter => !IsBody(parameter)) : [])
         {
             var contractMember =
@@ -181,14 +188,15 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                     : PortiaOpenApiEnrichment.Scalar(parameter.DefaultValue, concreteSchema.Default, schema);
             }
 
-            var wireName = parameter.WireName ?? jsonOptions.PropertyNamingPolicy?.ConvertName(parameter.ClrName) ??
-                parameter.ClrName;
+            var headerName = HeaderName(parameter.ClrName);
+            var wireName = headerName ?? parameter.WireName ??
+                jsonOptions.PropertyNamingPolicy?.ConvertName(parameter.ClrName) ?? parameter.ClrName;
             operation.Parameters.Add(new OpenApiParameter
             {
                 Description = MemberDescription(parameter, wireName),
-                Name = parameter.WireName ?? jsonOptions.PropertyNamingPolicy?.ConvertName(parameter.ClrName) ??
-                    parameter.ClrName,
-                In = parameter.Source == "route" ? ParameterLocation.Path : ParameterLocation.Query,
+                Name = wireName,
+                In = headerName is not null ? ParameterLocation.Header
+                    : parameter.Source == "route" ? ParameterLocation.Path : ParameterLocation.Query,
                 Required = parameter.Source == "route" || parameter.Required || PortiaJsonConstraints.RequiresPresence(
                     PortiaJsonDescriptions.MemberMetadata(jsonOptions, metadata.RequestType, parameter.ClrName)),
                 Schema = schema
