@@ -1,1 +1,2 @@
 #nullable enable
+Cntryl.Portia.Testing.ReactorScenario.RespondByDefault<TOut>(Cntryl.Portia.Result<TOut> result) -> Cntryl.Portia.Testing.ReactorScenario!
