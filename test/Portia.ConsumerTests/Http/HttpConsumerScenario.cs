@@ -44,10 +44,10 @@ static class HttpConsumerScenario
                                           {
                                               public static async Task<(int, string)> Run(string path, string? json, bool snake, bool converter)
                                               {
-                                                  var result = await RunWithLocation(path, json, snake, converter);
+                                                  var result = await RunWithLocation(path, json, snake, converter, null);
                                                   return (result.Item1, result.Item2);
                                               }
-                                              public static async Task<(int, string, string?)> RunWithLocation(string path, string? json, bool snake, bool converter)
+                                              public static async Task<(int, string, string?)> RunWithLocation(string path, string? json, bool snake, bool converter, string? method)
                                               {
                                                   var builder = WebApplication.CreateBuilder();
                                                   builder.WebHost.UseTestServer();
@@ -65,7 +65,7 @@ static class HttpConsumerScenario
                                                   {{mapping}}
                                                   await app.StartAsync();
                                                   using var client = app.GetTestClient();
-                                                  using var message = new HttpRequestMessage(json is null ? HttpMethod.Get : HttpMethod.Post, path);
+                                                  using var message = new HttpRequestMessage(method is not null ? new HttpMethod(method) : json is null ? HttpMethod.Get : HttpMethod.Post, path);
                                                   if (json is not null) message.Content = new StringContent(json, Encoding.UTF8, "application/json");
                                                   using var response = await client.SendAsync(message);
                                                   return ((int)response.StatusCode, await response.Content.ReadAsStringAsync(), response.Headers.Location?.ToString());
@@ -88,7 +88,7 @@ static class HttpConsumerScenario
             [path, json, snake, converter])!;
 
     public static Task<(int Status, string Body, string? Location)> RunWithLocationAsync(Assembly assembly,
-        string path, string? json = null)
+        string path, string? json = null, string? method = null)
         => (Task<(int, string, string?)>)assembly.GetType("HttpScenario")!.GetMethod("RunWithLocation")!.Invoke(null,
-            [path, json, false, false])!;
+            [path, json, false, false, method])!;
 }

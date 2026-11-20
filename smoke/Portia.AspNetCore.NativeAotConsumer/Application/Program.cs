@@ -41,6 +41,7 @@ _ = builder.Services.AddPortia().ConfigureJson(options =>
     .AddRequestHandler<SmokeUploadHandler>()
     .AddRequestHandler<SmokeBindingHandler>()
     .AddRequestHandler<SmokeCreateHandler>()
+    .AddRequestHandler<SmokeReplaceHandler>()
     .AddRequestPipelineBehavior<SmokeRequestBehavior>()
     .AddRequestGuard<SmokeRequestGuard>();
 _ = builder.Services.AddCors(options => options.AddPolicy("smoke", policy => policy.WithOrigins("https://trusted.example")));
@@ -62,8 +63,10 @@ _ = app.MapPortiaGet<SmokeRequest, SmokePayload>("/smoke", endpoint => endpoint
     .Describe(x => x.Name, "Requested name.").DescribeResponse("Native response."));
 _ = app.MapPortiaPost<SmokeBinding, string>("/smoke-binding", endpoint => endpoint.Describe(x => x.A, "First value.")
     .RequestExample("binding", new SmokeBinding(11, 22)).ResponseExample(200, "binding", "11,22"));
-_ = app.MapGroup("/native").MapPortiaPost<SmokeCreate, PortiaCreateOutcome>("/resources",
-    endpoint => endpoint.Created("/native/resources/1"));
+_ = app.MapGroup("/native").MapPortiaPost<SmokeCreate, PortiaCreateOutcome<SmokeResource>>("/resources",
+    endpoint => endpoint.Created("/native/resources/{id}", includePayload: false));
+_ = app.MapPortiaPut<SmokeReplace, PortiaCreateOutcome<SmokeResource>>("/native/resources/{resource}",
+    endpoint => endpoint.Created("/native/resources/{id}", includePayload: false));
 _ = app.MapPortiaPost<SmokeUpload, int>("/smoke-upload", endpoint => endpoint
     .Accepts<Stream>("application/octet-stream")
     .OnBind(async (http, ct) =>
@@ -98,6 +101,12 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
             (await create.Content.ReadAsStringAsync()).Length != 0)
             throw new InvalidOperationException($"Unexpected bodyless create response: {(int)create.StatusCode}.");
     }
+
+    using var replaceBody = new StringContent("{}", Encoding.UTF8, "application/json");
+    using var replace = await client.PutAsync("/native/resources/1", replaceBody);
+    if (replace.StatusCode != HttpStatusCode.NoContent || replace.Headers.Location?.OriginalString != "/native/resources/1" ||
+        (await replace.Content.ReadAsStringAsync()).Length != 0)
+        throw new InvalidOperationException($"Unexpected bodyless replace response: {(int)replace.StatusCode}.");
 
     using var bindingBody = new StringContent("{\"wire_a\":11,\"wire_b\":22}", Encoding.UTF8, "application/json");
     using var bindingResponse = await client.PostAsync("/smoke-binding", bindingBody);
@@ -369,14 +378,34 @@ sealed class SmokeUploadHandler : IRequestHandler<SmokeUpload, int>
 
 [Discriminator("portia.smoke.native-aot.create")]
 [RequestRoute("portia-smoke", "requests", "native-aot", "create")]
-sealed record SmokeCreate(bool Repeated) : IRequest<PortiaCreateOutcome>, ICallable;
+sealed record SmokeCreate(bool Repeated) :
+    IRequest<PortiaCreateOutcome<SmokeResource>>, ICallable;
 
-sealed class SmokeCreateHandler : IRequestHandler<SmokeCreate, PortiaCreateOutcome>
+sealed record SmokeResource(string Id);
+
+sealed class SmokeCreateHandler : IRequestHandler<SmokeCreate, PortiaCreateOutcome<SmokeResource>>
 {
-    public ValueTask<Result<PortiaCreateOutcome>> HandleAsync(IRequestContext<SmokeCreate> context,
-        CancellationToken ct) =>
-        ValueTask.FromResult(Result<PortiaCreateOutcome>.Success(
-            context.Request.Repeated ? PortiaCreateOutcome.Repeated() : PortiaCreateOutcome.Created()));
+    public ValueTask<Result<PortiaCreateOutcome<SmokeResource>>> HandleAsync(
+        IRequestContext<SmokeCreate> context, CancellationToken ct)
+    {
+        var resource = new SmokeResource("1");
+        var outcome = context.Request.Repeated
+            ? PortiaCreateOutcome<SmokeResource>.Repeated(resource)
+            : PortiaCreateOutcome<SmokeResource>.Created(resource);
+        return ValueTask.FromResult(Result<PortiaCreateOutcome<SmokeResource>>.Success(outcome));
+    }
+}
+
+[Discriminator("portia.smoke.native-aot.replace")]
+[RequestRoute("portia-smoke", "requests", "native-aot", "replace")]
+sealed record SmokeReplace(string Resource) : IRequest<PortiaCreateOutcome<SmokeResource>>, ICallable;
+
+sealed class SmokeReplaceHandler : IRequestHandler<SmokeReplace, PortiaCreateOutcome<SmokeResource>>
+{
+    public ValueTask<Result<PortiaCreateOutcome<SmokeResource>>> HandleAsync(
+        IRequestContext<SmokeReplace> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result<PortiaCreateOutcome<SmokeResource>>.Success(
+            PortiaCreateOutcome<SmokeResource>.Replaced(new SmokeResource(context.Request.Resource))));
 }
 
 interface ISmokeRequest : IRequestBase;
@@ -413,7 +442,8 @@ sealed class SmokeGuardProbe
 [JsonSerializable(typeof(SmokeVariant))]
 [JsonSerializable(typeof(SmokeUpload))]
 [JsonSerializable(typeof(SmokeCreate))]
-[JsonSerializable(typeof(PortiaCreateOutcome))]
+[JsonSerializable(typeof(SmokeReplace))]
+[JsonSerializable(typeof(PortiaCreateOutcome<SmokeResource>))]
 [JsonSerializable(typeof(SmokeBinding))]
 [JsonSerializable(typeof(SmokeCatalogChanged))]
 [JsonSerializable(typeof(SmokeCatalogConfirmed))]

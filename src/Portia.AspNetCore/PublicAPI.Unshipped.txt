@@ -1,11 +1,11 @@
 #nullable enable
-Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>.Created(string! uriTemplate) -> Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>!
+Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>.Created(string! uriTemplate, bool includePayload = true) -> Cntryl.Portia.PortiaEndpointConfiguration<TRequest, TOut>!
 Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.ApplyMetadata(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Microsoft.AspNetCore.Builder.IEndpointConventionBuilder! builder, System.Collections.Generic.IReadOnlyDictionary<string!, System.Func<TRequest, object?>!>! requestMembers, System.Collections.Generic.IReadOnlyDictionary<string!, System.Func<object?, object?>!>? payloadMembers, bool createPayloadIsNullable) -> void
 Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.FromHeader<TMember>(System.Linq.Expressions.Expression<System.Func<TRequest, TMember>!>! member, string! name) -> TConfiguration!
 static Cntryl.Portia.PortiaHttpBinding.HasBodyProperty<TRequest, TValue>(System.Text.Json.JsonElement body, System.Text.Json.JsonSerializerOptions! options, int memberIndex, string! memberName, string! fallbackName) -> bool
 static Cntryl.Portia.PortiaHttpBinding.ReadHeader(Microsoft.AspNetCore.Http.HttpContext! context, string! name) -> string?
 static Cntryl.Portia.PortiaHttpBinding.ResolveCreatedLocation<TRequest>(Microsoft.AspNetCore.Http.HttpContext! context, TRequest request) -> System.Func<object?, string!>?
-static Cntryl.Portia.ResultHttpExtensions.ToCreatedHttpResult<T>(this Cntryl.Portia.Result<T> result, System.Text.Json.JsonSerializerOptions! options, System.Func<object?, string!>! locationResolver) -> Microsoft.AspNetCore.Http.IResult!
+static Cntryl.Portia.ResultHttpExtensions.ToCreatedHttpResult<T>(this Cntryl.Portia.Result<T> result, System.Text.Json.JsonSerializerOptions! options, System.Func<object?, string!>! locationResolver, Microsoft.AspNetCore.Http.HttpContext! context) -> Microsoft.AspNetCore.Http.IResult!
 Cntryl.Portia.PortiaHttpOptions.FromHeader<TContract>(System.Linq.Expressions.Expression<System.Func<TContract!, object?>!>! member, string! name) -> Cntryl.Portia.PortiaHttpOptions!
 *REMOVED*Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.IsQueryMember(int index) -> bool
 Cntryl.Portia.PortiaEndpointConfigurationBase<TRequest, TConfiguration>.ResolveMemberSources(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Cntryl.Portia.PortiaHttpMember![]! members) -> Cntryl.Portia.PortiaHttpMemberSources!

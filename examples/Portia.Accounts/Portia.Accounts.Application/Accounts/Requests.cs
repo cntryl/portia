@@ -14,7 +14,7 @@ public interface IAccountRequest : ITenantRequest
 [Discriminator("accounts.open")]
 [RequestRoute("accounts", "account", "*", "open")]
 public sealed record OpenAccount(TenantId Tenant, Uuid AccountId, long InitialBalanceCents)
-    : IRequest, ICallable, IAccountRequest;
+    : IRequest<PortiaCreateOutcome<AccountCreated>>, ICallable, IAccountRequest;
 
 /// <summary>Deposits money into an existing account.</summary>
 /// <param name="Tenant">The tenant that owns the account.</param>
@@ -38,10 +38,14 @@ public sealed record GetAccount(TenantId Tenant, Uuid AccountId)
 /// <param name="BalanceCents">The projected balance in cents.</param>
 public sealed record AccountReadModel(Uuid AccountId, long BalanceCents);
 
+/// <summary>The identity established by opening an account.</summary>
+public sealed record AccountCreated(Uuid AccountId);
+
 [PortiaJsonContext]
 [JsonSourceGenerationOptions(JsonSerializerDefaults.Web,
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower)]
 [JsonSerializable(typeof(OpenAccount))]
+[JsonSerializable(typeof(PortiaCreateOutcome<AccountCreated>))]
 [JsonSerializable(typeof(DepositFunds))]
 [JsonSerializable(typeof(GetAccount))]
 [JsonSerializable(typeof(AccountReadModel))]

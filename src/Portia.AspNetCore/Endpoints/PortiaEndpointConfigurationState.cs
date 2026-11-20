@@ -286,7 +286,7 @@ sealed class PortiaEndpointConfigurationState<TRequest>
                 var route = (endpoint as RouteEndpointBuilder)?.RoutePattern ??
                             throw new InvalidOperationException("Created requires route metadata.");
                 endpoint.Metadata.Add(new PortiaCreatedLocation<TRequest>(created.Template, createPayloadIsNullable,
-                    route, requestMembers ??
+                    created.PayloadType is not null, route, requestMembers ??
                     throw new InvalidOperationException("Created requires generated request metadata."), payloadMembers));
                 var operation = endpoint.Metadata.OfType<PortiaOpenApiOperation>().Single();
                 endpoint.Metadata[endpoint.Metadata.IndexOf(operation)] = operation with
@@ -300,6 +300,9 @@ sealed class PortiaEndpointConfigurationState<TRequest>
                     contentTypes));
                 endpoint.Metadata.Add(new PortiaCreatedResponseMetadata(StatusCodes.Status201Created, created.PayloadType,
                     contentTypes));
+                if (created.PayloadType is null && endpoint.Metadata.OfType<IHttpMethodMetadata>()
+                        .Any(metadata => metadata.HttpMethods.Contains(HttpMethods.Put, StringComparer.OrdinalIgnoreCase)))
+                    endpoint.Metadata.Add(new PortiaCreatedResponseMetadata(StatusCodes.Status204NoContent, null, []));
             });
         if (_hasResultHandler)
             builder.Add(endpoint => endpoint.Metadata.Add(new PortiaCustomHttpResult(
