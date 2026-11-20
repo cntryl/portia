@@ -622,3 +622,5 @@ Cntryl.Portia.ProcessorKinds
 const Cntryl.Portia.ProcessorKinds.Projector = "projector" -> string!
 const Cntryl.Portia.ProcessorKinds.Reactor = "reactor" -> string!
 const Cntryl.Portia.OperationalRepairStatuses.Resumed = "resumed" -> string!
+Cntryl.Portia.RequestHandlerRegistration.StaticPermission.get -> string?
+Cntryl.Portia.RequestHandlerRegistration.StaticPermission.init -> void

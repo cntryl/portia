@@ -4,6 +4,30 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.14.8
+
+### Added
+
+- `Aggregate.IsNew` is true when a hydrated aggregate has no committed state events.
+- `Created(template, includePayload: false)` can resolve `Location` from a typed result and send an empty HTTP body.
+  A replaced PUT returns 200 with a payload or 204 with an empty body.
+- `IUnaryRequest` supports dispatch with a plain `Result` from actor and parent contexts, including reactions.
+  `ReactorScenario.RespondByDefault<T>` supplies an explicit typed fallback behind exact request scripts.
+- `DecimalString` preserves exact decimal values in JSON strings and HTTP text binding. `DecimalStringRange`
+  validates exact bounds and publishes them in OpenAPI.
+- `RequiredWhen` applies conditional input validation after authorization and describes the condition in OpenAPI.
+- `MapPortiaPutByBody` selects one typed request from a JSON body and documents each case and its static permission.
+- `WritePortiaOpenApiYamlAsync` exports the configured OpenAPI YAML document before server startup.
+
+### Changed
+
+- **Breaking:** `PortiaCreateOutcome` uses `Kind` with `Created`, `Repeated`, and `Replaced` values. Update callers
+  that used `IsCreated` or a boolean constructor. The serialized outcome now carries `kind`.
+
+### Fixed
+
+- Create endpoints publish response metadata for 200 and 201 with the effective payload and `Location` contract.
+
 ## 0.14.7
 
 ### Added
