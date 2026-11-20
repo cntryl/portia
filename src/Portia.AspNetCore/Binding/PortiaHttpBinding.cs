@@ -37,6 +37,40 @@ public static partial class PortiaHttpBinding
     public static JsonSerializerOptions GetJsonOptions(HttpContext context)
         => context.RequestServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
 
+    /// <summary>Verifies that conditional members use the generated JSON body contract.</summary>
+    public static void ValidateRequiredWhen<TRequest>(IEndpointRouteBuilder app, PortiaHttpMember[] members,
+        PortiaHttpMemberSources sources, bool hasCustomBinder)
+    {
+        if (hasCustomBinder)
+            throw new InvalidOperationException("RequiredWhen needs generated JSON body binding.");
+        var options = app.ServiceProvider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
+        var type = typeof(TRequest);
+        var contract = PortiaJsonDescriptions.Metadata(options, type) ??
+                       throw new InvalidOperationException($"RequiredWhen needs generated contract metadata for '{type}'.");
+        foreach (var member in contract.Members)
+        {
+            foreach (var condition in member.RequiredWhen)
+            {
+                Validate(member.Name, member.Type, expectedOptional: true);
+                Validate(condition.Selector, typeof(string), expectedOptional: false);
+            }
+        }
+
+        void Validate(string name, Type memberType, bool expectedOptional)
+        {
+            var index = Array.FindIndex(members, member => string.Equals(member.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (index < 0 || members[index].Source != "body" || sources.Query(index) || sources.Header(index) is not null)
+                throw new InvalidOperationException($"RequiredWhen member '{name}' must bind from the JSON body.");
+            var member = PortiaJsonDescriptions.MemberMetadata(options, type, name);
+            var fallback = member?.JsonName ?? options.PropertyNamingPolicy?.ConvertName(members[index].Name) ?? members[index].Name;
+            var binding = ResolveBodyMember(options, type, memberType, index, members[index].Name, fallback);
+            if (!binding.Input || expectedOptional && binding.Required || !ReferenceEquals(binding.Options, options) ||
+                memberType == typeof(string) &&
+                !ReferenceEquals(options.GetTypeInfo<string>().Converter, JsonMetadataServices.StringConverter))
+                throw new InvalidOperationException($"RequiredWhen member '{name}' needs ordinary JSON value binding.");
+        }
+    }
+
     /// <summary>Prepares a configured create URI and validates route and request values before dispatch.</summary>
     public static Func<object?, string>? ResolveCreatedLocation<TRequest>(HttpContext context, TRequest request) =>
         context.GetEndpoint()?.Metadata.GetMetadata<PortiaCreatedLocation<TRequest>>()?.Resolve(context, request);

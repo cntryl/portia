@@ -49,7 +49,7 @@ static class JsonDescriptionEmission
         // Only getters on paths to validation are needed. Editorial metadata must not cause
         // arbitrary getters to execute during dispatch, or inflate generated code for plain DTOs.
         var validated = new HashSet<ITypeSymbol>(nodes.Values
-            .Where(node => node.Members.Any(member => ValidationRules(member).Any()))
+            .Where(node => node.Members.Any(member => ValidationRules(member).Any() || RequiredWhenShape.Attributes(member).Any()))
             .Select(node => node.Type), SymbolEqualityComparer.Default);
         bool changed;
         do
@@ -105,7 +105,20 @@ static class JsonDescriptionEmission
                         .Append(string.Join(", ", rules)).AppendLine(" },");
                 if (rules.Length > 0 && CountExpression(memberType) is { } count)
                     memberFacts.Append("Count = static value => ").Append(count).AppendLine(",");
-                var validates = rules.Length > 0 ||
+                var conditions = RequiredWhenShape.Attributes(member)
+                    .Select(attribute => RequiredWhenShape.Resolve((INamedTypeSymbol)type, member, attribute))
+                    .Where(shape => shape is not null).ToArray();
+                if (conditions.Length > 0)
+                {
+                    memberFacts.AppendLine("RequiredWhen = new global::Cntryl.Portia.PortiaRequiredWhen[] {");
+                    foreach (var condition in conditions)
+                        memberFacts.Append("new(").Append(Literal(condition!.Selector)).Append(", ")
+                            .Append(Literal(condition.Value)).Append(", static value => ((")
+                            .Append(Type(type)).Append(")value).@").Append(condition.Selector).AppendLine("),");
+                    memberFacts.AppendLine("},");
+                }
+
+                var validates = rules.Length > 0 || conditions.Length > 0 ||
                                 validated.Contains(memberType.WithNullableAnnotation(NullableAnnotation.NotAnnotated));
                 if (validates)
                     memberFacts.AppendLine("HasValidation = true,");

@@ -41,6 +41,7 @@ _ = builder.Services.AddPortia().ConfigureJson(options =>
     .AddRequestHandler<SmokeUploadHandler>()
     .AddRequestHandler<SmokeBindingHandler>()
     .AddRequestHandler<SmokeQuoteHandler>()
+    .AddRequestHandler<SmokeScheduleHandler>()
     .AddRequestHandler<SmokeCreateHandler>()
     .AddRequestHandler<SmokeReplaceHandler>()
     .AddRequestPipelineBehavior<SmokeRequestBehavior>()
@@ -69,6 +70,7 @@ _ = app.MapGroup("/native").MapPortiaPost<SmokeCreate, PortiaCreateOutcome<Smoke
 _ = app.MapPortiaPut<SmokeReplace, PortiaCreateOutcome<SmokeResource>>("/native/resources/{resource}",
     endpoint => endpoint.Created("/native/resources/{id}", includePayload: false));
 _ = app.MapPortiaGet<SmokeQuote, DecimalString>("/smoke-quotes/{amount}");
+_ = app.MapPortiaPost<SmokeSchedule, string>("/smoke-schedule");
 _ = app.MapPortiaPost<SmokeUpload, int>("/smoke-upload", endpoint => endpoint
     .Accepts<Stream>("application/octet-stream")
     .OnBind(async (http, ct) =>
@@ -117,6 +119,15 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     using var rounded = await client.GetAsync("/smoke-quotes/1.00000000000000000000000000001");
     if (rounded.StatusCode != HttpStatusCode.BadRequest)
         throw new InvalidOperationException("Native decimal string accepted a rounded value.");
+
+    using var missingSchedule = new StringContent("""{"plan":"scheduled"}""", Encoding.UTF8, "application/json");
+    using var scheduleFailure = await client.PostAsync("/smoke-schedule", missingSchedule);
+    if (scheduleFailure.StatusCode != HttpStatusCode.BadRequest)
+        throw new InvalidOperationException("Native conditional validation accepted a missing value.");
+    using var manual = new StringContent("""{"plan":"manual"}""", Encoding.UTF8, "application/json");
+    using var scheduleSuccess = await client.PostAsync("/smoke-schedule", manual);
+    if (scheduleSuccess.StatusCode != HttpStatusCode.OK)
+        throw new InvalidOperationException("Native conditional validation rejected an inactive condition.");
 
     using var bindingBody = new StringContent("{\"wire_a\":11,\"wire_b\":22}", Encoding.UTF8, "application/json");
     using var bindingResponse = await client.PostAsync("/smoke-binding", bindingBody);
@@ -401,6 +412,19 @@ sealed class SmokeQuoteHandler : IRequestHandler<SmokeQuote, DecimalString>
         ValueTask.FromResult(Result<DecimalString>.Success(context.Request.Amount));
 }
 
+[Discriminator("portia.smoke.native-aot.schedule")]
+[RequestRoute("portia-smoke", "requests", "native-aot", "schedule")]
+sealed record SmokeSchedule(
+    [property: JsonPropertyName("plan")] string Mode,
+    [property: RequiredWhen(nameof(SmokeSchedule.Mode), "scheduled")] string? Schedule = null) :
+    IRequest<string>, ICallable;
+
+sealed class SmokeScheduleHandler : IRequestHandler<SmokeSchedule, string>
+{
+    public ValueTask<Result<string>> HandleAsync(IRequestContext<SmokeSchedule> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result<string>.Success(context.Request.Mode));
+}
+
 [Discriminator("portia.smoke.native-aot.create")]
 [RequestRoute("portia-smoke", "requests", "native-aot", "create")]
 sealed record SmokeCreate(bool Repeated) :
@@ -468,6 +492,7 @@ sealed class SmokeGuardProbe
 [JsonSerializable(typeof(SmokeUpload))]
 [JsonSerializable(typeof(SmokeQuote))]
 [JsonSerializable(typeof(DecimalString))]
+[JsonSerializable(typeof(SmokeSchedule))]
 [JsonSerializable(typeof(SmokeCreate))]
 [JsonSerializable(typeof(SmokeReplace))]
 [JsonSerializable(typeof(PortiaCreateOutcome<SmokeResource>))]

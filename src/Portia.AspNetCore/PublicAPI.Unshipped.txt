@@ -14,3 +14,4 @@ Cntryl.Portia.PortiaHttpMemberSources.ApplyMetadata(Microsoft.AspNetCore.Builder
 Cntryl.Portia.PortiaHttpMemberSources.Header(int index) -> string?
 Cntryl.Portia.PortiaHttpMemberSources.Query(int index) -> bool
 static Cntryl.Portia.PortiaHttpBinding.ResolveMemberSources<TRequest>(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Cntryl.Portia.PortiaHttpMember![]! members) -> Cntryl.Portia.PortiaHttpMemberSources!
+static Cntryl.Portia.PortiaHttpBinding.ValidateRequiredWhen<TRequest>(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder! app, Cntryl.Portia.PortiaHttpMember![]! members, Cntryl.Portia.PortiaHttpMemberSources! sources, bool hasCustomBinder) -> void

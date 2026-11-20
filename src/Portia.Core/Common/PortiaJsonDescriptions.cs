@@ -139,6 +139,9 @@ static class PortiaJsonDescriptions
                     required.Add((JsonNode?)JsonValue.Create(property.Name));
         }
 
+        if (input)
+            AddConditions(schema, info, options, properties);
+
         if (required.Count == 0)
             _ = schema.Remove("required");
         else if (schema["required"] is null)
@@ -153,6 +156,51 @@ static class PortiaJsonDescriptions
             ? new JsonArray(JsonValue.Create("string"), JsonValue.Create("null"))
             : JsonValue.Create("string");
         schema["pattern"] = DecimalString.Pattern;
+    }
+
+    static void AddConditions(JsonObject schema, JsonTypeInfo info, JsonSerializerOptions options, JsonObject properties)
+    {
+        if (Metadata(options, info.Type) is not { } contract || !contract.Members.Any(member => member.RequiredWhen.Count != 0))
+            return;
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var property in info.Properties)
+        {
+            var declared = PropertyMetadata(options, property)?.Name ?? property.AssociatedParameter?.Name ??
+                           (property.AttributeProvider as MemberInfo)?.Name;
+            if (properties.ContainsKey(property.Name) && declared is not null)
+                names[declared] = property.Name;
+        }
+
+        var conditions = schema["allOf"] as JsonArray ?? [];
+        foreach (var member in contract.Members)
+        {
+            foreach (var condition in member.RequiredWhen)
+            {
+                if (!names.TryGetValue(condition.Selector, out var selector) || !names.TryGetValue(member.Name, out var target))
+                    throw new InvalidOperationException($"RequiredWhen requires JSON members '{condition.Selector}' and '{member.Name}'.");
+                conditions.Add((JsonNode)new JsonObject
+                {
+                    ["if"] = new JsonObject
+                    {
+                        ["required"] = new JsonArray(JsonValue.Create(selector)),
+                        ["properties"] = new JsonObject { [selector] = new JsonObject { ["const"] = condition.Value } }
+                    },
+                    ["then"] = new JsonObject
+                    {
+                        ["required"] = new JsonArray(JsonValue.Create(target)),
+                        ["properties"] = new JsonObject
+                        {
+                            [target] = member.Type == typeof(string)
+                                ? new JsonObject { ["type"] = "string", ["pattern"] = PortiaJsonConstraints.RequiredTextPattern }
+                                : new JsonObject { ["not"] = new JsonObject { ["type"] = "null" } }
+                        }
+                    }
+                });
+            }
+        }
+
+        if (schema["allOf"] is null)
+            schema["allOf"] = conditions;
     }
 
     internal static JsonNode Apply(JsonSchemaExporterContext context, JsonNode node, JsonSerializerOptions options,
