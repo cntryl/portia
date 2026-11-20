@@ -232,6 +232,59 @@ public sealed class OpenApiEnrichmentTests
         Assert.True(required["required"]!.GetValue<bool>());
     }
 
+    /// <summary>An application-wide header binding is published on an endpoint mapped without configuration.</summary>
+    [Fact]
+    public async Task ShouldPublishHeaderParameterGivenApplicationWideHeaderBinding()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia()
+            .AddHttp(http => http.FromHeader<IExampleModeScoped>(request => request.Mode, "Example-Mode"))
+            .AddRequestHandler<EnumExampleHandler>();
+        await using var app = builder.Build();
+        _ = app.MapPortiaOpenApi();
+        _ = app.MapPortiaGet<EnumExampleRequest, string>("/application-header");
+        await app.StartAsync();
+
+        // Act
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+
+        // Assert
+        var parameter = Assert.Single(document["paths"]!["/application-header"]!["get"]!["parameters"]!.AsArray())!;
+        Assert.Equal("Example-Mode", parameter["name"]!.GetValue<string>());
+        Assert.Equal("header", parameter["in"]!.GetValue<string>());
+        Assert.True(parameter["required"]!.GetValue<bool>());
+        Assert.Null(parameter["description"]);
+    }
+
+    /// <summary>An endpoint description applies to a member bound from a header application-wide.</summary>
+    [Fact]
+    public async Task ShouldDescribeHeaderParameterGivenApplicationWideHeaderBinding()
+    {
+        // Arrange
+        var builder = WebApplication.CreateBuilder();
+        _ = builder.WebHost.UseTestServer();
+        _ = builder.Services.AddPortia()
+            .AddHttp(http => http.FromHeader<IExampleModeScoped>(request => request.Mode, "Example-Mode"))
+            .AddRequestHandler<EnumExampleHandler>();
+        await using var app = builder.Build();
+        _ = app.MapPortiaOpenApi();
+        _ = app.MapPortiaGet<EnumExampleRequest, string>("/application-header", configuration => configuration
+            .Describe(request => request.Mode, "Mode header."));
+        await app.StartAsync();
+
+        // Act
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+
+        // Assert
+        var parameter = Assert.Single(document["paths"]!["/application-header"]!["get"]!["parameters"]!.AsArray())!;
+        Assert.Equal("Example-Mode", parameter["name"]!.GetValue<string>());
+        Assert.Equal("header", parameter["in"]!.GetValue<string>());
+        Assert.True(parameter["required"]!.GetValue<bool>());
+        Assert.Equal("Mode header.", parameter["description"]!.GetValue<string>());
+    }
+
     /// <summary>Enum parameter examples retain the representation advertised by their scalar schema.</summary>
     [Theory]
     [InlineData(false)]

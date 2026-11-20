@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Cntryl.Portia;
 
@@ -22,8 +23,6 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     bool _hasResultHandler;
     (string Template, Type? PayloadType)? _created;
     bool _noInput;
-    bool[] _queryMemberFlags = [];
-    string?[] _headerNames = [];
     public Func<HttpContext, CancellationToken, ValueTask<TRequest>>? Binder { get; private set; }
     Type? BodyType { get; set; }
     string[]? BodyContentTypes { get; set; }
@@ -113,7 +112,7 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     {
         EnsureMutable();
         EnsureInput();
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        PortiaHttpHeaderName.Validate(name);
         if (_headerMembers.ContainsKey(member))
             throw new InvalidOperationException($"FromHeader is declared more than once for '{member}'.");
         if (_headerMembers.Values.Contains(name, StringComparer.OrdinalIgnoreCase))
@@ -151,12 +150,15 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         _responseHeaders.Add(new PortiaHttpResponseHeader(status, name, typeof(T), description, required));
     }
 
-    public bool IsQueryMember(int index) => (uint)index < (uint)_queryMemberFlags.Length && _queryMemberFlags[index];
-
-    public bool IsHeaderMember(int index) =>
-        (uint)index < (uint)_headerNames.Length && _headerNames[index] is not null;
-
-    public string? HeaderName(int index) => (uint)index < (uint)_headerNames.Length ? _headerNames[index] : null;
+    public PortiaHttpMemberSources ResolveMemberSources(IEndpointRouteBuilder app, PortiaHttpMember[] members)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(members);
+        return Binder is not null
+            ? PortiaHttpMemberSources.None(members)
+            : PortiaHttpMemberSources.Resolve(typeof(TRequest), members, _queryMembers, _headerMembers,
+                app.ServiceProvider.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.HeaderBindings);
+    }
 
     public void NoInput()
     {
@@ -223,44 +225,6 @@ sealed class PortiaEndpointConfigurationState<TRequest>
                     $"Describe member '{name}' is not a constructor-bound request member.");
         }
 
-        var flags = new bool[members.Length];
-        var headerNames = new string?[members.Length];
-        foreach (var name in _queryMembers)
-        {
-            var index = Array.FindIndex(members,
-                item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase));
-            if (index < 0)
-                throw new InvalidOperationException(
-                    $"FromQuery member '{name}' is not a constructor-bound request member.");
-            if (members[index].Source == "route")
-                throw new InvalidOperationException($"FromQuery member '{name}' is already bound from the route.");
-            if (!members[index].Scalar)
-                throw new InvalidOperationException(
-                    $"FromQuery member '{name}' must be a string, enum, or TryParse scalar.");
-            flags[index] = true;
-        }
-
-        foreach (var (memberName, headerName) in _headerMembers)
-        {
-            var index = Array.FindIndex(members,
-                item => string.Equals(item.Name, memberName, StringComparison.OrdinalIgnoreCase));
-            if (index < 0)
-                throw new InvalidOperationException(
-                    $"FromHeader member '{memberName}' is not a constructor-bound request member.");
-            if (members[index].Source == "route")
-                throw new InvalidOperationException(
-                    $"FromHeader member '{memberName}' is already bound from the route.");
-            if (!members[index].Scalar)
-                throw new InvalidOperationException(
-                    $"FromHeader member '{memberName}' must be a string, enum, or TryParse scalar.");
-            if (flags[index])
-                throw new InvalidOperationException(
-                    $"Request member '{memberName}' cannot bind from both a query parameter and an HTTP header.");
-            headerNames[index] = headerName;
-        }
-
-        _queryMemberFlags = flags;
-        _headerNames = headerNames;
         if (binderRequired && Binder is null)
             throw new InvalidOperationException("This request shape requires OnBind.");
         if (Binder is null && (_noInput || BodyType is not null || _parameters.Count != 0))
@@ -331,11 +295,6 @@ sealed class PortiaEndpointConfigurationState<TRequest>
                 endpoint.Metadata.Add(new PortiaCreatedResponseMetadata(StatusCodes.Status201Created, created.PayloadType,
                     contentTypes));
             });
-        if (_queryMembers.Count != 0)
-            builder.Add(endpoint => endpoint.Metadata.Add(new PortiaQueryMembers([.. _queryMembers])));
-        if (_headerMembers.Count != 0)
-            builder.Add(endpoint => endpoint.Metadata.Add(new PortiaHeaderMembers(
-                [.. _headerMembers.Select(item => new PortiaHeaderMember(item.Key, item.Value))])));
         if (_hasResultHandler)
             builder.Add(endpoint => endpoint.Metadata.Add(new PortiaCustomHttpResult(
                 [.. _responses.Select(ResponseStatus)])));

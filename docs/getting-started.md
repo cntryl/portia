@@ -521,17 +521,51 @@ described as a query parameter. The member must be a string, enum, or `TryParse`
 route does not already bind, and `FromQuery` cannot be combined with `OnBind`; mapping the route
 throws otherwise.
 
-For a value that belongs in an HTTP header, use `FromHeader`:
+A context value that belongs in an HTTP header, such as a tenant or region, is declared once for the
+whole application. Define a contract in your own code, bind its member in `AddHttp`, and every
+request that implements the contract reads that member from the header on every endpoint:
 
 ```csharp
-app.MapPortiaGet<GetTenant, TenantView>("/v1/tenant", endpoint => endpoint
-    .FromHeader(request => request.TenantId, "Tenant-Id"));
+public interface ITenantRequest
+{
+    string TenantId { get; }
+}
+
+builder.Services.AddPortia().AddHttp(http => http
+    .FromHeader<ITenantRequest>(x => x.TenantId, "Tenant-Id"));
+
+public sealed record GetOrders(string TenantId, int Page = 1)
+    : IRequest<OrdersView>, ICallable, ITenantRequest;
+
+app.MapPortiaGet<GetOrders, OrdersView>("/v1/orders");
 ```
 
-The member is omitted from the body and query schemas and appears as an OpenAPI header parameter.
-The header is required when its request member is non-nullable and has no default. Portia rejects a
-duplicate value in the body or query string. As with `FromQuery`, `FromHeader` uses the default
-generated binder and cannot be combined with `OnBind`.
+The binding always applies. Mapping an endpoint that would bind the member another way — a route
+token, `FromQuery`, or a different header — throws, as does a request whose contract member is not
+a constructor parameter. An endpoint that uses `OnBind` owns its inputs and is unaffected.
+
+For a header that only one endpoint reads, declare it where the route is mapped:
+
+```csharp
+app.MapPortiaGet<GetRegion, RegionView>("/v1/region", endpoint => endpoint
+    .FromHeader(x => x.Region, "Region"));
+```
+
+Either way the header name is always explicit, and the member must be a string, enum, or `TryParse`
+scalar sent as a single header value. The member is left out of the body and query schemas and
+described as an OpenAPI header parameter, required when the member is non-nullable and has no
+default. The name must be a valid HTTP header name. `Authorization`, `Proxy-Authorization` and
+`Cookie` are refused because a bound request is queued and stored under `Prefer: respond-async`;
+`Accept`, `Content-Type` and `Prefer` are refused because OpenAPI or Portia already gives them
+meaning.
+
+A `FromQuery` or `FromHeader` member has exactly one source. Sending its value anywhere else — in
+the JSON or form body, or for a header member in the query string — returns 400 rather than being
+ignored.
+
+A header is asserted by the caller. Binding a tenant from `Tenant-Id` does not prove the caller may
+act for that tenant; authorizers decide that. Browser clients also need the header allowed by your
+ASP.NET Core CORS policy (`WithHeaders` or `AllowAnyHeader`).
 
 An absent body is treated as `{}` unless a required complex member needs it. Bodies are bounded
 to 10 MiB by default; configure `PortiaHttpOptions.MaxJsonBodyBytes` through standard options

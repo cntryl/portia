@@ -8,6 +8,7 @@ using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Cntryl.Portia;
 
@@ -49,6 +50,24 @@ public static partial class PortiaHttpBinding
         if (app.ServiceProvider.GetService<PortiaHttpExtensions.PortiaOpenApiMarker>() is null)
             throw new InvalidOperationException(
                 "Portia HTTP endpoints require AddHttp() in the shared Portia application composition.");
+    }
+
+    /// <summary>
+    ///     Resolves where generated binding reads each member of a request mapped without endpoint
+    ///     configuration, applying the application-wide header bindings its contracts declare.
+    /// </summary>
+    /// <typeparam name="TRequest">The mapped request type.</typeparam>
+    /// <param name="app">The endpoint route builder.</param>
+    /// <param name="members">The request's constructor-bound members, in constructor order.</param>
+    /// <returns>The resolved member sources.</returns>
+    /// <exception cref="InvalidOperationException">An application-wide binding cannot apply to the request.</exception>
+    public static PortiaHttpMemberSources ResolveMemberSources<TRequest>(IEndpointRouteBuilder app,
+        PortiaHttpMember[] members)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(members);
+        return PortiaHttpMemberSources.Resolve(typeof(TRequest), members, [], new Dictionary<string, string>(),
+            app.ServiceProvider.GetRequiredService<IOptions<PortiaHttpOptions>>().Value.HeaderBindings);
     }
 
     /// <summary>Reports whether an exact RFC 7240 preference token requests asynchronous handling.</summary>

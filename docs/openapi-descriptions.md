@@ -60,7 +60,9 @@ OpenAPI member precedence is:
 
 Schema descriptions use the explicit fluent registration before the type attribute. Shared names
 are ordinal and case-sensitive. Route/query/form names follow binding; JSON body names follow the
-JSON contract. `Describe` covers constructor-bound members only. Custom `OnBind` inputs use:
+JSON contract. A member bound with `FromHeader`, per endpoint or application-wide, is published as a
+header parameter; `Describe` applies to it, and its shared `DescribeMember` name is the header name.
+`Describe` covers constructor-bound members only. Custom `OnBind` inputs use:
 
 ```csharp
 c.Parameter<string>("X-Region", PortiaHttpParameterLocation.Header,
