@@ -108,6 +108,23 @@ resource-backed validation messages, require explicit typed application validati
 reflection-dependent conversion. `PORTIA031` reports these declarations on Portia contracts.
 Literal `ErrorMessage` is supported. Resource-backed display text remains application-owned.
 
+## Exact decimal strings
+
+Declare a `DecimalString` when a decimal must travel without binary floating-point conversion.
+JSON carries a quoted base-ten decimal. Route and query values use the same invariant parser.
+The syntax permits a leading minus, an integer, and an optional decimal point followed by digits.
+The value must fit in `decimal` exactly. Exponents, grouping, leading integer zeros, and values
+that would round are rejected. The scalar exposes its `decimal Value` to the application.
+
+```csharp
+public sealed record SetRate(
+    [DecimalStringRange("0", "1", MinimumIsExclusive = true)] DecimalString Rate)
+    : IRequest;
+```
+
+The generated schema publishes a string pattern and keeps exact range bounds and exclusivity in
+`x-portia-range`. Monetary units, arithmetic, and rounding belong to the application.
+
 ## Typed examples
 
 Register a non-null typed value once in host composition. Portia serializes it with the configured

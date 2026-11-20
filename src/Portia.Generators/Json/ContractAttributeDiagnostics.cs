@@ -126,6 +126,16 @@ static class ContractAttributeDiagnostics
                 or "System.ComponentModel.DataAnnotations.MaxLengthAttribute" &&
             memberType is not null && JsonDescriptionEmission.CountExpression(memberType) is null)
             reason = "Length validation needs a string, array, ICollection<T> or IReadOnlyCollection<T>.";
+        if (name == "Cntryl.Portia.DecimalStringRangeAttribute" && memberType is not null)
+        {
+            var scalar = memberType is INamedTypeSymbol
+            {
+                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
+            } nullable ? nullable.TypeArguments[0] : memberType;
+            if (scalar is not INamedTypeSymbol named || !SymbolNames.Is(named, "Cntryl.Portia.DecimalString"))
+                reason = "DecimalStringRange requires a DecimalString or nullable DecimalString member.";
+        }
+
         var containingType = symbol as INamedTypeSymbol ?? symbol?.ContainingType;
         return reason is null || containingType is null
             ? null

@@ -37,6 +37,16 @@ static class PortiaJsonConstraints
                     }
 
                     break;
+                case DecimalStringRangeAttribute decimalRange:
+                    schema["x-portia-range"] = new JsonObject
+                    {
+                        ["minimum"] = decimalRange.Minimum,
+                        ["maximum"] = decimalRange.Maximum,
+                        ["operandType"] = typeof(DecimalString).FullName,
+                        ["minimumIsExclusive"] = decimalRange.MinimumIsExclusive,
+                        ["maximumIsExclusive"] = decimalRange.MaximumIsExclusive
+                    };
+                    break;
                 case RangeAttribute range:
                     schema["x-portia-range"] = new JsonObject
                     {

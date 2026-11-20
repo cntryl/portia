@@ -145,6 +145,16 @@ static class PortiaJsonDescriptions
             schema["required"] = required;
     }
 
+    internal static void ApplyDecimalString(JsonObject schema, Type type)
+    {
+        if (type != typeof(DecimalString) && type != typeof(DecimalString?))
+            return;
+        schema["type"] = type == typeof(DecimalString?)
+            ? new JsonArray(JsonValue.Create("string"), JsonValue.Create("null"))
+            : JsonValue.Create("string");
+        schema["pattern"] = DecimalString.Pattern;
+    }
+
     internal static JsonNode Apply(JsonSchemaExporterContext context, JsonNode node, JsonSerializerOptions options,
         bool input = false)
     {
@@ -171,7 +181,10 @@ static class PortiaJsonDescriptions
         }
 
         if (node is JsonObject schemaNode)
+        {
+            ApplyDecimalString(schemaNode, isProperty ? context.PropertyInfo!.PropertyType : context.TypeInfo.Type);
             ApplyFacts(schemaNode, options, context.TypeInfo.Type, isProperty ? context.PropertyInfo : null);
+        }
         // Some defaulted properties do not receive an exporter callback.
         if (node is JsonObject obj && obj["properties"] is JsonObject properties)
         {
@@ -179,6 +192,7 @@ static class PortiaJsonDescriptions
             {
                 if (properties[child.Name] is not JsonObject childSchema)
                     continue;
+                ApplyDecimalString(childSchema, child.PropertyType);
                 ApplyFacts(childSchema, options, child.PropertyType, child);
                 if (Property(options, child) is { } childText)
                     childSchema["description"] = childText;
