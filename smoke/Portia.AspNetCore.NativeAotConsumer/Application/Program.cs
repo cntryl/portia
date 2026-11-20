@@ -40,6 +40,7 @@ _ = builder.Services.AddPortia().ConfigureJson(options =>
     .AddRequestHandler<SmokeExternalHandler>()
     .AddRequestHandler<SmokeUploadHandler>()
     .AddRequestHandler<SmokeBindingHandler>()
+    .AddRequestHandler<SmokeQuoteHandler>()
     .AddRequestHandler<SmokeCreateHandler>()
     .AddRequestHandler<SmokeReplaceHandler>()
     .AddRequestPipelineBehavior<SmokeRequestBehavior>()
@@ -67,6 +68,7 @@ _ = app.MapGroup("/native").MapPortiaPost<SmokeCreate, PortiaCreateOutcome<Smoke
     endpoint => endpoint.Created("/native/resources/{id}", includePayload: false));
 _ = app.MapPortiaPut<SmokeReplace, PortiaCreateOutcome<SmokeResource>>("/native/resources/{resource}",
     endpoint => endpoint.Created("/native/resources/{id}", includePayload: false));
+_ = app.MapPortiaGet<SmokeQuote, DecimalString>("/smoke-quotes/{amount}");
 _ = app.MapPortiaPost<SmokeUpload, int>("/smoke-upload", endpoint => endpoint
     .Accepts<Stream>("application/octet-stream")
     .OnBind(async (http, ct) =>
@@ -107,6 +109,14 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     if (replace.StatusCode != HttpStatusCode.NoContent || replace.Headers.Location?.OriginalString != "/native/resources/1" ||
         (await replace.Content.ReadAsStringAsync()).Length != 0)
         throw new InvalidOperationException($"Unexpected bodyless replace response: {(int)replace.StatusCode}.");
+
+    using var quote = await client.GetAsync("/smoke-quotes/1.0000000000000000000000000001");
+    if (quote.StatusCode != HttpStatusCode.OK ||
+        await quote.Content.ReadAsStringAsync() != "\"1.0000000000000000000000000001\"")
+        throw new InvalidOperationException("Native decimal string lost precision.");
+    using var rounded = await client.GetAsync("/smoke-quotes/1.00000000000000000000000000001");
+    if (rounded.StatusCode != HttpStatusCode.BadRequest)
+        throw new InvalidOperationException("Native decimal string accepted a rounded value.");
 
     using var bindingBody = new StringContent("{\"wire_a\":11,\"wire_b\":22}", Encoding.UTF8, "application/json");
     using var bindingResponse = await client.PostAsync("/smoke-binding", bindingBody);
@@ -380,6 +390,17 @@ sealed class SmokeUploadHandler : IRequestHandler<SmokeUpload, int>
         ValueTask.FromResult(Result<int>.Success(context.Request.Length));
 }
 
+[Discriminator("portia.smoke.native-aot.quote")]
+[RequestRoute("portia-smoke", "requests", "native-aot", "quote")]
+sealed record SmokeQuote([property: DecimalStringRange("1", "2", MinimumIsExclusive = true)] DecimalString Amount)
+    : IRequest<DecimalString>, ICallable;
+
+sealed class SmokeQuoteHandler : IRequestHandler<SmokeQuote, DecimalString>
+{
+    public ValueTask<Result<DecimalString>> HandleAsync(IRequestContext<SmokeQuote> context, CancellationToken ct) =>
+        ValueTask.FromResult(Result<DecimalString>.Success(context.Request.Amount));
+}
+
 [Discriminator("portia.smoke.native-aot.create")]
 [RequestRoute("portia-smoke", "requests", "native-aot", "create")]
 sealed record SmokeCreate(bool Repeated) :
@@ -445,6 +466,8 @@ sealed class SmokeGuardProbe
 [JsonSerializable(typeof(SmokeCount))]
 [JsonSerializable(typeof(SmokeVariant))]
 [JsonSerializable(typeof(SmokeUpload))]
+[JsonSerializable(typeof(SmokeQuote))]
+[JsonSerializable(typeof(DecimalString))]
 [JsonSerializable(typeof(SmokeCreate))]
 [JsonSerializable(typeof(SmokeReplace))]
 [JsonSerializable(typeof(PortiaCreateOutcome<SmokeResource>))]

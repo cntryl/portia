@@ -82,7 +82,8 @@ sealed class PortiaOpenApiJsonSchemaExporter(
                   ApplyAnnotations(normalized, child, elementNullable);
             if (original is not null || mapped is not null || declaredElementNullable.HasValue || elementNullable ||
                 elementType == typeof(Uuid) || elementType == typeof(Uuid?) ||
-                elementType == typeof(TenantId) || elementType == typeof(TenantId?))
+                elementType == typeof(TenantId) || elementType == typeof(TenantId?) ||
+                elementType == typeof(DecimalString) || elementType == typeof(DecimalString?))
             {
                 Describe(completed, elementType, null);
                 obj[keyword] = completed;
@@ -195,6 +196,13 @@ sealed class PortiaOpenApiJsonSchemaExporter(
                 ? new JsonArray(JsonValue.Create("string"), JsonValue.Create("null"))
                 : JsonValue.Create("string");
             return tenant;
+        }
+
+        if (type == typeof(DecimalString) || type == typeof(DecimalString?))
+        {
+            var exactDecimal = schema as JsonObject ?? [];
+            PortiaJsonDescriptions.ApplyDecimalString(exactDecimal, type);
+            return exactDecimal;
         }
 
         // The OpenAPI reader expects object nodes for entries in a properties map.

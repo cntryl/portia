@@ -377,7 +377,8 @@ static class JsonDescriptionEmission
         "System.ComponentModel.DataAnnotations.StringLengthAttribute" or
         "System.ComponentModel.DataAnnotations.RegularExpressionAttribute" or
         "System.ComponentModel.DataAnnotations.EmailAddressAttribute" or
-        "System.ComponentModel.DataAnnotations.UrlAttribute";
+        "System.ComponentModel.DataAnnotations.UrlAttribute" or
+        "Cntryl.Portia.DecimalStringRangeAttribute";
 
     static IEnumerable<string> ValidationRules(ISymbol symbol)
     {
