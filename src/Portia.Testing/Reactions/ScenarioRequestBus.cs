@@ -8,6 +8,7 @@ namespace Cntryl.Portia.Testing;
 sealed class ScenarioRequestBus : IRequestBus
 {
     readonly Dictionary<Type, object> _responses = [];
+    readonly Dictionary<Type, object> _defaultResponses = [];
     readonly List<IRequestBase> _sent = [];
 
     readonly Lock _gate = new();
@@ -25,6 +26,12 @@ sealed class ScenarioRequestBus : IRequestBus
     {
         lock (_gate)
             _responses[requestType] = response;
+    }
+
+    public void ScriptDefault<TOut>(Result<TOut> response)
+    {
+        lock (_gate)
+            _defaultResponses[typeof(TOut)] = response;
     }
 
     // A scripted denial is the only authorization outcome the scenario knows, so it is reported here
@@ -69,9 +76,11 @@ sealed class ScenarioRequestBus : IRequestBus
         lock (_gate)
         {
             _sent.Add(request);
-            return ValueTask.FromResult(_responses.TryGetValue(request.GetType(), out var response)
-                ? (Result<TOut>)response
-                : throw Unscripted(request, nameof(ReactorScenario.RespondTo)));
+            if (_responses.TryGetValue(request.GetType(), out var response) ||
+                _defaultResponses.TryGetValue(typeof(TOut), out response))
+                return ValueTask.FromResult((Result<TOut>)response);
+
+            throw Unscripted(request, nameof(ReactorScenario.RespondTo));
         }
     }
 

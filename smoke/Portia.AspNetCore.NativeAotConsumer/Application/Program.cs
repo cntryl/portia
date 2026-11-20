@@ -251,6 +251,10 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
 await using (var scope = app.Services.CreateAsyncScope())
 {
     var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
+    IUnaryRequest unary = new SmokeRequest("unary");
+    var unaryOutcome = await bus.SendAsync(unary, RequestActor.System);
+    if (!unaryOutcome.IsSuccess)
+        throw new InvalidOperationException("Native unary dispatch failed.");
     var retained = await bus.SendAsync(new SmokeRequest("retain-continuation"), RequestActor.System);
     if (!retained.IsSuccess)
         throw new InvalidOperationException("Retaining smoke behavior failed.");

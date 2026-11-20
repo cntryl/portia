@@ -17,3 +17,4 @@ Cntryl.Portia.PortiaCreateOutcomeKind.Repeated = 2 -> Cntryl.Portia.PortiaCreate
 Cntryl.Portia.PortiaCreateOutcomeKind.Replaced = 3 -> Cntryl.Portia.PortiaCreateOutcomeKind
 static Cntryl.Portia.PortiaCreateOutcome.Replaced() -> Cntryl.Portia.PortiaCreateOutcome!
 static Cntryl.Portia.PortiaCreateOutcome<T>.Replaced(T value) -> Cntryl.Portia.PortiaCreateOutcome<T>!
+Cntryl.Portia.IUnaryRequest
