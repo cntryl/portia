@@ -3,6 +3,9 @@
 See [contract attributes](contract-attributes.md) for value validation, friendly names, defaults, typed
 examples, and HTTP document/security enrichment.
 
+For a built application to write its configured OpenAPI YAML document without starting the web server,
+see [Export YAML to disk](getting-started.md#export-yaml-to-disk).
+
 Put reusable descriptions beside the model using standard .NET attributes:
 
 ```csharp

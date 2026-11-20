@@ -97,9 +97,24 @@ if (JsonSerializer.Serialize(new App_A.FirstPayload("contracts"), firstType) != 
     || JsonSerializer.Deserialize("{\"value\":42}", secondType)?.Value != 42)
     throw new InvalidOperationException("Referenced JSON context composition failed.");
 
+var yamlPath = Path.Combine(Path.GetTempPath(), $"portia-native-openapi-{Guid.NewGuid():N}.yml");
+string exportedYaml;
+try
+{
+    await app.WritePortiaOpenApiYamlAsync(yamlPath);
+    exportedYaml = await File.ReadAllTextAsync(yamlPath);
+}
+finally
+{
+    File.Delete(yamlPath);
+}
+
 await app.StartAsync();
 using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
 {
+    if (!string.Equals(exportedYaml, await client.GetStringAsync("/openapi/v1.yml"), StringComparison.Ordinal))
+        throw new InvalidOperationException("Exported native OpenAPI YAML differs from the served document.");
+
     foreach (var (repeated, expected) in new[] { (false, HttpStatusCode.Created), (true, HttpStatusCode.OK) })
     {
         using var createBody = new StringContent(repeated ? """{"repeated":true}""" : """{"repeated":false}""",
