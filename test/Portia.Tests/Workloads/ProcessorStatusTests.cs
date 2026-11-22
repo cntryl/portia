@@ -38,10 +38,10 @@ public sealed class ProcessorStatusTests
         Assert.Equal(reactor ? "reactor" : "projector", result.Value.Kind);
         Assert.Equal(identity.ComponentName, result.Value.Processor);
         Assert.Equal(identity.Pattern.ToString(), result.Value.Pattern);
-        Assert.Equal("opaque-committed", result.Value.Progress.Position.Value);
-        Assert.Equal("opaque-head", result.Value.Progress.SourcePosition?.Value);
-        Assert.Equal(3UL, result.Value.Progress.PendingEvents);
-        Assert.False(result.Value.Progress.IsCaughtUp);
+        Assert.Equal("opaque-committed", result.Value.Progress!.Position.Value);
+        Assert.Equal("opaque-head", result.Value.Progress!.SourcePosition?.Value);
+        Assert.Equal(3UL, result.Value.Progress!.PendingEvents);
+        Assert.False(result.Value.Progress!.IsCaughtUp);
         Assert.Equal(identity, Assert.Single(checkpoint.Reads));
         Assert.Equal(identity.Pattern, progress.Pattern);
         Assert.Equal("opaque-committed", progress.Position.Value);
@@ -75,9 +75,9 @@ public sealed class ProcessorStatusTests
         Assert.Equal("tenant-a", result.Value.Tenant);
         Assert.Equal("candidate", result.Value.RebuildId);
         Assert.Equal(pattern.ToString(), result.Value.Pattern);
-        Assert.Equal("tenant-a-candidate", result.Value.Progress.Position.Value);
-        Assert.Null(result.Value.Progress.PendingEvents);
-        Assert.Null(result.Value.Progress.IsCaughtUp);
+        Assert.Equal("tenant-a-candidate", result.Value.Progress!.Position.Value);
+        Assert.Null(result.Value.Progress!.PendingEvents);
+        Assert.Null(result.Value.Progress!.IsCaughtUp);
         Assert.Equal(identity, Assert.Single(store.Reads));
         Assert.Equal(0, store.Writes);
     }
@@ -113,8 +113,8 @@ public sealed class ProcessorStatusTests
         var result = await SendAsync(provider, new GetProcessorStatus(identity.ComponentName));
 
         Assert.True(result.IsSuccess);
-        Assert.Equal("native-progress", result.Value.Progress.Position.Value);
-        Assert.Equal(3UL, result.Value.Progress.PendingEvents);
+        Assert.Equal("native-progress", result.Value.Progress!.Position.Value);
+        Assert.Equal(3UL, result.Value.Progress!.PendingEvents);
         Assert.Equal(identity, Assert.Single(store.Reads));
         Assert.Equal(0, store.Writes);
     }
@@ -343,7 +343,7 @@ public sealed class ProcessorStatusTests
 
         // Assert
         Assert.True(result.IsSuccess);
-        Assert.Equal("native-tenant-progress", result.Value.Progress.Position.Value);
+        Assert.Equal("native-tenant-progress", result.Value.Progress!.Position.Value);
         Assert.Equal(pattern.ToString(), result.Value.Pattern);
         Assert.Equal(identity, Assert.Single(store.Reads));
         Assert.Equal(0, directory.Reads);
@@ -368,11 +368,11 @@ public sealed class ProcessorStatusTests
 
         // Assert
         Assert.True(result.IsSuccess);
-        Assert.Equal("native-progress", result.Value.Progress.Position.Value);
+        Assert.Equal("native-progress", result.Value.Progress!.Position.Value);
         Assert.Equal(nameof(InvalidOperationException), result.Value.SourceError);
-        Assert.Null(result.Value.Progress.SourcePosition);
-        Assert.Null(result.Value.Progress.PendingEvents);
-        Assert.Null(result.Value.Progress.IsCaughtUp);
+        Assert.Null(result.Value.Progress!.SourcePosition);
+        Assert.Null(result.Value.Progress!.PendingEvents);
+        Assert.Null(result.Value.Progress!.IsCaughtUp);
         Assert.Equal(0, store.Writes);
     }
 
@@ -414,22 +414,19 @@ public sealed class ProcessorStatusTests
 
         // Assert
         Assert.True(result.IsSuccess);
-        Assert.Equal("native-progress", result.Value.Progress.Position.Value);
+        Assert.Equal("native-progress", result.Value.Progress!.Position.Value);
         Assert.Equal(sourceUnavailable ? nameof(IOException) : null, result.Value.SourceError);
-        Assert.Null(result.Value.Progress.SourcePosition);
-        Assert.Null(result.Value.Progress.PendingEvents);
-        Assert.Null(result.Value.Progress.IsCaughtUp);
-        if (staleJournal)
-            Assert.Null(result.Value.Failure);
-        else
-        {
-            Assert.NotNull(result.Value.Failure);
-            Assert.Equal("Handling", result.Value.Failure.Stage);
-            Assert.Equal("Validation", result.Value.Failure.Kind);
-            Assert.True(result.Value.Failure.IsBlocked);
-            Assert.Equal(2, result.Value.Failure.ConsecutiveFailures);
-            Assert.Equal(completed, result.Value.Failure.FailedAt);
-        }
+        Assert.Null(result.Value.Progress!.SourcePosition);
+        Assert.Null(result.Value.Progress!.PendingEvents);
+        Assert.Null(result.Value.Progress!.IsCaughtUp);
+        var failure = Assert.IsType<ProcessorStatusFailure>(result.Value.Failure);
+        Assert.Equal("Handling", failure.Stage);
+        Assert.Equal("Validation", failure.Kind);
+        Assert.True(failure.IsBlocked);
+        Assert.Equal(2, failure.ConsecutiveFailures);
+        Assert.Equal(completed, failure.FailedAt);
+        Assert.Equal("resume", result.Value.Repair?.Action);
+        Assert.Equal("blocked", result.Value.Execution?.Phase);
 
         Assert.Equal(0, store.Writes);
         var options = provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
@@ -486,9 +483,9 @@ public sealed class ProcessorStatusTests
 
         // Assert
         Assert.True(result.IsSuccess);
-        Assert.Equal("native-progress", result.Value.Progress.Position.Value);
+        Assert.Equal("native-progress", result.Value.Progress!.Position.Value);
         Assert.Equal(sourceUnavailable ? nameof(IOException) : null, result.Value.SourceError);
-        Assert.Equal(sourceUnavailable ? null : 3UL, result.Value.Progress.PendingEvents);
+        Assert.Equal(sourceUnavailable ? null : 3UL, result.Value.Progress!.PendingEvents);
         Assert.Null(result.Value.Failure);
         Assert.Equal(nameof(IOException), result.Value.FailureError);
         Assert.Single(store.Reads);
@@ -496,6 +493,30 @@ public sealed class ProcessorStatusTests
         var options = provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
         Assert.DoesNotContain("private journal detail", JsonSerializer.Serialize(result.Value, options),
             StringComparison.Ordinal);
+    }
+
+    /// <summary>An authorized query still succeeds when the native checkpoint cannot be read.</summary>
+    [Fact]
+    public async Task ShouldReturnPartialStatusGivenUnavailableCheckpoint()
+    {
+        // Arrange
+        var store = new StatusCheckpointStore { CheckpointError = new IOException("private checkpoint detail") };
+        var services = Services(store);
+        _ = services.AddPortia().AddProjector<GlobalStatusProjector>("projection", WorkloadScope.Global);
+        await using var provider = services.BuildServiceProvider();
+        Result<ProcessorStatus> status = default;
+
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
+            status = await SendAsync(provider, new GetProcessorStatus("projection")));
+
+        // Assert
+        Assert.Null(error);
+        Assert.True(status.IsSuccess);
+        Assert.Null(status.Value.Progress);
+        Assert.Equal(nameof(IOException), status.Value.CheckpointError);
+        Assert.NotNull(status.Value.CheckpointObservedAt);
+        Assert.Equal(0, store.Writes);
     }
 
     /// <summary>Preserves caller cancellation while reading operational failure evidence.</summary>
@@ -593,6 +614,7 @@ public sealed class ProcessorStatusTests
         readonly Dictionary<CheckpointIdentity, ProjectionCheckpoint> _checkpoints = [];
         internal List<CheckpointIdentity> Reads { get; } = [];
         internal int Writes { get; private set; }
+        internal Exception? CheckpointError { get; init; }
 
         internal void Set(CheckpointIdentity identity, string cursor) =>
             _checkpoints[identity] = new ProjectionCheckpoint(new EventCursor(cursor));
@@ -602,6 +624,8 @@ public sealed class ProcessorStatusTests
         {
             ct.ThrowIfCancellationRequested();
             Reads.Add(identity);
+            if (CheckpointError is { } error)
+                return ValueTask.FromException<ProjectionCheckpoint>(error);
             return ValueTask.FromResult(_checkpoints.GetValueOrDefault(identity));
         }
 

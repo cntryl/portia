@@ -157,7 +157,8 @@ public sealed class PortiaFitzBuilder
             provider.GetRequiredService<IRequestOutcomeDeserializer>(),
             provider.GetRequiredService<RequestTransportCatalog>()));
         services.TryAddSingleton<IProcessorStatusClient>(provider => new FitzProcessorStatusClient(
-            provider.GetRequiredService<IRemoteRequestSender>(), () => ProcessorStatusNamespace));
+            provider.GetRequiredService<IRemoteRequestSender>(), () => ProcessorStatusNamespace,
+            provider.GetService<TimeProvider>()));
         services.TryAddSingleton<IProcessorStatusRpcRegistrar>(provider => new FitzProcessorStatusRpcRegistrar(
             provider.GetRequiredService<FitzApplicationConnection>(),
             provider.GetRequiredService<IServiceScopeFactory>(),
@@ -236,6 +237,28 @@ public sealed class PortiaFitzBuilder
         if (_processorStatusNamespace is not null && _processorStatusNamespace != value)
             throw new InvalidOperationException("This application has conflicting processor status namespaces.");
         _processorStatusNamespace = value;
+        return this;
+    }
+
+    /// <summary>Serves authorized read-only processor status without starting application workloads.</summary>
+    /// <remarks>Enable this on a separately hosted operator service with the application's shared workload
+    /// registrations and native stores. The status client uses it when the owner endpoint is unavailable.</remarks>
+    /// <returns>This builder, for chaining.</returns>
+    public PortiaFitzBuilder AddProcessorStatusReader()
+    {
+        if (!_capabilities.Add("processor-status-reader"))
+            return this;
+
+        var services = _application.Services;
+        services.TryAddSingleton<IProcessorOwnerProbe>(provider => new FitzProcessorOwnerProbe(
+            provider.GetRequiredService<FitzApplicationConnection>(),
+            provider.GetService<IWorkloadCoordinator>() is FitzWorkloadCoordinator ? Fleet : null,
+            provider.GetService<TimeProvider>() ?? TimeProvider.System));
+        _ = services.AddSingleton<IHostedService>(provider => new FitzProcessorStatusReader(
+            provider.GetRequiredService<FitzApplicationConnection>(), provider.GetRequiredService<IServiceScopeFactory>(),
+            provider.GetRequiredService<RequestTransportCatalog>(), () => ProcessorStatusNamespace,
+            provider.GetService<ILogger<FitzProcessorStatusReader>>(),
+            provider.GetService<TimeProvider>() ?? TimeProvider.System));
         return this;
     }
 

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 [assembly: Cntryl.Portia.PortiaJsonRoot(typeof(Cntryl.Portia.GetProcessorStatus),
     typeof(Cntryl.Portia.ProcessorStatusJsonContext), typeof(Cntryl.Portia.ProcessorStatusJsonContextFactory))]
@@ -14,6 +15,7 @@ static class ProcessorStatusRegistration
 
     internal static void Add(PortiaBuilder builder) => builder.AddGeneratedRegistrations(Identity, static application =>
     {
+        application.Services.TryAddSingleton<ProcessorRuntimeStatusRegistry>();
         _ = application.AddGeneratedHandler(
             new RequestRegistration<GetProcessorStatus, ProcessorStatusHandler, ProcessorStatus>());
         _ = application.AddGeneratedAuthorizer(

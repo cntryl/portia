@@ -233,7 +233,7 @@ sealed class FitzApplicationWorkers(
     }
 
     internal static async Task RetryAsync(string runnerName, Func<CancellationToken, Task> run, TimeSpan interval,
-        TimeProvider clock, ILogger<FitzApplicationWorkers>? logger, CancellationToken ct)
+        TimeProvider clock, ILogger? logger, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {

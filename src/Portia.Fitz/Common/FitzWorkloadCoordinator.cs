@@ -18,15 +18,11 @@ sealed class FitzWorkloadCoordinator(
         await connection.StartAsync(ct).ConfigureAwait(false);
         var options = configuration.Fleet ?? new FleetRunOptions
         { MembershipSelector = "lease://portia/portia-members/*" };
-        var membership = options.MembershipSelector[8..].Split('/');
-        var prefix = $"lease://{membership[0]}/{membership[1]}-workloads/";
         IReadOnlyDictionary<string, WorkloadIdentity> current = new Dictionary<string, WorkloadIdentity>();
 
         IReadOnlyCollection<string> Snapshot()
         {
-            var snapshot = workloads().ToDictionary(identity => prefix + Uuid.CreateVersion5(NamespaceId,
-                    JsonSerializer.Serialize([identity.Name, identity.Tenant?.Value],
-                        FitzJsonContext.Default.StringArray)),
+            var snapshot = workloads().ToDictionary(identity => PartitionRoute(options, identity),
                 identity => identity);
             Volatile.Write(ref current, snapshot);
             return [.. snapshot.Keys];
@@ -38,5 +34,13 @@ sealed class FitzWorkloadCoordinator(
             Volatile.Read(ref current).TryGetValue(route, out var identity)
                 ? run(identity, token)
                 : Task.CompletedTask, options, ct).ConfigureAwait(false);
+    }
+
+    internal static string PartitionRoute(FleetRunOptions options, WorkloadIdentity identity)
+    {
+        var membership = options.MembershipSelector[8..].Split('/');
+        var workload = Uuid.CreateVersion5(NamespaceId, JsonSerializer.Serialize([identity.Name, identity.Tenant?.Value],
+            FitzJsonContext.Default.StringArray));
+        return $"lease://{membership[0]}/{membership[1]}-workloads/{workload}";
     }
 }
