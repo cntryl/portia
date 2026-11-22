@@ -423,10 +423,13 @@ sealed class PortiaWorkloadService(
                         terminalFailure = new WorkloadFailureException(identity, consecutiveFailures, passFailure);
                     }
 
-                    var reason = passFailure is ProcessorFailureException { Error: { } observedError }
-                        ? observedError.Kind.ToString()
-                        : passFailure is ProcessorFailureException { InnerException: { } innerFailure }
-                            ? innerFailure.GetType().Name : passFailure.GetType().Name;
+                    var reason = passFailure switch
+                    {
+                        ProcessorFailureException { CommitOutcomeUnknown: true } => "commit_outcome_unknown",
+                        ProcessorFailureException { Error: { } error } => error.Kind.ToString(),
+                        ProcessorFailureException { InnerException: { } inner } => inner.GetType().Name,
+                        _ => passFailure.GetType().Name
+                    };
                     var stage = passFailure is ProcessorFailureException processorFailure
                         ? processorFailure.Stage.ToString() : "Pass";
                     if (terminalFailure is null)

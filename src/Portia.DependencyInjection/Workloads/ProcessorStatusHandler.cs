@@ -86,10 +86,15 @@ sealed class ProcessorStatusHandler(
         }
 
         var state = journalObservation?.Value;
-        var attempt = state is { Attempts.Count: > 0 } ? state.Attempts[^1] : null;
         var blockedAttempt = state?.Block is { } block
             ? state.Attempts.LastOrDefault(item => item.Id == block.AttemptId)
             : null;
+        var latest = state is { Attempts.Count: > 0 } ? state.Attempts[^1] : null;
+        var attempt = latest is not null && (progress is null ||
+            latest.ExpectedCheckpoint == progress.Position.Value ||
+            latest.NextCheckpoint == progress.Position.Value && latest.Outcome is
+                OperationalAttemptOutcomes.Committed or OperationalAttemptOutcomes.CommittedCleanupFailed)
+            ? latest : blockedAttempt;
         var failureAttempt = blockedAttempt ?? (state?.ConsecutiveFailures > 0 &&
             (progress is null || state.Checkpoint == progress.Position.Value)
                 ? state.Attempts.LastOrDefault(item => item.Outcome is

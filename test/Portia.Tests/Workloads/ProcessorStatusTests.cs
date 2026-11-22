@@ -495,6 +495,37 @@ public sealed class ProcessorStatusTests
             StringComparison.Ordinal);
     }
 
+    /// <summary>An older attempt must not report a stall after independently confirmed progress.</summary>
+    [Fact]
+    public async Task ShouldIgnoreHistoricalUncertainAttemptGivenNativeProgressAdvanced()
+    {
+        // Arrange
+        var store = new StatusCheckpointStore();
+        var pattern = EventStreamPattern.ForPattern("global", "events");
+        var target = new OperationalTarget("projection", pattern.ToString(), OperationalScope.Global);
+        store.Set(target.Identity, "now");
+        var observed = DateTimeOffset.UtcNow;
+        var attempt = new OperationalAttempt(Guid.NewGuid(), Guid.NewGuid(), observed, observed,
+            OperationalAttemptOutcomes.Indeterminate, "before", "candidate", [], [], "test",
+            new ApplicationTopology([], [], "test"), "Committing", "commit_outcome_unknown", true);
+        var state = new OperationalProcessorState(target, "projector", attempt.OwnerSession, 2, "before",
+            new OperationalProcessingSettings(1, 1, 10, 1, 1), [attempt], null, [], [], [], 1, observed);
+        var services = Services(store);
+        _ = services.AddSingleton<IOperationalStore>(new StatusJournal(state));
+        _ = services.AddPortia().AddProjector<GlobalStatusProjector>(target.Processor, WorkloadScope.Global);
+        await using var provider = services.BuildServiceProvider();
+
+        // Act
+        var result = await SendAsync(provider, new GetProcessorStatus(target.Processor));
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal("now", result.Value.Progress?.Position.Value);
+        Assert.Null(result.Value.Attempt);
+        Assert.Null(result.Value.Failure);
+        Assert.NotEqual("recovery_unconfirmed", result.Value.Execution?.Phase);
+    }
+
     /// <summary>An authorized query still succeeds when the native checkpoint cannot be read.</summary>
     [Fact]
     public async Task ShouldReturnPartialStatusGivenUnavailableCheckpoint()

@@ -17,6 +17,11 @@ sealed class FitzProcessorStatusClient(IRemoteRequestSender sender, Func<string>
                 FitzProcessorStatusRoutes.Values(statusNamespace, workload), actorToken, ownerDeadline.Token)
                 .ConfigureAwait(false);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            ct.ThrowIfCancellationRequested();
+            throw;
+        }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested && !ct.IsCancellationRequested)
         {
         }
