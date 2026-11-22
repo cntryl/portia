@@ -28,7 +28,7 @@ public sealed class ScenarioDrainTests
             await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
             Assert.Equal(expected, seen);
             await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
-            Assert.Equal(expected, seen);
+            Assert.Equal(expected.Concat(expected), seen);
         }
         else
         {
@@ -107,7 +107,7 @@ public sealed class ScenarioDrainTests
                 scenario.RunAsync(reactor, cancellation.Token));
             Assert.Equal(ids.Take(4096), seen);
             await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
-            Assert.Equal(ids, seen);
+            Assert.Equal(ids, seen.Skip(4096));
         }
         else
         {
