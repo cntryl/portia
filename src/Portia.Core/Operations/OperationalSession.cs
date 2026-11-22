@@ -95,6 +95,8 @@ sealed class OperationalSession(
                             kind == ProcessorKinds.Projector && checkpoint is { } native &&
                             a.ExpectedCheckpoint != native.Cursor.Value
                                 ? OperationalAttemptOutcomes.Indeterminate
+                                : a.Coverage.Contains("commit requested", StringComparison.Ordinal)
+                                    ? OperationalAttemptOutcomes.Indeterminate
                                 : OperationalAttemptOutcomes.Interrupted,
                             CompletedAt = now,
                             Coverage = a.Coverage + "; process interrupted before confirmation"
@@ -305,6 +307,14 @@ sealed class OperationalSession(
             }
 
             var replacement = Succeed(state, id, next.Cursor.Value) with { Revision = checked(state.Revision + 1) };
+            await ChangeAsync(current => current with
+            {
+                Attempts = current.Attempts.Select(attempt => attempt.Id == id
+                    ? attempt with { Coverage = attempt.Coverage + "; commit requested" }
+                    : attempt).ToArray()
+            }, ct, "reactor-completion").ConfigureAwait(false);
+            state = _state;
+            replacement = Succeed(state, id, next.Cursor.Value) with { Revision = checked(state.Revision + 1) };
             if (!await checkpoints.CommitAsync(replacement, state.Revision, _owner, id, expected.Cursor.Value,
                     next.Cursor.Value, ct).ConfigureAwait(false))
                 return false;
@@ -509,6 +519,7 @@ sealed class OperationalSession(
     {
         OperationalJournalWait? wait = null;
         var failures = 0;
+        var reason = "dependency";
         while (true)
         {
             try
@@ -529,6 +540,7 @@ sealed class OperationalSession(
                         observeWait?.Invoke(null);
                     return;
                 }
+                reason = "contention";
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -542,13 +554,15 @@ sealed class OperationalSession(
             {
                 // Required journal outages pause invocation. Keep the exact pending write in memory;
                 // termination leaves the durable start visible for automatic crash replay.
-                failures = checked(failures + 1);
+                if (failures < int.MaxValue)
+                    failures++;
+                reason = "dependency";
             }
 
             if (wait is null)
             {
                 var now = clock.GetUtcNow();
-                wait = new OperationalJournalWait(transition, "dependency", now,
+                wait = new OperationalJournalWait(transition, reason, now,
                     now + options.JournalRetryDelay, failures);
                 observeWait?.Invoke(wait);
             }
