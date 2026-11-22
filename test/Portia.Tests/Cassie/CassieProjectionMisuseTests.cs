@@ -17,7 +17,7 @@ public sealed partial class CassieProjectionMisuseTests
         var activity = new CassieProjectionActivityGate();
 
         // Act
-        await activity.EnterBatchAsync(default);
+        await activity.EnterBatchAsync(TestContext.Current.CancellationToken);
 
         // Assert
         var misuse = Assert.Throws<NotSupportedException>(() => activity.EnterRead());
@@ -33,10 +33,10 @@ public sealed partial class CassieProjectionMisuseTests
         var activity = new CassieProjectionActivityGate();
 
         // Act
-        await activity.EnterBatchAsync(default);
+        await activity.EnterBatchAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        var misuse = await Assert.ThrowsAsync<NotSupportedException>(() => activity.EnterBatchAsync(default).AsTask());
+        var misuse = await Assert.ThrowsAsync<NotSupportedException>(() => activity.EnterBatchAsync(TestContext.Current.CancellationToken).AsTask());
 
         Assert.False(Diagnose(misuse).IsTransient);
     }
@@ -78,7 +78,7 @@ public sealed partial class CassieProjectionMisuseTests
         var worker = Assert.IsAssignableFrom<IHostedLifecycleService>(
             Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>()));
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => worker.StartingAsync(default));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => worker.StartingAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("SomethingElse", error.Message, StringComparison.Ordinal);
         Assert.Contains("'Probe'", error.Message, StringComparison.Ordinal);

@@ -52,13 +52,13 @@ public sealed class RequestRpcConsumerTests
         {
             Assert.Equal(11,
                 (await sender.SendAsync<FeatureOneRequest, int>(new FeatureOneRequest(10), new RequestRouteValues(),
-                    null)).Value);
+                    null, TestContext.Current.CancellationToken)).Value);
             Assert.Equal(12,
                 (await sender.SendAsync<FeatureTwoRequest, int>(new FeatureTwoRequest(10), new RequestRouteValues(),
-                    null)).Value);
+                    null, TestContext.Current.CancellationToken)).Value);
         }
 
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await sender.SendAsync<FeatureOneRequest, int>(new FeatureOneRequest(10), new RequestRouteValues(), null));
+            await sender.SendAsync<FeatureOneRequest, int>(new FeatureOneRequest(10), new RequestRouteValues(), null, TestContext.Current.CancellationToken));
     }
 }

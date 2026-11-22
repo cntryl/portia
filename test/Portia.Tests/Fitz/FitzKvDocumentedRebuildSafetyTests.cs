@@ -24,25 +24,25 @@ public sealed class FitzKvDocumentedRebuildSafetyProof(FitzBrokerFixture broker)
         var checkpoint = new ProjectionCheckpoint(new EventCursor("1"));
 
         await using (var batch =
-                     await repository.BeginAsync(new ProjectionBatchContext(live, ProjectionCheckpoint.Start)))
+                     await repository.BeginAsync(new ProjectionBatchContext(live, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
         {
             await repository.IncrementBalanceAsync(account, 625);
-            await batch.CommitAsync(checkpoint);
+            await batch.CommitAsync(checkpoint, TestContext.Current.CancellationToken);
         }
 
         Assert.Equal(625L, await repository.ReadBalanceAsync(live, account));
 
         // Act
         await using (var batch =
-                     await repository.BeginAsync(new ProjectionBatchContext(candidate, ProjectionCheckpoint.Start)))
+                     await repository.BeginAsync(new ProjectionBatchContext(candidate, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
         {
             await repository.IncrementBalanceAsync(account, 500);
-            await batch.CommitAsync(checkpoint);
+            await batch.CommitAsync(checkpoint, TestContext.Current.CancellationToken);
         }
 
         // Assert
-        Assert.Equal(checkpoint, await repository.LoadCheckpointAsync(live));
-        Assert.Equal(checkpoint, await repository.LoadCheckpointAsync(candidate));
+        Assert.Equal(checkpoint, await repository.LoadCheckpointAsync(live, TestContext.Current.CancellationToken));
+        Assert.Equal(checkpoint, await repository.LoadCheckpointAsync(candidate, TestContext.Current.CancellationToken));
         Assert.NotEqual(repository.WriteRoutes[0], repository.WriteRoutes[1]);
         Assert.Equal(625L, await repository.ReadBalanceAsync(live, account));
         Assert.Equal(500L, await repository.ReadBalanceAsync(candidate, account));
@@ -64,17 +64,17 @@ public sealed class FitzKvDocumentedRebuildSafetyProof(FitzBrokerFixture broker)
         var first = new ProjectionCheckpoint(new EventCursor("1"));
         foreach (var identity in new[] { live, candidate })
         {
-            await using var seed = await repository.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start));
+            await using var seed = await repository.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken);
             await repository.IncrementBalanceAsync(account, 1);
-            await seed.CommitAsync(first);
+            await seed.CommitAsync(first, TestContext.Current.CancellationToken);
         }
 
         // Act
         var context = new ProjectionBatchContext(candidate, first);
-        await using var batch = await repository.BeginAsync(context);
-        var conflict = await Record.ExceptionAsync(async () => await contender.BeginAsync(context));
+        await using var batch = await repository.BeginAsync(context, TestContext.Current.CancellationToken);
+        var conflict = await Record.ExceptionAsync(async () => await contender.BeginAsync(context, TestContext.Current.CancellationToken));
         var removed = await repository.DeleteBalancesAsync();
-        await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")));
+        await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.IsType<ProjectionConcurrencyException>(conflict);

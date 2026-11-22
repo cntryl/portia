@@ -124,10 +124,13 @@ jobs:
 
       - name: Test solution
         run: >-
-          dotnet test Portia.slnx
+          dotnet test --solution Portia.slnx
           --configuration Release
           --no-build
-          --filter "Category!=BrokerIntegration&Category!=StorageIntegration&Category!=CassieIntegration&Category!=DurabilityIntegration"
+          --filter-not-trait "Category=BrokerIntegration"
+          --filter-not-trait "Category=StorageIntegration"
+          --filter-not-trait "Category=CassieIntegration"
+          --filter-not-trait "Category=DurabilityIntegration"
 
       # Service containers start without a health check, so wait for each endpoint before testing.
       - name: Wait for integration services
@@ -139,32 +142,32 @@ jobs:
 
       - name: Test S3 storage integration
         run: >-
-          dotnet test Portia.slnx
+          dotnet test --project test/Portia.Tests/Portia.Tests.csproj
           --configuration Release
           --no-build
-          --filter "Category=StorageIntegration"
+          --filter-trait "Category=StorageIntegration"
 
       - name: Test full broker integration
-        run: >-
-          dotnet test Portia.slnx
-          --configuration Release
-          --no-build
-          --filter "Category=BrokerIntegration"
+        run: |
+          dotnet test --project test/Portia.Tests/Portia.Tests.csproj \
+            --configuration Release --no-build --filter-trait "Category=BrokerIntegration"
+          dotnet test --project test/Portia.ConsumerTests/Portia.ConsumerTests.csproj \
+            --configuration Release --no-build --filter-trait "Category=BrokerIntegration"
 
       # This lane starts its own isolated, persistent Fitz container on a random port.
       - name: Test operational crash durability with isolated persistent Fitz
         run: >-
-          dotnet test test/Portia.Tests/Portia.Tests.csproj
+          dotnet test --project test/Portia.Tests/Portia.Tests.csproj
           --configuration Release
           --no-build
-          --filter "Category=DurabilityIntegration"
+          --filter-trait "Category=DurabilityIntegration"
 
       - name: Test Fitz Portia Cassie integration
         run: >-
-          dotnet test Portia.slnx
+          dotnet test --project test/Portia.Tests/Portia.Tests.csproj
           --configuration Release
           --no-build
-          --filter "Category=CassieIntegration"
+          --filter-trait "Category=CassieIntegration"
 
       - name: Pack release packages for HTTP qualification
         run: dotnet pack Portia.slnx --configuration Release --no-build --output artifacts/packages

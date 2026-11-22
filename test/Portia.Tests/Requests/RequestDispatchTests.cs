@@ -48,7 +48,7 @@ public sealed class RequestDispatchTests
         // Act
         var dispatch = await RequestDispatch.SendAsync(validator, bus, new ChangeValue(1),
             new RequestDelivery("test.change_value", new QueueInvocation("queue://test/work/item", 1),
-                RequestMetadata.Create(), "expired-token"));
+                RequestMetadata.Create(), "expired-token"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(dispatch.WasDispatched);
@@ -73,7 +73,7 @@ public sealed class RequestDispatchTests
         // Act
         var dispatch = await RequestDispatch.SendAsync(validator, bus, new ChangeValue(42),
             new RequestDelivery("test.change_value", new QueueInvocation("queue://test/work/item", 1),
-                RequestMetadata.Create(), "valid-token"));
+                RequestMetadata.Create(), "valid-token"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(dispatch.WasDispatched);

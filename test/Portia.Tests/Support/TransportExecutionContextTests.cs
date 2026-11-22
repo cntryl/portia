@@ -26,9 +26,9 @@ public sealed class TransportExecutionContextTests
         _ = builder.Services.AddPortia().AddHttp();
         await using var app = builder.Build();
         _ = app.MapPortiaPost<TransportCommand>("/context/{amount}");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = app.GetTestClient();
-        using var response = await client.PostAsJsonAsync("/context/3?secret=hidden", new { });
+        using var response = await client.PostAsJsonAsync("/context/3?secret=hidden", new { }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
         _ = response.EnsureSuccessStatusCode();
@@ -41,7 +41,7 @@ public sealed class TransportExecutionContextTests
         Assert.Equal("/context/{amount}", http.RoutePattern);
         Assert.False(string.IsNullOrWhiteSpace(http.RequestIdentifier));
         Assert.Equal(4, context.ExecutionId.Version);
-        await app.StopAsync();
+        await app.StopAsync(TestContext.Current.CancellationToken);
     }
 
     /// <summary>
@@ -61,7 +61,7 @@ public sealed class TransportExecutionContextTests
         // Act
         await new QueueRunner(new Consumer(first, second), RequestDeliveryScopes.FixedQueue(bus, new Validator(),
                 terminalHandler: new IgnoreTerminalRequest()))
-            .RunAsync();
+            .RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, bus.Contexts.Count);

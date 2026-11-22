@@ -15,45 +15,45 @@ public sealed partial class OperationalProjectionTests
 
         // Act
         await session.AcquireAsync(Target, "projector", Settings with { FailureAttemptLimit = 3 },
-            ProjectionCheckpoint.Start, default);
+            ProjectionCheckpoint.Start, TestContext.Current.CancellationToken);
 
         // Assert
         _ = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
             new ProjectorRunner(events)
-                .RunAsync(session, new PermanentlyFailingProjector(native), ProjectionCheckpoint.Start).AsTask());
+                .RunAsync(session, new PermanentlyFailingProjector(native), ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken).AsTask());
         Assert.Equal(ProjectionCheckpoint.Start, native.Checkpoint);
         var api = new PortiaOperations(TestOperationalAuthorizer.Configuration(), journal, new OperationalOptions(),
             new EmptyApplicationTopology(), new TestOperationalAuthorizer(), null);
         var administrator = TestOperationalAuthorizer.AdministratorActor(true);
         var first = await QueueRepairAsync(api, administrator);
         var sibling = await QueueRepairAsync(api, administrator);
-        Assert.True(await session.PrepareAsync(ProjectionCheckpoint.Start, default));
+        Assert.True(await session.PrepareAsync(ProjectionCheckpoint.Start, TestContext.Current.CancellationToken));
         native.AfterCommit = () => throw new IOException("commit acknowledgement lost");
 
         _ = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ProjectorRunner(events).RunAsync(session,
             new ProbeProjector(native), ProjectionCheckpoint.Start,
-            session.BoundOptions(ProjectionRunOptions.Default)).AsTask());
+            session.BoundOptions(ProjectionRunOptions.Default), TestContext.Current.CancellationToken).AsTask());
 
         Assert.Equal("2", native.Checkpoint.Cursor.Value);
         Assert.Equal(2, native.Changes);
-        Assert.Equal("running", (await api.VerifyRepairAsync(administrator, Target, first.Id)).Status);
+        Assert.Equal("running", (await api.VerifyRepairAsync(administrator, Target, first.Id, TestContext.Current.CancellationToken)).Status);
         native.AfterCommit = null;
 
-        Assert.False(await session.PrepareAsync(native.Checkpoint, default));
+        Assert.False(await session.PrepareAsync(native.Checkpoint, TestContext.Current.CancellationToken));
 
         Assert.Null(session.ActivePlan);
         Assert.NotNull(session.State.Block);
         Assert.Equal(native.Checkpoint.Cursor.Value, session.State.Checkpoint);
-        Assert.Equal("indeterminate", (await api.VerifyRepairAsync(administrator, Target, first.Id)).Status);
-        Assert.Equal("invalidated", (await api.VerifyRepairAsync(administrator, Target, sibling.Id)).Status);
+        Assert.Equal("indeterminate", (await api.VerifyRepairAsync(administrator, Target, first.Id, TestContext.Current.CancellationToken)).Status);
+        Assert.Equal("invalidated", (await api.VerifyRepairAsync(administrator, Target, sibling.Id, TestContext.Current.CancellationToken)).Status);
         var resume = await QueueRepairAsync(api, administrator);
         Assert.Equal("resume", resume.Action);
-        Assert.True(await session.PrepareAsync(native.Checkpoint, default));
+        Assert.True(await session.PrepareAsync(native.Checkpoint, TestContext.Current.CancellationToken));
         Assert.Null(session.State.Block);
         _ = await new ProjectorRunner(events)
-            .RunAsync(session, new ProbeProjector(native), native.Checkpoint);
+            .RunAsync(session, new ProbeProjector(native), native.Checkpoint, ct: TestContext.Current.CancellationToken);
         Assert.Equal(2, native.Changes);
-        Assert.Equal("indeterminate", (await api.VerifyRepairAsync(administrator, Target, first.Id)).Status);
+        Assert.Equal("indeterminate", (await api.VerifyRepairAsync(administrator, Target, first.Id, TestContext.Current.CancellationToken)).Status);
     }
 
     static async ValueTask<RepairPlan> QueueRepairAsync(PortiaOperations api,

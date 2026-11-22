@@ -50,21 +50,21 @@ public sealed class RegistrationInterceptorIncrementalTests
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var compilation = CSharpCompilation.Create("RegistrationIncremental",
             [
-                CSharpSyntaxTree.ParseText(CallSite, parseOptions, "Composition.cs"),
-                CSharpSyntaxTree.ParseText(FirstEvent, parseOptions, "IncrementalFirst.cs")
+                CSharpSyntaxTree.ParseText(CallSite, parseOptions, "Composition.cs", cancellationToken: TestContext.Current.CancellationToken),
+                CSharpSyntaxTree.ParseText(FirstEvent, parseOptions, "IncrementalFirst.cs", cancellationToken: TestContext.Current.CancellationToken)
             ],
             References(), new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             [new RegistrationCallInterceptorGenerator().AsSourceGenerator()], parseOptions: parseOptions);
 
         // Act
-        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Contains("IncrementalFirst", Generated(driver), StringComparison.Ordinal);
 
         driver = driver.RunGenerators(compilation.AddSyntaxTrees(
-            CSharpSyntaxTree.ParseText(SecondEvent, parseOptions, "IncrementalSecond.cs")));
+            CSharpSyntaxTree.ParseText(SecondEvent, parseOptions, "IncrementalSecond.cs", cancellationToken: TestContext.Current.CancellationToken)), TestContext.Current.CancellationToken);
 
         Assert.Contains("IncrementalSecond", Generated(driver), StringComparison.Ordinal);
     }
@@ -83,8 +83,8 @@ public sealed class RegistrationInterceptorIncrementalTests
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
         var compilation = CSharpCompilation.Create("RegistrationIncrementalCache",
             [
-                CSharpSyntaxTree.ParseText(CallSite, parseOptions, "Composition.cs"),
-                CSharpSyntaxTree.ParseText(FirstEvent, parseOptions, "IncrementalFirst.cs")
+                CSharpSyntaxTree.ParseText(CallSite, parseOptions, "Composition.cs", cancellationToken: TestContext.Current.CancellationToken),
+                CSharpSyntaxTree.ParseText(FirstEvent, parseOptions, "IncrementalFirst.cs", cancellationToken: TestContext.Current.CancellationToken)
             ],
             References(), new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
@@ -92,9 +92,9 @@ public sealed class RegistrationInterceptorIncrementalTests
             parseOptions: parseOptions,
             driverOptions: new GeneratorDriverOptions(default, true));
 
-        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
         driver = driver.RunGenerators(compilation.AddSyntaxTrees(
-            CSharpSyntaxTree.ParseText(SecondEvent, parseOptions, "IncrementalSecond.cs")));
+            CSharpSyntaxTree.ParseText(SecondEvent, parseOptions, "IncrementalSecond.cs", cancellationToken: TestContext.Current.CancellationToken)), TestContext.Current.CancellationToken);
 
         // Act
         var reasons = driver.GetRunResult().Results.Single()
@@ -138,8 +138,8 @@ public sealed class RegistrationInterceptorIncrementalTests
                                    """;
         var parseOptions = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
-        var requestTree = CSharpSyntaxTree.ParseText(initialRequest, parseOptions, "FindAccount.cs");
-        var callSiteTree = CSharpSyntaxTree.ParseText(composition, parseOptions, "Composition.cs");
+        var requestTree = CSharpSyntaxTree.ParseText(initialRequest, parseOptions, "FindAccount.cs", cancellationToken: TestContext.Current.CancellationToken);
+        var callSiteTree = CSharpSyntaxTree.ParseText(composition, parseOptions, "Composition.cs", cancellationToken: TestContext.Current.CancellationToken);
         var compilation = CSharpCompilation.Create("McpDescriptionIncremental", [callSiteTree, requestTree],
             References().Append(MetadataReference.CreateFromFile(typeof(McpToolOptions).Assembly.Location)),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
@@ -148,14 +148,14 @@ public sealed class RegistrationInterceptorIncrementalTests
             [new RegistrationCallInterceptorGenerator().AsSourceGenerator()], parseOptions: parseOptions);
 
         // Act
-        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Contains("Finds an account.", Generated(driver), StringComparison.Ordinal);
         Assert.Contains("The stable account key.", Generated(driver), StringComparison.Ordinal);
 
         driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(requestTree,
-            CSharpSyntaxTree.ParseText(editedRequest, parseOptions, "FindAccount.cs")));
+            CSharpSyntaxTree.ParseText(editedRequest, parseOptions, "FindAccount.cs", cancellationToken: TestContext.Current.CancellationToken)), TestContext.Current.CancellationToken);
 
         Assert.Contains("Finds an account by its public identifier.", Generated(driver), StringComparison.Ordinal);
         Assert.Contains("The public account key.", Generated(driver), StringComparison.Ordinal);

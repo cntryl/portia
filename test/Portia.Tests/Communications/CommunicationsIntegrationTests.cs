@@ -28,7 +28,7 @@ public sealed class CommunicationsIntegrationTests
         var sender = new AwsMailSender(client, new AwsResolver());
 
         // Act
-        var outcome = await sender.SendAsync(Tenant, new SendId($"ses-{Guid.NewGuid():N}"), Mail());
+        var outcome = await sender.SendAsync(Tenant, new SendId($"ses-{Guid.NewGuid():N}"), Mail(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(SendStatus.Accepted, outcome.Status);
@@ -48,7 +48,7 @@ public sealed class CommunicationsIntegrationTests
         var sender = provider.GetRequiredService<IMailSender>();
 
         // Act
-        var outcome = await sender.SendAsync(Tenant, new SendId($"acs-{Guid.NewGuid():N}"), Mail());
+        var outcome = await sender.SendAsync(Tenant, new SendId($"acs-{Guid.NewGuid():N}"), Mail(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(SendStatus.Accepted, outcome.Status);
@@ -65,7 +65,7 @@ public sealed class CommunicationsIntegrationTests
 
         // Act
         var outcome = await sender.SendAsync(Tenant, new SendId($"sms-{Guid.NewGuid():N}"),
-            new SmsMessage("+15005550006", "Portia integration"));
+            new SmsMessage("+15005550006", "Portia integration"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(SendStatus.Accepted, outcome.Status);

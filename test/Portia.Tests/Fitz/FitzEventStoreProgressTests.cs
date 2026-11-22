@@ -46,7 +46,7 @@ public sealed class FitzEventStoreProgressTests
         var client = new ProgressClient(Page(false, Item(3, 10, 30), Item(4, 11, 31)));
 
         // Act
-        var progress = await Store(client).GetProgressAsync(pattern, Cursor(position));
+        var progress = await Store(client).GetProgressAsync(pattern, Cursor(position), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(Cursor(position), progress.Position);
@@ -67,7 +67,7 @@ public sealed class FitzEventStoreProgressTests
 
         // Act
         var progress =
-            await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), Cursor(10));
+            await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), Cursor(10), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(progress.SourcePosition);
@@ -85,7 +85,7 @@ public sealed class FitzEventStoreProgressTests
         var client = new ProgressClient(EmptyPage(100), previousPage: EmptyPage(99));
 
         // Act
-        var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant"), Cursor(100));
+        var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant"), Cursor(100), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(progress.SourcePosition);
@@ -102,7 +102,7 @@ public sealed class FitzEventStoreProgressTests
         var client = new ProgressClient(EmptyPage(3), previousPage: Page(false, Item(2, 2, 2)));
 
         // Act
-        var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant"), Cursor(3));
+        var progress = await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant"), Cursor(3), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(Cursor(3), progress.SourcePosition);
@@ -125,7 +125,7 @@ public sealed class FitzEventStoreProgressTests
         var client = new ProgressClient(Page(false, Item(2, 2, 2)), new StreamMetadata(0, 2, 3));
 
         // Act
-        var progress = await Store(client).GetProgressAsync(pattern, EventCursor.Start);
+        var progress = await Store(client).GetProgressAsync(pattern, EventCursor.Start, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(Cursor(3), progress.SourcePosition);
@@ -143,7 +143,7 @@ public sealed class FitzEventStoreProgressTests
 
         // Act
         var progress = await Store(client)
-            .GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), EventCursor.Start);
+            .GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), EventCursor.Start, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(Cursor(9), progress.SourcePosition);
@@ -161,7 +161,7 @@ public sealed class FitzEventStoreProgressTests
 
         // Act
         var progress = await Store(client)
-            .GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), EventCursor.Start);
+            .GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), EventCursor.Start, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(Cursor(2), progress.SourcePosition);
@@ -181,7 +181,7 @@ public sealed class FitzEventStoreProgressTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), EventCursor.Start));
+            await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), EventCursor.Start, TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<InvalidOperationException>(exception);
@@ -199,7 +199,7 @@ public sealed class FitzEventStoreProgressTests
 
         // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), EventCursor.Start));
+            await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), EventCursor.Start, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Withheld positions do not become a fabricated readable-event count.</summary>
@@ -212,7 +212,7 @@ public sealed class FitzEventStoreProgressTests
 
         // Act
         var progress =
-            await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), Cursor(10));
+            await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders"), Cursor(10), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(Cursor(12), progress.SourcePosition);
@@ -231,7 +231,7 @@ public sealed class FitzEventStoreProgressTests
         var pattern = EventStreamPattern.ForPattern("tenant", "orders", "one");
 
         // Act
-        var progress = await Store(client).GetProgressAsync(pattern, Cursor(2));
+        var progress = await Store(client).GetProgressAsync(pattern, Cursor(2), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(Cursor(5), progress.SourcePosition);
@@ -252,7 +252,7 @@ public sealed class FitzEventStoreProgressTests
 
         // Act
         var progress = await Store(client)
-            .GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), Cursor(0));
+            .GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), Cursor(0), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(Cursor(10000), progress.SourcePosition);
@@ -270,7 +270,7 @@ public sealed class FitzEventStoreProgressTests
 
         // Act
         var progress = await Store(client)
-            .GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), Cursor(5));
+            .GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), Cursor(5), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(Cursor(3), progress.SourcePosition);
@@ -288,7 +288,7 @@ public sealed class FitzEventStoreProgressTests
 
         // Act
         var progress = await Store(client)
-            .GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), Cursor(1));
+            .GetProgressAsync(EventStreamPattern.ForPattern("tenant", "orders", "one"), Cursor(1), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(Cursor(5), progress.SourcePosition);
@@ -309,9 +309,9 @@ public sealed class FitzEventStoreProgressTests
 
         // Assert
         _ = await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await store.GetProgressAsync(EventStreamPattern.ForTenant("orders"), EventCursor.Start));
+            await store.GetProgressAsync(EventStreamPattern.ForTenant("orders"), EventCursor.Start, TestContext.Current.CancellationToken));
         _ = await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await store.GetProgressAsync(EventStreamPattern.ForPattern("tenant"), new EventCursor("other-reader")));
+            await store.GetProgressAsync(EventStreamPattern.ForPattern("tenant"), new EventCursor("other-reader"), TestContext.Current.CancellationToken));
         Assert.Empty(client.Reads);
         Assert.Empty(client.MetadataRoutes);
     }
@@ -344,7 +344,7 @@ public sealed class FitzEventStoreProgressTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant"), EventCursor.Start));
+            await Store(client).GetProgressAsync(EventStreamPattern.ForPattern("tenant"), EventCursor.Start, TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<InvalidOperationException>(exception);

@@ -49,7 +49,7 @@ public sealed class MultiTenancyTests
         var third = TenantDirectorySnapshots.Create<TenantRegistered, TenantDeregistered>(thirdReader,
             TenantRegistryPattern, GetTenantId, snapshots);
         Assert.Equal([new TenantId("beta")], await ReadActiveTenantsAsync(third));
-        Assert.Equal((await snapshots.LoadAsync(TenantRegistryPattern))!.Cursor, thirdReader.Cursors.Single());
+        Assert.Equal((await snapshots.LoadAsync(TenantRegistryPattern, TestContext.Current.CancellationToken))!.Cursor, thirdReader.Cursors.Single());
     }
 
     /// <summary>A worker cursor starts from the persisted roster before reading later changes.</summary>
@@ -66,14 +66,14 @@ public sealed class MultiTenancyTests
             TenantRegistryPattern, GetTenantId, snapshots);
 
         // Assert
-        await using (var cursor = await first.OpenCursorAsync())
+        await using (var cursor = await first.OpenCursorAsync(TestContext.Current.CancellationToken))
             Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")),
                 await ReadOneAsync(cursor));
 
         var resumedReader = new CountingEventReader(events);
         var resumed = TenantDirectorySnapshots.Create<TenantRegistered, TenantDeregistered>(resumedReader,
             TenantRegistryPattern, GetTenantId, snapshots);
-        await using (var cursor = await resumed.OpenCursorAsync())
+        await using (var cursor = await resumed.OpenCursorAsync(TestContext.Current.CancellationToken))
             Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")),
                 await ReadOneAsync(cursor));
         Assert.NotEqual(EventCursor.Start, resumedReader.Cursors.Single());
@@ -89,9 +89,9 @@ public sealed class MultiTenancyTests
         var snapshots = new FitzKvTenantDirectorySnapshotStore(new FakeKvClient(), "kv://global/tenants/snapshots");
         var directory = TenantDirectorySnapshots.Create<TenantRegistered, TenantDeregistered>(events,
             TenantRegistryPattern, GetTenantId, snapshots);
-        await using var cursor = await directory.OpenCursorAsync();
+        await using var cursor = await directory.OpenCursorAsync(TestContext.Current.CancellationToken);
         _ = await ReadOneAsync(cursor);
-        var persisted = (await snapshots.LoadAsync(TenantRegistryPattern))!.Cursor;
+        var persisted = (await snapshots.LoadAsync(TenantRegistryPattern, TestContext.Current.CancellationToken))!.Cursor;
 
         // Act
         await RegisterTenantAsync(events, "beta");
@@ -99,7 +99,7 @@ public sealed class MultiTenancyTests
         // Assert
         Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("beta")),
             await ReadOneAsync(cursor));
-        Assert.Equal(persisted, (await snapshots.LoadAsync(TenantRegistryPattern))!.Cursor);
+        Assert.Equal(persisted, (await snapshots.LoadAsync(TenantRegistryPattern, TestContext.Current.CancellationToken))!.Cursor);
 
         var restarted = TenantDirectorySnapshots.Create<TenantRegistered, TenantDeregistered>(events,
             TenantRegistryPattern, GetTenantId, snapshots);
@@ -304,11 +304,11 @@ public sealed class MultiTenancyTests
             },
             cts.Token);
 
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         cts.Cancel();
 
         // Act
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        await run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(stopEntered.Task.IsCompleted);
@@ -341,11 +341,11 @@ public sealed class MultiTenancyTests
             },
             cts.Token);
 
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         cts.Cancel();
 
         // Act
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        await run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(cleanupCompleted);
@@ -492,7 +492,7 @@ public sealed class MultiTenancyTests
             cts.Token);
 
         // Assert
-        Assert.Equal(TimeSpan.FromSeconds(1), await clock.Scheduled.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(TimeSpan.FromSeconds(1), await clock.Scheduled.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         cts.Cancel();
         await AwaitRunAsync(run);
         Assert.Equal(1, directory.WatchAttempts);
@@ -517,8 +517,8 @@ public sealed class MultiTenancyTests
         }, (_, _) => Task.CompletedTask, cancellation.Token);
 
         // Assert
-        Assert.Equal(new TenantId("cursor"), await started.Task.WaitAsync(TimeSpan.FromSeconds(5)));
-        Assert.Equal(TimeSpan.FromSeconds(1), await clock.Scheduled.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(new TenantId("cursor"), await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        Assert.Equal(TimeSpan.FromSeconds(1), await clock.Scheduled.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         Assert.Equal(1, directory.OpenCount);
         Assert.Equal(1, directory.Cursor.ReadCount);
         Assert.Equal(0, directory.SnapshotCount);
@@ -552,13 +552,13 @@ public sealed class MultiTenancyTests
         }, cancellation.Token);
 
         // Act
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         directory.RemovedWhileDisconnected = true;
         clock.Advance(TimeSpan.FromSeconds(1));
-        Assert.Equal(new TenantId("acme"), await stopped.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(new TenantId("acme"), await stopped.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         Assert.Equal(1, directory.OpenCount);
         Assert.Equal(2, directory.Cursor.ReadCount);
 
@@ -574,10 +574,10 @@ public sealed class MultiTenancyTests
         var store = new InMemoryEventStore();
         await RegisterTenantAsync(store, "acme");
         var directory = CreateDirectory(store);
-        await using var first = await directory.OpenCursorAsync();
+        await using var first = await directory.OpenCursorAsync(TestContext.Current.CancellationToken);
 
         // Act
-        await using var second = await directory.OpenCursorAsync();
+        await using var second = await directory.OpenCursorAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")),
@@ -608,13 +608,13 @@ public sealed class MultiTenancyTests
         await RegisterTenantAsync(store, "acme");
         var directory = new EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(store,
             TenantRegistryPattern, GetTenantId, pollInterval, clock, new DroppingNotifier());
-        await using var cursor = await directory.OpenCursorAsync();
+        await using var cursor = await directory.OpenCursorAsync(TestContext.Current.CancellationToken);
         using var cancellation = new CancellationTokenSource();
 
         // Act
         await using var reader =
             (useCursor ? cursor.ReadAsync(cancellation.Token) : directory.WatchAsync(cancellation.Token))
-            .GetAsyncEnumerator();
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
@@ -623,11 +623,11 @@ public sealed class MultiTenancyTests
         var pending = reader.MoveNextAsync().AsTask();
         try
         {
-            Assert.Equal(pollInterval, await clock.WaitForDelayAsync());
+            Assert.Equal(pollInterval, await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
             await RegisterTenantAsync(store, "beta");
             clock.Advance(pollInterval);
 
-            Assert.True(await pending.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.True(await pending.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
             Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("beta")),
                 reader.Current);
         }
@@ -648,14 +648,14 @@ public sealed class MultiTenancyTests
         var store = new InMemoryEventStore();
         var directory = new EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(store,
             TenantRegistryPattern, GetTenantId, timeProvider: clock);
-        await using var cursor = await directory.OpenCursorAsync();
+        await using var cursor = await directory.OpenCursorAsync(TestContext.Current.CancellationToken);
         using var cancellation = new CancellationTokenSource();
-        await using var first = cursor.ReadAsync(cancellation.Token).GetAsyncEnumerator();
+        await using var first = cursor.ReadAsync(cancellation.Token).GetAsyncEnumerator(TestContext.Current.CancellationToken);
         var pending = first.MoveNextAsync().AsTask();
-        _ = await clock.Scheduled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        _ = await clock.Scheduled.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Act
-        await using var second = cursor.ReadAsync(cancellation.Token).GetAsyncEnumerator();
+        await using var second = cursor.ReadAsync(cancellation.Token).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => second.MoveNextAsync().AsTask());
@@ -673,15 +673,15 @@ public sealed class MultiTenancyTests
         var source = new GatedCursorSource();
         var directory = new EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(source,
             TenantRegistryPattern, GetTenantId, notifier: source);
-        var cursor = await directory.OpenCursorAsync();
-        var reader = cursor.ReadAsync().GetAsyncEnumerator();
+        var cursor = await directory.OpenCursorAsync(TestContext.Current.CancellationToken);
+        var reader = cursor.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
         var pending = reader.MoveNextAsync().AsTask();
-        await source.SubscribeStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await source.SubscribeStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         await cursor.DisposeAsync();
         source.ReleaseSubscription();
         var firstCompletion = await Task.WhenAny(pending, source.ReadStarted.Task)
-            .WaitAsync(TimeSpan.FromSeconds(5));
+            .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         source.ReleaseRead();
         var error = await Record.ExceptionAsync(() => pending);
 
@@ -705,10 +705,10 @@ public sealed class MultiTenancyTests
             TenantRegistryPattern, GetTenantId, notifier: source);
 
         // Act
-        await using var cursor = await directory.OpenCursorAsync();
+        await using var cursor = await directory.OpenCursorAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        await using (var first = cursor.ReadAsync().GetAsyncEnumerator())
+        await using (var first = cursor.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken))
         {
             Assert.True(await first.MoveNextAsync());
             Assert.Equal(TenantLifecycleChangeKind.Added, first.Current.Kind);
@@ -717,7 +717,7 @@ public sealed class MultiTenancyTests
 
         Assert.Equal(1, source.DisposalCount);
         source.Add(new TenantDeregistered("acme"));
-        await using (var resumed = cursor.ReadAsync().GetAsyncEnumerator())
+        await using (var resumed = cursor.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken))
         {
             Assert.True(await resumed.MoveNextAsync());
             Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Removed, new TenantId("acme")),
@@ -747,15 +747,15 @@ public sealed class MultiTenancyTests
         {
             _ = started.TrySetResult();
             return Task.Delay(Timeout.InfiniteTimeSpan, CancellationToken.None);
-        }, (_, _) => Task.CompletedTask);
+        }, (_, _) => Task.CompletedTask, TestContext.Current.CancellationToken);
 
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Act
         directory.Remove();
 
         // Assert
-        Assert.Equal(timeout, await clock.WaitForDelayAsync());
+        Assert.Equal(timeout, await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         clock.Advance(timeout);
         var error = await Assert.ThrowsAsync<TenantStopTimeoutException>(() => run);
 
@@ -792,18 +792,18 @@ public sealed class MultiTenancyTests
             _ = tenant;
             _ = stopEntered.TrySetResult(token);
             return Task.Delay(Timeout.InfiniteTimeSpan, CancellationToken.None);
-        });
+        }, TestContext.Current.CancellationToken);
 
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Act
         directory.Remove();
 
         // Assert
-        Assert.Equal(TimeSpan.FromSeconds(5), await clock.WaitForDelayAsync());
-        Assert.Equal(TimeSpan.FromSeconds(3), await clock.WaitForDelayAsync());
+        Assert.Equal(TimeSpan.FromSeconds(5), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(TimeSpan.FromSeconds(3), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         clock.Advance(TimeSpan.FromSeconds(3));
-        var stopToken = await stopEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var stopToken = await stopEntered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.False(stopToken.IsCancellationRequested);
         clock.Advance(TimeSpan.FromSeconds(2));
         _ = await Assert.ThrowsAsync<TenantStopTimeoutException>(() => run);
@@ -829,18 +829,18 @@ public sealed class MultiTenancyTests
             return Task.Delay(Timeout.InfiniteTimeSpan, CancellationToken.None);
         }, (_, _) => Task.CompletedTask, cancellation.Token);
 
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Act
         directory.Remove();
 
         // Assert
-        Assert.Equal(TimeSpan.FromSeconds(5), await clock.WaitForDelayAsync());
+        Assert.Equal(TimeSpan.FromSeconds(5), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         cancellation.Cancel();
-        Assert.Equal(new MultiTenantRunnerOptions().ShutdownGrace, await clock.WaitForDelayAsync());
+        Assert.Equal(new MultiTenantRunnerOptions().ShutdownGrace, await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         clock.Advance(new MultiTenantRunnerOptions().ShutdownGrace);
 
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        await run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
     }
 
     /// <summary>
@@ -880,20 +880,20 @@ public sealed class MultiTenancyTests
             return Task.CompletedTask;
         }, cancellation.Token);
 
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         directory.Remove();
-        Assert.Equal(TimeSpan.FromSeconds(5), await clock.WaitForDelayAsync());
+        Assert.Equal(TimeSpan.FromSeconds(5), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
 
         // Act
         await cancellation.CancelAsync();
 
         // Assert
-        Assert.Equal(grace, await clock.WaitForDelayAsync());
+        Assert.Equal(grace, await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         Assert.False(stopped.Task.IsCompleted);
         Assert.False(run.IsCompleted);
         release.SetResult();
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.True(await stopped.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        await run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.True(await stopped.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
     }
 
     /// <summary>Every configurable runner duration must be strictly positive.</summary>

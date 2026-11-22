@@ -23,7 +23,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
     Uri _endpoint = null!;
 
     /// <summary>Creates only this test's volume and broker.</summary>
-    public async Task InitializeAsync()
+    public async ValueTask InitializeAsync()
     {
         Directory.CreateDirectory(_directory);
         _ = await DockerAsync("volume", "create", _name);
@@ -31,7 +31,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>Releases this test's processes, broker, and volume even after an assertion fails.</summary>
-    public async Task DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
         foreach (var child in _children)
         {
@@ -60,7 +60,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
                 source[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregate, (ulong)i + 1,
                     DateTimeOffset.UtcNow));
             await events.AppendAsync(new EventStreamAddress("portia-durability", "source", aggregate.ToString()), 0,
-                source);
+                source, TestContext.Current.CancellationToken);
         }
 
         var failed = await StartWorkerAsync("blocked");
@@ -72,7 +72,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
         // Assert
         await using (var client = await ConnectAsync())
         {
-            var state = (await new FitzOperationalStore(client.Kv, Route).ReadAsync(Target))!;
+            var state = (await new FitzOperationalStore(client.Kv, Route).ReadAsync(Target, TestContext.Current.CancellationToken))!;
             failedAttempt = Assert.Single(state.Attempts).Id;
             failedOwner = state.OwnerSession;
             Assert.NotNull(state.Block);
@@ -85,11 +85,11 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
         await using (var client = await ConnectAsync())
         {
             var journal = new FitzOperationalStore(client.Kv, Route);
-            var persisted = (await journal.ReadAsync(Target))!;
+            var persisted = (await journal.ReadAsync(Target, TestContext.Current.CancellationToken))!;
             Assert.NotNull(persisted.Block);
             Assert.Equal(failedOwner, persisted.OwnerSession);
             Assert.Equal(failedAttempt, Assert.Single(persisted.Attempts).Id);
-            Assert.Equal(ProjectionCheckpoint.Start, await journal.LoadAsync(Target.Identity));
+            Assert.Equal(ProjectionCheckpoint.Start, await journal.LoadAsync(Target.Identity, TestContext.Current.CancellationToken));
             Assert.Single(await ReadAsync(Events(client), "effects"));
         }
 
@@ -102,7 +102,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
         await using (var client = await ConnectAsync())
         {
             var journal = new FitzOperationalStore(client.Kv, Route);
-            var state = (await journal.ReadAsync(Target))!;
+            var state = (await journal.ReadAsync(Target, TestContext.Current.CancellationToken))!;
             Assert.Null(state.Block);
             Assert.Equal(3, state.Attempts.Count);
             Assert.Equal("failed", state.Attempts.Single(a => a.Id == failedAttempt).Outcome);
@@ -111,7 +111,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
             Assert.Equal(3, state.Attempts.Select(a => a.OwnerSession).Distinct().Count());
             Assert.Equal(state.Attempts[0].Sources, committed.Sources);
             var source = await ReadAsync(Events(client), "source");
-            var checkpoint = await journal.LoadAsync(Target.Identity);
+            var checkpoint = await journal.LoadAsync(Target.Identity, TestContext.Current.CancellationToken);
             Assert.Equal(source[^1].NextCursor, checkpoint.Cursor);
             var effects = await ReadAsync(Events(client), "effects");
             Assert.Equal(2, effects.Count);
@@ -121,10 +121,10 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
             var api = new PortiaOperations(TestOperationalAuthorizer.Configuration(), journal, new OperationalOptions(),
                 new EmptyApplicationTopology(), new TestOperationalAuthorizer(), null);
             Assert.Equal("indeterminate",
-                (await api.VerifyRepairAsync(TestOperationalAuthorizer.AdministratorActor(), Target, repair.PlanId))
+                (await api.VerifyRepairAsync(TestOperationalAuthorizer.AdministratorActor(), Target, repair.PlanId, TestContext.Current.CancellationToken))
                 .Status);
             Assert.Empty(await api.ListIssuesAsync(TestOperationalAuthorizer.AdministratorActor(),
-                OperationalScope.Global));
+                OperationalScope.Global, TestContext.Current.CancellationToken));
         }
     }
 

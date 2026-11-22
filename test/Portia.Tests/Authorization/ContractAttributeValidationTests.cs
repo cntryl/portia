@@ -25,7 +25,7 @@ public sealed class ContractAttributeValidationTests
         var bus = provider.GetRequiredService<IRequestBus>();
 
         // Act
-        var result = await bus.SendAsync(new ContractLocalValidatedRequest(name, limit), RequestActor.System);
+        var result = await bus.SendAsync(new ContractLocalValidatedRequest(name, limit), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -47,7 +47,7 @@ public sealed class ContractAttributeValidationTests
         var bus = provider.GetRequiredService<IRequestBus>();
 
         // Act
-        var result = await bus.SendAsync(new ContractLocalValidatedRequest("name", 5), RequestActor.System);
+        var result = await bus.SendAsync(new ContractLocalValidatedRequest("name", 5), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -66,7 +66,7 @@ public sealed class ContractAttributeValidationTests
         using var host = builder.Build();
 
         // Act
-        var exception = await Record.ExceptionAsync(() => host.StartAsync());
+        var exception = await Record.ExceptionAsync(() => host.StartAsync(TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(exception);
@@ -108,7 +108,7 @@ public sealed class ContractAttributeValidationTests
 
         // Act
         var result = await provider.GetRequiredService<IRequestBus>()
-            .SendAsync(new ContractMetadataInputRequest(model), RequestActor.System);
+            .SendAsync(new ContractMetadataInputRequest(model), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -128,7 +128,7 @@ public sealed class ContractAttributeValidationTests
 
         // Act
         var result = await provider.GetRequiredService<IRequestBus>()
-            .SendAsync(new ContractDeniedRequest(), RequestActor.Anonymous);
+            .SendAsync(new ContractDeniedRequest(), RequestActor.Anonymous, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -157,7 +157,7 @@ public sealed class ContractAttributeValidationTests
 
         // Act
         var result = await provider.GetRequiredService<IRequestBus>()
-            .SendAsync(new ContractEnumerableValidatedRequest(Items()), RequestActor.System);
+            .SendAsync(new ContractEnumerableValidatedRequest(Items()), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -190,7 +190,7 @@ public sealed class ContractAttributeValidationTests
 
         // Act
         var result = await provider.GetRequiredService<IRequestBus>()
-            .SendAsync(new ContractEnumerableValidatedRequest(Items()), RequestActor.System);
+            .SendAsync(new ContractEnumerableValidatedRequest(Items()), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -209,7 +209,7 @@ public sealed class ContractAttributeValidationTests
         var request = new ContractInterfaceValidatedRequest(new List<ContractValidatedItem> { new("") });
 
         // Act
-        var result = await provider.GetRequiredService<IRequestBus>().SendAsync(request, RequestActor.System);
+        var result = await provider.GetRequiredService<IRequestBus>().SendAsync(request, RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -232,7 +232,7 @@ public sealed class ContractAttributeValidationTests
             : new ContractNestedValidatedRequest([new("")], []);
 
         // Act
-        var result = await provider.GetRequiredService<IRequestBus>().SendAsync(request, RequestActor.System);
+        var result = await provider.GetRequiredService<IRequestBus>().SendAsync(request, RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);

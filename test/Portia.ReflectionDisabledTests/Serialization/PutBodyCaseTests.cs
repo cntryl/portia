@@ -27,12 +27,12 @@ public sealed class PutBodyCaseTests
         // Arrange
         var probe = new HandlingProbe();
         await using var app = ConfigureHost(probe, allowArchive: true);
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = app.GetTestClient();
         using var body = new StringContent(json, Encoding.UTF8, "application/json");
 
         // Act
-        using var response = await client.PutAsync("/assets/1", body);
+        using var response = await client.PutAsync("/assets/1", body, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(expected, response.StatusCode);
@@ -51,15 +51,15 @@ public sealed class PutBodyCaseTests
         // Arrange
         var probe = new HandlingProbe();
         await using var app = ConfigureHost(probe, allowArchive: false);
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = app.GetTestClient();
         client.DefaultRequestHeaders.Add("X-Asset-Trace", "asset-trace");
         using var rename = new StringContent("""{"mode":"rename","name":"A"}""", Encoding.UTF8, "application/json");
         using var archive = new StringContent("""{"mode":"archive"}""", Encoding.UTF8, "application/json");
 
         // Act
-        using var permitted = await client.PutAsync("/assets/1?revision=2", rename);
-        using var denied = await client.PutAsync("/assets/1?revision=2", archive);
+        using var permitted = await client.PutAsync("/assets/1?revision=2", rename, TestContext.Current.CancellationToken);
+        using var denied = await client.PutAsync("/assets/1?revision=2", archive, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.NoContent, permitted.StatusCode);
@@ -73,11 +73,11 @@ public sealed class PutBodyCaseTests
     {
         // Arrange
         await using var app = ConfigureHost(new HandlingProbe(), allowArchive: false);
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = app.GetTestClient();
 
         // Act
-        var json = await client.GetStringAsync("/openapi/v1.json");
+        var json = await client.GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
 
         // Assert
         using var document = JsonDocument.Parse(json);
@@ -121,23 +121,23 @@ public sealed class PutBodyCaseTests
         await using var app = builder.Build();
         _ = app.MapPortiaPutByBody<int>("/assets/{id}/revision", "assetRevision", "mode")
             .Case<ReadRevision>("").Case<PreviewRevision>("preview");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = app.GetTestClient();
         using var body = new StringContent("""{"mode":"preview","additional":1}""", Encoding.UTF8, "application/json");
         using var empty = new StringContent("""{"mode":""}""", Encoding.UTF8, "application/json");
         using var missing = new StringContent("""{"mode":"preview"}""", Encoding.UTF8, "application/json");
 
         // Act
-        using var response = await client.PutAsync("/assets/4/revision", body);
-        using var emptySelection = await client.PutAsync("/assets/4/revision", empty);
-        using var failure = await client.PutAsync("/assets/4/revision", missing);
+        using var response = await client.PutAsync("/assets/4/revision", body, TestContext.Current.CancellationToken);
+        using var emptySelection = await client.PutAsync("/assets/4/revision", empty, TestContext.Current.CancellationToken);
+        using var failure = await client.PutAsync("/assets/4/revision", missing, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, failure.StatusCode);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("5", await response.Content.ReadAsStringAsync());
+        Assert.Equal("5", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.OK, emptySelection.StatusCode);
-        Assert.Equal("4", await emptySelection.Content.ReadAsStringAsync());
+        Assert.Equal("4", await emptySelection.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -145,11 +145,11 @@ public sealed class PutBodyCaseTests
     {
         // Arrange
         await using var app = ConfigureHost(new HandlingProbe(), allowArchive: false, archiveCredential: "alternate");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = app.GetTestClient();
 
         // Act
-        var exception = await Record.ExceptionAsync(() => client.GetStringAsync("/openapi/v1.json"));
+        var exception = await Record.ExceptionAsync(() => client.GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Contains("same OpenAPI credentials", Assert.IsType<InvalidOperationException>(exception).Message,

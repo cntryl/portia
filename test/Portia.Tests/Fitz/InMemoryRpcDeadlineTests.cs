@@ -19,7 +19,7 @@ public sealed class InMemoryRpcDeadlineTests
         // Act
         var exception = Record.Exception(() =>
         {
-            _ = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromMilliseconds(milliseconds));
+            _ = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromMilliseconds(milliseconds), TestContext.Current.CancellationToken);
         });
 
         // Assert
@@ -37,16 +37,16 @@ public sealed class InMemoryRpcDeadlineTests
         {
             Interlocked.Increment(ref dispatched);
             return ValueTask.CompletedTask;
-        });
-        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.Zero);
+        }, ct: TestContext.Current.CancellationToken);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.Zero, TestContext.Current.CancellationToken);
 
         // Act
-        var failure = await Record.ExceptionAsync(() => ConsumeAsync(call).WaitAsync(HangGuard));
+        var failure = await Record.ExceptionAsync(() => ConsumeAsync(call, TestContext.Current.CancellationToken).WaitAsync(HangGuard, TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal(0, dispatched);
         _ = Assert.IsAssignableFrom<OperationCanceledException>(failure);
-        Assert.Equal(RpcCancellationOutcome.RequestNotSent, await call.Cancellation.WaitAsync(HangGuard));
+        Assert.Equal(RpcCancellationOutcome.RequestNotSent, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Both caller and consumer tokens cancel a lazy call before a worker is invoked.</summary>
@@ -64,7 +64,7 @@ public sealed class InMemoryRpcDeadlineTests
         {
             Interlocked.Increment(ref dispatched);
             return ValueTask.CompletedTask;
-        });
+        }, ct: TestContext.Current.CancellationToken);
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
@@ -76,11 +76,11 @@ public sealed class InMemoryRpcDeadlineTests
         Assert.False(call.Cancellation.IsCompleted);
 
         var failure = await Record.ExceptionAsync(() =>
-            ConsumeAsync(call, useConsumerToken ? cancellation.Token : CancellationToken.None).WaitAsync(HangGuard));
+            ConsumeAsync(call, useConsumerToken ? cancellation.Token : CancellationToken.None).WaitAsync(HangGuard, TestContext.Current.CancellationToken));
 
         Assert.Equal(0, dispatched);
         _ = Assert.IsAssignableFrom<OperationCanceledException>(failure);
-        Assert.Equal(RpcCancellationOutcome.RequestNotSent, await call.Cancellation.WaitAsync(HangGuard));
+        Assert.Equal(RpcCancellationOutcome.RequestNotSent, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
     }
 
     /// <summary>A deadline ends the caller's wait even when the worker ignores its cancelled token.</summary>
@@ -90,26 +90,26 @@ public sealed class InMemoryRpcDeadlineTests
         // Arrange
         var rpc = new InMemoryRpcClient();
         var probe = new IgnoringWorker();
-        await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleAsync);
-        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromSeconds(1));
+        await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleAsync, ct: TestContext.Current.CancellationToken);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
 
         // Act
-        var consumption = ConsumeAsync(call);
+        var consumption = ConsumeAsync(call, TestContext.Current.CancellationToken);
 
         // Assert
         try
         {
-            await probe.Started.Task.WaitAsync(HangGuard);
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => consumption.WaitAsync(HangGuard));
-            await probe.CancellationObserved.Task.WaitAsync(HangGuard);
-            Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard));
+            await probe.Started.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
+            await probe.CancellationObserved.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             Assert.False(probe.Completed.Task.IsCompleted);
         }
         finally
         {
             probe.Release.SetResult();
-            await probe.Completed.Task.WaitAsync(HangGuard);
-            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard));
+            await probe.Completed.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
         }
     }
 
@@ -120,7 +120,7 @@ public sealed class InMemoryRpcDeadlineTests
         // Arrange
         var rpc = new InMemoryRpcClient();
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var worker = await rpc.RegisterWorkerAsync(Route, (_, _, _) => new ValueTask(release.Task));
+        await using var worker = await rpc.RegisterWorkerAsync(Route, (_, _, _) => new ValueTask(release.Task), ct: TestContext.Current.CancellationToken);
         var calls = Enumerable.Range(0, 64)
             .Select(_ => rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromMilliseconds(1)))
             .ToArray();
@@ -128,14 +128,14 @@ public sealed class InMemoryRpcDeadlineTests
         // Act
         var consumption = Task.WhenAll(calls.Select(async call =>
         {
-            var failure = await Record.ExceptionAsync(() => ConsumeAsync(call));
+            var failure = await Record.ExceptionAsync(() => ConsumeAsync(call, TestContext.Current.CancellationToken));
             return (Failure: failure, Cancellation: await call.Cancellation);
         }));
 
         // Assert
         try
         {
-            var results = await consumption.WaitAsync(HangGuard);
+            var results = await consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
 
             foreach (var result in results)
             {
@@ -147,7 +147,7 @@ public sealed class InMemoryRpcDeadlineTests
         finally
         {
             release.SetResult();
-            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard));
+            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
         }
     }
 
@@ -160,7 +160,7 @@ public sealed class InMemoryRpcDeadlineTests
         // Arrange
         var rpc = new InMemoryRpcClient();
         var probe = new IgnoringWorker();
-        await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleAsync);
+        await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleAsync, ct: TestContext.Current.CancellationToken);
         using var cancellation = new CancellationTokenSource();
         var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty,
             useConsumerToken ? CancellationToken.None : cancellation.Token);
@@ -171,18 +171,18 @@ public sealed class InMemoryRpcDeadlineTests
         // Assert
         try
         {
-            await probe.Started.Task.WaitAsync(HangGuard);
+            await probe.Started.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
             cancellation.Cancel();
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => consumption.WaitAsync(HangGuard));
-            await probe.CancellationObserved.Task.WaitAsync(HangGuard);
-            Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
+            await probe.CancellationObserved.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             Assert.False(probe.Completed.Task.IsCompleted);
         }
         finally
         {
             probe.Release.SetResult();
-            await probe.Completed.Task.WaitAsync(HangGuard);
-            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard));
+            await probe.Completed.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
         }
     }
 
@@ -195,7 +195,7 @@ public sealed class InMemoryRpcDeadlineTests
         // Arrange
         var rpc = new InMemoryRpcClient();
         var probe = new IgnoringWorker();
-        await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleAsync);
+        await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleAsync, ct: TestContext.Current.CancellationToken);
         using var callerCancellation = new CancellationTokenSource();
         using var consumerCancellation = new CancellationTokenSource();
         var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, callerCancellation.Token);
@@ -206,20 +206,20 @@ public sealed class InMemoryRpcDeadlineTests
         // Assert
         try
         {
-            await probe.Started.Task.WaitAsync(HangGuard);
+            await probe.Started.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
             (cancelConsumer ? consumerCancellation : callerCancellation).Cancel();
 
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => consumption.WaitAsync(HangGuard));
-            await probe.CancellationObserved.Task.WaitAsync(HangGuard);
-            Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
+            await probe.CancellationObserved.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             Assert.False((cancelConsumer ? callerCancellation : consumerCancellation).IsCancellationRequested);
             Assert.False(probe.Completed.Task.IsCompleted);
         }
         finally
         {
             probe.Release.SetResult();
-            await probe.Completed.Task.WaitAsync(HangGuard);
-            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard));
+            await probe.Completed.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
         }
     }
 
@@ -235,10 +235,10 @@ public sealed class InMemoryRpcDeadlineTests
             callbackRan.SetResult();
             throw new InvalidOperationException("worker cancellation callback failed");
         });
-        await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleAsync);
+        await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleAsync, ct: TestContext.Current.CancellationToken);
         using var cancellation = new CancellationTokenSource();
         var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, cancellation.Token);
-        var consumption = ConsumeAsync(call);
+        var consumption = ConsumeAsync(call, TestContext.Current.CancellationToken);
 
         // Act
         var stop = Task.CompletedTask;
@@ -246,21 +246,21 @@ public sealed class InMemoryRpcDeadlineTests
         // Assert
         try
         {
-            await probe.Started.Task.WaitAsync(HangGuard);
+            await probe.Started.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
             stop = Task.Run(() => cancellation.Cancel(), CancellationToken.None);
 
-            await stop.WaitAsync(HangGuard);
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => consumption.WaitAsync(HangGuard));
-            await callbackRan.Task.WaitAsync(HangGuard);
-            Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard));
+            await stop.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
+            await callbackRan.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             Assert.False(probe.Completed.Task.IsCompleted);
         }
         finally
         {
             probe.Release.SetResult();
-            await probe.Completed.Task.WaitAsync(HangGuard);
-            _ = await Record.ExceptionAsync(() => stop.WaitAsync(HangGuard));
-            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard));
+            await probe.Completed.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            _ = await Record.ExceptionAsync(() => stop.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
+            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
         }
     }
 
@@ -274,10 +274,10 @@ public sealed class InMemoryRpcDeadlineTests
         var rpc = new InMemoryRpcClient();
         await using var worker = await rpc.RegisterWorkerAsync(Route, (_, writer, ct) => failWorker
             ? ValueTask.FromException(new InvalidOperationException("worker failed"))
-            : writer.SendAsync(new byte[] { 42 }, true, ct));
+            : writer.SendAsync(new byte[] { 42 }, true, ct), ct: TestContext.Current.CancellationToken);
 
         // Act
-        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(call.Cancellation.IsCompleted);
@@ -285,15 +285,15 @@ public sealed class InMemoryRpcDeadlineTests
         if (failWorker)
         {
             var failure =
-                await Assert.ThrowsAsync<InvalidOperationException>(() => ConsumeAsync(call).WaitAsync(HangGuard));
+                await Assert.ThrowsAsync<InvalidOperationException>(() => ConsumeAsync(call, TestContext.Current.CancellationToken).WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             Assert.Equal("worker failed", failure.Message);
         }
         else
         {
-            await ConsumeAsync(call).WaitAsync(HangGuard);
+            await ConsumeAsync(call, TestContext.Current.CancellationToken).WaitAsync(HangGuard, TestContext.Current.CancellationToken);
         }
 
-        Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard));
+        Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
     }
 
     /// <summary>A worker's independent cancellation fault does not report caller-requested cancellation.</summary>
@@ -306,16 +306,16 @@ public sealed class InMemoryRpcDeadlineTests
         using var workerCancellation = new CancellationTokenSource();
         workerCancellation.Cancel();
         await using var worker = await rpc.RegisterWorkerAsync(Route, (_, _, _) =>
-            ValueTask.FromException(new OperationCanceledException(workerCancellation.Token)));
+            ValueTask.FromException(new OperationCanceledException(workerCancellation.Token)), ct: TestContext.Current.CancellationToken);
 
         // Act
         var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, callerCancellation.Token);
 
         // Assert
-        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ConsumeAsync(call).WaitAsync(HangGuard));
+        _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => ConsumeAsync(call, TestContext.Current.CancellationToken).WaitAsync(HangGuard, TestContext.Current.CancellationToken));
 
         Assert.False(callerCancellation.IsCancellationRequested);
-        Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard));
+        Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Failure to locate a worker also settles cancellation without hanging.</summary>
@@ -326,12 +326,12 @@ public sealed class InMemoryRpcDeadlineTests
         var rpc = new InMemoryRpcClient();
 
         // Act
-        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TestContext.Current.CancellationToken);
 
         // Assert
-        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => ConsumeAsync(call).WaitAsync(HangGuard));
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(() => ConsumeAsync(call, TestContext.Current.CancellationToken).WaitAsync(HangGuard, TestContext.Current.CancellationToken));
 
-        Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard));
+        Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
     }
 
     /// <summary>The concrete API exposes lazy call handles and accepts the maximum one-day budget.</summary>
@@ -349,23 +349,23 @@ public sealed class InMemoryRpcDeadlineTests
             Interlocked.Increment(ref dispatched);
             receivedBudget = request.RemainingTime;
             return writer.SendAsync(new byte[] { 42 }, true, ct);
-        });
+        }, ct: TestContext.Current.CancellationToken);
 
         // Act
         var call = useMaximumBudget
-            ? rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromDays(1))
-            : rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty);
+            ? rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TimeSpan.FromDays(1), TestContext.Current.CancellationToken)
+            : rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TestContext.Current.CancellationToken);
 
         // Assert
         _ = Assert.IsType<RpcCall>(call);
         Assert.Equal(0, dispatched);
         Assert.False(call.Cancellation.IsCompleted);
-        await using var enumerator = call.GetAsyncEnumerator();
+        await using var enumerator = call.GetAsyncEnumerator(TestContext.Current.CancellationToken);
         Assert.Equal(0, dispatched);
 
-        Assert.True(await enumerator.MoveNextAsync().AsTask().WaitAsync(HangGuard));
+        Assert.True(await enumerator.MoveNextAsync().AsTask().WaitAsync(HangGuard, TestContext.Current.CancellationToken));
         Assert.Equal(new byte[] { 42 }, enumerator.Current.Body.ToArray());
-        Assert.False(await enumerator.MoveNextAsync().AsTask().WaitAsync(HangGuard));
+        Assert.False(await enumerator.MoveNextAsync().AsTask().WaitAsync(HangGuard, TestContext.Current.CancellationToken));
 
         Assert.Equal(1, dispatched);
         if (useMaximumBudget)
@@ -378,7 +378,7 @@ public sealed class InMemoryRpcDeadlineTests
             Assert.Null(receivedBudget);
         }
 
-        Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard));
+        Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Leaving a stream after a nonfinal frame forwards cancellation to its still-running worker.</summary>
@@ -388,9 +388,9 @@ public sealed class InMemoryRpcDeadlineTests
         // Arrange
         var rpc = new InMemoryRpcClient();
         var probe = new IgnoringWorker();
-        await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleStreamingAsync);
-        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty);
-        var enumerator = call.GetAsyncEnumerator();
+        await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleStreamingAsync, ct: TestContext.Current.CancellationToken);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TestContext.Current.CancellationToken);
+        var enumerator = call.GetAsyncEnumerator(TestContext.Current.CancellationToken);
         var firstMove = enumerator.MoveNextAsync().AsTask();
 
         // Act
@@ -399,22 +399,22 @@ public sealed class InMemoryRpcDeadlineTests
         // Assert
         try
         {
-            Assert.True(await firstMove.WaitAsync(HangGuard));
+            Assert.True(await firstMove.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             Assert.Equal(new byte[] { 42 }, enumerator.Current.Body.ToArray());
-            await enumerator.DisposeAsync().AsTask().WaitAsync(HangGuard);
+            await enumerator.DisposeAsync().AsTask().WaitAsync(HangGuard, TestContext.Current.CancellationToken);
             disposed = true;
 
-            await probe.CancellationObserved.Task.WaitAsync(HangGuard);
-            Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard));
+            await probe.CancellationObserved.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             Assert.False(probe.Completed.Task.IsCompleted);
         }
         finally
         {
             probe.Release.SetResult();
-            await probe.Completed.Task.WaitAsync(HangGuard);
-            _ = await Record.ExceptionAsync(() => firstMove.WaitAsync(HangGuard));
+            await probe.Completed.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            _ = await Record.ExceptionAsync(() => firstMove.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             if (!disposed)
-                await enumerator.DisposeAsync().AsTask().WaitAsync(HangGuard);
+                await enumerator.DisposeAsync().AsTask().WaitAsync(HangGuard, TestContext.Current.CancellationToken);
         }
     }
 
@@ -441,10 +441,10 @@ public sealed class InMemoryRpcDeadlineTests
                 callbackExited.SetResult();
             }
         });
-        await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleStreamingAsync);
+        await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleStreamingAsync, ct: TestContext.Current.CancellationToken);
         using var cancellation = new CancellationTokenSource();
         var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, cancellation.Token);
-        var enumerator = call.GetAsyncEnumerator();
+        var enumerator = call.GetAsyncEnumerator(TestContext.Current.CancellationToken);
         var firstMove = enumerator.MoveNextAsync().AsTask();
         Task<bool>? nextMove = null;
         var stop = Task.CompletedTask;
@@ -455,7 +455,7 @@ public sealed class InMemoryRpcDeadlineTests
         // Assert
         try
         {
-            Assert.True(await firstMove.WaitAsync(HangGuard));
+            Assert.True(await firstMove.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             stop = Task.Run(async () =>
             {
                 if (disposeStream)
@@ -463,17 +463,17 @@ public sealed class InMemoryRpcDeadlineTests
                 else
                     cancellation.Cancel();
             }, CancellationToken.None);
-            await stop.WaitAsync(HangGuard);
+            await stop.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
             disposed = disposeStream;
 
-            await callbackEntered.Task.WaitAsync(HangGuard);
+            await callbackEntered.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
             if (!disposeStream)
             {
                 nextMove = enumerator.MoveNextAsync().AsTask();
-                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => nextMove.WaitAsync(HangGuard));
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => nextMove.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             }
 
-            Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard));
+            Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             Assert.False(callbackExited.Task.IsCompleted);
             Assert.False(probe.Completed.Task.IsCompleted);
         }
@@ -481,13 +481,13 @@ public sealed class InMemoryRpcDeadlineTests
         {
             callbackRelease.Set();
             probe.Release.SetResult();
-            _ = await Record.ExceptionAsync(() => stop.WaitAsync(HangGuard));
-            _ = await Record.ExceptionAsync(() => firstMove.WaitAsync(HangGuard));
+            _ = await Record.ExceptionAsync(() => stop.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
+            _ = await Record.ExceptionAsync(() => firstMove.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             if (nextMove is not null)
-                _ = await Record.ExceptionAsync(() => nextMove.WaitAsync(HangGuard));
+                _ = await Record.ExceptionAsync(() => nextMove.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             if (!disposed)
-                await enumerator.DisposeAsync().AsTask().WaitAsync(HangGuard);
-            await probe.Completed.Task.WaitAsync(HangGuard);
+                await enumerator.DisposeAsync().AsTask().WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            await probe.Completed.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
         }
     }
 
@@ -498,8 +498,8 @@ public sealed class InMemoryRpcDeadlineTests
         // Arrange
         var rpc = new InMemoryRpcClient();
         var probe = new IgnoringWorker();
-        await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleFinalThenWaitAsync);
-        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty);
+        await using var worker = await rpc.RegisterWorkerAsync(Route, probe.HandleFinalThenWaitAsync, ct: TestContext.Current.CancellationToken);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TestContext.Current.CancellationToken);
 
         // Act
         var consumption = ReadFramesAsync(call);
@@ -507,19 +507,19 @@ public sealed class InMemoryRpcDeadlineTests
         // Assert
         try
         {
-            await probe.Started.Task.WaitAsync(HangGuard);
-            var frames = await consumption.WaitAsync(HangGuard);
+            await probe.Started.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            var frames = await consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
 
             Assert.Equal(new byte[] { 42 }, Assert.Single(frames).Body.ToArray());
-            Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard));
+            Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             Assert.False(probe.CancellationObserved.Task.IsCompleted);
             Assert.False(probe.Completed.Task.IsCompleted);
         }
         finally
         {
             probe.Release.SetResult();
-            await probe.Completed.Task.WaitAsync(HangGuard);
-            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard));
+            await probe.Completed.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
         }
     }
 
@@ -547,28 +547,28 @@ public sealed class InMemoryRpcDeadlineTests
             {
                 completed.SetResult();
             }
-        });
+        }, ct: TestContext.Current.CancellationToken);
         var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, cancellation.Token);
 
         // Act
-        var consumption = Task.Run(() => ConsumeAsync(call));
+        var consumption = Task.Run(() => ConsumeAsync(call), TestContext.Current.CancellationToken);
 
         // Assert
         try
         {
-            await started.Task.WaitAsync(HangGuard);
+            await started.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
             cancellation.Cancel();
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => consumption.WaitAsync(HangGuard));
-            await cancellationObserved.Task.WaitAsync(HangGuard);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
+            await cancellationObserved.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
 
-            Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard));
+            Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             Assert.False(completed.Task.IsCompleted);
         }
         finally
         {
             release.Set();
-            await completed.Task.WaitAsync(HangGuard);
-            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard));
+            await completed.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
         }
     }
 
@@ -587,19 +587,19 @@ public sealed class InMemoryRpcDeadlineTests
             await writer.SendAsync(buffer, true, ct);
             buffer[0] = 3;
             reused.SetResult();
-        });
-        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty);
+        }, ct: TestContext.Current.CancellationToken);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TestContext.Current.CancellationToken);
 
-        var frames = await ReadFramesAsync(call).WaitAsync(HangGuard);
+        var frames = await ReadFramesAsync(call).WaitAsync(HangGuard, TestContext.Current.CancellationToken);
 
         // Act
-        await reused.Task.WaitAsync(HangGuard);
+        await reused.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, frames.Count);
         Assert.Equal(new byte[] { 1 }, frames[0].Body.ToArray());
         Assert.Equal(new byte[] { 2 }, frames[1].Body.ToArray());
-        Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard));
+        Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Only an empty final control frame is omitted from the response sequence.</summary>
@@ -616,11 +616,11 @@ public sealed class InMemoryRpcDeadlineTests
             await writer.SendAsync(ReadOnlyMemory<byte>.Empty, finishWithEmptyFrame, ct);
             if (!finishWithEmptyFrame)
                 await writer.SendAsync(new byte[] { 43 }, true, ct);
-        });
-        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty);
+        }, ct: TestContext.Current.CancellationToken);
+        var call = rpc.CallStreamingAsync(Route, ReadOnlyMemory<byte>.Empty, TestContext.Current.CancellationToken);
 
         // Act
-        var frames = await ReadFramesAsync(call).WaitAsync(HangGuard);
+        var frames = await ReadFramesAsync(call).WaitAsync(HangGuard, TestContext.Current.CancellationToken);
 
         // Assert
         if (finishWithEmptyFrame)
@@ -635,7 +635,7 @@ public sealed class InMemoryRpcDeadlineTests
             Assert.Equal(new byte[] { 43 }, frames[2].Body.ToArray());
         }
 
-        Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard));
+        Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Lazy dispatch snapshots request bytes before the caller reuses them after a final response.</summary>
@@ -661,9 +661,9 @@ public sealed class InMemoryRpcDeadlineTests
             {
                 completed.SetResult();
             }
-        });
+        }, ct: TestContext.Current.CancellationToken);
         var buffer = new byte[] { 1 };
-        var call = rpc.CallStreamingAsync(Route, buffer);
+        var call = rpc.CallStreamingAsync(Route, buffer, TestContext.Current.CancellationToken);
         buffer[0] = 2;
 
         // Act
@@ -672,22 +672,22 @@ public sealed class InMemoryRpcDeadlineTests
         // Assert
         try
         {
-            var frames = await consumption.WaitAsync(HangGuard);
+            var frames = await consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
             Assert.Equal(new byte[] { 42 }, Assert.Single(frames).Body.ToArray());
-            Assert.Equal(2, await atDispatch.Task.WaitAsync(HangGuard));
+            Assert.Equal(2, await atDispatch.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             Assert.False(completed.Task.IsCompleted);
 
             buffer[0] = 3;
             release.SetResult();
 
-            Assert.Equal(2, await afterCompletion.Task.WaitAsync(HangGuard));
-            Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard));
+            Assert.Equal(2, await afterCompletion.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
+            Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
         }
         finally
         {
             release.TrySetResult();
-            await completed.Task.WaitAsync(HangGuard);
-            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard));
+            await completed.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+            _ = await Record.ExceptionAsync(() => consumption.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
         }
     }
 

@@ -188,9 +188,9 @@ public sealed class FitzKvCheckpointIdentityTests
         Assert.NotEqual(FitzKvCheckpoints.Key(first).ToArray(), FitzKvCheckpoints.Key(second).ToArray());
         var client = new FakeKvClient();
         var store = new FitzKvCheckpointStore(client, "kv://review/identity/checkpoints");
-        await store.SaveAsync(first, new ProjectionCheckpoint(new EventCursor("8")));
+        await store.SaveAsync(first, new ProjectionCheckpoint(new EventCursor("8")), TestContext.Current.CancellationToken);
 
-        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(second));
+        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(second, TestContext.Current.CancellationToken));
     }
 
     sealed class IdentityRepository(IKvClient client, string name)

@@ -20,12 +20,12 @@ public sealed class FitzKvTenantDirectorySnapshotBrokerTests(FitzBrokerFixture b
         var writer = new FitzKvTenantDirectorySnapshotStore(client.Kv, route);
 
         // Assert
-        Assert.True(await writer.TrySaveAsync(pattern, null, saved));
+        Assert.True(await writer.TrySaveAsync(pattern, null, saved, TestContext.Current.CancellationToken));
 
         var reader = new FitzKvTenantDirectorySnapshotStore(client.Kv, route);
-        var loaded = await reader.LoadAsync(pattern);
+        var loaded = await reader.LoadAsync(pattern, TestContext.Current.CancellationToken);
         Assert.Equal(saved.Cursor, loaded!.Cursor);
         Assert.Equal(saved.ActiveTenants, loaded.ActiveTenants);
-        Assert.Null(await reader.LoadAsync(other));
+        Assert.Null(await reader.LoadAsync(other, TestContext.Current.CancellationToken));
     }
 }

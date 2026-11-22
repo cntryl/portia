@@ -41,19 +41,19 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var client = await HttpClientAsync(app);
         var id = Uuid.CreateVersion4();
         var arguments = new Dictionary<string, object?> { ["command_id"] = id.ToString() };
 
         // Act
-        var first = await client.CallToolAsync("identities.record", arguments);
-        var retry = await client.CallToolAsync("identities.record", arguments);
-        var missing = await client.CallToolAsync("identities.record", new Dictionary<string, object?>());
+        var first = await client.CallToolAsync("identities.record", arguments, cancellationToken: TestContext.Current.CancellationToken);
+        var retry = await client.CallToolAsync("identities.record", arguments, cancellationToken: TestContext.Current.CancellationToken);
+        var missing = await client.CallToolAsync("identities.record", new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken);
         var empty = await client.CallToolAsync("identities.record", new Dictionary<string, object?>
         {
             ["command_id"] = Uuid.Empty.ToString(),
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(first.IsError);
@@ -301,7 +301,7 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Contains(((IEndpointRouteBuilder)app).DataSources.SelectMany(source => source.Endpoints), endpoint =>
@@ -321,19 +321,19 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), NullLoggerFactory.Instance);
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
-        var tools = await client.ListToolsAsync();
+        var tools = await client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
         var result = await client.CallToolAsync("greetings.read", new Dictionary<string, object?>
         {
             ["name"] = "Portia"
-        }!);
+        }!, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Contains(tools, tool => tool.Name == "greetings.read");
@@ -361,12 +361,12 @@ public sealed class McpRegistrationTests
         UseTestActor(app);
         _ = app.UseCors("agents");
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = app.GetTestClient();
 
         // Act
-        using var rejected = await client.SendAsync(CrossOriginListTools("https://attacker.example"));
-        using var allowed = await client.SendAsync(CrossOriginListTools("https://agent.example"));
+        using var rejected = await client.SendAsync(CrossOriginListTools("https://attacker.example"), TestContext.Current.CancellationToken);
+        using var allowed = await client.SendAsync(CrossOriginListTools("https://agent.example"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.Forbidden, rejected.StatusCode);
@@ -392,12 +392,12 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = app.GetTestClient();
 
         // Act
-        using var rebound = await client.SendAsync(SameOriginListTools("rebound.example"));
-        using var served = await client.SendAsync(SameOriginListTools("localhost"));
+        using var rebound = await client.SendAsync(SameOriginListTools("rebound.example"), TestContext.Current.CancellationToken);
+        using var served = await client.SendAsync(SameOriginListTools("localhost"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, rebound.StatusCode);
@@ -568,7 +568,7 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
 
         // Assert
-        var exception = await Assert.ThrowsAsync<OptionsValidationException>(() => app.StartAsync());
+        var exception = await Assert.ThrowsAsync<OptionsValidationException>(() => app.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("requires stateless Streamable HTTP", exception.Message, StringComparison.Ordinal);
     }
@@ -636,7 +636,7 @@ public sealed class McpRegistrationTests
         _ = app.MapPortiaMcp().AllowAnonymous();
 
         // Assert
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => app.StartAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => app.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("greetings.read", error.Message, StringComparison.Ordinal);
         Assert.Contains(typeof(ReadGreeting).ToString(), error.Message, StringComparison.Ordinal);
@@ -657,15 +657,15 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), NullLoggerFactory.Instance);
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
-        var result = await client.CallToolAsync("greetings.reject", new Dictionary<string, object?>());
+        var result = await client.CallToolAsync("greetings.reject", new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsError);
@@ -698,11 +698,11 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var client = await HttpClientAsync(app);
 
         // Act
-        var result = await client.CallToolAsync("failures.json", new Dictionary<string, object?>());
+        var result = await client.CallToolAsync("failures.json", new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(1, probe.Committed);
@@ -732,11 +732,11 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var client = await HttpClientAsync(app);
 
         // Act
-        var result = await client.CallToolAsync("failures.actor", new Dictionary<string, object?>());
+        var result = await client.CallToolAsync("failures.actor", new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsError);
@@ -759,14 +759,14 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var client = await HttpClientAsync(app);
 
         // Act
         var result = await client.CallToolAsync("greetings.read", new Dictionary<string, object?>
         {
             ["name"] = 42
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsError);
@@ -790,7 +790,7 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var client = await HttpClientAsync(app);
 
         // Act
@@ -805,7 +805,7 @@ public sealed class McpRegistrationTests
             ["values"] = NestedInputValues,
             ["label"] = "scalar",
             ["note"] = null
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsError);
@@ -831,11 +831,11 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var client = await HttpClientAsync(app);
 
         // Act
-        var result = await client.CallToolAsync("greetings.read", new Dictionary<string, object?> { ["name"] = 42 });
+        var result = await client.CallToolAsync("greetings.read", new Dictionary<string, object?> { ["name"] = 42 }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsError);
@@ -867,7 +867,7 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var client = await HttpClientAsync(app);
 
         // Act
@@ -878,7 +878,7 @@ public sealed class McpRegistrationTests
             ["values"] = MalformedInputValues,
             ["label"] = "malformed",
             ["note"] = null
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsError);
@@ -904,17 +904,17 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var client = await HttpClientAsync(app);
 
         var firstCall = client.CallToolAsync("greetings.commit", new Dictionary<string, object?>
         {
             ["expected_version"] = 0
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         var secondCall = client.CallToolAsync("greetings.commit", new Dictionary<string, object?>
         {
             ["expected_version"] = 0
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
         var responses = new[] { await firstCall, await secondCall };
@@ -959,15 +959,15 @@ public sealed class McpRegistrationTests
             return next(context);
         });
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), NullLoggerFactory.Instance);
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
-        var result = await client.CallToolAsync("actors.read", new Dictionary<string, object?>());
+        var result = await client.CallToolAsync("actors.read", new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("authenticated-agent|mcp|actors.read",
@@ -988,11 +988,11 @@ public sealed class McpRegistrationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var client = await HttpClientAsync(app);
 
         // Act
-        var result = await client.CallToolAsync("actors.read", new Dictionary<string, object?>());
+        var result = await client.CallToolAsync("actors.read", new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(0, actor.Invocations);
@@ -1014,14 +1014,14 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var client = await HttpClientAsync(app);
         var arguments = new Dictionary<string, object?>();
         if (explicitNull)
             arguments["name"] = null;
 
         // Act
-        var result = await client.CallToolAsync("greetings.read", arguments);
+        var result = await client.CallToolAsync("greetings.read", arguments, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsError);
@@ -1042,7 +1042,7 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var client = await HttpClientAsync(app);
 
         // Act
@@ -1052,7 +1052,7 @@ public sealed class McpRegistrationTests
             ["rows"] = Array.Empty<object>(),
             ["values"] = NestedInputValues,
             ["label"] = "scalar"
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsError);
@@ -1075,14 +1075,14 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         app.UseAuthorization();
         _ = app.MapPortiaMcp();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         using var http = app.GetTestClient();
 
         // Assert
         var error = await Assert.ThrowsAsync<HttpRequestException>(async () =>
-            await McpScenario.ConnectAsync(http, new Uri("http://localhost/mcp")));
+            await McpScenario.ConnectAsync(http, new Uri("http://localhost/mcp"), TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.Unauthorized, error.StatusCode);
     }
 
@@ -1102,12 +1102,12 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         app.UseAuthorization();
         _ = app.MapPortiaMcp().RequireAuthorization();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         using var http = app.GetTestClient();
         var error = await Assert.ThrowsAsync<HttpRequestException>(async () =>
-            await McpScenario.ConnectAsync(http, new Uri("http://localhost/mcp")));
+            await McpScenario.ConnectAsync(http, new Uri("http://localhost/mcp"), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal(HttpStatusCode.Unauthorized, error.StatusCode);
@@ -1241,12 +1241,12 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), NullLoggerFactory.Instance);
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
         using var cancellation = new CancellationTokenSource();
         // A failure bound only; the cancellation under test is the explicit one below.
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -1283,15 +1283,15 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app);
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), NullLoggerFactory.Instance);
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
-        _ = await client.CallToolAsync("greetings.read", new Dictionary<string, object?> { ["name"] = "trace" });
+        _ = await client.CallToolAsync("greetings.read", new Dictionary<string, object?> { ["name"] = "trace" }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         var receive = Assert.Single(stopped, activity => activity.OperationName == PortiaTelemetry.ProcessActivityName);
@@ -1318,11 +1318,11 @@ public sealed class McpRegistrationTests
         await using var app = builder.Build();
         UseTestActor(app, "aliased-agent");
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var client = await HttpClientAsync(app);
 
         // Act
-        var result = await client.CallToolAsync("actors.alias", new Dictionary<string, object?>());
+        var result = await client.CallToolAsync("actors.alias", new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("aliased-agent|mcp|actors.alias",

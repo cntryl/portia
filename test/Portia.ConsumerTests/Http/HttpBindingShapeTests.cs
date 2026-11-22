@@ -70,7 +70,7 @@ public sealed class HttpBindingShapeTests
         _ = GeneratorCompilation.Compile(source, new RequestHttpBindingGenerator());
 
         // Act
-        var metadata = CSharpSyntaxTree.ParseText(generated).GetRoot().DescendantNodes()
+        var metadata = CSharpSyntaxTree.ParseText(generated, cancellationToken: TestContext.Current.CancellationToken).GetRoot(TestContext.Current.CancellationToken).DescendantNodes()
             .OfType<ObjectCreationExpressionSyntax>().Single(node =>
                 node.Type.ToString().EndsWith("PortiaOpenApiOperation", StringComparison.Ordinal)
                 && node.ArgumentList?.Arguments[0].Expression is LiteralExpressionSyntax literal

@@ -32,10 +32,10 @@ public sealed class SystemOperatorAccessTests
         Assert.True(ordinary.IsAuthenticated);
         Assert.False(unauthenticatedAdministrator.IsAuthenticated);
         Assert.True(actor.IsInRole(TestOperationalAuthorizer.AdministratorRole));
-        Assert.True(await policy.AuthorizeAsync(actor, OperationalScope.Global, OperationalAccess.Read));
+        Assert.True(await policy.AuthorizeAsync(actor, OperationalScope.Global, OperationalAccess.Read, TestContext.Current.CancellationToken));
 
         _ = await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
-            await operations.ListIssuesAsync(actor, OperationalScope.Global));
+            await operations.ListIssuesAsync(actor, OperationalScope.Global, TestContext.Current.CancellationToken));
 
         Assert.Equal(0, store.Reads);
         Assert.Equal(0, store.Writes);
@@ -60,7 +60,7 @@ public sealed class SystemOperatorAccessTests
         var actor = new ClaimsPrincipal([new ClaimsIdentity(), administrator]);
 
         // Act
-        var description = await operations.DescribeApplicationAsync(actor, OperationalScope.Global);
+        var description = await operations.DescribeApplicationAsync(actor, OperationalScope.Global, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("test", description.Coverage);
@@ -88,7 +88,7 @@ public sealed class SystemOperatorAccessTests
         Assert.Null(provider.GetService<TimeProvider>());
 
         var result = await provider.GetRequiredService<IPortiaOperations>()
-            .DescribeApplicationAsync(TestOperationalAuthorizer.AdministratorActor(), OperationalScope.Global);
+            .DescribeApplicationAsync(TestOperationalAuthorizer.AdministratorActor(), OperationalScope.Global, TestContext.Current.CancellationToken);
 
         Assert.Equal("test", result.Coverage);
         Assert.Equal(1, topology.Reads);
@@ -107,7 +107,7 @@ public sealed class SystemOperatorAccessTests
 
         // Assert
         _ = await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
-            await operations.ListIssuesAsync(TestOperationalAuthorizer.AdministratorActor(), OperationalScope.Global));
+            await operations.ListIssuesAsync(TestOperationalAuthorizer.AdministratorActor(), OperationalScope.Global, TestContext.Current.CancellationToken));
 
         Assert.Equal(0, store.Reads);
         Assert.Equal(0, store.Writes);
@@ -145,41 +145,41 @@ public sealed class SystemOperatorAccessTests
         var id = Guid.NewGuid();
 
         // Assert
-        Assert.True(await policy.AuthorizeAsync(actor, OperationalScope.Global, OperationalAccess.Approve));
+        Assert.True(await policy.AuthorizeAsync(actor, OperationalScope.Global, OperationalAccess.Approve, TestContext.Current.CancellationToken));
 
         _ = await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
         {
             switch (operation)
             {
                 case "describe":
-                    _ = await operations.DescribeApplicationAsync(actor, target.Scope);
+                    _ = await operations.DescribeApplicationAsync(actor, target.Scope, TestContext.Current.CancellationToken);
                     break;
                 case "health":
-                    _ = await operations.GetSystemHealthAsync(actor, target.Scope);
+                    _ = await operations.GetSystemHealthAsync(actor, target.Scope, TestContext.Current.CancellationToken);
                     break;
                 case "issues":
-                    _ = await operations.ListIssuesAsync(actor, target.Scope);
+                    _ = await operations.ListIssuesAsync(actor, target.Scope, TestContext.Current.CancellationToken);
                     break;
                 case "inspect":
-                    _ = await operations.InspectProcessorAsync(actor, target);
+                    _ = await operations.InspectProcessorAsync(actor, target, TestContext.Current.CancellationToken);
                     break;
                 case "trace":
-                    _ = await operations.TraceCausalityAsync(actor, target, id);
+                    _ = await operations.TraceCausalityAsync(actor, target, id, TestContext.Current.CancellationToken);
                     break;
                 case "preview":
-                    _ = await operations.PreviewRepairAsync(actor, target);
+                    _ = await operations.PreviewRepairAsync(actor, target, TestContext.Current.CancellationToken);
                     break;
                 case "approve":
-                    _ = await operations.ApproveRepairAsync(actor, target, id);
+                    _ = await operations.ApproveRepairAsync(actor, target, id, TestContext.Current.CancellationToken);
                     break;
                 case "revoke":
-                    await operations.RevokeRepairAsync(actor, target, id);
+                    await operations.RevokeRepairAsync(actor, target, id, TestContext.Current.CancellationToken);
                     break;
                 case "execute":
-                    _ = await operations.ExecuteRepairAsync(actor, target, id);
+                    _ = await operations.ExecuteRepairAsync(actor, target, id, TestContext.Current.CancellationToken);
                     break;
                 case "verify":
-                    _ = await operations.VerifyRepairAsync(actor, target, id);
+                    _ = await operations.VerifyRepairAsync(actor, target, id, TestContext.Current.CancellationToken);
                     break;
                 default:
                     throw new InvalidOperationException("Unknown test operation.");

@@ -51,8 +51,8 @@ public sealed class GcpObjectStorageIntegrationTests
         using var transfer = new HttpClient();
 
         // Act
-        await client.CreateBucketAsync("portia-test", firstBucket);
-        await client.CreateBucketAsync("portia-test", secondBucket);
+        await client.CreateBucketAsync("portia-test", firstBucket, cancellationToken: TestContext.Current.CancellationToken);
+        await client.CreateBucketAsync("portia-test", secondBucket, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         try
@@ -79,12 +79,12 @@ public sealed class GcpObjectStorageIntegrationTests
                         ? values.Single()
                         : throw new InvalidDataException("The signed part upload returned no x-goog-generation.");
                     return new ObjectPartReceipt(part.PartNumber, generation);
-                });
+                }, TestContext.Current.CancellationToken);
         }
         finally
         {
-            await client.DeleteBucketAsync(firstBucket);
-            await client.DeleteBucketAsync(secondBucket);
+            await client.DeleteBucketAsync(firstBucket, cancellationToken: TestContext.Current.CancellationToken);
+            await client.DeleteBucketAsync(secondBucket, cancellationToken: TestContext.Current.CancellationToken);
         }
     }
 

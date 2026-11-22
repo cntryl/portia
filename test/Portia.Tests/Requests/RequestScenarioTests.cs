@@ -22,7 +22,7 @@ public sealed class RequestScenarioTests
         // Act
         var result = await RequestScenario.For(provider)
             .GivenActor(Member)
-            .When(new ScenarioCommand())
+            .When(new ScenarioCommand(), TestContext.Current.CancellationToken)
             .ExpectAuthorized()
             .ExpectGuardPassed<SlugGuard>()
             .ExpectHandled()
@@ -42,7 +42,7 @@ public sealed class RequestScenarioTests
         // Act
         var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(provider)
             .GivenActor(Member)
-            .When(new ScenarioCommand())
+            .When(new ScenarioCommand(), TestContext.Current.CancellationToken)
             .ExpectAuthorized()
             .ExpectGuardFailed<SlugGuard>(RequestErrorKind.Conflict)
             .ExpectNotHandled()
@@ -61,7 +61,7 @@ public sealed class RequestScenarioTests
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand()).ExpectHandled());
+            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand(), TestContext.Current.CancellationToken).ExpectHandled());
 
         // Assert
         _ = Assert.IsType<ScenarioExpectationException>(error);
@@ -82,7 +82,7 @@ public sealed class RequestScenarioTests
         // Act
         var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(provider)
             .GivenActor(RequestActor.Anonymous)
-            .When(new ScenarioCommand())
+            .When(new ScenarioCommand(), TestContext.Current.CancellationToken)
             .ExpectDenied(RequestErrorKind.Forbidden)
             .ExpectNotHandled());
 
@@ -100,7 +100,7 @@ public sealed class RequestScenarioTests
         // Act
         var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(provider)
             .GivenActor(Member)
-            .When(new ScenarioPermissionCommand())
+            .When(new ScenarioPermissionCommand(), TestContext.Current.CancellationToken)
             .ExpectDenied(RequestErrorKind.Forbidden)
             .ExpectNotHandled());
 
@@ -117,7 +117,7 @@ public sealed class RequestScenarioTests
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand()).ExpectDenied());
+            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand(), TestContext.Current.CancellationToken).ExpectDenied());
 
         // Assert
         _ = Assert.IsType<ScenarioExpectationException>(error);
@@ -133,7 +133,7 @@ public sealed class RequestScenarioTests
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioOpenCommand())
+            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioOpenCommand(), TestContext.Current.CancellationToken)
                 .ExpectAuthorized());
 
         // Assert
@@ -168,7 +168,7 @@ public sealed class RequestScenarioTests
         // Arrange
         await using var provider = Provider();
         var log = provider.GetRequiredService<ScenarioLog>();
-        var expectations = RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand()).ExpectHandled();
+        var expectations = RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand(), TestContext.Current.CancellationToken).ExpectHandled();
 
         _ = await expectations;
 
@@ -185,7 +185,7 @@ public sealed class RequestScenarioTests
     {
         // Arrange
         await using var provider = Provider(RequestErrorKind.Conflict);
-        var failing = RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand());
+        var failing = RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand(), TestContext.Current.CancellationToken);
 
         var extended = failing.ExpectHandled();
 
@@ -210,8 +210,8 @@ public sealed class RequestScenarioTests
         // Act
         var exception = await Record.ExceptionAsync(async () =>
         {
-            await scenario.GivenActor(Member).When(new ScenarioCommand()).ExpectAuthorized().ExpectHandled();
-            await scenario.When(new ScenarioCommand()).ExpectDenied(RequestErrorKind.Forbidden);
+            await scenario.GivenActor(Member).When(new ScenarioCommand(), TestContext.Current.CancellationToken).ExpectAuthorized().ExpectHandled();
+            await scenario.When(new ScenarioCommand(), TestContext.Current.CancellationToken).ExpectDenied(RequestErrorKind.Forbidden);
         });
 
         // Assert
@@ -227,7 +227,7 @@ public sealed class RequestScenarioTests
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand())
+            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand(), TestContext.Current.CancellationToken)
                 .ExpectGuardPassed<OpenCommandGuard>());
 
         // Assert
@@ -244,10 +244,10 @@ public sealed class RequestScenarioTests
         await using var provider = Provider();
         var log = provider.GetRequiredService<ScenarioLog>();
 
-        await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand()).ExpectHandled();
+        await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand(), TestContext.Current.CancellationToken).ExpectHandled();
 
         // Act
-        await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand()).ExpectHandled();
+        await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand(), TestContext.Current.CancellationToken).ExpectHandled();
 
         // Assert
         Assert.Equal(2, log.Scopes.Distinct().Count());
@@ -262,7 +262,7 @@ public sealed class RequestScenarioTests
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand())
+            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand(), TestContext.Current.CancellationToken)
                 .ExpectHandled()
                 .ExpectSuccess());
 
@@ -280,7 +280,7 @@ public sealed class RequestScenarioTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioExplodingCommand())
+            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioExplodingCommand(), TestContext.Current.CancellationToken)
                 .ExpectHandled());
 
         // Assert
@@ -295,7 +295,7 @@ public sealed class RequestScenarioTests
         await using var provider = Provider(RequestErrorKind.Conflict);
 
         // Act
-        await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand())
+        await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand(), TestContext.Current.CancellationToken)
             .ExpectAuthorized()
             .ExpectGuardFailed<SlugGuard>();
 
@@ -312,7 +312,7 @@ public sealed class RequestScenarioTests
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await RequestScenario.For(provider).When(new ScenarioCommand()).ExpectHandled());
+            await RequestScenario.For(provider).When(new ScenarioCommand(), TestContext.Current.CancellationToken).ExpectHandled());
 
         // Assert
         _ = Assert.IsType<InvalidOperationException>(error);
@@ -363,7 +363,7 @@ public sealed class RequestScenarioTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioConflictCommand())
+            await RequestScenario.For(provider).GivenActor(Member).When(new ScenarioConflictCommand(), TestContext.Current.CancellationToken)
                 .ExpectHandled()
                 .ExpectFailure(RequestErrorKind.Conflict));
 
@@ -397,7 +397,7 @@ public sealed class RequestScenarioTests
         // Arrange
         await using var provider = Provider();
         var log = provider.GetRequiredService<ScenarioLog>();
-        var kept = RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand());
+        var kept = RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCommand(), TestContext.Current.CancellationToken);
 
 #pragma warning disable PORTIA107 // Deliberately reproduce the test pitfall the analyzer diagnoses.
         // Act
@@ -424,7 +424,7 @@ public sealed class RequestScenarioTests
         await using var provider = Provider();
         var log = provider.GetRequiredService<ScenarioLog>();
         var expectations = RequestScenario.For(provider).GivenActor(Member)
-            .When(new ScenarioStream(), limit).ExpectSuccess().ExpectHandled();
+            .When(new ScenarioStream(), limit, TestContext.Current.CancellationToken).ExpectSuccess().ExpectHandled();
 
         // Act
         var items = await expectations;
@@ -447,7 +447,7 @@ public sealed class RequestScenarioTests
         using var provider = Provider();
 
         // Act
-        var exception = Record.Exception(() => RequestScenario.For(provider).When(new ScenarioStream(), limit));
+        var exception = Record.Exception(() => RequestScenario.For(provider).When(new ScenarioStream(), limit, TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<ArgumentOutOfRangeException>(exception);
@@ -488,7 +488,7 @@ public sealed class RequestScenarioTests
                 .AsTask()
             : RequestScenario.For(provider).GivenActor(Member).When(new ScenarioCancelledCommand(), cancellation.Token)
                 .AsTask();
-        await log.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await log.Started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Act
         cancellation.Cancel();

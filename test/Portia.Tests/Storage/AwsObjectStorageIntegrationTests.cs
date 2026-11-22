@@ -24,7 +24,7 @@ public sealed class AwsObjectStorageIntegrationTests
         using var host = services.BuildServiceProvider();
         var storage = host.GetRequiredService<IObjectStorage>();
         using var transfer = new HttpClient();
-        await client.PutBucketAsync(new PutBucketRequest { BucketName = bucket });
+        await client.PutBucketAsync(new PutBucketRequest { BucketName = bucket }, TestContext.Current.CancellationToken);
         try
         {
             // Act
@@ -35,15 +35,15 @@ public sealed class AwsObjectStorageIntegrationTests
                         await transfer.PutAsync(part.UploadUri, new ByteArrayContent(bytes.ToArray()), ct);
                     response.EnsureSuccessStatusCode();
                     return new ObjectPartReceipt(part.PartNumber, response.Headers.ETag!.Tag);
-                });
+                }, TestContext.Current.CancellationToken);
 
             // Assert
-            var remaining = await client.ListObjectsV2Async(new ListObjectsV2Request { BucketName = bucket });
+            var remaining = await client.ListObjectsV2Async(new ListObjectsV2Request { BucketName = bucket }, TestContext.Current.CancellationToken);
             Assert.Empty(remaining.S3Objects ?? []);
         }
         finally
         {
-            await client.DeleteBucketAsync(new DeleteBucketRequest { BucketName = bucket });
+            await client.DeleteBucketAsync(new DeleteBucketRequest { BucketName = bucket }, TestContext.Current.CancellationToken);
         }
     }
 
@@ -70,10 +70,10 @@ public sealed class AwsObjectStorageIntegrationTests
         using var transfer = new HttpClient();
         var storage = host.GetRequiredService<IObjectStorage>();
 
-        await client.PutBucketAsync(new PutBucketRequest { BucketName = firstBucket });
+        await client.PutBucketAsync(new PutBucketRequest { BucketName = firstBucket }, TestContext.Current.CancellationToken);
 
         // Act
-        await client.PutBucketAsync(new PutBucketRequest { BucketName = secondBucket });
+        await client.PutBucketAsync(new PutBucketRequest { BucketName = secondBucket }, TestContext.Current.CancellationToken);
 
         // Assert
         try
@@ -90,12 +90,12 @@ public sealed class AwsObjectStorageIntegrationTests
                     var etag = response.Headers.ETag?.Tag
                                ?? throw new InvalidDataException("The signed part upload returned no ETag.");
                     return new ObjectPartReceipt(part.PartNumber, etag);
-                });
+                }, TestContext.Current.CancellationToken);
         }
         finally
         {
-            await client.DeleteBucketAsync(new DeleteBucketRequest { BucketName = firstBucket });
-            await client.DeleteBucketAsync(new DeleteBucketRequest { BucketName = secondBucket });
+            await client.DeleteBucketAsync(new DeleteBucketRequest { BucketName = firstBucket }, TestContext.Current.CancellationToken);
+            await client.DeleteBucketAsync(new DeleteBucketRequest { BucketName = secondBucket }, TestContext.Current.CancellationToken);
         }
     }
 
@@ -111,7 +111,7 @@ public sealed class AwsObjectStorageIntegrationTests
         using var client = CreateClient(endpoint);
 
         // Act
-        await client.PutBucketAsync(new PutBucketRequest { BucketName = bucket });
+        await client.PutBucketAsync(new PutBucketRequest { BucketName = bucket }, TestContext.Current.CancellationToken);
 
         // Assert
         try
@@ -124,7 +124,7 @@ public sealed class AwsObjectStorageIntegrationTests
                 ContentBody = "first",
                 UseChunkEncoding = false,
                 IfNoneMatch = "*"
-            });
+            }, TestContext.Current.CancellationToken);
             var putConflict = await Assert.ThrowsAsync<AmazonS3Exception>(() =>
                 client.PutObjectAsync(new PutObjectRequest
                 {
@@ -133,7 +133,7 @@ public sealed class AwsObjectStorageIntegrationTests
                     ContentBody = "second",
                     UseChunkEncoding = false,
                     IfNoneMatch = "*"
-                }));
+                }, TestContext.Current.CancellationToken));
             Assert.Equal(HttpStatusCode.PreconditionFailed, putConflict.StatusCode);
 
             await client.CopyObjectAsync(new CopyObjectRequest
@@ -143,7 +143,7 @@ public sealed class AwsObjectStorageIntegrationTests
                 DestinationBucket = bucket,
                 DestinationKey = "destination",
                 IfNoneMatch = "*"
-            });
+            }, TestContext.Current.CancellationToken);
             var copyConflict = await Assert.ThrowsAsync<AmazonS3Exception>(() =>
                 client.CopyObjectAsync(new CopyObjectRequest
                 {
@@ -152,18 +152,18 @@ public sealed class AwsObjectStorageIntegrationTests
                     DestinationBucket = bucket,
                     DestinationKey = "destination",
                     IfNoneMatch = "*"
-                }));
+                }, TestContext.Current.CancellationToken));
             Assert.Equal(HttpStatusCode.PreconditionFailed, copyConflict.StatusCode);
 
-            using var source = await client.GetObjectAsync(bucket, "source");
+            using var source = await client.GetObjectAsync(bucket, "source", TestContext.Current.CancellationToken);
             using var reader = new StreamReader(source.ResponseStream);
-            Assert.Equal("first", await reader.ReadToEndAsync());
+            Assert.Equal("first", await reader.ReadToEndAsync(TestContext.Current.CancellationToken));
         }
         finally
         {
-            await client.DeleteObjectAsync(bucket, "source");
-            await client.DeleteObjectAsync(bucket, "destination");
-            await client.DeleteBucketAsync(new DeleteBucketRequest { BucketName = bucket });
+            await client.DeleteObjectAsync(bucket, "source", TestContext.Current.CancellationToken);
+            await client.DeleteObjectAsync(bucket, "destination", TestContext.Current.CancellationToken);
+            await client.DeleteBucketAsync(new DeleteBucketRequest { BucketName = bucket }, TestContext.Current.CancellationToken);
         }
     }
 
@@ -198,8 +198,8 @@ public sealed class AwsObjectStorageIntegrationTests
         // Assert
         Assert.NotSame(api, worker);
 
-        await apiClient.PutBucketAsync(new PutBucketRequest { BucketName = firstBucket });
-        await apiClient.PutBucketAsync(new PutBucketRequest { BucketName = secondBucket });
+        await apiClient.PutBucketAsync(new PutBucketRequest { BucketName = firstBucket }, TestContext.Current.CancellationToken);
+        await apiClient.PutBucketAsync(new PutBucketRequest { BucketName = secondBucket }, TestContext.Current.CancellationToken);
         var content = new byte[ObjectStorageLimits.MinimumNonfinalPartLength + 19];
         RandomNumberGenerator.Fill(content);
         var digest = new ObjectDigest(Convert.ToHexString(SHA256.HashData(content)), content.LongLength);
@@ -208,21 +208,21 @@ public sealed class AwsObjectStorageIntegrationTests
         try
         {
             await UploadAsync(api, firstTenant, digest, content, transfer);
-            Assert.True(await worker.HeadAndVerifyAsync(firstTenant, digest));
-            Assert.False(await worker.HeadAndVerifyAsync(secondTenant, digest));
-            await using (var read = await worker.OpenReadAsync(firstTenant, digest))
+            Assert.True(await worker.HeadAndVerifyAsync(firstTenant, digest, TestContext.Current.CancellationToken));
+            Assert.False(await worker.HeadAndVerifyAsync(secondTenant, digest, TestContext.Current.CancellationToken));
+            await using (var read = await worker.OpenReadAsync(firstTenant, digest, TestContext.Current.CancellationToken))
             {
                 Assert.NotNull(read);
                 using var buffer = new MemoryStream();
-                await read.CopyToAsync(buffer);
+                await read.CopyToAsync(buffer, TestContext.Current.CancellationToken);
                 Assert.Equal(content, buffer.ToArray());
             }
 
-            var download = await worker.CreateDownloadAsync(firstTenant, digest, TimeSpan.FromMinutes(1));
+            var download = await worker.CreateDownloadAsync(firstTenant, digest, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken);
             Assert.True(download.ExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(1));
-            Assert.Equal(content, await transfer.GetByteArrayAsync(download.DownloadUri));
+            Assert.Equal(content, await transfer.GetByteArrayAsync(download.DownloadUri, TestContext.Current.CancellationToken));
 
-            var promoted = await workerClient.GetObjectMetadataAsync(firstBucket, key);
+            var promoted = await workerClient.GetObjectMetadataAsync(firstBucket, key, TestContext.Current.CancellationToken);
             Assert.Equal(ServerSideEncryptionMethod.AWSKMS, promoted.ServerSideEncryptionMethod);
             Assert.Equal(locations[firstTenant.Value].EncryptionKeyReference,
                 promoted.ServerSideEncryptionKeyManagementServiceKeyId);
@@ -231,23 +231,23 @@ public sealed class AwsObjectStorageIntegrationTests
             // A second upload with the same content key exercises the immutable copy precondition.
             await UploadAsync(api, firstTenant, digest, content, transfer);
             await UploadAsync(api, secondTenant, digest, content, transfer);
-            Assert.True(await worker.HeadAndVerifyAsync(secondTenant, digest));
-            var secondPromoted = await workerClient.GetObjectMetadataAsync(secondBucket, key);
+            Assert.True(await worker.HeadAndVerifyAsync(secondTenant, digest, TestContext.Current.CancellationToken));
+            var secondPromoted = await workerClient.GetObjectMetadataAsync(secondBucket, key, TestContext.Current.CancellationToken);
             Assert.Equal(locations[secondTenant.Value].EncryptionKeyReference,
                 secondPromoted.ServerSideEncryptionKeyManagementServiceKeyId);
 
-            await worker.DeleteAsync(firstTenant, digest);
-            Assert.False(await worker.HeadAndVerifyAsync(firstTenant, digest));
-            Assert.True(await worker.HeadAndVerifyAsync(secondTenant, digest));
-            await worker.DeleteAsync(secondTenant, digest);
-            Assert.False(await worker.HeadAndVerifyAsync(secondTenant, digest));
+            await worker.DeleteAsync(firstTenant, digest, TestContext.Current.CancellationToken);
+            Assert.False(await worker.HeadAndVerifyAsync(firstTenant, digest, TestContext.Current.CancellationToken));
+            Assert.True(await worker.HeadAndVerifyAsync(secondTenant, digest, TestContext.Current.CancellationToken));
+            await worker.DeleteAsync(secondTenant, digest, TestContext.Current.CancellationToken);
+            Assert.False(await worker.HeadAndVerifyAsync(secondTenant, digest, TestContext.Current.CancellationToken));
         }
         finally
         {
-            await apiClient.DeleteObjectAsync(firstBucket, key);
-            await apiClient.DeleteObjectAsync(secondBucket, key);
-            await apiClient.DeleteBucketAsync(new DeleteBucketRequest { BucketName = firstBucket });
-            await apiClient.DeleteBucketAsync(new DeleteBucketRequest { BucketName = secondBucket });
+            await apiClient.DeleteObjectAsync(firstBucket, key, TestContext.Current.CancellationToken);
+            await apiClient.DeleteObjectAsync(secondBucket, key, TestContext.Current.CancellationToken);
+            await apiClient.DeleteBucketAsync(new DeleteBucketRequest { BucketName = firstBucket }, TestContext.Current.CancellationToken);
+            await apiClient.DeleteBucketAsync(new DeleteBucketRequest { BucketName = secondBucket }, TestContext.Current.CancellationToken);
         }
     }
 

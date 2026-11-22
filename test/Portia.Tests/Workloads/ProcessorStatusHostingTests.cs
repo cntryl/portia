@@ -16,7 +16,7 @@ public sealed class ProcessorStatusHostingTests
         var changed = new ValueChanged(1);
         changed.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregate, 1, DateTimeOffset.UtcNow));
         await source.AppendAsync(new EventStreamAddress("status-hosting", "source", aggregate.ToString()), 0,
-            [changed]);
+            [changed], TestContext.Current.CancellationToken);
         var control = new StatusHostingControl();
         var endpoints = new FailingStatusRegistrar();
         var services = new ServiceCollection();
@@ -35,16 +35,16 @@ public sealed class ProcessorStatusHostingTests
         var worker = provider.GetServices<IHostedService>().OfType<PortiaWorkloadService>().Single();
 
         // Act
-        await worker.StartAsync(default);
+        await worker.StartAsync(TestContext.Current.CancellationToken);
 
         // Assert
         try
         {
-            await Task.WhenAll(control.Projected.Task, control.Reacted.Task).WaitAsync(TimeSpan.FromSeconds(5));
+            await Task.WhenAll(control.Projected.Task, control.Reacted.Task).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.Equal(0, endpoints.Active);
             endpoints.AllowRegistration.TrySetResult();
             await Task.WhenAll(endpoints.ProjectorRegistered.Task, endpoints.ReactorRegistered.Task)
-                .WaitAsync(TimeSpan.FromSeconds(5));
+                .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
             Assert.False(worker.ExecuteTask!.IsCompleted);
             Assert.Equal(2, endpoints.Active);
@@ -53,7 +53,7 @@ public sealed class ProcessorStatusHostingTests
         }
         finally
         {
-            await worker.StopAsync(default);
+            await worker.StopAsync(TestContext.Current.CancellationToken);
             worker.Dispose();
         }
 
@@ -79,13 +79,13 @@ public sealed class ProcessorStatusHostingTests
         // Act
         try
         {
-            await worker.StartingAsync(default);
-            await worker.StartAsync(default);
-            await processingStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await worker.StartingAsync(TestContext.Current.CancellationToken);
+            await worker.StartAsync(TestContext.Current.CancellationToken);
+            await processingStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         }
         finally
         {
-            await worker.StopAsync(default);
+            await worker.StopAsync(TestContext.Current.CancellationToken);
         }
 
         // Assert

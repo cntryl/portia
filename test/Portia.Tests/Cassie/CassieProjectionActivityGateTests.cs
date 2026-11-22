@@ -13,7 +13,7 @@ public sealed class CassieProjectionActivityGateTests
         var secondRead = activity.EnterRead();
 
         // Act
-        var begin = activity.EnterBatchAsync(default).AsTask();
+        var begin = activity.EnterBatchAsync(TestContext.Current.CancellationToken).AsTask();
 
         // Assert
         Assert.False(begin.IsCompleted);

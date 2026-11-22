@@ -1,0 +1,8 @@
+{
+  "platformOptions": {
+    "Coverlet": {
+      "include": "[Portia.*]*",
+      "exclude": "[*.Tests]*"
+    }
+  }
+}

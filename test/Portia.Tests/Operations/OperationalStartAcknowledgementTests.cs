@@ -17,14 +17,14 @@ public sealed class OperationalStartAcknowledgementTests
         var journal = new LostStartAcknowledgementStore();
         var session = await SessionAsync(journal);
         var records = new List<DomainEventRecord>();
-        await foreach (var record in (await OperationalExecutionTests.EventsAsync()).ReadAsync(Target.Identity.Pattern))
+        await foreach (var record in (await OperationalExecutionTests.EventsAsync()).ReadAsync(Target.Identity.Pattern, ct: TestContext.Current.CancellationToken))
             records.Add(record);
         journal.LoseNextStartAcknowledgement = true;
 
-        var attempt = await session.BeginAsync(records, ProjectionCheckpoint.Start, default);
+        var attempt = await session.BeginAsync(records, ProjectionCheckpoint.Start, TestContext.Current.CancellationToken);
 
         // Act
-        var persisted = (await journal.ReadAsync(Target))!;
+        var persisted = (await journal.ReadAsync(Target, TestContext.Current.CancellationToken))!;
 
         // Assert
         Assert.Single(persisted.Attempts, candidate => candidate.Id == attempt);
@@ -38,19 +38,19 @@ public sealed class OperationalStartAcknowledgementTests
         var journal = new LostStartAcknowledgementStore();
         var session = await SessionAsync(journal);
         var records = new List<DomainEventRecord>();
-        await foreach (var record in (await OperationalExecutionTests.EventsAsync()).ReadAsync(Target.Identity.Pattern))
+        await foreach (var record in (await OperationalExecutionTests.EventsAsync()).ReadAsync(Target.Identity.Pattern, ct: TestContext.Current.CancellationToken))
             records.Add(record);
         journal.FailNextStartBeforeCommit = true;
 
         // Act
-        var attempt = await session.BeginAsync(records, ProjectionCheckpoint.Start, default);
+        var attempt = await session.BeginAsync(records, ProjectionCheckpoint.Start, TestContext.Current.CancellationToken);
 
         // Assert
-        var persisted = Assert.Single((await journal.ReadAsync(Target))!.Attempts);
+        var persisted = Assert.Single((await journal.ReadAsync(Target, TestContext.Current.CancellationToken))!.Attempts);
         Assert.Equal(attempt, persisted.Id);
         Assert.Equal("running", persisted.Outcome);
         Assert.Equal(records.Select(OperationalSource.From), persisted.Sources);
-        Assert.Equal(ProjectionCheckpoint.Start, await journal.LoadAsync(Target.Identity));
+        Assert.Equal(ProjectionCheckpoint.Start, await journal.LoadAsync(Target.Identity, TestContext.Current.CancellationToken));
     }
 
     /// <summary>A reactor reaches its atomic completion receipt despite a lost durable-start acknowledgement.</summary>
@@ -70,13 +70,13 @@ public sealed class OperationalStartAcknowledgementTests
         // Act
         var checkpoint =
             await new ReactorRunner(await OperationalExecutionTests.EventsAsync()).RunAsync(session, reactor,
-                ProjectionCheckpoint.Start);
+                ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("2", checkpoint.Cursor.Value);
-        Assert.Equal(checkpoint, await journal.LoadAsync(Target.Identity));
+        Assert.Equal(checkpoint, await journal.LoadAsync(Target.Identity, TestContext.Current.CancellationToken));
         Assert.Equal(2, effects.Executions.Count);
-        Assert.Equal("committed", Assert.Single((await journal.ReadAsync(Target))!.Attempts).Outcome);
+        Assert.Equal("committed", Assert.Single((await journal.ReadAsync(Target, TestContext.Current.CancellationToken))!.Attempts).Outcome);
     }
 
     static async Task<OperationalSession> SessionAsync(LostStartAcknowledgementStore journal)

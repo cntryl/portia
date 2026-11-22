@@ -24,7 +24,7 @@ public sealed class RequiredPresenceTests
         using var client = app.GetTestClient();
 
         // Act
-        using var response = await client.PostAsync("/presence", body);
+        using var response = await client.PostAsync("/presence", body, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(status, response.StatusCode);
@@ -39,7 +39,7 @@ public sealed class RequiredPresenceTests
         using var client = app.GetTestClient();
 
         // Act
-        var parsed = OpenApiDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
+        var parsed = OpenApiDocument.Parse(await client.GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Empty(parsed.Diagnostic!.Errors);
@@ -69,7 +69,7 @@ public sealed class RequiredPresenceTests
         await using var app = builder.Build();
         _ = app.MapPortiaPost<RequiredPresenceRequest, string>("/presence-header", configuration =>
             configuration.FromHeader(request => request.Marker, "Marker"));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = app.GetTestClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, "/presence-header")
         {
@@ -78,7 +78,7 @@ public sealed class RequiredPresenceTests
         request.Headers.Add("Marker", "header");
 
         // Act
-        using var response = await client.SendAsync(request);
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(status, response.StatusCode);
@@ -99,12 +99,12 @@ public sealed class RequiredPresenceTests
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaGet<RequiredHeaderPresenceRequest, string>("/header-presence", configuration =>
             configuration.FromHeader(request => request.Region, "Region"));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = app.GetTestClient();
-        using var missing = await client.GetAsync("/header-presence");
+        using var missing = await client.GetAsync("/header-presence", TestContext.Current.CancellationToken);
 
         // Act
-        var parsed = OpenApiDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
+        var parsed = OpenApiDocument.Parse(await client.GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);

@@ -19,10 +19,10 @@ public sealed class ContractMemberMetadataTests
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaPost<ContractFirstTitleRequest, ContractMetadataModel>("/first-title");
         _ = app.MapPortiaPost<ContractSecondTitleRequest, ContractMetadataModel>("/second-title");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
+        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken)).Document!;
 
         // Assert
         var first =
@@ -48,10 +48,10 @@ public sealed class ContractMemberMetadataTests
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaPost<ContractLiteralDefaultRequest, string>("/literal-default");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
+        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken)).Document!;
 
         // Assert
         var schema =
@@ -72,10 +72,10 @@ public sealed class ContractMemberMetadataTests
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaGet<ContractQueryRulesRequest, string>("/query-rules");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
+        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken)).Document!;
 
         // Assert
         var parameters = document.Paths["/query-rules"].Operations![HttpMethod.Get].Parameters!;
@@ -94,10 +94,10 @@ public sealed class ContractMemberMetadataTests
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaPost<ContractIgnoredInputRequest, string>("/ignored-input");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
+        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken)).Document!;
 
         // Assert
         var schema =

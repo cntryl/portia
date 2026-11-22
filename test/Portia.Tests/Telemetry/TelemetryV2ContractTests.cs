@@ -148,11 +148,11 @@ public sealed class TelemetryV2ContractTests
         var serializer = TestJson.Serializer(typeof(RpcGetValue));
         using var busHost = TestRequestBus.Create();
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
-        await using var registration = await server.RegisterAsync<RpcGetValue, int>();
+        await using var registration = await server.RegisterAsync<RpcGetValue, int>(TestContext.Current.CancellationToken);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
 
         // Act
-        var result = await sender.SendAsync<RpcGetValue, int>(new RpcGetValue(), RequestRouteValues.None, null);
+        var result = await sender.SendAsync<RpcGetValue, int>(new RpcGetValue(), RequestRouteValues.None, null, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -191,7 +191,7 @@ public sealed class TelemetryV2ContractTests
                 RequestActor.System, "test.shared.universal-action")
         ]), RequestDeliveryScopes.Fixed(busHost.Bus, new TestRequestActorValidator()));
 
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         var requestActivities = activities.Where(activity =>
             Equals(activity.GetTagItem("portia.request.name"), "test.shared.universal-action")).ToArray();
@@ -227,7 +227,7 @@ public sealed class TelemetryV2ContractTests
 
         // Act
         var result = await RequestDispatch.SendAsync(new TestRequestActorValidator("expired-token"), busHost.Bus,
-            new ChangeValue(1), delivery);
+            new ChangeValue(1), delivery, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.WasDispatched);
@@ -284,7 +284,7 @@ public sealed class TelemetryV2ContractTests
         // Act
         _ = await new FitzRequestScheduler(schedule, serializer).ScheduleAsync(
             new UniversalAction(7), new RequestScheduleSpec("0 0 * * *"), RequestRouteValues.None,
-            RequestActor.CreateSystem("scheduler"));
+            RequestActor.CreateSystem("scheduler"), TestContext.Current.CancellationToken);
 
         // Assert
         var producer = Assert.Single(activities,
@@ -377,7 +377,7 @@ public sealed class TelemetryV2ContractTests
 
         // Assert
         _ = await Assert.ThrowsAsync<OperationCanceledException>(() => RequestDispatch.SendAsync(
-            new UnrequestedCancellationValidator(), busHost.Bus, new ChangeValue(1), delivery).AsTask());
+            new UnrequestedCancellationValidator(), busHost.Bus, new ChangeValue(1), delivery, TestContext.Current.CancellationToken).AsTask());
 
         var process = Assert.Single(activities);
         Assert.Equal("fault", process.GetTagItem("portia.outcome"));

@@ -27,7 +27,7 @@ public sealed class PermissionCultureTests
         // Act
         try
         {
-            _ = await busHost.Bus.SendAsync(new GetOrder(-42), RequestActor.System);
+            _ = await busHost.Bus.SendAsync(new GetOrder(-42), RequestActor.System, ct: TestContext.Current.CancellationToken);
         }
         finally
         {

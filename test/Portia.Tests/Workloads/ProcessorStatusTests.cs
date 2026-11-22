@@ -141,7 +141,7 @@ public sealed class ProcessorStatusTests
 
         // Act
         var result = await scope.ServiceProvider.GetRequiredService<IRequestBus>()
-            .SendAsync(new GetProcessorStatus("projection"), actor);
+            .SendAsync(new GetProcessorStatus("projection"), actor, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -175,10 +175,10 @@ public sealed class ProcessorStatusTests
         // Assert
         Assert.True(actor.IsInRole(AdministratorRole));
         Assert.True(await provider.GetRequiredService<IOperationalAuthorizer>()
-            .AuthorizeAsync(actor, OperationalScope.Global, OperationalAccess.Read));
+            .AuthorizeAsync(actor, OperationalScope.Global, OperationalAccess.Read, TestContext.Current.CancellationToken));
 
         var result = await scope.ServiceProvider.GetRequiredService<IRequestBus>()
-            .SendAsync(new GetProcessorStatus("projection"), actor);
+            .SendAsync(new GetProcessorStatus("projection"), actor, ct: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Forbidden, result.Error.Kind);
@@ -208,7 +208,7 @@ public sealed class ProcessorStatusTests
 
         // Act
         var result = await scope.ServiceProvider.GetRequiredService<IRequestBus>()
-            .SendAsync(new GetProcessorStatus("projection"), actor);
+            .SendAsync(new GetProcessorStatus("projection"), actor, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -241,10 +241,10 @@ public sealed class ProcessorStatusTests
 
         // Assert
         Assert.True(await provider.GetRequiredService<IOperationalAuthorizer>()
-            .AuthorizeAsync(actor, OperationalScope.Global, OperationalAccess.Read));
+            .AuthorizeAsync(actor, OperationalScope.Global, OperationalAccess.Read, TestContext.Current.CancellationToken));
 
         var result = await scope.ServiceProvider.GetRequiredService<IRequestBus>()
-            .SendAsync(new GetProcessorStatus("component"), actor);
+            .SendAsync(new GetProcessorStatus("component"), actor, ct: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Forbidden, result.Error.Kind);
@@ -281,10 +281,10 @@ public sealed class ProcessorStatusTests
 
         // Assert
         Assert.True(await provider.GetRequiredService<IOperationalAuthorizer>()
-            .AuthorizeAsync(actor, OperationalScope.Global, OperationalAccess.Read));
+            .AuthorizeAsync(actor, OperationalScope.Global, OperationalAccess.Read, TestContext.Current.CancellationToken));
 
         var result = await scope.ServiceProvider.GetRequiredService<IRequestBus>()
-            .SendAsync(new GetProcessorStatus("projection"), actor);
+            .SendAsync(new GetProcessorStatus("projection"), actor, ct: TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccess);
         Assert.Equal(RequestErrorKind.Forbidden, result.Error.Kind);

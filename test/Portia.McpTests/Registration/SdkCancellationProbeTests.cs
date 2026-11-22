@@ -27,7 +27,7 @@ public sealed class SdkCancellationProbeTests
             // Act
             operation = SdkCancellationProbe.WaitForCancellationAsync(directory, PublishStartedAsync,
                 cancellation.Token);
-            await published.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await published.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             await cancellation.CancelAsync();
             var exception = await Record.ExceptionAsync(() => operation);
 

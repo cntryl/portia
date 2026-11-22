@@ -18,7 +18,7 @@ public sealed class ExplicitRegistrationConsumerTests
         using var host = builder.Build();
 
         // Assert
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains(nameof(IPermissionEvaluator), error.Message, StringComparison.Ordinal);
         Assert.Contains(typeof(FeatureTwoRequest).FullName!, error.Message, StringComparison.Ordinal);
@@ -159,8 +159,8 @@ public sealed class ExplicitRegistrationConsumerTests
         var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
 
         // Assert
-        Assert.Equal(11, (await bus.SendAsync(new FeatureOneRequest(10), RequestActor.System)).Value);
-        Assert.Equal(12, (await bus.SendAsync(new FeatureTwoRequest(10), RequestActor.System)).Value);
+        Assert.Equal(11, (await bus.SendAsync(new FeatureOneRequest(10), RequestActor.System, ct: TestContext.Current.CancellationToken)).Value);
+        Assert.Equal(12, (await bus.SendAsync(new FeatureTwoRequest(10), RequestActor.System, ct: TestContext.Current.CancellationToken)).Value);
         var transports = provider.GetServices<RequestTransportRegistration>().ToArray();
         Assert.Equal(4, transports.Length);
         Assert.Contains(transports, registration => registration.RequestType == typeof(FeatureOneRequest));

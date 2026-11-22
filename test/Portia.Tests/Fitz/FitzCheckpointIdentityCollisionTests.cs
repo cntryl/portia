@@ -22,9 +22,9 @@ public sealed class FitzCheckpointIdentityCollisionProof(FitzBrokerFixture broke
         Assert.NotEqual(first, second);
 
         // Act
-        await store.SaveAsync(first, new ProjectionCheckpoint(new EventCursor("8")));
+        await store.SaveAsync(first, new ProjectionCheckpoint(new EventCursor("8")), TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(second));
+        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(second, TestContext.Current.CancellationToken));
     }
 }

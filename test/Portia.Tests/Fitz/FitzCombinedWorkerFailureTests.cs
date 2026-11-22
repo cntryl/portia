@@ -46,17 +46,17 @@ public sealed class FitzCombinedWorkerFailureTests(FitzBrokerFixture broker)
         // Missing credentials exercise an ordinary terminal actor-validation failure. The observer's
         // exception must escape to the host, regardless of other listeners running alongside it.
         // Act
-        await publisher.EnqueueAsync(new UniversalAction(7), RequestRouteValues.None, null);
+        await publisher.EnqueueAsync(new UniversalAction(7), RequestRouteValues.None, null, TestContext.Current.CancellationToken);
 
         // Assert
         try
         {
-            await worker.StartAsync(default);
-            await observer.Seen.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await worker.StartAsync(TestContext.Current.CancellationToken);
+            await observer.Seen.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             var execution = Assert.IsAssignableFrom<Task>(worker.ExecuteTask);
 
             _ = await Assert.ThrowsAsync<TerminalHandlerFailureException>(() =>
-                execution.WaitAsync(TimeSpan.FromMilliseconds(500)));
+                execution.WaitAsync(TimeSpan.FromMilliseconds(500), TestContext.Current.CancellationToken));
         }
         finally
         {

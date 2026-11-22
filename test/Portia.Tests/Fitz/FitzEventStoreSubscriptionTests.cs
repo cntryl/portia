@@ -26,7 +26,7 @@ public sealed class FitzEventStoreSubscriptionTests
         var store = new FitzEventStore(client, TestJson.DomainSerializer(new DomainEventTypeCatalog()));
 
         // Act
-        await using var subscription = await store.SubscribeAsync(Pattern);
+        await using var subscription = await store.SubscribeAsync(Pattern, TestContext.Current.CancellationToken);
 
         // Assert
         using (var backstop = new CancellationTokenSource(TimeSpan.FromMilliseconds(50)))
@@ -55,7 +55,7 @@ public sealed class FitzEventStoreSubscriptionTests
         var store = new FitzEventStore(client, TestJson.DomainSerializer(new DomainEventTypeCatalog()));
 
         // Act
-        var subscription = await store.SubscribeAsync(Pattern);
+        var subscription = await store.SubscribeAsync(Pattern, TestContext.Current.CancellationToken);
 
         // Assert
         using (var backstop = new CancellationTokenSource(TimeSpan.FromMilliseconds(50)))
@@ -82,7 +82,7 @@ public sealed class FitzEventStoreSubscriptionTests
         var store = new FitzEventStore(client, TestJson.DomainSerializer(new DomainEventTypeCatalog()));
 
         // Act
-        var subscription = await store.SubscribeAsync(Pattern);
+        var subscription = await store.SubscribeAsync(Pattern, TestContext.Current.CancellationToken);
 
         // Assert
         using (var backstop = new CancellationTokenSource(TimeSpan.FromMilliseconds(50)))
@@ -92,7 +92,7 @@ public sealed class FitzEventStoreSubscriptionTests
         }
 
         _ = commits.Writer.TryComplete(new IOException("broker connection lost"));
-        _ = await Assert.ThrowsAsync<IOException>(async () => await subscription.WaitAsync());
+        _ = await Assert.ThrowsAsync<IOException>(async () => await subscription.WaitAsync(TestContext.Current.CancellationToken));
 
         await subscription.DisposeAsync();
 
@@ -110,7 +110,7 @@ public sealed class FitzEventStoreSubscriptionTests
         // Arrange
         var client = new BoundedStreamClient(4);
         var store = new FitzEventStore(client, TestJson.DomainSerializer(new DomainEventTypeCatalog()));
-        await using var subscription = await store.SubscribeAsync(Pattern);
+        await using var subscription = await store.SubscribeAsync(Pattern, TestContext.Current.CancellationToken);
 
         // Act
         for (var round = 0; round < 5; round++)
@@ -138,7 +138,7 @@ public sealed class FitzEventStoreSubscriptionTests
         // Arrange
         var client = new BoundedStreamClient(2);
         var store = new FitzEventStore(client, TestJson.DomainSerializer(new DomainEventTypeCatalog()));
-        await using var subscription = await store.SubscribeAsync(Pattern);
+        await using var subscription = await store.SubscribeAsync(Pattern, TestContext.Current.CancellationToken);
         client.Commit(3);
 
         // Act
@@ -169,16 +169,16 @@ public sealed class FitzEventStoreSubscriptionTests
         // Arrange
         var client = new GatedResubscribeClient();
         var store = new FitzEventStore(client, TestJson.DomainSerializer(new DomainEventTypeCatalog()));
-        var subscription = await store.SubscribeAsync(Pattern);
+        var subscription = await store.SubscribeAsync(Pattern, TestContext.Current.CancellationToken);
         client.Overflow();
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var wait = subscription.WaitAsync(deadline.Token).AsTask();
-        await client.ReplacementRequested.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await client.ReplacementRequested.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Act
         await subscription.DisposeAsync();
         client.ReleaseReplacement();
-        var failure = await Record.ExceptionAsync(() => wait.WaitAsync(TimeSpan.FromSeconds(5)));
+        var failure = await Record.ExceptionAsync(() => wait.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(failure);

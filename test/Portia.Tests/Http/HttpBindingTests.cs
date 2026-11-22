@@ -53,8 +53,8 @@ public sealed class HttpBindingTests : IAsyncDisposable
         request.Headers.Add("Authorization", "Bearer carried");
 
         // Act
-        var response = await client.SendAsync(request);
-        using var receipt = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        using var receipt = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
@@ -85,7 +85,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         // Act
         var response = await client.PostAsync($"/form-identity/{id}",
-            Form(("command_id", (conflict ? Uuid.CreateVersion4() : id).ToString())));
+            Form(("command_id", (conflict ? Uuid.CreateVersion4() : id).ToString())), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(conflict ? HttpStatusCode.BadRequest : HttpStatusCode.NoContent, response.StatusCode);
@@ -102,7 +102,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         // Act
         var response = await client.PostAsync($"/duplicate/{id}",
-            Form(("widget_id", Uuid.CreateVersion4().ToString()), ("name", "cog"), ("quantity", "2")));
+            Form(("widget_id", Uuid.CreateVersion4().ToString()), ("name", "cog"), ("quantity", "2")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -129,11 +129,11 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var widgetId = Uuid.CreateVersion4();
 
         // Act
-        var response = await client.GetAsync($"/widgets/{widgetId}?include_archived=true");
+        var response = await client.GetAsync($"/widgets/{widgetId}?include_archived=true", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var body = await response.Content.ReadFromJsonAsync<string>();
+        var body = await response.Content.ReadFromJsonAsync<string>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal($"{widgetId} (archived: True)", body);
     }
 
@@ -158,7 +158,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         request.Headers.Add("archived", "true");
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
@@ -182,11 +182,11 @@ public sealed class HttpBindingTests : IAsyncDisposable
                 int.Parse(http.Request.Query["limit"].ToString(), CultureInfo.InvariantCulture))))));
 
         // Act
-        var response = await client.GetAsync("/search?name=gear&limit=3");
+        var response = await client.GetAsync("/search?name=gear&limit=3", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("gear:3", await response.Content.ReadFromJsonAsync<string>());
+        Assert.Equal("gear:3", await response.Content.ReadFromJsonAsync<string>(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -211,7 +211,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
                 })).DisableAntiforgery());
 
         // Act
-        var response = await client.PostAsync("/sign-in", Form(("value", "jeff")));
+        var response = await client.PostAsync("/sign-in", Form(("value", "jeff")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
@@ -237,30 +237,30 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var widgetId = Uuid.CreateVersion4();
 
         var urlEncoded = await client.PostAsync($"/widgets/{widgetId}?dry_run=true",
-            Form(("name", "gear"), ("quantity", "3"), ("active", "on"), ("priority", "")));
+            Form(("name", "gear"), ("quantity", "3"), ("active", "on"), ("priority", "")), TestContext.Current.CancellationToken);
         using var multipartContent = new MultipartFormDataContent
         {
             { new StringContent("cog"), "name" },
             { new StringContent("4"), "quantity" },
             { new StringContent("7"), "priority" }
         };
-        var multipart = await client.PostAsync($"/widgets/{widgetId}", multipartContent);
+        var multipart = await client.PostAsync($"/widgets/{widgetId}", multipartContent, TestContext.Current.CancellationToken);
         var json = await client.PostAsJsonAsync($"/widgets/{widgetId}?dry_run=true",
-            new { name = "bolt", quantity = 5, active = true });
+            new { name = "bolt", quantity = 5, active = true }, cancellationToken: TestContext.Current.CancellationToken);
         var bodyBeforeQuery = await client.PostAsJsonAsync($"/widgets/{widgetId}?dry_run=true&quantity=9",
-            new { name = "nut", quantity = 6, active = false, dry_run = false });
+            new { name = "nut", quantity = 6, active = false, dry_run = false }, cancellationToken: TestContext.Current.CancellationToken);
         var formBeforeQuery = await client.PostAsync($"/widgets/{widgetId}?name=query",
-            Form(("name", "form"), ("quantity", "2")));
-        var queryOnly = await client.PostAsync($"/widgets/{widgetId}?name=washer&quantity=8&active=true", null);
+            Form(("name", "form"), ("quantity", "2")), TestContext.Current.CancellationToken);
+        var queryOnly = await client.PostAsync($"/widgets/{widgetId}?name=washer&quantity=8&active=true", null, TestContext.Current.CancellationToken);
         // ASP.NET's checkbox helpers post the checkbox value followed by a hidden "false".
         var helperChecked = await client.PostAsync($"/widgets/{widgetId}",
-            Form(("name", "pin"), ("quantity", "1"), ("active", "true"), ("active", "false")));
+            Form(("name", "pin"), ("quantity", "1"), ("active", "true"), ("active", "false")), TestContext.Current.CancellationToken);
         var helperUnchecked = await client.PostAsync($"/widgets/{widgetId}",
-            Form(("name", "pin"), ("quantity", "1"), ("active", "false")));
+            Form(("name", "pin"), ("quantity", "1"), ("active", "false")), TestContext.Current.CancellationToken);
 
         // Act
         var jsonMissingActive =
-            await client.PostAsJsonAsync($"/widgets/{widgetId}", new { name = "nut", quantity = 6 });
+            await client.PostAsJsonAsync($"/widgets/{widgetId}", new { name = "nut", quantity = 6 }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal($"{widgetId} gear 3 True none dry-run", await ReadSuccess(urlEncoded));
@@ -289,15 +289,15 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var widgetId = Uuid.CreateVersion4();
 
         var jsonQuery = await client.PostAsJsonAsync($"/widgets/{widgetId}?dry_run=true&priority=2",
-            new { name = "gear", quantity = 1, active = true });
+            new { name = "gear", quantity = 1, active = true }, cancellationToken: TestContext.Current.CancellationToken);
         var jsonDefaults = await client.PostAsJsonAsync($"/widgets/{widgetId}",
-            new { name = "gear", quantity = 1, active = true });
+            new { name = "gear", quantity = 1, active = true }, cancellationToken: TestContext.Current.CancellationToken);
         var formQuery = await client.PostAsync($"/widgets/{widgetId}?dry_run=true",
-            Form(("name", "cog"), ("quantity", "2")));
+            Form(("name", "cog"), ("quantity", "2")), TestContext.Current.CancellationToken);
 
         // Act
         var invalidQuery = await client.PostAsJsonAsync($"/widgets/{widgetId}?dry_run=maybe",
-            new { name = "gear", quantity = 1, active = true });
+            new { name = "gear", quantity = 1, active = true }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal($"{widgetId} gear 1 True 2 dry-run", await ReadSuccess(jsonQuery));
@@ -327,10 +327,10 @@ public sealed class HttpBindingTests : IAsyncDisposable
         HttpContent withoutCopy = body == "json"
             ? JsonContent.Create(new { name = "gear", quantity = 1, active = true })
             : Form(("name", "gear"), ("quantity", "1"));
-        var control = await client.PostAsync(uri, withoutCopy);
+        var control = await client.PostAsync(uri, withoutCopy, TestContext.Current.CancellationToken);
 
         // Act
-        var response = await client.PostAsync(uri, content);
+        var response = await client.PostAsync(uri, content, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(control.IsSuccessStatusCode);
@@ -348,11 +348,11 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var widgetId = Uuid.CreateVersion4();
 
         var missing = await client.PostAsJsonAsync($"/required-query/{widgetId}",
-            new { name = "gear", quantity = 1, active = true });
+            new { name = "gear", quantity = 1, active = true }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
         var supplied = await client.PostAsJsonAsync($"/required-query/{widgetId}?quantity=4",
-            new { name = "gear", active = true });
+            new { name = "gear", active = true }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
@@ -410,17 +410,17 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         var jsonHeaders = await client.SendAsync(WithHeaders(HttpMethod.Post, $"/widgets/{widgetId}",
             JsonContent.Create(new { name = "gear", quantity = 1, active = true }),
-            ("Dry-Run", "true"), ("Widget-Priority", "2")));
+            ("Dry-Run", "true"), ("Widget-Priority", "2")), TestContext.Current.CancellationToken);
         var jsonDefaults = await client.PostAsJsonAsync($"/widgets/{widgetId}",
-            new { name = "gear", quantity = 1, active = true });
+            new { name = "gear", quantity = 1, active = true }, cancellationToken: TestContext.Current.CancellationToken);
         var formHeaders = await client.SendAsync(WithHeaders(HttpMethod.Post, $"/widgets/{widgetId}",
-            Form(("name", "cog"), ("quantity", "2")), ("dry-run", "true"), ("Widget-Priority", "3")));
+            Form(("name", "cog"), ("quantity", "2")), ("dry-run", "true"), ("Widget-Priority", "3")), TestContext.Current.CancellationToken);
         var bodiless = await client.SendAsync(WithHeaders(HttpMethod.Get, $"/widgets/{widgetId}", null,
-            ("Include-Archived", "true")));
+            ("Include-Archived", "true")), TestContext.Current.CancellationToken);
 
         // Act
         var invalidHeader = await client.SendAsync(WithHeaders(HttpMethod.Post, $"/widgets/{widgetId}",
-            JsonContent.Create(new { name = "gear", quantity = 1, active = true }), ("Dry-Run", "maybe")));
+            JsonContent.Create(new { name = "gear", quantity = 1, active = true }), ("Dry-Run", "maybe")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal($"{widgetId} gear 1 True 2 dry-run", await ReadSuccess(jsonHeaders));
@@ -455,10 +455,10 @@ public sealed class HttpBindingTests : IAsyncDisposable
         if (duplicate == "repeated")
             request.Headers.Add("Dry-Run", "false");
         var control = await client.SendAsync(WithHeaders(HttpMethod.Post, $"/widgets/{Uuid.CreateVersion4()}",
-            JsonContent.Create(new { name = "gear", quantity = 1, active = true }), ("Dry-Run", "true")));
+            JsonContent.Create(new { name = "gear", quantity = 1, active = true }), ("Dry-Run", "true")), TestContext.Current.CancellationToken);
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(control.IsSuccessStatusCode);
@@ -480,15 +480,15 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var widgetId = Uuid.CreateVersion4();
 
         var missingJson = await client.SendAsync(WithHeaders(HttpMethod.Post, $"/required-header/{widgetId}",
-            JsonContent.Create(new { name = "gear" }), ("Widget-Active", "true")));
+            JsonContent.Create(new { name = "gear" }), ("Widget-Active", "true")), TestContext.Current.CancellationToken);
         var missingFormBoolean = await client.SendAsync(WithHeaders(HttpMethod.Post,
-            $"/required-header/{widgetId}", Form(("name", "gear")), ("Widget-Quantity", "4")));
+            $"/required-header/{widgetId}", Form(("name", "gear")), ("Widget-Quantity", "4")), TestContext.Current.CancellationToken);
         var suppliedForm = await client.SendAsync(WithHeaders(HttpMethod.Post, $"/required-header/{widgetId}",
-            Form(("name", "cog")), ("Widget-Quantity", "5"), ("Widget-Active", "false")));
+            Form(("name", "cog")), ("Widget-Quantity", "5"), ("Widget-Active", "false")), TestContext.Current.CancellationToken);
 
         // Act
         var supplied = await client.SendAsync(WithHeaders(HttpMethod.Post, $"/required-header/{widgetId}",
-            JsonContent.Create(new { name = "gear" }), ("Widget-Quantity", "4"), ("Widget-Active", "true")));
+            JsonContent.Create(new { name = "gear" }), ("Widget-Quantity", "4"), ("Widget-Active", "true")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, missingJson.StatusCode);
@@ -514,7 +514,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
             Form(("name", "gear"), ("quantity", "1")), ("Widget-Active", value));
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(status, response.StatusCode);
@@ -584,23 +584,23 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var widgetId = Uuid.CreateVersion4();
 
         var bodiless = await client.SendAsync(WithHeaders(HttpMethod.Get, "/scoped?name=gear", null,
-            ("Tenant-Id", "acme")));
+            ("Tenant-Id", "acme")), TestContext.Current.CancellationToken);
         var json = await client.SendAsync(WithHeaders(HttpMethod.Post, "/scoped",
-            JsonContent.Create(new { name = "gear", active = true }), ("tenant-id", "acme")));
+            JsonContent.Create(new { name = "gear", active = true }), ("tenant-id", "acme")), TestContext.Current.CancellationToken);
         var form = await client.SendAsync(WithHeaders(HttpMethod.Post, "/scoped",
-            Form(("name", "cog"), ("active", "on")), ("Tenant-Id", "globex")));
+            Form(("name", "cog"), ("active", "on")), ("Tenant-Id", "globex")), TestContext.Current.CancellationToken);
         var stream = await client.SendAsync(WithHeaders(HttpMethod.Get, "/scoped/items", null,
-            ("Tenant-Id", "acme")));
-        var outsideContract = await client.GetAsync($"/widgets/{widgetId}");
+            ("Tenant-Id", "acme")), TestContext.Current.CancellationToken);
+        var outsideContract = await client.GetAsync($"/widgets/{widgetId}", TestContext.Current.CancellationToken);
 
         // Act
-        var missing = await client.GetAsync("/scoped?name=gear");
+        var missing = await client.GetAsync("/scoped?name=gear", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("acme:gear", await ReadSuccess(bodiless));
         Assert.Equal("acme:gear:True", await ReadSuccess(json));
         Assert.Equal("globex:cog:True", await ReadSuccess(form));
-        Assert.Equal(["acme"], await stream.Content.ReadFromJsonAsync<List<string>>());
+        Assert.Equal(["acme"], await stream.Content.ReadFromJsonAsync<List<string>>(cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal($"{widgetId} (archived: False)", await ReadSuccess(outsideContract));
         Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
     }
@@ -627,10 +627,10 @@ public sealed class HttpBindingTests : IAsyncDisposable
         };
 
         var control = await client.SendAsync(WithHeaders(HttpMethod.Post, "/scoped",
-            JsonContent.Create(new { name = "gear" }), ("Tenant-Id", "acme")));
+            JsonContent.Create(new { name = "gear" }), ("Tenant-Id", "acme")), TestContext.Current.CancellationToken);
 
         // Act
-        var response = await client.SendAsync(WithHeaders(HttpMethod.Post, uri, content, ("Tenant-Id", "acme")));
+        var response = await client.SendAsync(WithHeaders(HttpMethod.Post, uri, content, ("Tenant-Id", "acme")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(control.IsSuccessStatusCode);
@@ -693,11 +693,11 @@ public sealed class HttpBindingTests : IAsyncDisposable
                 .FromHeader(x => x.Tenant, "tenant-id"));
         }, BindTenantHeader);
 
-        var custom = await client.GetAsync("/custom?tenant=acme");
+        var custom = await client.GetAsync("/custom?tenant=acme", TestContext.Current.CancellationToken);
 
         // Act
         var same = await client.SendAsync(WithHeaders(HttpMethod.Post, "/same",
-            JsonContent.Create(new { name = "gear" }), ("Tenant-Id", "acme")));
+            JsonContent.Create(new { name = "gear" }), ("Tenant-Id", "acme")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("acme:none", await ReadSuccess(custom));
@@ -723,7 +723,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
             ("Tenant-Id", "acme"), ("Prefer", "respond-async"), ("Authorization", "Bearer carried"));
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
@@ -806,7 +806,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         // Act
         var response = await client.PostAsync($"/widgets/{Uuid.CreateVersion4()}",
-            new StringContent(form, Encoding.UTF8, "application/x-www-form-urlencoded"));
+            new StringContent(form, Encoding.UTF8, "application/x-www-form-urlencoded"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -820,7 +820,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var client = await StartAsync(app => app.MapPortiaPost<HttpCreateOrder, Uuid>("/orders"));
 
         // Act
-        var response = await client.PostAsync("/orders", Form(("lines", "x")));
+        var response = await client.PostAsync("/orders", Form(("lines", "x")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
@@ -845,13 +845,13 @@ public sealed class HttpBindingTests : IAsyncDisposable
             _ = app.MapPortiaPost<HttpUpdateWidget, string>("/open-form/{widget_id}").DisableAntiforgery();
         }, services => services.AddAntiforgery());
 
-        var missing = await client.PostAsync("/guarded-form", Form(("value", "x")));
-        var json = await client.PostAsJsonAsync("/guarded-form", new { value = "json" });
+        var missing = await client.PostAsync("/guarded-form", Form(("value", "x")), TestContext.Current.CancellationToken);
+        var json = await client.PostAsJsonAsync("/guarded-form", new { value = "json" }, cancellationToken: TestContext.Current.CancellationToken);
         var widgetId = Uuid.CreateVersion4();
-        var optedOut = await client.PostAsync($"/open-form/{widgetId}", Form(("name", "open"), ("quantity", "1")));
+        var optedOut = await client.PostAsync($"/open-form/{widgetId}", Form(("name", "open"), ("quantity", "1")), TestContext.Current.CancellationToken);
 
-        var tokenResponse = await client.GetAsync("/token");
-        var field = (await tokenResponse.Content.ReadAsStringAsync()).Split('=', 2);
+        var tokenResponse = await client.GetAsync("/token", TestContext.Current.CancellationToken);
+        var field = (await tokenResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)).Split('=', 2);
         using var valid = new HttpRequestMessage(HttpMethod.Post, "/guarded-form")
         {
             Content = Form(("value", "valid"), (field[0], field[1]))
@@ -860,7 +860,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
             tokenResponse.Headers.GetValues("Set-Cookie").Select(cookie => cookie.Split(';')[0]));
 
         // Act
-        var accepted = await client.SendAsync(valid);
+        var accepted = await client.SendAsync(valid, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);
@@ -885,13 +885,13 @@ public sealed class HttpBindingTests : IAsyncDisposable
         });
         var widgetId = Uuid.CreateVersion4();
 
-        var urlEncoded = await client.PostAsync("/unguarded-form", Form(("value", "x")));
+        var urlEncoded = await client.PostAsync("/unguarded-form", Form(("value", "x")), TestContext.Current.CancellationToken);
         using var multipartContent = new MultipartFormDataContent { { new StringContent("x"), "value" } };
-        var multipart = await client.PostAsync("/unguarded-form", multipartContent);
-        var json = await client.PostAsJsonAsync("/unguarded-form", new { value = "json" });
+        var multipart = await client.PostAsync("/unguarded-form", multipartContent, TestContext.Current.CancellationToken);
+        var json = await client.PostAsJsonAsync("/unguarded-form", new { value = "json" }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
-        var optedOut = await client.PostAsync($"/open-form/{widgetId}", Form(("name", "open"), ("quantity", "1")));
+        var optedOut = await client.PostAsync($"/open-form/{widgetId}", Form(("name", "open"), ("quantity", "1")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, urlEncoded.StatusCode);
@@ -920,18 +920,18 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var widgetId = Uuid.CreateVersion4();
 
         var plainJson = await client.PostAsync($"/widgets/{widgetId}", new StringContent(
-            /*lang=json,strict*/ """{"name":"gear","quantity":1,"active":true}""", Encoding.UTF8, "text/plain"));
-        var plainEmpty = await client.PostAsync("/optional", new StringContent("", Encoding.UTF8, "text/plain"));
+            /*lang=json,strict*/ """{"name":"gear","quantity":1,"active":true}""", Encoding.UTF8, "text/plain"), TestContext.Current.CancellationToken);
+        var plainEmpty = await client.PostAsync("/optional", new StringContent("", Encoding.UTF8, "text/plain"), TestContext.Current.CancellationToken);
         var untypedJson = await client.PostAsync("/optional",
-            new ByteArrayContent( /*lang=json,strict*/ """{"value":"untyped"}"""u8.ToArray()));
+            new ByteArrayContent( /*lang=json,strict*/ """{"value":"untyped"}"""u8.ToArray()), TestContext.Current.CancellationToken);
         using var untypedChunkedContent =
             new UnknownLengthContent( /*lang=json,strict*/ """{"value":"chunked"}"""u8.ToArray());
-        var untypedChunked = await client.PostAsync("/optional", untypedChunkedContent);
+        var untypedChunked = await client.PostAsync("/optional", untypedChunkedContent, TestContext.Current.CancellationToken);
         var suffixJson = await client.PostAsync("/optional", new StringContent(
-            /*lang=json,strict*/ """{"value":"suffix"}""", Encoding.UTF8, "application/merge-patch+json"));
+            /*lang=json,strict*/ """{"value":"suffix"}""", Encoding.UTF8, "application/merge-patch+json"), TestContext.Current.CancellationToken);
 
         // Act
-        var bodiless = await client.PostAsync("/optional", null);
+        var bodiless = await client.PostAsync("/optional", null, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, plainJson.StatusCode);
@@ -984,11 +984,11 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var widgetId = Uuid.CreateVersion4();
 
         // Act
-        var response = await client.GetAsync($"/decorated/{widgetId}?include_archived=true");
+        var response = await client.GetAsync($"/decorated/{widgetId}?include_archived=true", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal($"{widgetId} (archived: True)", await response.Content.ReadFromJsonAsync<string>());
+        Assert.Equal($"{widgetId} (archived: True)", await response.Content.ReadFromJsonAsync<string>(cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
         var cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
         Assert.StartsWith("last_widget=", cookie, StringComparison.Ordinal);
@@ -1014,12 +1014,12 @@ public sealed class HttpBindingTests : IAsyncDisposable
                 return null;
             })));
 
-        var denied = await client.PostAsync("/sign-out", null);
+        var denied = await client.PostAsync("/sign-out", null, TestContext.Current.CancellationToken);
         using var permitted = new HttpRequestMessage(HttpMethod.Post, "/sign-out");
         permitted.Headers.Add("X-Debug-Permission", "http:guarded");
 
         // Act
-        var allowed = await client.SendAsync(permitted);
+        var allowed = await client.SendAsync(permitted, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.Found, denied.StatusCode);
@@ -1044,7 +1044,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var widgetId = Uuid.CreateVersion4();
 
         // Act
-        var response = await client.GetAsync($"/tenants/acme/widgets/{widgetId}");
+        var response = await client.GetAsync($"/tenants/acme/widgets/{widgetId}", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -1082,12 +1082,12 @@ public sealed class HttpBindingTests : IAsyncDisposable
             services => services.Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = 1));
 
         // Act
-        var response = await client.PostAsync("/custom-body", new StringContent("too large"));
+        var response = await client.PostAsync("/custom-body", new StringContent("too large"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(binderCalled);
         Assert.True(response.StatusCode == HttpStatusCode.RequestEntityTooLarge,
-            $"Expected 413, received {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+            $"Expected 413, received {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken)}");
     }
 
     /// <summary>
@@ -1111,10 +1111,10 @@ public sealed class HttpBindingTests : IAsyncDisposable
         using var large = new UnknownLengthContent("name=gear&quantity=1&active=true"u8.ToArray());
         large.Headers.ContentType = new MediaTypeHeaderValue("application/x-www-form-urlencoded");
 
-        using var accepted = await client.PostAsync($"/server-limited-form/{widgetId}", small);
+        using var accepted = await client.PostAsync($"/server-limited-form/{widgetId}", small, TestContext.Current.CancellationToken);
 
         // Act
-        using var rejected = await client.PostAsync($"/server-limited-form/{widgetId}", large);
+        using var rejected = await client.PostAsync($"/server-limited-form/{widgetId}", large, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal($"{widgetId} gear 1 False none", await ReadSuccess(accepted));
@@ -1141,7 +1141,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         // Act
         using var response = await client.PostAsync(
-            $"/antiforgery-limited-form/{Uuid.CreateVersion4()}", large);
+            $"/antiforgery-limited-form/{Uuid.CreateVersion4()}", large, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
@@ -1161,7 +1161,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
 
         // Act
-        using var response = await client.PostAsync($"/server-limited-json/{Uuid.CreateVersion4()}", content);
+        using var response = await client.PostAsync($"/server-limited-json/{Uuid.CreateVersion4()}", content, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
@@ -1195,7 +1195,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
             services => services.Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = 8));
 
         // Act
-        using var response = await client.PostAsync("/custom-chunked", new UnknownLengthContent(new byte[9]));
+        using var response = await client.PostAsync("/custom-chunked", new UnknownLengthContent(new byte[9]), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
@@ -1226,7 +1226,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
             services => services.Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = 8));
 
         // Act
-        using var response = await client.PostAsync("/custom-chunked-prefix", new UnknownLengthContent(new byte[9]));
+        using var response = await client.PostAsync("/custom-chunked-prefix", new UnknownLengthContent(new byte[9]), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
@@ -1251,7 +1251,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
             services => services.Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = 8));
 
         // Act
-        using var response = await client.PostAsync("/custom-chunked-limit", new UnknownLengthContent(new byte[8]));
+        using var response = await client.PostAsync("/custom-chunked-limit", new UnknownLengthContent(new byte[8]), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -1293,7 +1293,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
                     Uuid.Parse((string)http.Request.RouteValues["widget_id"]!, CultureInfo.InvariantCulture)))));
 
         // Act
-        var response = await client.GetAsync("/custom-format/not-a-uuid");
+        var response = await client.GetAsync("/custom-format/not-a-uuid", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -1348,9 +1348,9 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var handler = Assert.IsType<Func<HttpContext, Result<string>, CancellationToken, ValueTask<IResult?>>>(
             configuration.ResultHandler);
         var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await handler(new DefaultHttpContext(), Result<string>.Success("done"), default));
+            await handler(new DefaultHttpContext(), Result<string>.Success("done"), TestContext.Current.CancellationToken));
         var failureResponse = await handler(new DefaultHttpContext(), Result<string>.Failure(
-            new RequestError(RequestErrorKind.NotFound, "missing")), default);
+            new RequestError(RequestErrorKind.NotFound, "missing")), TestContext.Current.CancellationToken);
 
         Assert.Equal(
             "OnResult must return a response for a successful result when a custom success response is declared.",
@@ -1383,7 +1383,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
                     Uuid.Parse((string)http.Request.RouteValues["widget_id"]!, CultureInfo.InvariantCulture))));
 
         // Assert
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _app.StartAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _app.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("Custom route parameters must exactly match", error.Message, StringComparison.Ordinal);
         Assert.Empty(scheduler.Requests);
@@ -1410,7 +1410,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
                 endpoint => endpoint.Created("/tenants/{tenant_id}/widgets/{missing}"));
 
         // Act
-        var exception = await Record.ExceptionAsync(() => _app.StartAsync());
+        var exception = await Record.ExceptionAsync(() => _app.StartAsync(TestContext.Current.CancellationToken));
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(exception);
@@ -1445,7 +1445,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
                     Uuid.Parse((string)http.Request.RouteValues["widget_id"]!, CultureInfo.InvariantCulture))));
 
         // Assert
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _app.StartAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => _app.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("Custom route parameters must exactly match", error.Message, StringComparison.Ordinal);
         Assert.Empty(scheduler.Requests);
@@ -1475,7 +1475,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
                     Uuid.Parse((string)http.Request.RouteValues["widget_id"]!, CultureInfo.InvariantCulture))));
 
         // Act
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(["started"], scheduler.Requests);
@@ -1493,7 +1493,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         // Act
         var response = await client.PostAsync("/custom-json",
-            new StringContent("{", Encoding.UTF8, "application/json"));
+            new StringContent("{", Encoding.UTF8, "application/json"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -1510,7 +1510,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var client = await StartAsync(app => app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}"));
 
         // Act
-        var response = await client.GetAsync("/widgets/not-a-uuid?include_archived=true");
+        var response = await client.GetAsync("/widgets/not-a-uuid?include_archived=true", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -1530,11 +1530,11 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var response = await client.PostAsJsonAsync("/orders", new
         {
             lines = new[] { new { sku = "ABC", quantity = 2 } }
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var orderId = await response.Content.ReadFromJsonAsync<Uuid>();
+        var orderId = await response.Content.ReadFromJsonAsync<Uuid>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotEqual(Uuid.Empty, orderId);
     }
 
@@ -1553,7 +1553,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         // Act
         var response = await client.PostAsync(
             "/orders",
-            new StringContent( /*lang=json,strict*/ """{"lines":"not-an-array"}""", Encoding.UTF8, "application/json"));
+            new StringContent( /*lang=json,strict*/ """{"lines":"not-an-array"}""", Encoding.UTF8, "application/json"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -1571,7 +1571,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         // Act
         var response = await client.PostAsync(
             "/orders",
-            new StringContent("{not json at all", Encoding.UTF8, "application/json"));
+            new StringContent("{not json at all", Encoding.UTF8, "application/json"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -1590,7 +1590,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var client = await StartAsync(app => app.MapPortiaPost<HttpCreateOrder, Uuid>("/orders"));
 
         // Act
-        var response = await client.PostAsync("/orders", new ByteArrayContent([]));
+        var response = await client.PostAsync("/orders", new ByteArrayContent([]), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -1618,12 +1618,12 @@ public sealed class HttpBindingTests : IAsyncDisposable
         request.Headers.Add("Authorization", "Bearer carried");
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.Equal("respond-async", response.Headers.GetValues("Preference-Applied").Single());
-        using var receipt = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var receipt = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         var requestId = receipt.RootElement.GetProperty("request_id").GetString();
         Assert.NotNull(requestId);
         Assert.NotEqual(Uuid.Empty, Uuid.Parse(requestId, CultureInfo.InvariantCulture));
@@ -1646,7 +1646,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         request.Headers.Add("Prefer", "respond-async");
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
@@ -1672,7 +1672,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         request.Headers.Add("Prefer", "respond-async");
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
@@ -1696,7 +1696,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         request.Headers.Add("Authorization", "Bearer carried");
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
@@ -1718,7 +1718,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         request.Headers.Add("Prefer", "respond-async");
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
@@ -1738,7 +1738,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         _ = request.Headers.TryAddWithoutValidation("Prefer", "x-respond-async");
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
@@ -1757,12 +1757,12 @@ public sealed class HttpBindingTests : IAsyncDisposable
         _ = request.Headers.TryAddWithoutValidation("Authorization", "Basic secret");
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var problem = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(400, problem.GetProperty("status").GetInt32());
         Assert.Equal("Bad Request", problem.GetProperty("title").GetString());
         Assert.True(problem.TryGetProperty("detail", out _));
@@ -1781,7 +1781,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         _ = request.Headers.TryAddWithoutValidation("Authorization", "Bearer abc ");
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
@@ -1796,11 +1796,11 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var client = await StartAsync(app => app.MapPortiaPost<HttpOptionalBody, string>("/optional"));
 
         // Act
-        var response = await client.PostAsync("/optional", new ByteArrayContent([]));
+        var response = await client.PostAsync("/optional", new ByteArrayContent([]), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("fallback", await response.Content.ReadFromJsonAsync<string>());
+        Assert.Equal("fallback", await response.Content.ReadFromJsonAsync<string>(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     /// <summary>JSON bodies are rejected before exceeding the configured bound.</summary>
@@ -1813,7 +1813,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         // Act
         var response = await client.PostAsync("/optional", new StringContent(
-            /*lang=json,strict*/ """{"value":"too-long"}""", Encoding.UTF8, "application/json"));
+            /*lang=json,strict*/ """{"value":"too-long"}""", Encoding.UTF8, "application/json"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
@@ -1837,12 +1837,12 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         // Act
         var response = await client.PostAsync("/optional", new StringContent(
-            /*lang=json,strict*/ """{"value":"x"}""", Encoding.UTF8, "application/json"));
+            /*lang=json,strict*/ """{"value":"x"}""", Encoding.UTF8, "application/json"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
-        var body = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains("An unexpected error occurred.", body, StringComparison.Ordinal);
         Assert.DoesNotContain(nameof(PortiaHttpOptions.MaxJsonBodyBytes), body, StringComparison.Ordinal);
     }
@@ -1895,11 +1895,11 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         // Act
         var response = await client.PostAsync("/optional",
-            new StringContent(json, Encoding.UTF8, "application/json"));
+            new StringContent(json, Encoding.UTF8, "application/json"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("\"bound\"", await response.Content.ReadAsStringAsync());
+        Assert.Equal("\"bound\"", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -1916,7 +1916,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
             services => services.AddSingleton<IRequestQueuePublisher>(publisher));
 
         // Act
-        var response = await client.PostAsJsonAsync("/ping", new { });
+        var response = await client.PostAsJsonAsync("/ping", new { }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
@@ -1934,12 +1934,12 @@ public sealed class HttpBindingTests : IAsyncDisposable
         var client = await StartAsync(app => app.MapPortiaPost<HttpGuardedAction>("/guarded"));
 
         // Act
-        var response = await client.PostAsJsonAsync("/guarded", new { });
+        var response = await client.PostAsJsonAsync("/guarded", new { }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Equal("false", response.Headers.GetValues(ResultHttpExtensions.TransientHeaderName).Single());
-        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var problem = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         Assert.Equal("about:blank", problem.RootElement.GetProperty("type").GetString());
         Assert.Equal("Forbidden", problem.RootElement.GetProperty("title").GetString());
         Assert.Equal(403, problem.RootElement.GetProperty("status").GetInt32());
@@ -1967,7 +1967,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);
         Assert.Equal("true", context.Response.Headers[ResultHttpExtensions.TransientHeaderName].ToString());
         context.Response.Body.Position = 0;
-        using var problem = await JsonDocument.ParseAsync(context.Response.Body);
+        using var problem = await JsonDocument.ParseAsync(context.Response.Body, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(problem.RootElement.GetProperty("transient").GetBoolean());
     }
 
@@ -2005,7 +2005,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         request.Headers.Add("X-Debug-Permission", "http:guarded");
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
@@ -2027,11 +2027,11 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         // Act
         var response =
-            await client.PostAsJsonAsync("/payments", new { amount = new { currency = "USD", cents = 500 } });
+            await client.PostAsJsonAsync("/payments", new { amount = new { currency = "USD", cents = 500 } }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var paymentId = await response.Content.ReadFromJsonAsync<Uuid>();
+        var paymentId = await response.Content.ReadFromJsonAsync<Uuid>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotEqual(Uuid.Empty, paymentId);
     }
 
@@ -2044,10 +2044,10 @@ public sealed class HttpBindingTests : IAsyncDisposable
         // Arrange
         var client = await StartAsync(app => app.MapPortiaGetStream<HttpListWidgets, string>("/widgets"));
 
-        var response = await client.GetAsync("/widgets");
+        var response = await client.GetAsync("/widgets", TestContext.Current.CancellationToken);
 
         // Act
-        var items = await response.Content.ReadFromJsonAsync<List<string>>();
+        var items = await response.Content.ReadFromJsonAsync<List<string>>(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -2063,7 +2063,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
             AddConflictStreamGuard);
 
         // Act
-        var response = await client.GetAsync("/guarded-widgets");
+        var response = await client.GetAsync("/guarded-widgets", TestContext.Current.CancellationToken);
 
         // Assert
         await AssertGuardConflictAsync(response);
@@ -2078,7 +2078,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
             AddConflictStreamGuard);
 
         // Act
-        var response = await client.GetAsync("/guarded-widget-events");
+        var response = await client.GetAsync("/guarded-widget-events", TestContext.Current.CancellationToken);
 
         // Assert
         await AssertGuardConflictAsync(response);
@@ -2106,10 +2106,10 @@ public sealed class HttpBindingTests : IAsyncDisposable
         // Arrange
         var client = await StartAsync(app => app.MapPortiaGetSse<HttpListWidgets, string>("/widgets/events"));
 
-        var response = await client.GetAsync("/widgets/events");
+        var response = await client.GetAsync("/widgets/events", TestContext.Current.CancellationToken);
 
         // Act
-        var body = await response.Content.ReadAsStringAsync();
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -2139,7 +2139,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         request.Headers.Add("Authorization", "Bearer carried");
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -2172,7 +2172,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
             _ = request.Headers.TryAddWithoutValidation("Authorization", "Basic secret");
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -2198,7 +2198,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
         request.Headers.Add("X-Debug-Permission", "http:guarded-queue");
 
         // Act
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

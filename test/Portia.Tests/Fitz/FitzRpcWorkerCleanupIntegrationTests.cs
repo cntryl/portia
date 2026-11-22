@@ -24,7 +24,7 @@ public sealed class FitzRpcWorkerCleanupIntegrationTests(FitzBrokerFixture broke
                                ?? "ws://127.0.0.1:4090/ws");
         // Keep domain dispatch parallel enough to expose the independent per-worker limit on any CPU count.
         await using var workerClient = new FitzClient(new ClientConfig(endpoint) { AsyncHandlers = new AsyncHandlerOptions(MaxConcurrency: 4) });
-        await workerClient.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(TimeSpan.FromSeconds(15)));
+        await workerClient.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(TimeSpan.FromSeconds(15)), TestContext.Current.CancellationToken);
         await using var callerClient = await broker.CreateClientAsync();
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         using var bus = TestRequestBus.Create();
@@ -100,7 +100,7 @@ public sealed class FitzRpcWorkerCleanupIntegrationTests(FitzBrokerFixture broke
         {
             cleanup.Release.TrySetResult();
             if (second is { } pending)
-                _ = await Record.ExceptionAsync(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
+                _ = await Record.ExceptionAsync(() => pending.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
             if (registration is not null)
                 await registration.DisposeAsync();
         }

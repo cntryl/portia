@@ -287,9 +287,9 @@ public sealed class DomainEventValidationTests
         // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await store.AppendAsync(stream, 0,
-                [Event(Metadata(aggregateId)), Event(Metadata(Uuid.CreateVersion4(), 2))]));
+                [Event(Metadata(aggregateId)), Event(Metadata(Uuid.CreateVersion4(), 2))], TestContext.Current.CancellationToken));
 
-        await foreach (var record in store.ReadAsync(stream))
+        await foreach (var record in store.ReadAsync(stream, ct: TestContext.Current.CancellationToken))
             Assert.Fail($"A rejected batch appended event {record.Event.Metadata.EventId}.");
     }
 

@@ -27,7 +27,7 @@ public sealed class CompilerRetentionProbeTests
         const int edits = 4;
 
         // Act
-        var report = await RetentionProbe.RunAsync("minimal", edits);
+        var report = await RetentionProbe.RunAsync("minimal", edits, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(edits, report.EditsCompleted);

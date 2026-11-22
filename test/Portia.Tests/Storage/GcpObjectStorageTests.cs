@@ -25,14 +25,14 @@ public sealed class GcpObjectStorageTests
         harness.Gcs.BucketKeys[ApplicationStorageResolver.Bucket] = Harness.KeyOf("shared");
         var storage = new GcpObjectStorage(Harness.CreateClient(harness.Gcs), Harness.CreateSigner(), resolver,
             harness.Protection.CreateProtector("layout"));
-        var session = await storage.CreateUploadAsync(tenant, digest);
-        var part = await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1));
+        var session = await storage.CreateUploadAsync(tenant, digest, TestContext.Current.CancellationToken);
+        var part = await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken);
         var receipt = new ObjectPartReceipt(1, harness.Gcs.PutSigned(part.UploadUri, content));
         resolver.ContentRoot = "moved";
         resolver.UploadRoot = "new-uploads";
 
         // Act
-        await storage.CompleteUploadAsync(session, [receipt]);
+        await storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(harness.Gcs.Objects.ContainsKey((ApplicationStorageResolver.Bucket, expectedKey)));
@@ -53,7 +53,7 @@ public sealed class GcpObjectStorageTests
         // Act
         await ObjectStorageConformance.VerifyAsync(storage, new TenantId("tenant-one"), new TenantId("tenant-two"),
             (part, bytes, _) => ValueTask.FromResult(new ObjectPartReceipt(part.PartNumber,
-                harness.Gcs.PutSigned(part.UploadUri, bytes.ToArray()))));
+                harness.Gcs.PutSigned(part.UploadUri, bytes.ToArray()))), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(harness.Gcs.Objects);
@@ -73,11 +73,11 @@ public sealed class GcpObjectStorageTests
         var content = "object bytes"u8.ToArray();
         var digest = Digest(content);
         var harness = Harness.Create();
-        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
-        var signed = await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1));
+        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
+        var signed = await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken);
         var receipt = new ObjectPartReceipt(1, harness.Gcs.PutSigned(signed.UploadUri, content));
         if (replay)
-            await harness.Storage.CompleteUploadAsync(session, [receipt]);
+            await harness.Storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken);
         harness.Seed("tenant-one-bucket", digest, content);
         var key = ("tenant-one-bucket", $"content/sha256/{digest.Sha256[..2]}/{digest.Sha256}");
         var destination = harness.Gcs.Objects[key] with { KmsKey = missingKey ? null : Harness.KeyOf("tenant-two") };
@@ -86,7 +86,7 @@ public sealed class GcpObjectStorageTests
 
         // Act
         var exception =
-            await Record.ExceptionAsync(async () => await harness.Storage.CompleteUploadAsync(session, [receipt]));
+            await Record.ExceptionAsync(async () => await harness.Storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidOperationException>(exception);
@@ -107,12 +107,12 @@ public sealed class GcpObjectStorageTests
         var content = "object bytes"u8.ToArray();
         var digest = Digest(content);
         var harness = Harness.Create();
-        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
-        var signed = await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(4));
+        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
+        var signed = await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(4), TestContext.Current.CancellationToken);
         var receipt = harness.Gcs.PutSigned(signed.UploadUri, content);
 
         // Act
-        await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, receipt)]);
+        await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, receipt)], TestContext.Current.CancellationToken);
 
         // Assert
         var start = Assert.Single(harness.Gcs.Requests,
@@ -145,10 +145,10 @@ public sealed class GcpObjectStorageTests
         var harness = Harness.Create();
         var session =
             await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"),
-                new ObjectDigest(new string('a', 64), 1));
+                new ObjectDigest(new string('a', 64), 1), TestContext.Current.CancellationToken);
 
         // Act
-        var signed = await harness.Storage.SignPartAsync(session, 3, TimeSpan.FromMinutes(4));
+        var signed = await harness.Storage.SignPartAsync(session, 3, TimeSpan.FromMinutes(4), TestContext.Current.CancellationToken);
 
         // Assert
         var query = HttpUtility.ParseQueryString(signed.UploadUri.Query);
@@ -169,7 +169,7 @@ public sealed class GcpObjectStorageTests
         // Act
         var session =
             await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"),
-                new ObjectDigest(new string('a', 64), 1));
+                new ObjectDigest(new string('a', 64), 1), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.DoesNotContain("tenant-one-bucket", session.Token, StringComparison.Ordinal);
@@ -184,13 +184,13 @@ public sealed class GcpObjectStorageTests
         // Arrange
         var harness = Harness.Create();
         var digest = Digest("correct"u8.ToArray());
-        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
-        var signed = await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1));
+        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
+        var signed = await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken);
         var receipt = harness.Gcs.PutSigned(signed.UploadUri, "changed"u8.ToArray());
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, receipt)]));
+            await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, receipt)], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidDataException>(error);
@@ -210,27 +210,27 @@ public sealed class GcpObjectStorageTests
         var second = "tail"u8.ToArray();
         var content = first.Concat(second).ToArray();
         var tenant = new TenantId("tenant-one");
-        var session = await harness.Storage.CreateUploadAsync(tenant, Digest(content));
+        var session = await harness.Storage.CreateUploadAsync(tenant, Digest(content), TestContext.Current.CancellationToken);
         var shortFirst =
-            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1))).UploadUri,
+            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).UploadUri,
                 first[..1024]);
         var secondReceipt =
-            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 2, TimeSpan.FromMinutes(1))).UploadUri,
+            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 2, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).UploadUri,
                 second);
 
         // Act
         var error = await Record.ExceptionAsync(async () => await harness.Storage.CompleteUploadAsync(
-            session, [new ObjectPartReceipt(1, shortFirst), new ObjectPartReceipt(2, secondReceipt)]));
+            session, [new ObjectPartReceipt(1, shortFirst), new ObjectPartReceipt(2, secondReceipt)], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidDataException>(error);
         Assert.Equal(2, harness.Gcs.Names("tenant-one-bucket", "staging/").Length);
         var corrected =
-            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1))).UploadUri,
+            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).UploadUri,
                 first);
         await harness.Storage.CompleteUploadAsync(session,
-            [new ObjectPartReceipt(1, corrected), new ObjectPartReceipt(2, secondReceipt)]);
-        Assert.True(await harness.Storage.HeadAndVerifyAsync(tenant, Digest(content)));
+            [new ObjectPartReceipt(1, corrected), new ObjectPartReceipt(2, secondReceipt)], TestContext.Current.CancellationToken);
+        Assert.True(await harness.Storage.HeadAndVerifyAsync(tenant, Digest(content), TestContext.Current.CancellationToken));
     }
 
     /// <summary>Checks that a receipt that is not a generation is rejected without ending the session.</summary>
@@ -240,19 +240,19 @@ public sealed class GcpObjectStorageTests
         // Arrange
         var content = "receipt"u8.ToArray();
         var harness = Harness.Create();
-        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), Digest(content));
+        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), Digest(content), TestContext.Current.CancellationToken);
         var receipt =
-            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1))).UploadUri,
+            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).UploadUri,
                 content);
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "\"etag\"")]));
+            await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "\"etag\"")], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidDataException>(error);
         Assert.Single(harness.Gcs.Names("tenant-one-bucket", "staging/"));
-        await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, receipt)]);
+        await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, receipt)], TestContext.Current.CancellationToken);
     }
 
     /// <summary>Checks that a stale receipt, from an overwritten part, is rejected and leaves the part for correction.</summary>
@@ -262,14 +262,14 @@ public sealed class GcpObjectStorageTests
         // Arrange
         var content = "stale"u8.ToArray();
         var harness = Harness.Create();
-        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), Digest(content));
-        var uri = (await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1))).UploadUri;
+        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), Digest(content), TestContext.Current.CancellationToken);
+        var uri = (await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).UploadUri;
         var stale = harness.Gcs.PutSigned(uri, "first attempt"u8.ToArray());
         harness.Gcs.PutSigned(uri, content);
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, stale)]));
+            await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, stale)], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidDataException>(error);
@@ -283,15 +283,15 @@ public sealed class GcpObjectStorageTests
         // Arrange
         var content = "retryable object"u8.ToArray();
         var harness = Harness.Create();
-        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), Digest(content));
+        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), Digest(content), TestContext.Current.CancellationToken);
         var receipt =
-            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1))).UploadUri,
+            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).UploadUri,
                 content);
         var parts = new[] { new ObjectPartReceipt(1, receipt) };
-        await harness.Storage.CompleteUploadAsync(session, parts);
+        await harness.Storage.CompleteUploadAsync(session, parts, TestContext.Current.CancellationToken);
 
         // Act
-        var error = await Record.ExceptionAsync(async () => await harness.Storage.CompleteUploadAsync(session, parts));
+        var error = await Record.ExceptionAsync(async () => await harness.Storage.CompleteUploadAsync(session, parts, TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(error);
@@ -308,9 +308,9 @@ public sealed class GcpObjectStorageTests
         var content = "raced object"u8.ToArray();
         var digest = Digest(content);
         var harness = Harness.Create();
-        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
         var receipt =
-            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1))).UploadUri,
+            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).UploadUri,
                 content);
         var contentKey = $"content/sha256/{digest.Sha256[..2]}/{digest.Sha256}";
         harness.Gcs.BeforeRewrite = gcs => gcs.Objects[("tenant-one-bucket", contentKey)] = new FakeGcsHandler.Stored(
@@ -318,7 +318,7 @@ public sealed class GcpObjectStorageTests
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, receipt)]));
+            await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, receipt)], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(error);
@@ -334,9 +334,9 @@ public sealed class GcpObjectStorageTests
         var content = "squatted key"u8.ToArray();
         var digest = Digest(content);
         var harness = Harness.Create();
-        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
         var receipt =
-            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1))).UploadUri,
+            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).UploadUri,
                 content);
         harness.Gcs.BeforeRewrite = gcs =>
             gcs.Objects[("tenant-one-bucket", $"content/sha256/{digest.Sha256[..2]}/{digest.Sha256}")] =
@@ -344,7 +344,7 @@ public sealed class GcpObjectStorageTests
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, receipt)]));
+            await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, receipt)], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidDataException>(error);
@@ -358,17 +358,17 @@ public sealed class GcpObjectStorageTests
         var content = "shared digest"u8.ToArray();
         var digest = Digest(content);
         var harness = Harness.Create();
-        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
         var receipt =
-            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1))).UploadUri,
+            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).UploadUri,
                 content);
 
         // Act
-        await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, receipt)]);
+        await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, receipt)], TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.True(await harness.Storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest));
-        Assert.False(await harness.Storage.HeadAndVerifyAsync(new TenantId("tenant-two"), digest));
+        Assert.True(await harness.Storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken));
+        Assert.False(await harness.Storage.HeadAndVerifyAsync(new TenantId("tenant-two"), digest, TestContext.Current.CancellationToken));
         Assert.Empty(harness.Gcs.Names("tenant-two-bucket", ""));
         Assert.DoesNotContain(harness.Gcs.Requests,
             static request => request.Path.Contains("tenant-two-bucket/o/staging", StringComparison.Ordinal));
@@ -382,12 +382,12 @@ public sealed class GcpObjectStorageTests
         var harness = Harness.Create();
         var session =
             await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"),
-                new ObjectDigest(new string('a', 64), 1));
+                new ObjectDigest(new string('a', 64), 1), TestContext.Current.CancellationToken);
         var other = Harness.Create(purpose: "Cntryl.Portia.Storage.Aws.UploadSession.v1", sameKeyRingAs: harness);
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await other.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)));
+            await other.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<ArgumentException>(error);
@@ -404,7 +404,7 @@ public sealed class GcpObjectStorageTests
         // Act
         var error = await Record.ExceptionAsync(async () =>
             await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"),
-                new ObjectDigest(new string('a', 64), 1)));
+                new ObjectDigest(new string('a', 64), 1), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidOperationException>(error);
@@ -417,15 +417,15 @@ public sealed class GcpObjectStorageTests
         // Arrange
         var content = "wrong key"u8.ToArray();
         var harness = Harness.Create();
-        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), Digest(content));
+        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), Digest(content), TestContext.Current.CancellationToken);
         harness.Gcs.SignedUploadKeyOverride = Harness.KeyOf("someone-else") + "/cryptoKeyVersions/1";
         var receipt =
-            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1))).UploadUri,
+            harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).UploadUri,
                 content);
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, receipt)]));
+            await harness.Storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, receipt)], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidOperationException>(error);
@@ -447,19 +447,19 @@ public sealed class GcpObjectStorageTests
         var content = first.Concat(second).Concat(tail).ToArray();
         var digest = Digest(content);
         var tenant = new TenantId("tenant-one");
-        var session = await harness.Storage.CreateUploadAsync(tenant, digest);
+        var session = await harness.Storage.CreateUploadAsync(tenant, digest, TestContext.Current.CancellationToken);
         var receipts = new List<ObjectPartReceipt>();
         foreach (var (number, bytes) in new[] { (3, tail), (1, first), (2, second) })
         {
-            var uri = (await harness.Storage.SignPartAsync(session, number, TimeSpan.FromMinutes(1))).UploadUri;
+            var uri = (await harness.Storage.SignPartAsync(session, number, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).UploadUri;
             receipts.Add(new ObjectPartReceipt(number, harness.Gcs.PutSigned(uri, bytes)));
         }
 
         // Act
-        await harness.Storage.CompleteUploadAsync(session, receipts);
+        await harness.Storage.CompleteUploadAsync(session, receipts, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.True(await harness.Storage.HeadAndVerifyAsync(tenant, digest));
+        Assert.True(await harness.Storage.HeadAndVerifyAsync(tenant, digest, TestContext.Current.CancellationToken));
         Assert.Equal(content,
             harness.Gcs.Objects[("tenant-one-bucket", $"content/sha256/{digest.Sha256[..2]}/{digest.Sha256}")].Data);
     }
@@ -470,14 +470,14 @@ public sealed class GcpObjectStorageTests
     {
         // Arrange
         var harness = Harness.Create();
-        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), Digest("abort"u8.ToArray()));
-        harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1))).UploadUri,
+        var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), Digest("abort"u8.ToArray()), TestContext.Current.CancellationToken);
+        harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).UploadUri,
             "abort"u8.ToArray());
-        harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 2, TimeSpan.FromMinutes(1))).UploadUri,
+        harness.Gcs.PutSigned((await harness.Storage.SignPartAsync(session, 2, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).UploadUri,
             "abort"u8.ToArray());
 
         // Act
-        await harness.Storage.AbortUploadAsync(session);
+        await harness.Storage.AbortUploadAsync(session, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(harness.Gcs.Names("tenant-one-bucket", ""));
@@ -496,7 +496,7 @@ public sealed class GcpObjectStorageTests
 
         // Act
         var download =
-            await harness.Storage.CreateDownloadAsync(tenant, digest, ObjectStorageLimits.MaximumDownloadLifetime);
+            await harness.Storage.CreateDownloadAsync(tenant, digest, ObjectStorageLimits.MaximumDownloadLifetime, TestContext.Current.CancellationToken);
 
         // Assert
         var query = HttpUtility.ParseQueryString(download.DownloadUri.Query);
@@ -506,7 +506,7 @@ public sealed class GcpObjectStorageTests
         Assert.True(download.ExpiresAt <= DateTimeOffset.UtcNow.Add(ObjectStorageLimits.MaximumDownloadLifetime));
         var tooLong = await Record.ExceptionAsync(async () =>
             await harness.Storage.CreateDownloadAsync(tenant, digest,
-                ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromSeconds(1)));
+                ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken));
         Assert.IsType<ArgumentOutOfRangeException>(tooLong);
     }
 
@@ -523,12 +523,12 @@ public sealed class GcpObjectStorageTests
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await harness.Storage.CreateDownloadAsync(new TenantId("tenant-one"), digest, TimeSpan.FromMinutes(1)));
+            await harness.Storage.CreateDownloadAsync(new TenantId("tenant-one"), digest, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<FileNotFoundException>(error);
-        Assert.False(await harness.Storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest));
-        Assert.Null(await harness.Storage.OpenReadAsync(new TenantId("tenant-one"), digest));
+        Assert.False(await harness.Storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken));
+        Assert.Null(await harness.Storage.OpenReadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Checks that head verification reads metadata only and does not download the object.</summary>
@@ -542,7 +542,7 @@ public sealed class GcpObjectStorageTests
         harness.Seed("tenant-one-bucket", digest, content);
 
         // Act
-        var verified = await harness.Storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest);
+        var verified = await harness.Storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(verified);
@@ -561,12 +561,12 @@ public sealed class GcpObjectStorageTests
         harness.Seed("tenant-one-bucket", digest, content);
 
         // Act
-        await using var stream = await harness.Storage.OpenReadAsync(new TenantId("tenant-one"), digest);
+        await using var stream = await harness.Storage.OpenReadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(stream);
         using var copy = new MemoryStream();
-        await stream.CopyToAsync(copy);
+        await stream.CopyToAsync(copy, TestContext.Current.CancellationToken);
         Assert.Equal(content, copy.ToArray());
         var read = harness.Gcs.Requests.Last(static request => request.Query.GetValueOrDefault("alt") == "media");
         Assert.Equal("5000", read.Query["generation"]);
@@ -582,14 +582,14 @@ public sealed class GcpObjectStorageTests
         var tenant = new TenantId("tenant-one");
         var harness = Harness.Create();
         harness.Seed("tenant-one-bucket", digest, content);
-        await harness.Storage.DeleteAsync(tenant, digest);
+        await harness.Storage.DeleteAsync(tenant, digest, TestContext.Current.CancellationToken);
 
         // Act
-        var error = await Record.ExceptionAsync(async () => await harness.Storage.DeleteAsync(tenant, digest));
+        var error = await Record.ExceptionAsync(async () => await harness.Storage.DeleteAsync(tenant, digest, TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(error);
-        Assert.False(await harness.Storage.HeadAndVerifyAsync(tenant, digest));
+        Assert.False(await harness.Storage.HeadAndVerifyAsync(tenant, digest, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Checks that registration resolves the provider from an explicit client and signer.</summary>

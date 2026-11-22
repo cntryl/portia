@@ -45,7 +45,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
             SingleWorkerMembership.Options(TimeSpan.FromSeconds(2)),
             cts.Token);
 
-        await Task.Delay(TimeSpan.FromSeconds(7));
+        await Task.Delay(TimeSpan.FromSeconds(7), TestContext.Current.CancellationToken);
         cts.Cancel();
 
         // Act
@@ -97,7 +97,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
             SingleWorkerMembership.Options(TimeSpan.FromSeconds(2)),
             holderCts.Token);
 
-        await holderAcquired.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await holderAcquired.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         var waiterRunner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(waiterClient.Lease),
             new SingleWorkerMembership());
@@ -119,7 +119,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
 
         // TTL is 2s; give it real margin past that for the broker to expire the lease and for
         // the waiter's blocked WithLeaseAsync call to actually win it.
-        await waiterAcquired.Task.WaitAsync(TimeSpan.FromSeconds(15));
+        await waiterAcquired.Task.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
 
         waiterCts.Cancel();
         try

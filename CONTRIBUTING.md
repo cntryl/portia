@@ -8,10 +8,21 @@ separately classified integration suite against Fitz:
 ```shell
 dotnet format Portia.slnx --verify-no-changes
 dotnet build Portia.slnx --configuration Release
-dotnet test Portia.slnx --configuration Release --no-build --filter "Category!=BrokerIntegration&Category!=StorageIntegration&Category!=CassieIntegration&Category!=DurabilityIntegration"
+dotnet test --solution Portia.slnx --configuration Release --no-build \
+  --filter-not-trait "Category=BrokerIntegration" --filter-not-trait "Category=StorageIntegration" \
+  --filter-not-trait "Category=CassieIntegration" --filter-not-trait "Category=DurabilityIntegration"
 docker compose up -d --wait
-dotnet test Portia.slnx --configuration Release --no-build --filter "Category=BrokerIntegration"
+dotnet test --project test/Portia.Tests/Portia.Tests.csproj --configuration Release --no-build --filter-trait "Category=BrokerIntegration"
+dotnet test --project test/Portia.ConsumerTests/Portia.ConsumerTests.csproj --configuration Release --no-build --filter-trait "Category=BrokerIntegration"
 docker compose down --volumes
+```
+
+Use `--coverlet` to collect coverage from a test project that references Coverlet.
+The shared test configuration limits coverage to Portia assemblies.
+
+```shell
+dotnet test --project test/Portia.ReflectionDisabledTests/Portia.ReflectionDisabledTests.csproj \
+  --configuration Release --coverlet --coverlet-output-format cobertura
 ```
 
 The Compose broker listens on `127.0.0.1:4090` with authentication disabled. Set
@@ -27,7 +38,7 @@ docker compose up -d --wait fitz cassie
 curl --fail --silent --show-error --retry 30 --retry-delay 1 --retry-connrefused --max-time 2 http://127.0.0.1:8080/readyz
 FITZ_TEST_ENDPOINT=ws://127.0.0.1:4090/ws \
 PORTIA_CASSIE_TEST_CONNECTION_STRING='Host=127.0.0.1;Port=5432;Database=postgres;Username=root;Password=portia-cassie-test;SSL Mode=Disable;Timeout=15' \
-dotnet test Portia.slnx --configuration Release --no-build --filter "Category=CassieIntegration"
+dotnet test --project test/Portia.Tests/Portia.Tests.csproj --configuration Release --no-build --filter-trait "Category=CassieIntegration"
 docker compose down --volumes
 ```
 
@@ -45,7 +56,7 @@ and a child test-worker process. It owns container creation, hard termination, b
 assertions, and cleanup; it does not use the shared tmpfs broker:
 
 ```shell
-dotnet test test/Portia.Tests/Portia.Tests.csproj -c Release --no-build --filter "Category=DurabilityIntegration"
+dotnet test --project test/Portia.Tests/Portia.Tests.csproj -c Release --no-build --filter-trait "Category=DurabilityIntegration"
 ```
 
 See [processor operations](docs/operations.md) for the recovery and approval contract.

@@ -48,11 +48,11 @@ public sealed class SingleProcessWorkloadCancellationTests
         // Assert
         try
         {
-            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Volatile.Write(ref snapshot, []);
-            await cleanupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            await callbackRan.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            var observationWindow = Task.Delay(TimeSpan.FromMilliseconds(100));
+            await cleanupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            await callbackRan.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            var observationWindow = Task.Delay(TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken);
             _ = await Task.WhenAny(run, observationWindow);
 
             Assert.False(run.IsCompleted,
@@ -64,11 +64,11 @@ public sealed class SingleProcessWorkloadCancellationTests
             try
             {
                 releaseCleanup.TrySetResult();
-                await cleanupFinished.Task.WaitAsync(TimeSpan.FromSeconds(5));
+                await cleanupFinished.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
                 try
                 {
                     await lifetime.CancelAsync();
-                    await run.WaitAsync(TimeSpan.FromSeconds(5));
+                    await run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
                 }
                 catch (OperationCanceledException)
                 {
@@ -134,11 +134,11 @@ public sealed class SingleProcessWorkloadCancellationTests
         // Assert
         try
         {
-            await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Volatile.Write(ref snapshot, [new("sibling")]);
-            await cleanupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await cleanupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             releaseCleanup.TrySetResult();
-            var error = await Assert.ThrowsAsync<AggregateException>(() => run.WaitAsync(TimeSpan.FromSeconds(5)));
+            var error = await Assert.ThrowsAsync<AggregateException>(() => run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
 
             Assert.Equal(["asynchronous workload cleanup failed", "cancellation callback failed"],
                 error.Flatten().InnerExceptions.Select(failure => failure.Message).Order(StringComparer.Ordinal));
@@ -160,7 +160,7 @@ public sealed class SingleProcessWorkloadCancellationTests
 
                 try
                 {
-                    await run.WaitAsync(TimeSpan.FromSeconds(5));
+                    await run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
                 }
                 catch (Exception error) when (error is AggregateException or OperationCanceledException)
                 {

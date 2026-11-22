@@ -25,21 +25,21 @@ public sealed class ScenarioDrainTests
         {
             var scenario = new ReactorScenario().Given(events);
             var reactor = new DrainReactor(new InMemoryProjectionCheckpointStore(), seen);
-            await scenario.RunAsync(reactor);
+            await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
             Assert.Equal(expected, seen);
-            await scenario.RunAsync(reactor);
+            await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
             Assert.Equal(expected.Concat(expected), seen);
         }
         else
         {
             var scenario = new ProjectorScenario().Given(events);
             var projector = new DrainProjector(scenario.Store, seen);
-            await scenario.RunAsync(projector);
+            await scenario.RunAsync(projector, TestContext.Current.CancellationToken);
             Assert.Equal(expected, seen);
-            await scenario.RunAsync(projector);
+            await scenario.RunAsync(projector, TestContext.Current.CancellationToken);
             Assert.Equal(expected, seen);
             var extra = Uuid.CreateVersion4();
-            await scenario.Given(new UserCreated(extra)).RunAsync(projector);
+            await scenario.Given(new UserCreated(extra)).RunAsync(projector, TestContext.Current.CancellationToken);
             Assert.Equal(expected.Append(extra), seen);
         }
     }
@@ -64,19 +64,19 @@ public sealed class ScenarioDrainTests
             var scenario = new ReactorScenario().Given(events);
             var checkpoints = new InMemoryProjectionCheckpointStore();
             var reactor = new DrainReactor(checkpoints, seen, failure);
-            var diagnostic = await Assert.ThrowsAsync<ProcessorFailureException>(() => scenario.RunAsync(reactor));
+            var diagnostic = await Assert.ThrowsAsync<ProcessorFailureException>(() => scenario.RunAsync(reactor, TestContext.Current.CancellationToken));
             Assert.Same(failure, diagnostic.InnerException);
-            var checkpoint = await checkpoints.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern));
+            var checkpoint = await checkpoints.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), TestContext.Current.CancellationToken);
             Assert.Equal("4096", checkpoint.Cursor.ToString());
         }
         else
         {
             var scenario = new ProjectorScenario().Given(events);
             var projector = new DrainProjector(scenario.Store, seen, failure);
-            var diagnostic = await Assert.ThrowsAsync<ProcessorFailureException>(() => scenario.RunAsync(projector));
+            var diagnostic = await Assert.ThrowsAsync<ProcessorFailureException>(() => scenario.RunAsync(projector, TestContext.Current.CancellationToken));
             Assert.Same(failure, diagnostic.InnerException);
             var checkpoint =
-                await scenario.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern));
+                await scenario.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern), TestContext.Current.CancellationToken);
             Assert.Equal("4096", checkpoint.Cursor.ToString());
         }
 
@@ -106,7 +106,7 @@ public sealed class ScenarioDrainTests
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
                 scenario.RunAsync(reactor, cancellation.Token));
             Assert.Equal(ids.Take(4096), seen);
-            await scenario.RunAsync(reactor);
+            await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
             Assert.Equal(ids, seen.Skip(4096));
         }
         else
@@ -117,7 +117,7 @@ public sealed class ScenarioDrainTests
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
                 scenario.RunAsync(projector, cancellation.Token));
             Assert.Equal(ids.Take(4096), seen);
-            await scenario.RunAsync(projector);
+            await scenario.RunAsync(projector, TestContext.Current.CancellationToken);
             Assert.Equal(ids, seen);
         }
     }
@@ -161,7 +161,7 @@ public sealed class ScenarioDrainTests
                 scenario.RunAsync(reactor, cancellation.Token));
             Assert.Equal(cancellation.Token, error.CancellationToken);
             Assert.Equal(ProjectionCheckpoint.Start,
-                await store.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern)));
+                await store.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), TestContext.Current.CancellationToken));
         }
         else
         {
@@ -171,7 +171,7 @@ public sealed class ScenarioDrainTests
                 scenario.RunAsync(projector, cancellation.Token));
             Assert.Equal(cancellation.Token, error.CancellationToken);
             Assert.Equal(ProjectionCheckpoint.Start,
-                await scenario.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern)));
+                await scenario.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern), TestContext.Current.CancellationToken));
         }
 
         Assert.Equal(300, seen.Count);

@@ -32,10 +32,10 @@ public sealed class OpenApiEnrichmentTests
         _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/organized")
             .WithName("getContract").WithTags("Contracts").WithSummary("Get a contract")
             .WithDescription("Returns a **documented** contract.");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var parsed = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"));
+        var parsed = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Empty(parsed.Diagnostic!.Errors);
@@ -72,10 +72,10 @@ public sealed class OpenApiEnrichmentTests
                 .RequestExample("create", new ContractExampleRequest(7, endpoint))
                 .ResponseExample(200, "normal", endpoint)
                 .ResponseHeader<string>(200, "ETag", "Version token.", required: true));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken))!;
 
         // Assert
         var operation = document["paths"]!["/examples/{id}"]!["post"]!;
@@ -104,10 +104,10 @@ public sealed class OpenApiEnrichmentTests
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/invalid-example");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json"));
+        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken));
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(exception);
@@ -130,10 +130,10 @@ public sealed class OpenApiEnrichmentTests
         _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/custom-example", configuration =>
             configuration
                 .Produces<string>(200).OnResult((_, _) => Results.Json("actual response")));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken))!;
 
         // Assert
         var examples =
@@ -155,10 +155,10 @@ public sealed class OpenApiEnrichmentTests
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/header", configuration => configuration
             .ResponseHeader<string>(400, "X-Reason", "Rejection reason."));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
+        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken)).Document!;
 
         // Assert
         var responses = document.Paths["/header"].Operations![HttpMethod.Get].Responses!;
@@ -178,10 +178,10 @@ public sealed class OpenApiEnrichmentTests
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaPost<ConvertedExampleRequest, string>("/converted/{id}", configuration => configuration
             .FromQuery(request => request.Count).RequestExample("converted", new ConvertedExampleRequest(16, 7)));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
+        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken)).Document!;
 
         // Assert
         var parameters = document.Paths["/converted/{id}"].Operations![HttpMethod.Post].Parameters!;
@@ -208,10 +208,10 @@ public sealed class OpenApiEnrichmentTests
                 .RequestExample("create", new ContractExampleRequest(7, Example("Endpoint"), 25)));
         _ = app.MapPortiaGet<EnumExampleRequest, string>("/required-header", configuration => configuration
             .FromHeader(request => request.Mode, "Example-Mode"));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken))!;
 
         // Assert
         var operation = document["paths"]!["/headers/{id}"]!["post"]!;
@@ -246,10 +246,10 @@ public sealed class OpenApiEnrichmentTests
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaGet<EnumExampleRequest, string>("/application-header");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken))!;
 
         // Assert
         var parameter = Assert.Single(document["paths"]!["/application-header"]!["get"]!["parameters"]!.AsArray())!;
@@ -273,10 +273,10 @@ public sealed class OpenApiEnrichmentTests
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaGet<EnumExampleRequest, string>("/application-header", configuration => configuration
             .Describe(request => request.Mode, "Mode header."));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken))!;
 
         // Assert
         var parameter = Assert.Single(document["paths"]!["/application-header"]!["get"]!["parameters"]!.AsArray())!;
@@ -306,10 +306,10 @@ public sealed class OpenApiEnrichmentTests
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaGet<EnumExampleRequest, string>("/enum-example", configuration => configuration
             .RequestExample("first", new EnumExampleRequest(ExampleMode.First)));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
+        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken)).Document!;
 
         // Assert
         var parameter = Assert.Single(document.Paths["/enum-example"].Operations![HttpMethod.Get].Parameters!);

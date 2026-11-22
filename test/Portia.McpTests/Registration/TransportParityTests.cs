@@ -66,13 +66,13 @@ public sealed class TransportParityTests
         _ = app.MapPortiaPost<QualifiedChange, QualifiedReply>("/qualification").AllowAnonymous();
         _ = app.MapPortiaGet<QualifiedRead, QualifiedState>("/qualification").AllowAnonymous();
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var http = app.GetTestClient();
         var json = app.Services.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
         McpClient? client = null;
         if (transportName == "mcp-http")
             client = await McpClient.CreateAsync(new HttpClientTransport(new HttpClientTransportOptions
-            { Endpoint = new Uri("http://localhost/mcp") }, http));
+            { Endpoint = new Uri("http://localhost/mcp") }, http), cancellationToken: TestContext.Current.CancellationToken);
         else if (transportName == "mcp-stdio")
         {
             var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
@@ -81,7 +81,7 @@ public sealed class TransportParityTests
                 AppContext.BaseDirectory);
             client = await McpClient.CreateAsync(new StdioClientTransport(new StdioClientTransportOptions
             { Command = "dotnet", Arguments = [host, "--qualification"], Name = "Application parity" }),
-                StdioClientOptions.Create());
+                StdioClientOptions.Create(), cancellationToken: TestContext.Current.CancellationToken);
         }
 
         await using var ownedClient = client;

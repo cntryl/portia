@@ -21,19 +21,19 @@ public sealed class OperationalConcurrencyIntegrationTests(FitzBrokerFixture bro
             new OperationalProcessingSettings(1, 1, 3, 1, 1), [], null, [], [], [], 0, DateTimeOffset.UtcNow);
 
         // Assert
-        Assert.True(await journal.CompareExchangeAsync(state, 0, Guid.Empty));
+        Assert.True(await journal.CompareExchangeAsync(state, 0, Guid.Empty, TestContext.Current.CancellationToken));
         var next = state with { Revision = 2, ConsecutiveFailures = 1 };
         await using (var competing =
-                     await client.Kv.BeginAsync(FitzKvCheckpoints.WorkloadRoute(route, target.Identity)))
+                     await client.Kv.BeginAsync(FitzKvCheckpoints.WorkloadRoute(route, target.Identity), ct: TestContext.Current.CancellationToken))
         {
             _ = await Assert.ThrowsAsync<ProjectionConcurrencyException>(() => journal
-                .CompareExchangeAsync(next, state.Revision, state.OwnerSession).AsTask());
-            Assert.Equal(1, (await journal.ReadAsync(target))!.Revision);
-            await competing.RollbackAsync();
+                .CompareExchangeAsync(next, state.Revision, state.OwnerSession, TestContext.Current.CancellationToken).AsTask());
+            Assert.Equal(1, (await journal.ReadAsync(target, TestContext.Current.CancellationToken))!.Revision);
+            await competing.RollbackAsync(TestContext.Current.CancellationToken);
         }
 
-        Assert.True(await journal.CompareExchangeAsync(next, state.Revision, state.OwnerSession));
-        Assert.False(await journal.CompareExchangeAsync(next, state.Revision, state.OwnerSession));
-        Assert.Equal(2, (await journal.ReadAsync(target))!.Revision);
+        Assert.True(await journal.CompareExchangeAsync(next, state.Revision, state.OwnerSession, TestContext.Current.CancellationToken));
+        Assert.False(await journal.CompareExchangeAsync(next, state.Revision, state.OwnerSession, TestContext.Current.CancellationToken));
+        Assert.Equal(2, (await journal.ReadAsync(target, TestContext.Current.CancellationToken))!.Revision);
     }
 }

@@ -76,14 +76,14 @@ public sealed class AggregateRepositoryRegistrationTests
             var aggregate = new TestAggregate(id);
             aggregate.ChangeValue(7);
             await scope.ServiceProvider.GetRequiredService<IAggregateWriter>()
-                .SaveAsync(aggregate, new RequestDispatchContext(RequestActor.System));
+                .SaveAsync(aggregate, new RequestDispatchContext(RequestActor.System), TestContext.Current.CancellationToken);
         }
 
         await using var reading = provider.CreateAsyncScope();
 
         // Act
         var hydrated = await reading.ServiceProvider.GetRequiredService<IAggregateReader>()
-            .HydrateAsync(new TestAggregate(id));
+            .HydrateAsync(new TestAggregate(id), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(7, hydrated.Value);

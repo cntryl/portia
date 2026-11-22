@@ -41,12 +41,12 @@ public sealed class DeliveryScopeTests
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         try
         {
-            await worker.StartAsync(default);
+            await worker.StartAsync(TestContext.Current.CancellationToken);
             await effects.WaitForAsync("nested", 4);
         }
         finally
         {
-            await worker.StopAsync(default);
+            await worker.StopAsync(TestContext.Current.CancellationToken);
             (worker as IDisposable)?.Dispose();
         }
 
@@ -76,7 +76,7 @@ public sealed class DeliveryScopeTests
         _ = services.AddSingleton<FitzRpcRequestServer>();
         await using var provider = ConsumerHost.Build(services);
         var server = provider.GetRequiredService<FitzRpcRequestServer>();
-        await using var registration = await server.RegisterAsync<ScopeRequest>();
+        await using var registration = await server.RegisterAsync<ScopeRequest>(TestContext.Current.CancellationToken);
 
         // Act
         var sender = new FitzRemoteRequestSender(provider.GetRequiredService<IRpcClient>(), serializer, serializer);
@@ -85,12 +85,12 @@ public sealed class DeliveryScopeTests
         for (var i = 0; i < 2; i++)
         {
             Assert.True(
-                (await sender.SendAsync(new ScopeRequest(Uuid.CreateVersion4()), new RequestRouteValues(), null))
+                (await sender.SendAsync(new ScopeRequest(Uuid.CreateVersion4()), new RequestRouteValues(), null, TestContext.Current.CancellationToken))
                 .IsSuccess);
         }
 
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await sender.SendAsync(new ScopeRequest(Uuid.CreateVersion4(), 1), new RequestRouteValues(), null));
+            await sender.SendAsync(new ScopeRequest(Uuid.CreateVersion4(), 1), new RequestRouteValues(), null, TestContext.Current.CancellationToken));
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         Assert.Equal(3,
             effects.Items.Where(item => item.Component == "delivery").Select(item => item.ScopeId).Distinct().Count());

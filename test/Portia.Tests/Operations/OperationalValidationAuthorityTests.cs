@@ -15,48 +15,48 @@ public sealed partial class OperationalValidationAuthorityTests
         var principal = new RequestDispatchContext(RequestActor.System);
         var inventory = new Inventory(inventoryId);
         inventory.AddStock();
-        await repository.SaveAsync(inventory, principal);
+        await repository.SaveAsync(inventory, principal, TestContext.Current.CancellationToken);
 
         // Act
-        var advisory = await repository.HydrateAsync(new Inventory(inventoryId));
+        var advisory = await repository.HydrateAsync(new Inventory(inventoryId), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(1, advisory.Available);
         var order = new Order(orderId);
         order.Place(inventoryId);
-        await repository.SaveAsync(order, principal);
+        await repository.SaveAsync(order, principal, TestContext.Current.CancellationToken);
         Assert.Equal("pending", order.State);
 
         // A different participant operation commits after the successful observation.
-        var competing = await repository.HydrateAsync(new Inventory(inventoryId));
+        var competing = await repository.HydrateAsync(new Inventory(inventoryId), TestContext.Current.CancellationToken);
         Assert.True(competing.Reserve(Uuid.CreateVersion4()));
-        await repository.SaveAsync(competing, principal);
+        await repository.SaveAsync(competing, principal, TestContext.Current.CancellationToken);
 
         var journal = new MemoryOperationalStore();
         var target = new OperationalTarget("reservations", "stream://authority/orders/*", OperationalScope.Global);
         var session = new OperationalSession(journal, new OperationalOptions(), new EmptyApplicationTopology(),
             TimeProvider.System);
         await session.AcquireAsync(target, "reactor", new OperationalProcessingSettings(512, 4096, 3, 1, 1),
-            ProjectionCheckpoint.Start, default);
+            ProjectionCheckpoint.Start, TestContext.Current.CancellationToken);
         var reactor = new ReservationReactor(journal, repository);
         reactor.BindWorkload(new WorkloadIdentity(target.Processor), target.Processor);
-        var checkpoint = await new ReactorRunner(events).RunAsync(session, reactor, ProjectionCheckpoint.Start);
+        var checkpoint = await new ReactorRunner(events).RunAsync(session, reactor, ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken);
         Assert.NotEqual(ProjectionCheckpoint.Start, checkpoint);
         Assert.Null(session.State.Block);
         Assert.All(session.State.Attempts, a => Assert.Equal("committed", a.Outcome));
-        Assert.Equal("rejected", (await repository.HydrateAsync(new Order(orderId))).State);
+        Assert.Equal("rejected", (await repository.HydrateAsync(new Order(orderId), TestContext.Current.CancellationToken)).State);
 
         // Replaying the original trigger obtains the already committed participant decision.
         _ = await new ReactorRunner(events).RunAsync(
             new ReservationReactor(new InMemoryProjectionCheckpointStore(), repository),
-            ProjectionCheckpoint.Start);
+            ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken);
         var decisions = new List<DomainEvent>();
-        await foreach (var record in events.ReadAsync(new Inventory(inventoryId).Stream, 0, default))
+        await foreach (var record in events.ReadAsync(new Inventory(inventoryId).Stream, 0, TestContext.Current.CancellationToken))
             decisions.Add(record.Event);
         Assert.Single(decisions.OfType<ReservationRefused>());
         Assert.Single(decisions.OfType<ReservationAccepted>());
         var outcomes = new List<DomainEvent>();
-        await foreach (var record in events.ReadAsync(new Order(orderId).Stream, 0, default))
+        await foreach (var record in events.ReadAsync(new Order(orderId).Stream, 0, TestContext.Current.CancellationToken))
             outcomes.Add(record.Event);
         Assert.Single(outcomes.OfType<OrderRejected>());
         Assert.DoesNotContain(outcomes, outcome => outcome is OrderConfirmed);

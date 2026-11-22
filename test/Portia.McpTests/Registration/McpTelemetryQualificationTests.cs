@@ -70,12 +70,12 @@ public sealed class McpTelemetryQualificationTests
             return next(context);
         });
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient());
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
@@ -83,20 +83,20 @@ public sealed class McpTelemetryQualificationTests
             if (primitive == "tool")
             {
                 var result = await client.CallToolAsync("telemetry.read",
-                    new Dictionary<string, object?> { ["fail"] = fails });
+                    new Dictionary<string, object?> { ["fail"] = fails }, cancellationToken: TestContext.Current.CancellationToken);
                 Assert.Equal(fails, result.IsError == true);
                 if (fails)
                     Assert.Null(result.StructuredContent);
             }
             else if (primitive == "resource")
-                _ = await client.ReadResourceAsync($"telemetry://read/{fails}");
+                _ = await client.ReadResourceAsync($"telemetry://read/{fails}", cancellationToken: TestContext.Current.CancellationToken);
             else
                 _ = await client.GetPromptAsync("telemetry-read",
-                    new Dictionary<string, object?> { ["fail"] = fails.ToString() });
+                    new Dictionary<string, object?> { ["fail"] = fails.ToString() }, cancellationToken: TestContext.Current.CancellationToken);
         });
         // Stop every producer, then assert against snapshots: exporters may still append on other threads.
         await client.DisposeAsync();
-        await app.StopAsync();
+        await app.StopAsync(TestContext.Current.CancellationToken);
 
         // Assert
         if (fails && primitive != "tool")
@@ -177,20 +177,20 @@ public sealed class McpTelemetryQualificationTests
             .AddMcpHttp();
         await using var app = builder.Build();
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient());
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
         {
             if (primitive == "resource")
-                _ = await client.ReadResourceAsync("telemetry://projection");
+                _ = await client.ReadResourceAsync("telemetry://projection", cancellationToken: TestContext.Current.CancellationToken);
             else
-                _ = await client.GetPromptAsync("telemetry-render");
+                _ = await client.GetPromptAsync("telemetry-render", cancellationToken: TestContext.Current.CancellationToken);
         });
 
         // Assert

@@ -19,7 +19,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         var probe = new Probe(database);
 
         // Act
-        var exception = await Record.ExceptionAsync(() => ProjectionStoreConformance.VerifyAsync(probe).AsTask());
+        var exception = await Record.ExceptionAsync(() => ProjectionStoreConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         Assert.Null(exception);
@@ -42,7 +42,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         for (var i = 0; i < changes.Length; i++)
             changes[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), account, (ulong)i + 1,
                 DateTimeOffset.UtcNow));
-        await events.AppendAsync(new EventStreamAddress(realm, "accounts", account.ToString()), 0, changes);
+        await events.AppendAsync(new EventStreamAddress(realm, "accounts", account.ToString()), 0, changes, TestContext.Current.CancellationToken);
 
         // Act
         var expectedFailure = RequestError.Conflict("temporary projection dependency", isTransient: true);
@@ -52,37 +52,37 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         {
             var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => new ProjectorRunner(events)
                 .RunAsync(Adapt(repository, identity, new FailurePlan(expectedFailure)),
-                    ProjectionCheckpoint.Start).AsTask());
+                    ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken).AsTask());
             Assert.Same(expectedFailure, failure.Error);
-            Assert.Equal(ProjectionCheckpoint.Start, await repository.LoadCheckpointAsync(identity));
-            Assert.Null(await repository.GetAsync(identity, account.ToString()));
+            Assert.Equal(ProjectionCheckpoint.Start, await repository.LoadCheckpointAsync(identity, TestContext.Current.CancellationToken));
+            Assert.Null(await repository.GetAsync(identity, account.ToString(), TestContext.Current.CancellationToken));
         }
 
         ProjectionCheckpoint committed;
         await using (var repository = new AccountRepository(database))
         {
             committed = await new ProjectorRunner(events).RunAsync(Adapt(repository, identity),
-                await repository.LoadCheckpointAsync(identity));
+                await repository.LoadCheckpointAsync(identity, TestContext.Current.CancellationToken), ct: TestContext.Current.CancellationToken);
             Assert.Equal(new AccountReadModel(account.ToString(), 625),
-                await repository.GetAsync(identity, account.ToString()));
+                await repository.GetAsync(identity, account.ToString(), TestContext.Current.CancellationToken));
         }
 
         await using (var repository = new AccountRepository(database))
         {
-            Assert.Equal(committed, await repository.LoadCheckpointAsync(identity));
+            Assert.Equal(committed, await repository.LoadCheckpointAsync(identity, TestContext.Current.CancellationToken));
             var resumed = await new ProjectorRunner(events).RunAsync(Adapt(repository, identity),
-                await repository.LoadCheckpointAsync(identity));
+                await repository.LoadCheckpointAsync(identity, TestContext.Current.CancellationToken), ct: TestContext.Current.CancellationToken);
             Assert.Equal(committed, resumed);
             Assert.Equal(new AccountReadModel(account.ToString(), 625),
-                await repository.GetAsync(identity, account.ToString()));
-            Assert.Null(await repository.GetAsync(Identity(otherRealm), account.ToString()));
+                await repository.GetAsync(identity, account.ToString(), TestContext.Current.CancellationToken));
+            Assert.Null(await repository.GetAsync(Identity(otherRealm), account.ToString(), TestContext.Current.CancellationToken));
 
             var candidate = new CheckpointIdentity(identity.ComponentName, identity.Pattern, "candidate");
             _ = await new ProjectorRunner(events).RunAsync(Adapt(repository, identity),
-                await repository.LoadCheckpointAsync(candidate), new ProjectionRunOptions { RebuildId = "candidate" });
+                await repository.LoadCheckpointAsync(candidate, TestContext.Current.CancellationToken), new ProjectionRunOptions { RebuildId = "candidate" }, TestContext.Current.CancellationToken);
             Assert.Equal(new AccountReadModel(account.ToString(), 625),
-                await repository.GetAsync(candidate, account.ToString()));
-            Assert.Equal(committed, await repository.LoadCheckpointAsync(identity));
+                await repository.GetAsync(candidate, account.ToString(), TestContext.Current.CancellationToken));
+            Assert.Equal(committed, await repository.LoadCheckpointAsync(identity, TestContext.Current.CancellationToken));
         }
     }
 
@@ -107,7 +107,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
             changes[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), account, (ulong)i + 1,
                 DateTimeOffset.UtcNow));
         await events.AppendAsync(new EventStreamAddress(identity.Pattern.Realm, "accounts", account.ToString()), 0,
-            changes);
+            changes, TestContext.Current.CancellationToken);
         var error = RequestError.Conflict("injected handler failure", transient);
         var failures = new FailurePlan(error);
         var committed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -136,17 +136,17 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
-            await worker.StartAsync(default);
+            await worker.StartAsync(TestContext.Current.CancellationToken);
             if (transient)
             {
-                await committed.Task.WaitAsync(TimeSpan.FromSeconds(15));
-                await worker.StopAsync(default);
+                await committed.Task.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
+                await worker.StopAsync(TestContext.Current.CancellationToken);
                 Assert.Equal(2, failures.Attempts);
             }
             else
             {
                 var terminal = await Assert.ThrowsAsync<WorkloadFailureException>(() =>
-                    worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(15)));
+                    worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken));
                 Assert.Equal(1, terminal.Attempts);
                 var diagnostic = Assert.IsType<ProcessorFailureException>(terminal.InnerException);
                 Assert.Same(error, diagnostic.Error);
@@ -156,29 +156,29 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
 
             await using var queryScope = provider.CreateAsyncScope();
             var repository = queryScope.ServiceProvider.GetRequiredService<AccountRepository>();
-            var checkpoint = await repository.LoadCheckpointAsync(identity);
+            var checkpoint = await repository.LoadCheckpointAsync(identity, TestContext.Current.CancellationToken);
             if (transient)
             {
                 Assert.NotEqual(ProjectionCheckpoint.Start, checkpoint);
                 Assert.Equal(new AccountReadModel(account.ToString(), 625),
-                    await repository.GetAsync(identity, account.ToString()));
+                    await repository.GetAsync(identity, account.ToString(), TestContext.Current.CancellationToken));
             }
             else if (batchSize == 1)
             {
                 Assert.NotEqual(ProjectionCheckpoint.Start, checkpoint);
                 Assert.Equal(new AccountReadModel(account.ToString(), 500),
-                    await repository.GetAsync(identity, account.ToString()));
+                    await repository.GetAsync(identity, account.ToString(), TestContext.Current.CancellationToken));
             }
             else
             {
                 Assert.Equal(ProjectionCheckpoint.Start, checkpoint);
-                Assert.Null(await repository.GetAsync(identity, account.ToString()));
+                Assert.Null(await repository.GetAsync(identity, account.ToString(), TestContext.Current.CancellationToken));
             }
         }
         finally
         {
             if (worker.ExecuteTask is { IsCompleted: false })
-                await worker.StopAsync(default);
+                await worker.StopAsync(TestContext.Current.CancellationToken);
             worker.Dispose();
         }
     }
@@ -196,11 +196,11 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         var table = "portia_" + Guid.NewGuid().ToString("N") + "_legacy";
 
         // Act
-        await using (var connection = await database.Source.OpenConnectionAsync())
+        await using (var connection = await database.Source.OpenConnectionAsync(TestContext.Current.CancellationToken))
         await using (var command = connection.CreateCommand())
         {
             command.CommandText = $"CREATE TABLE {table} {schema}";
-            _ = await command.ExecuteNonQueryAsync();
+            _ = await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
         }
 
         // Assert
@@ -215,8 +215,8 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
                 foreach (var hosted in provider.GetServices<IHostedService>())
                 {
                     if (hosted is IHostedLifecycleService lifecycle)
-                        await lifecycle.StartingAsync(default);
-                    await hosted.StartAsync(default);
+                        await lifecycle.StartingAsync(TestContext.Current.CancellationToken);
+                    await hosted.StartAsync(TestContext.Current.CancellationToken);
                 }
             });
 
@@ -225,10 +225,10 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         }
         finally
         {
-            await using var connection = await database.Source.OpenConnectionAsync();
+            await using var connection = await database.Source.OpenConnectionAsync(TestContext.Current.CancellationToken);
             await using var command = connection.CreateCommand();
             command.CommandText = $"DROP TABLE {table}";
-            _ = await command.ExecuteNonQueryAsync();
+            _ = await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
         }
     }
 
@@ -242,14 +242,14 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         var identity = Identity("cassie-reopen-" + Uuid.CreateVersion4());
         var read = await repository.OpenReopenedReadAsync();
 
-        var begin = repository.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)).AsTask();
+        var begin = repository.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken).AsTask();
         using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(500));
         var startedEarly = await Task.WhenAny(begin, Task.Delay(Timeout.InfiniteTimeSpan, timeout.Token)) == begin;
         await timeout.CancelAsync();
         await read.DisposeAsync();
 
         // Act
-        await using var batch = await begin.WaitAsync(TimeSpan.FromSeconds(15));
+        await using var batch = await begin.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(startedEarly, "A batch began while a query read was still open.");

@@ -45,9 +45,9 @@ public sealed class ConsumerRecoveryTests
         using var cancellation = new CancellationTokenSource();
         try
         {
-            await worker.StartAsync(default);
+            await worker.StartAsync(TestContext.Current.CancellationToken);
             var delay = clock.WaitForDelayAsync(cancellation.Token);
-            var first = await Task.WhenAny(delay, worker.ExecuteTask!).WaitAsync(TimeSpan.FromSeconds(5));
+            var first = await Task.WhenAny(delay, worker.ExecuteTask!).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             await first;
             Assert.Same(delay, first);
             Assert.Equal(TimeSpan.FromSeconds(1), await delay);
@@ -63,7 +63,7 @@ public sealed class ConsumerRecoveryTests
         finally
         {
             cancellation.Cancel();
-            await worker.StopAsync(default);
+            await worker.StopAsync(TestContext.Current.CancellationToken);
             worker.Dispose();
         }
 

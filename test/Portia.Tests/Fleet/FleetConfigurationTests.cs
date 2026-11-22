@@ -12,7 +12,7 @@ public sealed class FleetConfigurationTests
         { MembershipSelector = "lease://audit/members/*", WorkerId = "w", LeaseTtl = TimeSpan.FromDays(60) };
         await using var client = new FitzClient(new ClientConfig(new Uri("ws://127.0.0.1:1")));
         var sdkFailure = await Record.ExceptionAsync(() => client.Lease.WithLeaseAsync("lease://test/members/w",
-            options.LeaseTtl, _ => ValueTask.CompletedTask).WaitAsync(TimeSpan.FromSeconds(3)));
+            options.LeaseTtl, _ => ValueTask.CompletedTask, ct: TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
         var fitz = new PortiaFitzBuilder(new ServiceCollection().AddPortia());
 
         // Act

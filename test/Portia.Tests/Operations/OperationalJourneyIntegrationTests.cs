@@ -28,7 +28,7 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         for (var i = 0; i < source.Length; i++)
             source[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregate, (ulong)i + 1,
                 DateTimeOffset.UtcNow));
-        await events.AppendAsync(new EventStreamAddress(realm, "source", aggregate.ToString()), 0, source);
+        await events.AppendAsync(new EventStreamAddress(realm, "source", aggregate.ToString()), 0, source, TestContext.Current.CancellationToken);
 
         // Act
         Guid previousOwner;
@@ -37,15 +37,15 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         await using (var provider = Services(client, events, control, route).BuildServiceProvider())
         {
             var worker = provider.GetServices<IHostedService>().OfType<PortiaWorkloadService>().Single();
-            await worker.StartAsync(default);
+            await worker.StartAsync(TestContext.Current.CancellationToken);
             try
             {
                 var journal = provider.GetRequiredService<IOperationalStore>();
                 await WaitAsync(async () => (await journal.ReadAsync(target))?.Block is not null);
-                await control.IndependentProgress.Task.WaitAsync(TimeSpan.FromSeconds(15));
+                await control.IndependentProgress.Task.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
                 Assert.False(worker.ExecuteTask!.IsCompleted);
                 var issue = Assert.Single(await provider.GetRequiredService<IPortiaOperations>()
-                    .ListIssuesAsync(TestOperationalAuthorizer.AdministratorActor(), OperationalScope.Global));
+                    .ListIssuesAsync(TestOperationalAuthorizer.AdministratorActor(), OperationalScope.Global, TestContext.Current.CancellationToken));
                 previousOwner = issue.OwnerSession;
                 Assert.Null(control.LastException);
                 Assert.Equal(2, Assert.Single(issue.Attempts).Sources.Count);
@@ -54,7 +54,7 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
             }
             finally
             {
-                await worker.StopAsync(default);
+                await worker.StopAsync(TestContext.Current.CancellationToken);
                 worker.Dispose();
             }
         }
@@ -62,7 +62,7 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         await using (var provider = Services(client, events, control, route).BuildServiceProvider())
         {
             var worker = provider.GetServices<IHostedService>().OfType<PortiaWorkloadService>().Single();
-            await worker.StartAsync(default);
+            await worker.StartAsync(TestContext.Current.CancellationToken);
             try
             {
                 var operations = provider.GetRequiredService<IPortiaOperations>();
@@ -71,25 +71,25 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
                         is { Block: not null } state && state.OwnerSession != previousOwner);
                 Assert.Equal(2, control.Invocations);
                 var agent = TestOperationalAuthorizer.AdministratorActor();
-                var plan = await operations.PreviewRepairAsync(agent, target);
+                var plan = await operations.PreviewRepairAsync(agent, target, TestContext.Current.CancellationToken);
                 _ = await operations.ApproveRepairAsync(TestOperationalAuthorizer.AdministratorActor(true), target,
-                    plan.Id);
+                    plan.Id, TestContext.Current.CancellationToken);
                 control.Fail = false;
-                _ = await operations.ExecuteRepairAsync(agent, target, plan.Id);
+                _ = await operations.ExecuteRepairAsync(agent, target, plan.Id, TestContext.Current.CancellationToken);
                 await WaitAsync(async () =>
                     (await operations.VerifyRepairAsync(agent, target, plan.Id)).Status == "committed");
-                var verification = await operations.VerifyRepairAsync(agent, target, plan.Id);
+                var verification = await operations.VerifyRepairAsync(agent, target, plan.Id, TestContext.Current.CancellationToken);
                 var checkpoint = await provider.GetRequiredService<IProjectionCheckpointStore>()
-                    .LoadAsync(target.Identity);
+                    .LoadAsync(target.Identity, TestContext.Current.CancellationToken);
                 Assert.Equal(checkpoint.Cursor.Value, verification.Checkpoint);
                 Assert.NotEqual(ProjectionCheckpoint.Start, checkpoint);
                 Assert.Equal(4, control.Invocations);
                 Assert.Equal(2, (await ReadEffectsAsync(events, realm)).Count);
-                Assert.Null((await operations.InspectProcessorAsync(agent, target))!.Block);
+                Assert.Null((await operations.InspectProcessorAsync(agent, target, TestContext.Current.CancellationToken))!.Block);
             }
             finally
             {
-                await worker.StopAsync(default);
+                await worker.StopAsync(TestContext.Current.CancellationToken);
                 worker.Dispose();
             }
         }
@@ -99,11 +99,11 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         await using var accounts = new AccountRepository(database);
         _ = await new ProjectorRunner(events).RunAsync(ProjectorDispatch<AccountProjector>.Create(
                 new AccountProjector(accounts), identity.ComponentName, identity.Pattern),
-            await accounts.LoadCheckpointAsync(identity));
+            await accounts.LoadCheckpointAsync(identity, TestContext.Current.CancellationToken), ct: TestContext.Current.CancellationToken);
         var committedEffects = await ReadEffectsAsync(events, realm);
         foreach (var effect in committedEffects)
         {
-            var model = await accounts.GetAsync(identity, effect.Event.Metadata.AggregateId.ToString());
+            var model = await accounts.GetAsync(identity, effect.Event.Metadata.AggregateId.ToString(), TestContext.Current.CancellationToken);
             Assert.Equal(((ValueChanged)effect.Event).Value, model!.BalanceCents);
         }
     }

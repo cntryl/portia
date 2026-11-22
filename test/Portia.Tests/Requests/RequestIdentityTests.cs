@@ -15,13 +15,13 @@ public sealed class RequestIdentityTests
         var serializer = TestJson.Serializer(typeof(IdentifiedCommand));
         var server = new FitzRpcRequestServer(rpc, provider.GetRequiredService<IServiceScopeFactory>(),
             TestJson.Catalog(RequestTransportId.Callable, typeof(IdentifiedCommand)));
-        await using var worker = await server.RegisterAsync<IdentifiedCommand>();
+        await using var worker = await server.RegisterAsync<IdentifiedCommand>(TestContext.Current.CancellationToken);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
         var request = new IdentifiedCommand(Uuid.CreateVersion4());
 
         // Act
-        var first = await sender.SendAsync(request, new RequestRouteValues(), null);
-        var retry = await sender.SendAsync(request, new RequestRouteValues(), null);
+        var first = await sender.SendAsync(request, new RequestRouteValues(), null, TestContext.Current.CancellationToken);
+        var retry = await sender.SendAsync(request, new RequestRouteValues(), null, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(first.IsSuccess);
@@ -70,8 +70,8 @@ public sealed class RequestIdentityTests
         var request = new IdentifiedQuery(Uuid.CreateVersion4());
 
         // Act
-        var first = await bus.SendAsync(request, RequestActor.System);
-        var retry = await bus.SendAsync(request, RequestActor.System);
+        var first = await bus.SendAsync(request, RequestActor.System, ct: TestContext.Current.CancellationToken);
+        var retry = await bus.SendAsync(request, RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(first.IsSuccess);
@@ -117,9 +117,9 @@ public sealed class RequestIdentityTests
             metadata: new RequestMetadata(Uuid.CreateVersion4(), Uuid.CreateVersion4()));
 
         // Act
-        var empty = await bus.SendAsync(new IdentifiedCommand(Uuid.Empty), RequestActor.System);
-        var mismatch = await bus.DispatchAsync(request, wrong);
-        var emptyQuery = await bus.SendAsync(new IdentifiedQuery(Uuid.Empty), RequestActor.System);
+        var empty = await bus.SendAsync(new IdentifiedCommand(Uuid.Empty), RequestActor.System, ct: TestContext.Current.CancellationToken);
+        var mismatch = await bus.DispatchAsync(request, wrong, TestContext.Current.CancellationToken);
+        var emptyQuery = await bus.SendAsync(new IdentifiedQuery(Uuid.Empty), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(RequestErrorKind.Validation, empty.Error!.Kind);
@@ -142,7 +142,7 @@ public sealed class RequestIdentityTests
         var request = new IdentifiedCommand(Uuid.CreateVersion4());
 
         // Act
-        var result = await bus.SendAsync(request, RequestActor.System);
+        var result = await bus.SendAsync(request, RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(RequestErrorKind.Forbidden, result.Error!.Kind);
@@ -172,7 +172,7 @@ public sealed class RequestIdentityTests
         {
             var execution = new ReactionExecutionContext(source, RequestActor.System);
             var reaction = new ReactorContext<ValueChanged>(ev, source, execution);
-            await bus.SendReactionAsync(command, reaction);
+            await bus.SendReactionAsync(command, reaction, ct: TestContext.Current.CancellationToken);
         }
 
         // Assert

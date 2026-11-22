@@ -38,15 +38,15 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         {
             Assert.Equal(route, await first.EnsureAsync(new UniversalAction(1),
                 new RequestScheduleSpec("0 0 * * *"), RequestRouteValues.None,
-                RequestActor.CreateSystem("replica")));
+                RequestActor.CreateSystem("replica"), TestContext.Current.CancellationToken));
             Assert.Equal(route, await second.EnsureAsync(new UniversalAction(1),
                 new RequestScheduleSpec("0 0 * * *"), RequestRouteValues.None,
-                RequestActor.CreateSystem("replica")));
-            Assert.Single(await firstClient.Schedule.ListBySelectorAsync(route));
+                RequestActor.CreateSystem("replica"), TestContext.Current.CancellationToken));
+            Assert.Single(await firstClient.Schedule.ListBySelectorAsync(route, TestContext.Current.CancellationToken));
 
             _ = await second.EnsureAsync(new UniversalAction(2), new RequestScheduleSpec("0 1 * * *"),
-                RequestRouteValues.None, RequestActor.CreateSystem("replica"));
-            var updated = Assert.Single(await firstClient.Schedule.ListBySelectorAsync(route));
+                RequestRouteValues.None, RequestActor.CreateSystem("replica"), TestContext.Current.CancellationToken);
+            var updated = Assert.Single(await firstClient.Schedule.ListBySelectorAsync(route, TestContext.Current.CancellationToken));
             var outer = JsonSerializer.Deserialize(updated.Payload.Span,
                 FitzJsonContext.Default.FitzScheduledRequestEnvelope)!;
             var envelope = serializer.DeserializeEnvelope(outer.RequestEnvelope);
@@ -54,10 +54,10 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         }
         finally
         {
-            await firstClient.Schedule.CancelAsync(route);
+            await firstClient.Schedule.CancelAsync(route, TestContext.Current.CancellationToken);
         }
 
-        Assert.Empty(await firstClient.Schedule.ListBySelectorAsync(route));
+        Assert.Empty(await firstClient.Schedule.ListBySelectorAsync(route, TestContext.Current.CancellationToken));
     }
 
     /// <summary>A real persisted schedule carries the completed producer span as its future link.</summary>
@@ -79,8 +79,8 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         {
             scheduleId = await scheduler.ScheduleAsync(new UniversalAction(73),
                 new RequestScheduleSpec("0 0 * * *"), RequestRouteValues.None,
-                RequestActor.CreateSystem("telemetry-test"));
-            var stored = Assert.Single(await client.Schedule.ListBySelectorAsync(route));
+                RequestActor.CreateSystem("telemetry-test"), TestContext.Current.CancellationToken);
+            var stored = Assert.Single(await client.Schedule.ListBySelectorAsync(route, TestContext.Current.CancellationToken));
             var scheduled = JsonSerializer.Deserialize(stored.Payload.Span,
                 FitzJsonContext.Default.FitzScheduledRequestEnvelope)!;
             var envelope = serializer.DeserializeEnvelope(scheduled.RequestEnvelope);
@@ -95,7 +95,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         {
             if (scheduleId is not null)
             {
-                await scheduler.CancelAsync(scheduleId);
+                await scheduler.CancelAsync(scheduleId, TestContext.Current.CancellationToken);
             }
         }
     }
@@ -113,7 +113,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var probe = new FitzEventStoreProbe(client);
 
         // Act
-        var exception = await Record.ExceptionAsync(() => EventStoreConformance.VerifyAsync(probe).AsTask());
+        var exception = await Record.ExceptionAsync(() => EventStoreConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         Assert.Null(exception);
@@ -122,7 +122,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     /// <summary>Runs the distributed ownership contract against two real Fitz client sessions.</summary>
     [Fact]
     public async Task ShouldSatisfyWorkloadCoordinatorConformanceGivenRealFitzBroker() =>
-        await WorkloadCoordinatorConformance.VerifyAsync(new FitzWorkloadCoordinatorProbe(_broker));
+        await WorkloadCoordinatorConformance.VerifyAsync(new FitzWorkloadCoordinatorProbe(_broker), TestContext.Current.CancellationToken);
 
     /// <summary>
     ///     Runs the public projection-store conformance suite against <see cref="FitzKvProjectionStore" />
@@ -133,7 +133,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     /// </summary>
     [Fact]
     public async Task ShouldSatisfyProjectionStoreConformanceGivenRealFitzKv() =>
-        await ProjectionStoreConformance.VerifyAsync(new FitzKvProjectionProbe(_broker));
+        await ProjectionStoreConformance.VerifyAsync(new FitzKvProjectionProbe(_broker), TestContext.Current.CancellationToken);
 
     /// <summary>
     ///     A malformed checkpoint discovered after BEGIN must release Fitz's route ownership so another
@@ -151,10 +151,10 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var key = FitzKvCheckpoints.Key(identity);
         var resource = FitzKvCheckpoints.WorkloadRoute(route, identity);
 
-        await using (var seed = await originalClient.Kv.BeginAsync(resource))
+        await using (var seed = await originalClient.Kv.BeginAsync(resource, ct: TestContext.Current.CancellationToken))
         {
-            await seed.PutAsync(key, new byte[] { 1, 2, 3 });
-            await seed.CommitAsync(KvDurability.Sync);
+            await seed.PutAsync(key, new byte[] { 1, 2, 3 }, TestContext.Current.CancellationToken);
+            await seed.CommitAsync(KvDurability.Sync, TestContext.Current.CancellationToken);
         }
 
         // Act
@@ -162,19 +162,19 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
         // Assert
         _ = await Assert.ThrowsAsync<InvalidDataException>(async () =>
-            await store.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)));
+            await store.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken));
 
-        await using (var repair = await repairClient.Kv.BeginAsync(resource))
+        await using (var repair = await repairClient.Kv.BeginAsync(resource, ct: TestContext.Current.CancellationToken))
         {
-            await repair.PutAsync(key, FitzKvCheckpoints.Encode(EventCursor.Start));
-            await repair.CommitAsync(KvDurability.Sync);
+            await repair.PutAsync(key, FitzKvCheckpoints.Encode(EventCursor.Start), TestContext.Current.CancellationToken);
+            await repair.CommitAsync(KvDurability.Sync, TestContext.Current.CancellationToken);
         }
 
         await using (var batch = await store.BeginAsync(
-                         new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)))
+                         new ProjectionBatchContext(identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
         {
             await store.StageAsync(identity, "reused", CancellationToken.None);
-            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
         }
 
         Assert.Equal("reused", await store.ReadAsync(identity, CancellationToken.None));
@@ -200,17 +200,17 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var rebuild = new CheckpointIdentity("reactor", pattern, "rebuild-1");
 
         // Assert
-        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(live));
+        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(live, TestContext.Current.CancellationToken));
 
-        await store.SaveAsync(live, new ProjectionCheckpoint(new EventCursor("42")));
+        await store.SaveAsync(live, new ProjectionCheckpoint(new EventCursor("42")), TestContext.Current.CancellationToken);
 
-        Assert.Equal("42", (await store.LoadAsync(live)).Cursor.ToString());
+        Assert.Equal("42", (await store.LoadAsync(live, TestContext.Current.CancellationToken)).Cursor.ToString());
         // A rebuild generation shares the route and must not inherit the live generation's progress.
-        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(rebuild));
+        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(rebuild, TestContext.Current.CancellationToken));
 
-        await store.SaveAsync(live, new ProjectionCheckpoint(new EventCursor("43")));
+        await store.SaveAsync(live, new ProjectionCheckpoint(new EventCursor("43")), TestContext.Current.CancellationToken);
 
-        Assert.Equal("43", (await store.LoadAsync(live)).Cursor.ToString());
+        Assert.Equal("43", (await store.LoadAsync(live, TestContext.Current.CancellationToken)).Cursor.ToString());
     }
 
     /// <summary>
@@ -230,13 +230,13 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var tenantA = new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-a", "reactions"));
         var tenantB = new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-b", "reactions"));
         await using var inFlight = await client.Kv.BeginAsync(
-            FitzKvCheckpoints.WorkloadRoute(route, tenantA));
+            FitzKvCheckpoints.WorkloadRoute(route, tenantA), ct: TestContext.Current.CancellationToken);
 
         // Act
-        await store.SaveAsync(tenantB, new ProjectionCheckpoint(new EventCursor("7")));
+        await store.SaveAsync(tenantB, new ProjectionCheckpoint(new EventCursor("7")), TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal("7", (await store.LoadAsync(tenantB)).Cursor.ToString());
+        Assert.Equal("7", (await store.LoadAsync(tenantB, TestContext.Current.CancellationToken)).Cursor.ToString());
     }
 
     /// <summary>
@@ -262,11 +262,11 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             1,
             DateTimeOffset.UtcNow));
 
-        await store.AppendAsync(stream, 0, [original]);
+        await store.AppendAsync(stream, 0, [original], TestContext.Current.CancellationToken);
         var events = new List<DomainEvent>();
 
         // Act
-        await foreach (var ev in store.ReadAsync(stream))
+        await foreach (var ev in store.ReadAsync(stream, ct: TestContext.Current.CancellationToken))
             events.Add(ev.Event);
 
         // Assert
@@ -294,7 +294,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             TestJson.DomainSerializer(new DomainEventTypeCatalog().Register<WidgetNamed>(1, "WidgetNamed")));
         var original = new WidgetNamed("Sprocket");
         original.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, 1, DateTimeOffset.UtcNow));
-        await writerStore.AppendAsync(stream, 0, [original]);
+        await writerStore.AppendAsync(stream, 0, [original], TestContext.Current.CancellationToken);
 
         var readerStore = new FitzEventStore(
             client.Stream,
@@ -305,7 +305,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var events = new List<DomainEvent>();
 
         // Act
-        await foreach (var ev in readerStore.ReadAsync(stream))
+        await foreach (var ev in readerStore.ReadAsync(stream, ct: TestContext.Current.CancellationToken))
             events.Add(ev.Event);
 
         // Assert
@@ -333,7 +333,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var stream = new EventStreamAddress("portia-integration", "event-store-conflict", aggregateId.ToString());
         var first = new ValueChanged(1);
         first.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, 1, DateTimeOffset.UtcNow));
-        await store.AppendAsync(stream, 0, [first]);
+        await store.AppendAsync(stream, 0, [first], TestContext.Current.CancellationToken);
 
         var stale = new ValueChanged(2);
 
@@ -342,7 +342,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
 
         // Assert
         _ = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() =>
-            store.AppendAsync(stream, 0, [stale]).AsTask());
+            store.AppendAsync(stream, 0, [stale], TestContext.Current.CancellationToken).AsTask());
     }
 
     /// <summary>
@@ -362,24 +362,24 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var aggregateId = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("portia-integration", "event-store-session-contention",
             aggregateId.ToString());
-        await using var blocker = await blockingClient.Stream.BeginAsync(stream.ToString());
+        await using var blocker = await blockingClient.Stream.BeginAsync(stream.ToString(), ct: TestContext.Current.CancellationToken);
         var blocked = new ValueChanged(1);
         blocked.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, 1,
             DateTimeOffset.UtcNow));
 
         // Act
         var error = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() =>
-            store.AppendAsync(stream, 0, [blocked]).AsTask());
+            store.AppendAsync(stream, 0, [blocked], TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         var fitz = Assert.IsType<StreamException>(error.InnerException);
         Assert.Equal(FitzErrorCodes.StreamSessionAlreadyActive, fitz.DomainCode);
 
-        await blocker.RollbackAsync();
+        await blocker.RollbackAsync(TestContext.Current.CancellationToken);
         var accepted = new ValueChanged(2);
         accepted.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregateId, 1,
             DateTimeOffset.UtcNow));
-        await store.AppendAsync(stream, 0, [accepted]);
+        await store.AppendAsync(stream, 0, [accepted], TestContext.Current.CancellationToken);
     }
 
     /// <summary>
@@ -399,14 +399,14 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         var server = new FitzRpcRequestServer(
             workerClient.Rpc,
             busHost.ScopeFactory);
-        await using var registration = await server.RegisterAsync<RpcGetValue, int>();
+        await using var registration = await server.RegisterAsync<RpcGetValue, int>(TestContext.Current.CancellationToken);
         var sender = new FitzRemoteRequestSender(callerClient.Rpc, serializer, serializer);
 
         // Act
         var result = await sender.SendAsync<RpcGetValue, int>(
             new RpcGetValue(),
             new RequestRouteValues(),
-            null);
+            null, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -440,10 +440,10 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator()));
         var publisher = new FitzRequestQueuePublisher(callerClient.Queue, serializer);
 
-        await publisher.EnqueueAsync(new UniversalAction(74), RequestRouteValues.None, "valid-token");
+        await publisher.EnqueueAsync(new UniversalAction(74), RequestRouteValues.None, "valid-token", TestContext.Current.CancellationToken);
 
         // Act
-        await runner.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        await runner.RunAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Contains(74, handler.HandledValues);
@@ -476,21 +476,21 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             busHost.Bus, new TestRequestActorValidator("expired-token"),
             terminalHandler: new RecordingTerminalRequest(failures)));
 
-        await publisher.EnqueueAsync(new UniversalAction(76), RequestRouteValues.None, "expired-token");
+        await publisher.EnqueueAsync(new UniversalAction(76), RequestRouteValues.None, "expired-token", TestContext.Current.CancellationToken);
 
         // Act
-        await runner.RunAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        await runner.RunAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(QueuedRequestTerminalReason.ActorValidationFailure, Assert.Single(failures).Reason);
         Assert.Empty(handler.HandledValues);
         var redelivered = Assert.Single(await workerClient.Queue.ReserveAsync(route, TimeSpan.FromSeconds(2),
-            wait: TimeSpan.FromSeconds(5)));
+            wait: TimeSpan.FromSeconds(5), ct: TestContext.Current.CancellationToken));
         try
         {
             var envelope = serializer.DeserializeEnvelope(redelivered.Body);
             Assert.Equal(new UniversalAction(76), Assert.IsType<UniversalAction>(envelope.Request));
-            await redelivered.CompleteAsync();
+            await redelivered.CompleteAsync(TestContext.Current.CancellationToken);
         }
         finally
         {
@@ -515,14 +515,14 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
             TestJson.Catalog(RequestTransportId.Notice, typeof(UniversalAction)));
         var runner = new RequestNotificationRunner(new OneNotificationConsumer(consumer),
             RequestDeliveryScopes.Fixed(busHost.Bus, new TestRequestActorValidator()));
-        var run = runner.RunAsync();
-        await signalingNotice.Ready.WaitAsync(TimeSpan.FromSeconds(10));
+        var run = runner.RunAsync(TestContext.Current.CancellationToken);
+        await signalingNotice.Ready.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         await new FitzNoticeRequestSender(callerClient.Notice, serializer)
-            .PublishAsync(new UniversalAction(75), RequestRouteValues.None, "valid-token");
+            .PublishAsync(new UniversalAction(75), RequestRouteValues.None, "valid-token", TestContext.Current.CancellationToken);
 
         // Act
-        await run.WaitAsync(TimeSpan.FromSeconds(10));
+        await run.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Contains(75, handler.HandledValues);

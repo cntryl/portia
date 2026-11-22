@@ -15,11 +15,11 @@ public sealed class WorkloadLifecycleTests
         var descriptor = new WorkloadLifecycleDescriptor(_ => ValueTask.FromException<ProjectionPassResult>(original));
         var notifier = new WorkloadLifecycleNotifier(cleanupFails);
         using var worker = WorkloadLifecycleTestHost.Worker(provider, descriptor, notifier);
-        await worker.StartAsync(default);
+        await worker.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var failure = await Record.ExceptionAsync(() => worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(3)));
-        await worker.StopAsync(default);
+        var failure = await Record.ExceptionAsync(() => worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
+        await worker.StopAsync(TestContext.Current.CancellationToken);
 
         // Assert
         var terminal = Assert.IsType<WorkloadFailureException>(failure);
@@ -51,11 +51,11 @@ public sealed class WorkloadLifecycleTests
             notificationMode == 0
                 ? null
                 : new WorkloadLifecycleNotifier(false, throwOnSubscribe: notificationMode == 2));
-        await worker.StartAsync(default);
+        await worker.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var failure = await Record.ExceptionAsync(() => worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(3)));
-        await worker.StopAsync(default);
+        var failure = await Record.ExceptionAsync(() => worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
+        await worker.StopAsync(TestContext.Current.CancellationToken);
 
         // Assert
         var terminal = Assert.IsType<WorkloadFailureException>(failure);
@@ -80,19 +80,19 @@ public sealed class WorkloadLifecycleTests
         });
         var notifier = new RecoveringNotifier();
         using var worker = WorkloadLifecycleTestHost.Worker(provider, descriptor, notifier);
-        await worker.StartAsync(default);
+        await worker.StartAsync(TestContext.Current.CancellationToken);
         Exception? processingError;
         bool endedPrematurely;
 
         // Act
         try
         {
-            processingError = await Record.ExceptionAsync(() => processedAgain.Task.WaitAsync(TimeSpan.FromSeconds(3)));
+            processingError = await Record.ExceptionAsync(() => processedAgain.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
             endedPrematurely = worker.ExecuteTask!.IsCompleted;
         }
         finally
         {
-            await worker.StopAsync(default);
+            await worker.StopAsync(TestContext.Current.CancellationToken);
         }
 
         // Assert

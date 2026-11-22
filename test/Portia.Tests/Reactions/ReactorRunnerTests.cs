@@ -22,13 +22,13 @@ public sealed class ReactorRunnerTests
             Committed(new ValueChanged(40), id, 1),
             Committed(new ValueIncremented(1), id, 2),
             Committed(new ValueIncremented(1), id, 3)
-        ]);
+        ], TestContext.Current.CancellationToken);
         var repository = new RecordingAggregateRepository();
         var reactor = new TestReactor(repository);
         var runner = new ReactorRunner(store);
 
         // Act
-        var checkpoint = await runner.RunAsync(reactor, ProjectionCheckpoint.Start);
+        var checkpoint = await runner.RunAsync(reactor, ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken);
 
         // Assert
         var target = Assert.Single(repository.SavedAggregates);
@@ -50,7 +50,7 @@ public sealed class ReactorRunnerTests
         var checkpoint = new ProjectionCheckpoint(new EventCursor("3"));
 
         // Act
-        var nextCheckpoint = await runner.RunAsync(reactor, checkpoint);
+        var nextCheckpoint = await runner.RunAsync(reactor, checkpoint, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(checkpoint, nextCheckpoint);
@@ -70,7 +70,7 @@ public sealed class ReactorRunnerTests
 
         // Assert
         var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            runner.RunAsync(reactor, ProjectionCheckpoint.Start, maxBatchSize).AsTask());
+            runner.RunAsync(reactor, ProjectionCheckpoint.Start, maxBatchSize, TestContext.Current.CancellationToken).AsTask());
 
         Assert.Equal(nameof(maxBatchSize), exception.ParamName);
     }
@@ -87,15 +87,15 @@ public sealed class ReactorRunnerTests
             Committed(new ValueChanged(1), id, 1),
             Committed(new ValueChanged(2), id, 2),
             Committed(new ValueChanged(3), id, 3)
-        ]);
+        ], TestContext.Current.CancellationToken);
         var reactor = new TestReactor(new RecordingAggregateRepository());
         var runner = new ReactorRunner(store);
         var options = new ProjectionRunOptions { MaxEventsPerPass = 2 };
 
-        var first = await runner.RunPassAsync(reactor, ProjectionCheckpoint.Start, options);
+        var first = await runner.RunPassAsync(reactor, ProjectionCheckpoint.Start, options, TestContext.Current.CancellationToken);
 
         // Act
-        var second = await runner.RunPassAsync(reactor, first, options);
+        var second = await runner.RunPassAsync(reactor, first, options, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("2", first.Cursor.ToString());
@@ -113,10 +113,10 @@ public sealed class ReactorRunnerTests
         var runner = new ReactorRunner(store);
         var options = new ProjectionRunOptions { MaxBatchSize = 8, MaxEventsPerPass = 2 };
 
-        var first = await runner.RunPassAsync(reactor, ProjectionCheckpoint.Start, options);
+        var first = await runner.RunPassAsync(reactor, ProjectionCheckpoint.Start, options, TestContext.Current.CancellationToken);
 
         // Act
-        var second = await runner.RunPassAsync(reactor, first, options);
+        var second = await runner.RunPassAsync(reactor, first, options, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("2", first.Cursor.ToString());
@@ -137,10 +137,10 @@ public sealed class ReactorRunnerTests
         var runner = new ReactorRunner(store);
         var options = new ProjectionRunOptions { MaxBatchSize = 3, MaxEventsPerPass = 5 };
 
-        var first = await runner.RunPassAsync(reactor, ProjectionCheckpoint.Start, options);
+        var first = await runner.RunPassAsync(reactor, ProjectionCheckpoint.Start, options, TestContext.Current.CancellationToken);
 
         // Act
-        var second = await runner.RunPassAsync(reactor, first, options);
+        var second = await runner.RunPassAsync(reactor, first, options, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("5", first.Cursor.ToString());
@@ -161,11 +161,11 @@ public sealed class ReactorRunnerTests
         await store.AppendAsync(stream, 0, [
             Committed(new ValueChanged(1), id, 1),
             Committed(new ValueChanged(2), id, 2)
-        ]);
+        ], TestContext.Current.CancellationToken);
         var reactor = new ActorIsolationReactor();
 
         // Act
-        _ = await new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start);
+        _ = await new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal([false, false], reactor.SawMutation);
@@ -190,7 +190,7 @@ public sealed class ReactorRunnerTests
             Committed(new ValueChanged(1), id, 1),
             Committed(new ValueChanged(2), id, 2),
             Committed(new ValueChanged(3), id, 3)
-        ]);
+        ], TestContext.Current.CancellationToken);
         var reactor = new FlakyOnSecondEventReactor();
 
         // Act
@@ -200,14 +200,14 @@ public sealed class ReactorRunnerTests
         // First pass fails on the second event — no checkpoint is returned at all.
         // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
-            runner.RunAsync(reactor, ProjectionCheckpoint.Start).AsTask());
+            runner.RunAsync(reactor, ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken).AsTask());
         Assert.IsType<InvalidOperationException>(failure.InnerException);
         Assert.Equal(ProcessorFailureStage.Handling, failure.Stage);
         Assert.Equal([1], reactor.HandledValues);
 
         // A caller has nothing but the original (unchanged) checkpoint to retry from — the only
         // option is starting the whole pass over.
-        var checkpoint = await runner.RunAsync(reactor, ProjectionCheckpoint.Start);
+        var checkpoint = await runner.RunAsync(reactor, ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken);
 
         // Event 1 was handled a second time on retry, even though it succeeded the first time —
         // exactly the "no bound on redone work, side effects may not be idempotent" gap.
@@ -235,7 +235,7 @@ public sealed class ReactorRunnerTests
             Committed(new ValueChanged(2), id, 2),
             Committed(new ValueChanged(3), id, 3),
             Committed(new ValueChanged(4), id, 4)
-        ]);
+        ], TestContext.Current.CancellationToken);
         var runner = new ReactorRunner(store);
         var checkpointStore = new InMemoryProjectionCheckpointStore();
 
@@ -244,20 +244,20 @@ public sealed class ReactorRunnerTests
 
         // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
-            runner.RunAsync(reactor, ProjectionCheckpoint.Start, 2).AsTask());
+            runner.RunAsync(reactor, ProjectionCheckpoint.Start, 2, TestContext.Current.CancellationToken).AsTask());
         Assert.IsType<InvalidOperationException>(failure.InnerException);
         Assert.Equal(ProcessorFailureStage.Handling, failure.Stage);
 
         // The first batch (events 1-2) must already be durably saved — not just held in memory —
         // by the time the second batch's failure propagates.
-        var savedAfterFailure = await checkpointStore.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern));
+        var savedAfterFailure = await checkpointStore.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), TestContext.Current.CancellationToken);
         Assert.Equal("2", savedAfterFailure.Cursor.ToString());
         Assert.Equal([1, 2], reactor.HandledValues);
 
         // Retrying from the saved checkpoint (not ProjectionCheckpoint.Start) only re-reacts to
         // events 3-4 — events 1-2 are never handled a second time.
-        var resumeFrom = await checkpointStore.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern));
-        var finalCheckpoint = await runner.RunAsync(reactor, resumeFrom, 2);
+        var resumeFrom = await checkpointStore.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), TestContext.Current.CancellationToken);
+        var finalCheckpoint = await runner.RunAsync(reactor, resumeFrom, 2, TestContext.Current.CancellationToken);
 
         Assert.Equal([1, 2, 3, 4], reactor.HandledValues);
         Assert.Equal("4", finalCheckpoint.Cursor.ToString());

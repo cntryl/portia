@@ -13,29 +13,29 @@ public sealed class QueueBrokerTests
         await using var client = await ConsumerBroker.ConnectAsync();
         var route = "queue://portia-consumer-tests/queue/" + Guid.NewGuid().ToString("N");
         var serializer = ConsumerJson.CreateSerializer();
-        _ = await client.Queue.EnqueueAsync(route, "{"u8.ToArray());
+        _ = await client.Queue.EnqueueAsync(route, "{"u8.ToArray(), ct: TestContext.Current.CancellationToken);
         var id = Uuid.CreateVersion4();
         _ = await client.Queue.EnqueueAsync(route,
-            serializer.Serialize(new ScopeRequest(id), null, RequestMetadata.Create(), null));
+            serializer.Serialize(new ScopeRequest(id), null, RequestMetadata.Create(), null), ct: TestContext.Current.CancellationToken);
         var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog());
 
         // Act
-        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var reader = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
         var malformed = reader.Current;
         _ = Assert.ThrowsAny<JsonException>(() => malformed.Request);
-        await malformed.RetryAsync(TimeSpan.FromSeconds(1));
+        await malformed.RetryAsync(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
         Assert.True(await reader.MoveNextAsync());
         Assert.Equal(id, Assert.IsType<ScopeRequest>(reader.Current.Request).Id);
-        await reader.Current.CompleteAsync();
+        await reader.Current.CompleteAsync(TestContext.Current.CancellationToken);
         var redelivered = Assert.Single(await client.Queue.ReserveAsync(
-            route, TimeSpan.FromSeconds(30), wait: TimeSpan.FromSeconds(3)));
+            route, TimeSpan.FromSeconds(30), wait: TimeSpan.FromSeconds(3), ct: TestContext.Current.CancellationToken));
         Assert.Equal("{"u8.ToArray(), redelivered.Body.ToArray());
         // Test cleanup acknowledges the observed redelivery; Portia never acknowledged the malformed delivery.
-        await redelivered.CompleteAsync();
-        Assert.Empty(await client.Queue.ReserveAsync(route, TimeSpan.FromSeconds(1), wait: TimeSpan.Zero));
+        await redelivered.CompleteAsync(TestContext.Current.CancellationToken);
+        Assert.Empty(await client.Queue.ReserveAsync(route, TimeSpan.FromSeconds(1), wait: TimeSpan.Zero, ct: TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -50,18 +50,18 @@ public sealed class QueueBrokerTests
         var route = "queue://portia-consumer-tests/queue/" + Guid.NewGuid().ToString("N");
         var serializer = ConsumerJson.CreateSerializer();
         _ = await client.Queue.EnqueueAsync(route,
-            serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null, RequestMetadata.Create(), null));
+            serializer.Serialize(new ScopeRequest(Uuid.CreateVersion4()), null, RequestMetadata.Create(), null), ct: TestContext.Current.CancellationToken);
         var consumer = new FitzRequestQueueConsumer(client.Queue, serializer, route, ConsumerJson.Catalog());
 
         // Act
-        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var reader = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
 
         Assert.Equal("consumer.scopes.scope-request", reader.Current.Name);
         Assert.NotEqual(nameof(ScopeRequest), reader.Current.Name);
-        await reader.Current.CompleteAsync();
+        await reader.Current.CompleteAsync(TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public sealed class QueueBrokerTests
         var serializer = ConsumerJson.CreateSerializer();
         var id = Uuid.CreateVersion4();
         _ = await client.Queue.EnqueueAsync(route,
-            serializer.Serialize(new ScopeRequest(id, 2), null, RequestMetadata.Create(), null));
+            serializer.Serialize(new ScopeRequest(id, 2), null, RequestMetadata.Create(), null), ct: TestContext.Current.CancellationToken);
         var services = ConsumerHost.CreateServices();
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
@@ -95,7 +95,7 @@ public sealed class QueueBrokerTests
         {
             await provider.GetRequiredService<ConsumerHost.Effects>().WaitForAsync("nested");
             Assert.Empty(await competitor.Queue.ReserveAsync(
-                route, TimeSpan.FromSeconds(1), wait: TimeSpan.FromSeconds(4)));
+                route, TimeSpan.FromSeconds(1), wait: TimeSpan.FromSeconds(4), ct: TestContext.Current.CancellationToken));
         }
         finally
         {
@@ -110,10 +110,10 @@ public sealed class QueueBrokerTests
         }
 
         var redelivered = Assert.Single(await competitor.Queue.ReserveAsync(
-            route, TimeSpan.FromSeconds(30), wait: TimeSpan.FromSeconds(3)));
+            route, TimeSpan.FromSeconds(30), wait: TimeSpan.FromSeconds(3), ct: TestContext.Current.CancellationToken));
         var request = serializer.DeserializeEnvelope(redelivered.Body).Request;
         Assert.Equal(id, Assert.IsType<ScopeRequest>(request).Id);
-        await redelivered.CompleteAsync();
+        await redelivered.CompleteAsync(TestContext.Current.CancellationToken);
         Assert.All(provider.GetRequiredService<ConsumerHost.Effects>().Scopes.Values, Assert.True);
     }
 }

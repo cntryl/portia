@@ -145,7 +145,7 @@ public sealed class EventStreamPatternTests
         // Act
         var thrown = await Record.ExceptionAsync(() =>
             new ProjectorRunner(new InMemoryEventStore())
-                .RunAsync(projector, ProjectionCheckpoint.Start).AsTask());
+                .RunAsync(projector, ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         var error = Assert.IsType<InvalidOperationException>(thrown);

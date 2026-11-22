@@ -25,7 +25,7 @@ public sealed class AwsMailSenderTests
         };
 
         // Act
-        var outcome = await sender.SendAsync(Tenant, new SendId("order-1.receipt"), message);
+        var outcome = await sender.SendAsync(Tenant, new SendId("order-1.receipt"), message, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(SendStatus.Accepted, outcome.Status);
@@ -60,7 +60,7 @@ public sealed class AwsMailSenderTests
         proxy.Failure = ServiceFailure(exceptionType, providerMessage, HttpStatusCode.BadRequest);
 
         // Act
-        var outcome = await sender.SendAsync(Tenant, new SendId("a"), Message());
+        var outcome = await sender.SendAsync(Tenant, new SendId("a"), Message(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(SendStatus.Rejected, outcome.Status);
@@ -80,7 +80,7 @@ public sealed class AwsMailSenderTests
 
         // Act
         var exception =
-            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
+            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message(), TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<SendThrottledException>(exception);
@@ -100,7 +100,7 @@ public sealed class AwsMailSenderTests
             : new TaskCanceledException("The request timed out.");
 
         // Act
-        var outcome = await sender.SendAsync(Tenant, new SendId("a"), Message());
+        var outcome = await sender.SendAsync(Tenant, new SendId("a"), Message(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(SendStatus.Unknown, outcome.Status);
@@ -119,7 +119,7 @@ public sealed class AwsMailSenderTests
 
         // Act
         var exception =
-            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
+            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message(), TestContext.Current.CancellationToken));
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(exception);
@@ -137,7 +137,7 @@ public sealed class AwsMailSenderTests
 
         // Act
         var exception =
-            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
+            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message(), TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<AmazonServiceException>(exception);

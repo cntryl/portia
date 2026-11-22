@@ -24,7 +24,7 @@ public sealed class AggregateSaveConcurrencyTests
         else
             aggregate.Deposit(1);
 
-        var saving = repository.SaveAsync(aggregate, _saveContext).AsTask();
+        var saving = repository.SaveAsync(aggregate, _saveContext, TestContext.Current.CancellationToken).AsTask();
 
         // Act
         await store.Entered.Task;
@@ -34,7 +34,7 @@ public sealed class AggregateSaveConcurrencyTests
         {
             _ = operation == "save"
                 ? await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                    repository.SaveAsync(aggregate, _saveContext).AsTask())
+                    repository.SaveAsync(aggregate, _saveContext, TestContext.Current.CancellationToken).AsTask())
                 : operation == "audit"
                     ? Assert.Throws<InvalidOperationException>(() => aggregate.Audit(new Declined("second")))
                     : Assert.Throws<InvalidOperationException>(() => aggregate.Deposit(2));
@@ -72,7 +72,7 @@ public sealed class AggregateSaveConcurrencyTests
         var metadata = payload.Metadata;
 
         // Assert
-        _ = await Assert.ThrowsAsync<IOException>(() => repository.SaveAsync(aggregate, _saveContext).AsTask());
+        _ = await Assert.ThrowsAsync<IOException>(() => repository.SaveAsync(aggregate, _saveContext, TestContext.Current.CancellationToken).AsTask());
         Assert.Same(payload, Assert.Single(audit ? scenario.PendingAudits : scenario.PendingEvents));
         Assert.Equal(metadata, payload.Metadata with
         {
@@ -89,7 +89,7 @@ public sealed class AggregateSaveConcurrencyTests
             : Assert.Throws<InvalidOperationException>(() => aggregate.Audit(new Declined("rejected")));
 
         store.FailAppend = false;
-        await repository.SaveAsync(aggregate, _saveContext);
+        await repository.SaveAsync(aggregate, _saveContext, TestContext.Current.CancellationToken);
         Assert.Empty(scenario.PendingAudits);
         Assert.Empty(scenario.PendingEvents);
         Assert.Equal(audit ? 0UL : 1UL, scenario.CommittedEventCount);
@@ -100,7 +100,7 @@ public sealed class AggregateSaveConcurrencyTests
             Assert.Equal(4, Uuid.Parse(store.Routes[0].Resource, CultureInfo.InvariantCulture).Version);
             Assert.NotEqual(aggregate.Stream, store.Routes[0]);
             aggregate.Audit(new Declined("new session"));
-            await repository.SaveAsync(aggregate, _saveContext);
+            await repository.SaveAsync(aggregate, _saveContext, TestContext.Current.CancellationToken);
             Assert.NotEqual(store.Routes[0], store.Routes[2]);
         }
     }
@@ -115,7 +115,7 @@ public sealed class AggregateSaveConcurrencyTests
 
         // Act
         await scope.ServiceProvider.Aggregates()
-            .SaveAsync(new Account(Uuid.CreateVersion4()), _saveContext);
+            .SaveAsync(new Account(Uuid.CreateVersion4()), _saveContext, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(0, store.AppendCalls);
@@ -130,20 +130,20 @@ public sealed class AggregateSaveConcurrencyTests
         await using var scope = provider.CreateAsyncScope();
         var repository = scope.ServiceProvider.Aggregates();
         var id = Uuid.CreateVersion4();
-        var winner = await repository.HydrateAsync(new Account(id));
-        var contender = await repository.HydrateAsync(new Account(id));
+        var winner = await repository.HydrateAsync(new Account(id), TestContext.Current.CancellationToken);
+        var contender = await repository.HydrateAsync(new Account(id), TestContext.Current.CancellationToken);
         winner.Deposit(1);
         contender.Deposit(2);
-        await repository.SaveAsync(winner, _saveContext);
+        await repository.SaveAsync(winner, _saveContext, TestContext.Current.CancellationToken);
 
         // Act
-        var exception = await Record.ExceptionAsync(() => repository.SaveAsync(contender, _saveContext).AsTask());
+        var exception = await Record.ExceptionAsync(() => repository.SaveAsync(contender, _saveContext, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         Assert.IsType<EventStreamConcurrencyException>(exception);
         Assert.False(winner.IsNew);
         Assert.True(contender.IsNew);
-        var reloaded = await repository.HydrateAsync(new Account(id));
+        var reloaded = await repository.HydrateAsync(new Account(id), TestContext.Current.CancellationToken);
         Assert.False(reloaded.IsNew);
     }
 

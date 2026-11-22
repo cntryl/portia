@@ -38,7 +38,7 @@ public sealed class ServerSentEventTests : IAsyncDisposable
         // Arrange
         var client = await StartAsync(TimeSpan.FromSeconds(30));
 
-        using var response = await client.GetAsync("/events", HttpCompletionOption.ResponseHeadersRead);
+        using var response = await client.GetAsync("/events", HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
 
         // Act
         var body = await ReadUntilAsync(response, "fourth\n\n");
@@ -57,7 +57,7 @@ public sealed class ServerSentEventTests : IAsyncDisposable
         // Arrange
         var client = await StartAsync(TimeSpan.FromMilliseconds(50));
 
-        using var response = await client.GetAsync("/events", HttpCompletionOption.ResponseHeadersRead);
+        using var response = await client.GetAsync("/events", HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
 
         // Act
         var body = await ReadUntilAsync(response, ":\n\n");
@@ -73,11 +73,11 @@ public sealed class ServerSentEventTests : IAsyncDisposable
         // Arrange
         var client = await StartAsync(null);
 
-        using var response = await client.GetAsync("/events", HttpCompletionOption.ResponseHeadersRead);
+        using var response = await client.GetAsync("/events", HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
         var body = await ReadUntilAsync(response, "fourth");
 
         // Act
-        await Task.Delay(200);
+        await Task.Delay(200, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.DoesNotContain(":\n\n", body, StringComparison.Ordinal);
@@ -106,7 +106,7 @@ public sealed class ServerSentEventTests : IAsyncDisposable
 
         // Assert
         _ = await Assert.ThrowsAsync<IOException>(() =>
-            PortiaStreamResults.Sse(IdleAfterFirstItem(stopped, throwingCallback)).ExecuteAsync(context));
+            PortiaStreamResults.Sse(IdleAfterFirstItem(stopped, throwingCallback, TestContext.Current.CancellationToken)).ExecuteAsync(context));
 
         Assert.True(stopped.Value);
     }

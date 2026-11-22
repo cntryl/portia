@@ -18,20 +18,20 @@ public sealed class FakeObjectStorageTests
         await UploadAsync(store, tenantA, digest, content);
 
         // Assert
-        Assert.True(await store.HeadAndVerifyAsync(tenantA, digest));
-        Assert.False(await store.HeadAndVerifyAsync(tenantB, digest));
-        var download = await store.CreateDownloadAsync(tenantA, digest, TimeSpan.FromMinutes(3));
+        Assert.True(await store.HeadAndVerifyAsync(tenantA, digest, TestContext.Current.CancellationToken));
+        Assert.False(await store.HeadAndVerifyAsync(tenantB, digest, TestContext.Current.CancellationToken));
+        var download = await store.CreateDownloadAsync(tenantA, digest, TimeSpan.FromMinutes(3), TestContext.Current.CancellationToken);
         Assert.True(download.ExpiresAt > DateTimeOffset.UtcNow);
         Assert.True(download.ExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(3));
-        await using var read = await store.OpenReadAsync(tenantA, digest);
+        await using var read = await store.OpenReadAsync(tenantA, digest, TestContext.Current.CancellationToken);
         Assert.NotNull(read);
         using var copy = new MemoryStream();
-        await read!.CopyToAsync(copy);
+        await read!.CopyToAsync(copy, TestContext.Current.CancellationToken);
         Assert.Equal(content, copy.ToArray());
 
         await UploadAsync(store, tenantB, digest, content);
-        Assert.True(await store.HeadAndVerifyAsync(tenantA, digest));
-        Assert.True(await store.HeadAndVerifyAsync(tenantB, digest));
+        Assert.True(await store.HeadAndVerifyAsync(tenantA, digest, TestContext.Current.CancellationToken));
+        Assert.True(await store.HeadAndVerifyAsync(tenantB, digest, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Checks that mismatched uploads fail and discard their session.</summary>
@@ -41,17 +41,17 @@ public sealed class FakeObjectStorageTests
         // Arrange
         var store = new FakeObjectStorage();
         var expected = Digest("expected"u8.ToArray());
-        var session = await store.CreateUploadAsync(new TenantId("tenant-a"), expected);
+        var session = await store.CreateUploadAsync(new TenantId("tenant-a"), expected, TestContext.Current.CancellationToken);
 
         // Act
-        var receipt = await store.AcceptPartAsync(session, 1, new MemoryStream("actual"u8.ToArray()));
+        var receipt = await store.AcceptPartAsync(session, 1, new MemoryStream("actual"u8.ToArray()), TestContext.Current.CancellationToken);
 
         // Assert
         await Assert.ThrowsAsync<InvalidDataException>(async () =>
-            await store.CompleteUploadAsync(session, [receipt]));
+            await store.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken));
 
         Assert.Equal(0, store.ActiveUploadCount);
-        Assert.False(await store.HeadAndVerifyAsync(new TenantId("tenant-a"), expected));
+        Assert.False(await store.HeadAndVerifyAsync(new TenantId("tenant-a"), expected, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -66,18 +66,18 @@ public sealed class FakeObjectStorageTests
         var tenant = new TenantId("tenant-a");
         var content = "browser upload"u8.ToArray();
         var digest = Digest(content);
-        var session = await store.CreateUploadAsync(tenant, digest);
-        var receipt = await store.AcceptPartAsync(session, 1, new MemoryStream(content));
+        var session = await store.CreateUploadAsync(tenant, digest, TestContext.Current.CancellationToken);
+        var receipt = await store.AcceptPartAsync(session, 1, new MemoryStream(content), TestContext.Current.CancellationToken);
         var rejected = await Record.ExceptionAsync(async () =>
-            await store.CompleteUploadAsync(session, [receipt with { Token = "mistyped-etag" }]));
+            await store.CompleteUploadAsync(session, [receipt with { Token = "mistyped-etag" }], TestContext.Current.CancellationToken));
 
         // Act
-        var corrected = await Record.ExceptionAsync(async () => await store.CompleteUploadAsync(session, [receipt]));
+        var corrected = await Record.ExceptionAsync(async () => await store.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidDataException>(rejected);
         Assert.Null(corrected);
-        Assert.True(await store.HeadAndVerifyAsync(tenant, digest));
+        Assert.True(await store.HeadAndVerifyAsync(tenant, digest, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Checks abort cleanup and bounded presigned lifetimes.</summary>
@@ -87,23 +87,23 @@ public sealed class FakeObjectStorageTests
         // Arrange
         var store = new FakeObjectStorage();
         var expected = Digest("content"u8.ToArray());
-        var session = await store.CreateUploadAsync(new TenantId("tenant-a"), expected);
+        var session = await store.CreateUploadAsync(new TenantId("tenant-a"), expected, TestContext.Current.CancellationToken);
 
         // Act
-        var part = await store.SignPartAsync(session, 1, TimeSpan.FromMinutes(2));
+        var part = await store.SignPartAsync(session, 1, TimeSpan.FromMinutes(2), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(part.ExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(2));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
-            await store.SignPartAsync(session, 1, ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromTicks(1)));
+            await store.SignPartAsync(session, 1, ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromTicks(1), TestContext.Current.CancellationToken));
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await store.CreateDownloadAsync(new TenantId("tenant-a"), expected,
-                ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromTicks(1)));
+                ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromTicks(1), TestContext.Current.CancellationToken));
 
-        await store.AbortUploadAsync(session);
+        await store.AbortUploadAsync(session, TestContext.Current.CancellationToken);
         Assert.Equal(0, store.ActiveUploadCount);
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await store.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)));
+            await store.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken));
     }
 
     /// <summary>Checks the maximum object size and digest validation.</summary>
@@ -140,7 +140,7 @@ public sealed class FakeObjectStorageTests
                 new ObjectUploadSession(part.UploadUri.AbsolutePath.Split('/')[1]),
                 part.PartNumber,
                 new MemoryStream(content.ToArray()),
-                ct)));
+                ct), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(exception);
@@ -153,12 +153,12 @@ public sealed class FakeObjectStorageTests
         // Arrange
         var store = new FakeObjectStorage();
         var content = new byte[8 * 1024 * 1024];
-        var session = await store.CreateUploadAsync(new TenantId("tenant-a"), Digest(content));
-        var first = await store.AcceptPartAsync(session, 1, new MemoryStream(content, 0, 4 * 1024 * 1024));
-        var last = await store.AcceptPartAsync(session, 2, new MemoryStream(content, 4 * 1024 * 1024, 4 * 1024 * 1024));
+        var session = await store.CreateUploadAsync(new TenantId("tenant-a"), Digest(content), TestContext.Current.CancellationToken);
+        var first = await store.AcceptPartAsync(session, 1, new MemoryStream(content, 0, 4 * 1024 * 1024), TestContext.Current.CancellationToken);
+        var last = await store.AcceptPartAsync(session, 2, new MemoryStream(content, 4 * 1024 * 1024, 4 * 1024 * 1024), TestContext.Current.CancellationToken);
 
         // Act
-        var error = await Record.ExceptionAsync(async () => await store.CompleteUploadAsync(session, [first, last]));
+        var error = await Record.ExceptionAsync(async () => await store.CompleteUploadAsync(session, [first, last], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidDataException>(error);
@@ -174,7 +174,7 @@ public sealed class FakeObjectStorageTests
         var tenant = new TenantId("tenant-a");
         var content = new byte[ObjectStorageLimits.MinimumNonfinalPartLength * 2 + 1];
         var digest = Digest(content);
-        var session = await store.CreateUploadAsync(tenant, digest);
+        var session = await store.CreateUploadAsync(tenant, digest, TestContext.Current.CancellationToken);
         var parts = await Task.WhenAll(Enumerable.Range(1, 3).Select(partNumber => Task.Run(async () =>
         {
             var start = (partNumber - 1) * ObjectStorageLimits.MinimumNonfinalPartLength;
@@ -183,10 +183,10 @@ public sealed class FakeObjectStorageTests
         })));
 
         // Act
-        await store.CompleteUploadAsync(session, parts);
+        await store.CompleteUploadAsync(session, parts, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.True(await store.HeadAndVerifyAsync(tenant, digest));
+        Assert.True(await store.HeadAndVerifyAsync(tenant, digest, TestContext.Current.CancellationToken));
 
         var payloads = Enumerable.Range(0, 64).Select(index => BitConverter.GetBytes(index)).ToArray();
         await Task.WhenAll(payloads.Select(payload => Task.Run(async () =>
@@ -195,7 +195,7 @@ public sealed class FakeObjectStorageTests
         Assert.Equal(0, store.ActiveUploadCount);
         foreach (var payload in payloads)
         {
-            Assert.True(await store.HeadAndVerifyAsync(tenant, Digest(payload)));
+            Assert.True(await store.HeadAndVerifyAsync(tenant, Digest(payload), TestContext.Current.CancellationToken));
         }
     }
 
@@ -205,12 +205,12 @@ public sealed class FakeObjectStorageTests
     {
         // Arrange
         var store = new FakeObjectStorage();
-        var session = await store.CreateUploadAsync(new TenantId("tenant-a"), Digest([1]));
+        var session = await store.CreateUploadAsync(new TenantId("tenant-a"), Digest([1]), TestContext.Current.CancellationToken);
         using var stream = new PausingStream([1]);
-        var acceptance = store.AcceptPartAsync(session, 1, stream).AsTask();
+        var acceptance = store.AcceptPartAsync(session, 1, stream, TestContext.Current.CancellationToken).AsTask();
 
         await stream.ReadStarted;
-        await store.AbortUploadAsync(session);
+        await store.AbortUploadAsync(session, TestContext.Current.CancellationToken);
 
         // Act
         stream.Resume();
@@ -230,26 +230,26 @@ public sealed class FakeObjectStorageTests
         var tenantB = new TenantId("tenant-b");
         var content = "retryable content"u8.ToArray();
         var digest = Digest(content);
-        var session = await store.CreateUploadAsync(tenantA, digest);
-        var receipt = await store.AcceptPartAsync(session, 1, new MemoryStream(content));
+        var session = await store.CreateUploadAsync(tenantA, digest, TestContext.Current.CancellationToken);
+        var receipt = await store.AcceptPartAsync(session, 1, new MemoryStream(content), TestContext.Current.CancellationToken);
 
-        await store.CompleteUploadAsync(session, [receipt]);
+        await store.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken);
 
         // Act
-        await store.CompleteUploadAsync(session, [new ObjectPartReceipt(receipt.PartNumber, receipt.Token)]);
+        await store.CompleteUploadAsync(session, [new ObjectPartReceipt(receipt.PartNumber, receipt.Token)], TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(0, store.ActiveUploadCount);
-        Assert.True(await store.HeadAndVerifyAsync(tenantA, digest));
+        Assert.True(await store.HeadAndVerifyAsync(tenantA, digest, TestContext.Current.CancellationToken));
 
         await Assert.ThrowsAsync<InvalidDataException>(async () =>
-            await store.CompleteUploadAsync(session, [new ObjectPartReceipt(receipt.PartNumber, "altered-receipt")]));
+            await store.CompleteUploadAsync(session, [new ObjectPartReceipt(receipt.PartNumber, "altered-receipt")], TestContext.Current.CancellationToken));
 
         await UploadAsync(store, tenantB, digest, content);
-        await store.DeleteAsync(tenantA, digest);
+        await store.DeleteAsync(tenantA, digest, TestContext.Current.CancellationToken);
         await Assert.ThrowsAsync<FileNotFoundException>(async () =>
-            await store.CompleteUploadAsync(session, [receipt]));
-        Assert.True(await store.HeadAndVerifyAsync(tenantB, digest));
+            await store.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken));
+        Assert.True(await store.HeadAndVerifyAsync(tenantB, digest, TestContext.Current.CancellationToken));
     }
 
     static ObjectDigest Digest(byte[] content)

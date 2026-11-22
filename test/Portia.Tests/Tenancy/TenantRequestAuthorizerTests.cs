@@ -24,7 +24,7 @@ public sealed class TenantRequestAuthorizerTests
         // Act
         var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(provider)
             .GivenActor(Actor("acme"))
-            .When(new TenantScopedCommand(Acme))
+            .When(new TenantScopedCommand(Acme), TestContext.Current.CancellationToken)
             .ExpectAuthorized()
             .ExpectHandled()
             .ExpectSuccess());
@@ -47,7 +47,7 @@ public sealed class TenantRequestAuthorizerTests
         // Act
         var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(provider)
             .GivenActor(Actor(claim))
-            .When(new TenantScopedCommand(Acme))
+            .When(new TenantScopedCommand(Acme), TestContext.Current.CancellationToken)
             .ExpectDenied(RequestErrorKind.Forbidden)
             .ExpectNotHandled());
 
@@ -67,7 +67,7 @@ public sealed class TenantRequestAuthorizerTests
         // Act
         var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(provider)
             .GivenActor(actor)
-            .When(new TenantScopedCommand(Acme))
+            .When(new TenantScopedCommand(Acme), TestContext.Current.CancellationToken)
             .ExpectDenied(RequestErrorKind.Forbidden)
             .ExpectNotHandled());
 
@@ -85,7 +85,7 @@ public sealed class TenantRequestAuthorizerTests
         // Act
         var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(provider)
             .GivenActor(RequestActor.System)
-            .When(new TenantScopedCommand(Acme))
+            .When(new TenantScopedCommand(Acme), TestContext.Current.CancellationToken)
             .ExpectAuthorized()
             .ExpectHandled());
 
@@ -106,7 +106,7 @@ public sealed class TenantRequestAuthorizerTests
         using var host = builder.Build();
 
         // Assert
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.StartsWith("IActorTenantResolver is required by TenantRequestAuthorizer.", failure.Message,
             StringComparison.Ordinal);
@@ -126,8 +126,8 @@ public sealed class TenantRequestAuthorizerTests
         // Act
         var exception = await Record.ExceptionAsync(async () =>
         {
-            await host.StartAsync();
-            await host.StopAsync();
+            await host.StartAsync(TestContext.Current.CancellationToken);
+            await host.StopAsync(TestContext.Current.CancellationToken);
         });
 
         // Assert

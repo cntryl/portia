@@ -17,7 +17,7 @@ public sealed class ProcessorBaseTests
         var runner = new ProjectorRunner(events);
 
         // Act
-        _ = await runner.RunAsync(projector, ProjectionCheckpoint.Start, new ProjectionRunOptions { MaxBatchSize = 2 });
+        _ = await runner.RunAsync(projector, ProjectionCheckpoint.Start, new ProjectionRunOptions { MaxBatchSize = 2 }, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(6, repository.Value);
@@ -38,14 +38,14 @@ public sealed class ProcessorBaseTests
 
         // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
-            runner.RunAsync(new BatchAccounts(repository), ProjectionCheckpoint.Start).AsTask());
+            runner.RunAsync(new BatchAccounts(repository), ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken).AsTask());
         Assert.IsType<InvalidOperationException>(failure.InnerException);
         Assert.Equal(ProcessorFailureStage.Committing, failure.Stage);
         Assert.Equal(0, repository.Value);
         Assert.Equal(ProjectionCheckpoint.Start, repository.Checkpoint);
         Assert.Equal(1, repository.Disposals);
         repository.Fail = false;
-        _ = await runner.RunAsync(new BatchAccounts(repository), repository.Checkpoint);
+        _ = await runner.RunAsync(new BatchAccounts(repository), repository.Checkpoint, ct: TestContext.Current.CancellationToken);
         Assert.Equal(6, repository.Value);
         Assert.Equal("3", repository.Checkpoint.Cursor.ToString());
     }
@@ -79,7 +79,7 @@ public sealed class ProcessorBaseTests
         Reactor reactor = batch ? new BatchReaction(repository) : new Reaction(repository);
 
         // Act
-        _ = await new ReactorRunner(events).RunAsync(reactor, ProjectionCheckpoint.Start, 2);
+        _ = await new ReactorRunner(events).RunAsync(reactor, ProjectionCheckpoint.Start, 2, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(batch ? new ulong[] { 2, 3 } : [1, 2, 3], repository.Commits);
@@ -106,13 +106,13 @@ public sealed class ProcessorBaseTests
 
         // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
-            runner.RunAsync(reactor, ProjectionCheckpoint.Start, 2).AsTask());
+            runner.RunAsync(reactor, ProjectionCheckpoint.Start, 2, TestContext.Current.CancellationToken).AsTask());
         Assert.IsType<IOException>(failure.InnerException);
         Assert.Equal(ProcessorFailureStage.Committing, failure.Stage);
         Assert.Equal(ProjectionCheckpoint.Start, repository.Checkpoint);
         Assert.Equal(batch ? 2 : 1, repository.Contexts.Count);
         repository.FailSave = false;
-        _ = await runner.RunAsync(reactor, repository.Checkpoint, 2);
+        _ = await runner.RunAsync(reactor, repository.Checkpoint, 2, TestContext.Current.CancellationToken);
         Assert.Equal(batch ? 5 : 4, repository.Contexts.Count);
         Assert.Equal(repository.Contexts[0].CauseId, repository.Contexts[batch ? 2 : 1].CauseId);
         Assert.NotEqual(repository.Contexts[0].ExecutionId, repository.Contexts[batch ? 2 : 1].ExecutionId);

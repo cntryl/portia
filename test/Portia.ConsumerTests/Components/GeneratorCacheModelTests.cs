@@ -171,17 +171,17 @@ public sealed class GeneratorCacheModelTests
             .Append(typeof(Aggregate).Assembly.Location)
             .Distinct(StringComparer.Ordinal)
             .Select(static path => MetadataReference.CreateFromFile(path));
-        var originalTree = CSharpSyntaxTree.ParseText(source, parseOptions, "CacheEvent.cs");
+        var originalTree = CSharpSyntaxTree.ParseText(source, parseOptions, "CacheEvent.cs", cancellationToken: TestContext.Current.CancellationToken);
         var compilation = CSharpCompilation.Create("GeneratorCache",
             [originalTree], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             [new DomainEventCatalogGenerator().AsSourceGenerator()],
             parseOptions: parseOptions,
             driverOptions: new GeneratorDriverOptions(default, true));
-        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
 
-        var movedTree = CSharpSyntaxTree.ParseText(Environment.NewLine + source, parseOptions, "CacheEvent.cs");
-        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(originalTree, movedTree));
+        var movedTree = CSharpSyntaxTree.ParseText(Environment.NewLine + source, parseOptions, "CacheEvent.cs", cancellationToken: TestContext.Current.CancellationToken);
+        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(originalTree, movedTree), TestContext.Current.CancellationToken);
 
         var steps = driver.GetRunResult().Results.Single()
             .TrackedSteps["DomainEventCatalogRegistrations"];
@@ -207,14 +207,14 @@ public sealed class GeneratorCacheModelTests
                               public partial class ExampleContext : JsonSerializerContext;
                               """;
         var options = new CSharpParseOptions(LanguageVersion.Preview);
-        var tree = CSharpSyntaxTree.ParseText(source, options, "Example.cs");
+        var tree = CSharpSyntaxTree.ParseText(source, options, "Example.cs", cancellationToken: TestContext.Current.CancellationToken);
         var compilation = CSharpCompilation.Create("GeneratorCache", [tree], References(),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new JsonRootMarkerGenerator().AsSourceGenerator()],
             parseOptions: options, driverOptions: new GeneratorDriverOptions(default, true));
-        driver = driver.RunGenerators(compilation);
-        var moved = CSharpSyntaxTree.ParseText(Environment.NewLine + source, options, "Example.cs");
-        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree, moved));
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
+        var moved = CSharpSyntaxTree.ParseText(Environment.NewLine + source, options, "Example.cs", cancellationToken: TestContext.Current.CancellationToken);
+        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree, moved), TestContext.Current.CancellationToken);
 
         // Act
         var outputs = driver.GetRunResult().Results.Single().TrackedSteps["PortiaJsonRootEmission"]
@@ -228,8 +228,8 @@ public sealed class GeneratorCacheModelTests
 
         var changedRoot = CSharpSyntaxTree.ParseText(
             (Environment.NewLine + source).Replace("typeof(string)", "typeof(int)", StringComparison.Ordinal),
-            options, "Example.cs");
-        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree, changedRoot));
+            options, "Example.cs", cancellationToken: TestContext.Current.CancellationToken);
+        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree, changedRoot), TestContext.Current.CancellationToken);
         outputs = driver.GetRunResult().Results.Single().TrackedSteps["PortiaJsonRootEmission"]
             .SelectMany(step => step.Outputs).ToArray();
         Assert.Contains(outputs, output => output.Reason == IncrementalStepRunReason.Modified);

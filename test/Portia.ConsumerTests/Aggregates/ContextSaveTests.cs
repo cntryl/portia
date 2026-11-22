@@ -32,7 +32,7 @@ public sealed class ContextSaveTests
         }
 
         // Assert
-        _ = await Assert.ThrowsAsync<IOException>(async () => await repository.SaveAsync(account, context));
+        _ = await Assert.ThrowsAsync<IOException>(async () => await repository.SaveAsync(account, context, TestContext.Current.CancellationToken));
         _ = Assert.Throws<InvalidOperationException>(() =>
         {
             if (audit)
@@ -52,12 +52,12 @@ public sealed class ContextSaveTests
         Assert.Equal(new ActorAttribution("alice", "accounts"), metadata.Actor);
         var replacement = new RequestContext<DepositAccount>(context.Request, RequestActor.System);
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await repository.SaveAsync(account, replacement));
+            await repository.SaveAsync(account, replacement, TestContext.Current.CancellationToken));
         _ = Assert.Single(store.Writes);
         // Mutation of the input principal or an exposed snapshot cannot rewrite the frozen attribution.
         ((ClaimsIdentity)actor.Identity!).AddClaim(new Claim("role", "admin"));
         ((ClaimsIdentity)context.Actor.Identity!).AddClaim(new Claim("role", "owner"));
-        await repository.SaveAsync(account, context);
+        await repository.SaveAsync(account, context, TestContext.Current.CancellationToken);
         Assert.Equal(first, store.Writes[1]);
         Assert.Equal(audit ? 0UL : 1UL, account.CommittedStreamPosition);
         if (audit)
@@ -69,7 +69,7 @@ public sealed class ContextSaveTests
             account.Deposit(5);
         }
 
-        await repository.SaveAsync(account, replacement);
+        await repository.SaveAsync(account, replacement, TestContext.Current.CancellationToken);
         Assert.Equal(replacement.ExecutionId, store.Serializer.Deserialize(store.Writes[2]).Metadata.ExecutionId);
     }
 
@@ -85,7 +85,7 @@ public sealed class ContextSaveTests
         account.Deposit(1);
 
         // Assert
-        _ = await Assert.ThrowsAsync<ArgumentNullException>(async () => await repository.SaveAsync(account, null!));
+        _ = await Assert.ThrowsAsync<ArgumentNullException>(async () => await repository.SaveAsync(account, null!, TestContext.Current.CancellationToken));
         Assert.Equal(0UL, account.CommittedStreamPosition);
     }
 
@@ -108,8 +108,8 @@ public sealed class ContextSaveTests
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await repository.SaveAsync(account, first, cancellation.Token));
         var second = new RequestContext<DepositAccount>(first.Request, RequestActor.System);
-        await repository.SaveAsync(account, second);
-        await foreach (var record in store.ReadAsync(account.Stream))
+        await repository.SaveAsync(account, second, TestContext.Current.CancellationToken);
+        await foreach (var record in store.ReadAsync(account.Stream, ct: TestContext.Current.CancellationToken))
             Assert.Equal(second.ExecutionId, record.Event.Metadata.ExecutionId);
     }
 
@@ -131,10 +131,10 @@ public sealed class ContextSaveTests
 
         // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await repository.SaveAsync(account, context));
+            await repository.SaveAsync(account, context, TestContext.Current.CancellationToken));
         Assert.Same(original, first.Metadata);
         Assert.Equal(0UL, account.CommittedStreamPosition);
-        await foreach (var record in store.ReadAsync(account.Stream))
+        await foreach (var record in store.ReadAsync(account.Stream, ct: TestContext.Current.CancellationToken))
             Assert.Fail($"Unexpected appended event {record.Event.Metadata.EventId}");
     }
 

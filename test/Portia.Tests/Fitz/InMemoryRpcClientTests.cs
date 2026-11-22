@@ -21,10 +21,10 @@ public sealed class InMemoryRpcClientTests
         {
             receivedBudget = request.RemainingTime;
             return ValueTask.CompletedTask;
-        });
+        }, ct: TestContext.Current.CancellationToken);
 
         // Act
-        var call = rpc.CallStreamingAsync("rpc://test", ReadOnlyMemory<byte>.Empty, TimeSpan.FromMinutes(1));
+        var call = rpc.CallStreamingAsync("rpc://test", ReadOnlyMemory<byte>.Empty, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(call.Cancellation.IsCompleted);
@@ -50,10 +50,10 @@ public sealed class InMemoryRpcClientTests
         {
             started.SetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
-        });
+        }, ct: TestContext.Current.CancellationToken);
 
         // Act
-        var call = rpc.CallStreamingAsync("rpc://test", ReadOnlyMemory<byte>.Empty, TimeSpan.FromSeconds(1));
+        var call = rpc.CallStreamingAsync("rpc://test", ReadOnlyMemory<byte>.Empty, TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
 
         // Assert
         var failure = Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
@@ -62,9 +62,9 @@ public sealed class InMemoryRpcClientTests
             {
             }
         });
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        _ = await failure.WaitAsync(TimeSpan.FromSeconds(5));
-        Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(TimeSpan.FromSeconds(5)));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        _ = await failure.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -86,10 +86,10 @@ public sealed class InMemoryRpcClientTests
         {
             received = request.Route;
             return ValueTask.CompletedTask;
-        });
+        }, ct: TestContext.Current.CancellationToken);
 
         // Act
-        await foreach (var _ in rpc.CallStreamingAsync("rpc://tenant-a/orders/place/run", ReadOnlyMemory<byte>.Empty))
+        await foreach (var _ in rpc.CallStreamingAsync("rpc://tenant-a/orders/place/run", ReadOnlyMemory<byte>.Empty, TestContext.Current.CancellationToken))
         {
         }
 
@@ -112,12 +112,12 @@ public sealed class InMemoryRpcClientTests
         var rpc = new InMemoryRpcClient();
 
         // Act
-        await using var worker = await rpc.RegisterWorkerAsync(pattern, (_, _, _) => ValueTask.CompletedTask);
+        await using var worker = await rpc.RegisterWorkerAsync(pattern, (_, _, _) => ValueTask.CompletedTask, ct: TestContext.Current.CancellationToken);
 
         // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await foreach (var _ in rpc.CallStreamingAsync("rpc://tenant-a/orders/place/run", ReadOnlyMemory<byte>.Empty))
+            await foreach (var _ in rpc.CallStreamingAsync("rpc://tenant-a/orders/place/run", ReadOnlyMemory<byte>.Empty, TestContext.Current.CancellationToken))
             {
             }
         });
@@ -133,17 +133,17 @@ public sealed class InMemoryRpcClientTests
         var rpc = new InMemoryRpcClient();
         var calls = 0;
         var superseded = await rpc.RegisterWorkerAsync("rpc://tenant-a/orders/place/run",
-            (_, _, _) => ValueTask.CompletedTask);
+            (_, _, _) => ValueTask.CompletedTask, ct: TestContext.Current.CancellationToken);
         await using var current = await rpc.RegisterWorkerAsync("rpc://tenant-a/orders/place/run", (_, _, _) =>
         {
             calls++;
             return ValueTask.CompletedTask;
-        });
+        }, ct: TestContext.Current.CancellationToken);
 
         await superseded.DisposeAsync();
 
         // Act
-        await foreach (var _ in rpc.CallStreamingAsync("rpc://tenant-a/orders/place/run", ReadOnlyMemory<byte>.Empty))
+        await foreach (var _ in rpc.CallStreamingAsync("rpc://tenant-a/orders/place/run", ReadOnlyMemory<byte>.Empty, TestContext.Current.CancellationToken))
         {
         }
 

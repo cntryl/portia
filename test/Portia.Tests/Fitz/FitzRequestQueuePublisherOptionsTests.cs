@@ -22,7 +22,7 @@ public sealed class FitzRequestQueuePublisherOptionsTests
 
         // Act
         await publisher.EnqueueWithOptionsAsync(request, RequestRouteValues.None, "actor-token", metadata, options,
-            default);
+            TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("queue://test/shared/action", queue.Route);
@@ -65,7 +65,7 @@ public sealed class FitzRequestQueuePublisherOptionsTests
         var parent = new RequestContext<UniversalAction>(new UniversalAction(1));
 
         await publisher.EnqueueWithOptionsAsync(new UniversalAction(2), RequestRouteValues.None, "actor-token", parent,
-            new RequestQueueOptions(TimeSpan.FromSeconds(2), 1));
+            new RequestQueueOptions(TimeSpan.FromSeconds(2), 1), ct: TestContext.Current.CancellationToken);
 
         // Act
         var metadata = serializer.DeserializeEnvelope(queue.Body).Metadata;
@@ -152,7 +152,7 @@ public sealed class FitzRequestQueuePublisherOptionsTests
             new FitzRequestQueuePublisher(queue, TestJson.Serializer(typeof(UniversalAction)));
 
         // Act
-        await publisher.EnqueueAsync(new UniversalAction(1), RequestRouteValues.None, null);
+        await publisher.EnqueueAsync(new UniversalAction(1), RequestRouteValues.None, null, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(1, queue.LegacyCalls);
@@ -171,7 +171,7 @@ public sealed class FitzRequestQueuePublisherOptionsTests
 
         // Act
         await publisher.EnqueueWithOptionsAsync(new UniversalAction(1), RequestRouteValues.None, null, metadata,
-            new RequestQueueOptions(TimeSpan.Zero), default);
+            new RequestQueueOptions(TimeSpan.Zero), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(1, implementation.Calls);

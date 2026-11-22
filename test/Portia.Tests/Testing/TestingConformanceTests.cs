@@ -14,7 +14,7 @@ public sealed class TestingConformanceTests
 
         // Act
         var exception =
-            await Record.ExceptionAsync(async () => await ReactionDeduplicationConformance.VerifyAsync(probe));
+            await Record.ExceptionAsync(async () => await ReactionDeduplicationConformance.VerifyAsync(probe, TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(exception);
@@ -29,7 +29,7 @@ public sealed class TestingConformanceTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            ReactionDeduplicationConformance.VerifyAsync(probe).AsTask());
+            ReactionDeduplicationConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);
@@ -44,7 +44,7 @@ public sealed class TestingConformanceTests
         var probe = new ProjectionProbe(false);
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await ProjectionStoreConformance.VerifyAsync(probe));
+        var exception = await Record.ExceptionAsync(async () => await ProjectionStoreConformance.VerifyAsync(probe, TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(exception);
@@ -59,7 +59,7 @@ public sealed class TestingConformanceTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            ProjectionStoreConformance.VerifyAsync(probe).AsTask());
+            ProjectionStoreConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);
@@ -75,7 +75,7 @@ public sealed class TestingConformanceTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            ProjectionStoreConformance.VerifyAsync(probe).AsTask());
+            ProjectionStoreConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);
@@ -90,7 +90,7 @@ public sealed class TestingConformanceTests
         var probe = new EventStoreProbe(true);
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await EventStoreConformance.VerifyAsync(probe));
+        var exception = await Record.ExceptionAsync(async () => await EventStoreConformance.VerifyAsync(probe, TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(exception);
@@ -105,7 +105,7 @@ public sealed class TestingConformanceTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            EventStoreConformance.VerifyAsync(probe).AsTask());
+            EventStoreConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);

@@ -27,7 +27,7 @@ public sealed class TenantDirectoryTelemetryTests
         var tenants = new List<TenantId>();
 
         // Act
-        await foreach (var tenant in directory.GetActiveTenantsAsync())
+        await foreach (var tenant in directory.GetActiveTenantsAsync(TestContext.Current.CancellationToken))
             tenants.Add(tenant);
 
         // Assert
@@ -53,7 +53,7 @@ public sealed class TenantDirectoryTelemetryTests
         using var cancellation = new CancellationTokenSource();
 
         // Act
-        await using var changes = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator();
+        await using var changes = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await changes.MoveNextAsync());
@@ -66,7 +66,7 @@ public sealed class TenantDirectoryTelemetryTests
             changes.Current);
 
         var waiting = changes.MoveNextAsync().AsTask();
-        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         cancellation.Cancel();
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
 
@@ -92,7 +92,7 @@ public sealed class TenantDirectoryTelemetryTests
         await using var cursor = await directory.OpenCursorAsync(cancellation.Token);
 
         // Act
-        await using var changes = cursor.ReadAsync(cancellation.Token).GetAsyncEnumerator();
+        await using var changes = cursor.ReadAsync(cancellation.Token).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await changes.MoveNextAsync());
@@ -106,7 +106,7 @@ public sealed class TenantDirectoryTelemetryTests
 
         clock.Advance(TimeSpan.FromSeconds(30));
         var waiting = changes.MoveNextAsync().AsTask();
-        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         cancellation.Cancel();
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
 
@@ -133,10 +133,10 @@ public sealed class TenantDirectoryTelemetryTests
         source.FailBeforeOffset = 1;
         using var listener = Listen(out var measurements);
         var directory = CreateDirectory(source, clock);
-        await using var cursor = await directory.OpenCursorAsync();
+        await using var cursor = await directory.OpenCursorAsync(TestContext.Current.CancellationToken);
 
         // Act
-        await using var changes = cursor.ReadAsync().GetAsyncEnumerator();
+        await using var changes = cursor.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         _ = await Assert.ThrowsAsync<IOException>(() => changes.MoveNextAsync().AsTask());

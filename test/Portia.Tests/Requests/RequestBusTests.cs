@@ -17,7 +17,7 @@ public sealed class RequestBusTests
         var bus = busHost.Bus;
 
         // Act
-        var result = await bus.SendAsync(new ChangeValue(42), RequestActor.System);
+        var result = await bus.SendAsync(new ChangeValue(42), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -36,7 +36,7 @@ public sealed class RequestBusTests
         var bus = busHost.Bus;
 
         // Act
-        var result = await bus.SendAsync(new GetValue(), RequestActor.System);
+        var result = await bus.SendAsync(new GetValue(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);

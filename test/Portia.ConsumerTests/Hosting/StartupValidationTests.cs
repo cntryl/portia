@@ -64,7 +64,7 @@ public sealed class StartupValidationTests
         using var host = builder.Build();
 
         // Act
-        var error = await Record.ExceptionAsync(() => host.StartAsync());
+        var error = await Record.ExceptionAsync(() => host.StartAsync(TestContext.Current.CancellationToken));
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(error);

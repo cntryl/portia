@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Security.Claims;
 
 namespace Cntryl.Portia;
@@ -76,7 +77,10 @@ public sealed class RequestDispatchAllocationTests
     // ship, so it is asserted only against an optimized Portia.Core.
     sealed class OptimizedBuildFactAttribute : FactAttribute
     {
-        public OptimizedBuildFactAttribute()
+        public OptimizedBuildFactAttribute(
+            [CallerFilePath] string? sourceFilePath = null,
+            [CallerLineNumber] int sourceLineNumber = -1)
+            : base(sourceFilePath, sourceLineNumber)
         {
             if (typeof(RequestBus).Assembly.GetCustomAttribute<DebuggableAttribute>()?.IsJITOptimizerDisabled
                 is true)

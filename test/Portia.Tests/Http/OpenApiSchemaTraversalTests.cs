@@ -36,16 +36,16 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
         _app = builder.Build();
         _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaPost<OpenApiTenantCollectionRequest, OpenApiTenantCollections>("/tenant-collections");
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
         using var client = _app.GetTestClient();
 
         using var response = await client.PostAsync("/tenant-collections", new StringContent(
             """{"payload":{"items":["acme"],"values":{"first":"globex"},"nullable_items":["acme",null],"nullable_values":{"first":"globex","second":null}}}""",
-            Encoding.UTF8, "application/json"));
+            Encoding.UTF8, "application/json"), TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 
         // Act
-        using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal("acme", actual.RootElement.GetProperty("items")[0].GetString());
@@ -89,16 +89,16 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
         _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaPost<OpenApiDictionaryTraversalRequest, Dictionary<string, OpenApiTraversalCollection>>(
             "/dictionary-traversal");
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
         using var client = _app.GetTestClient();
 
         using var response = await client.PostAsync("/dictionary-traversal", new StringContent(
             """{"payload":{"first":[{"item_id":"root","next":{"item_id":"child"}}],"second":[{"item_id":"sibling"}]}}""",
-            Encoding.UTF8, "application/json"));
+            Encoding.UTF8, "application/json"), TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 
         // Act
-        using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal("child",
@@ -133,16 +133,16 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
         _app = builder.Build();
         _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaPost<OpenApiPolymorphicTraversalRequest, OpenApiTraversalVariant>("/polymorphic-traversal");
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
         using var client = _app.GetTestClient();
 
         using var response = await client.PostAsync("/polymorphic-traversal", new StringContent(
             """{"payload":{"kind":"collection","items":[{"item_id":"variant","next":{"item_id":"nested"}}],"groups":{"first":[{"item_id":"group"}]},"batches":[[{"item_id":"batch"}]]}}""",
-            Encoding.UTF8, "application/json"));
+            Encoding.UTF8, "application/json"), TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 
         // Act
-        using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal("collection", actual.RootElement.GetProperty("kind").GetString());
@@ -187,7 +187,7 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
         _app = builder.Build();
         _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaPost<OpenApiNullableTraversalRequest, OpenApiTraversalCounts>("/nullable-traversal");
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         using var client = _app.GetTestClient();
@@ -197,9 +197,9 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
         {
             using var response = await client.PostAsync("/nullable-traversal", new StringContent(
                 "{\"payload\":{\"required_count\":42,\"optional_count\":" + optional + "}}",
-                Encoding.UTF8, "application/json"));
+                Encoding.UTF8, "application/json"), TestContext.Current.CancellationToken);
             response.EnsureSuccessStatusCode();
-            using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
             Assert.Equal(42, actual.RootElement.GetProperty("required_count").GetInt64());
             Assert.Equal(optional, actual.RootElement.GetProperty("optional_count").GetRawText());
         }
@@ -247,20 +247,20 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
         _app = builder.Build();
         _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaPost<OpenApiRecursiveTraversalRequest, OpenApiRecursiveArray>("/recursive-traversal");
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
         using var client = _app.GetTestClient();
 
         using var response = await client.PostAsync("/recursive-traversal", new StringContent(
-            """{"payload":{"a~/b":[[],[[]],null]}}""", Encoding.UTF8, "application/json"));
+            """{"payload":{"a~/b":[[],[[]],null]}}""", Encoding.UTF8, "application/json"), TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 
         // Act
-        using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal("[[],[[]],null]", actual.RootElement.GetRawText());
 
-        var serialized = await client.GetStringAsync("/openapi/v1." + format);
+        var serialized = await client.GetStringAsync("/openapi/v1." + format, TestContext.Current.CancellationToken);
         var document = ReadDocument(serialized, format);
         var operation = document.Paths!["/recursive-traversal"].Operations![HttpMethod.Post];
         var envelope = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];

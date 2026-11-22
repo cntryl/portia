@@ -448,19 +448,19 @@ public sealed class GeneratorDiagnosticsTests
         var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location).Distinct(StringComparer.Ordinal)
             .Select(path => MetadataReference.CreateFromFile(path));
-        var tree = CSharpSyntaxTree.ParseText(source, parseOptions, "Requests.cs");
+        var tree = CSharpSyntaxTree.ParseText(source, parseOptions, "Requests.cs", cancellationToken: TestContext.Current.CancellationToken);
         var compilation = CSharpCompilation.Create("DiagnosticRelocation", [tree],
             references, new CSharpCompilationOptions(
                 OutputKind.DynamicallyLinkedLibrary));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             [new PortiaServiceRegistrationGenerator().AsSourceGenerator()], parseOptions: parseOptions,
             driverOptions: new GeneratorDriverOptions(default, trackIncrementalGeneratorSteps: true));
-        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
 
         var movedSource = Environment.NewLine + source;
         var movedTree = CSharpSyntaxTree.ParseText(movedSource, parseOptions,
-            "Requests.cs");
-        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree, movedTree));
+            "Requests.cs", cancellationToken: TestContext.Current.CancellationToken);
+        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree, movedTree), TestContext.Current.CancellationToken);
 
         var result = driver.GetRunResult().Results.Single();
 
@@ -919,21 +919,21 @@ public sealed class GeneratorDiagnosticsTests
                                                   {
                                                       public ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, CancellationToken ct) => default;
                                                   }
-                                                  """, parseOptions, "View.Handlers.cs");
+                                                  """, parseOptions, "View.Handlers.cs", cancellationToken: TestContext.Current.CancellationToken);
         const string state = """
                              using System.Net.Http;
                              using Cntryl.Portia;
                              public sealed partial class View(IProjectionStore store, HttpClient http)
                                  : Projector(store, EventStreamPattern.ForPattern("views"));
                              """;
-        var stateTree = CSharpSyntaxTree.ParseText(state, parseOptions, "View.cs");
+        var stateTree = CSharpSyntaxTree.ParseText(state, parseOptions, "View.cs", cancellationToken: TestContext.Current.CancellationToken);
         var compilation = CSharpCompilation.Create("PartialFiles", [handlers, stateTree],
             ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location)
             .Distinct(StringComparer.Ordinal).Select(path => MetadataReference.CreateFromFile(path)),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
-        var whole = await compilation.WithAnalyzers([new ComponentPracticeAnalyzer()]).GetAnalyzerDiagnosticsAsync();
+        var whole = await compilation.WithAnalyzers([new ComponentPracticeAnalyzer()]).GetAnalyzerDiagnosticsAsync(TestContext.Current.CancellationToken);
         // A fresh analysis per file, as an editor runs for the open document.
         var inHandlers = await compilation.WithAnalyzers([new ComponentPracticeAnalyzer()])
             .GetAnalyzerSemanticDiagnosticsAsync(compilation.GetSemanticModel(handlers), null, CancellationToken.None);

@@ -99,7 +99,7 @@ public sealed class ApplicationStructureAnalyzerTests
 
         // Assert
         var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA200");
-        Assert.Equal("Currency", diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan));
+        Assert.Equal("Currency", diagnostic.Location.SourceTree!.GetText(TestContext.Current.CancellationToken).ToString(diagnostic.Location.SourceSpan));
     }
 
     [Fact]

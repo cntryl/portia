@@ -27,7 +27,7 @@ public sealed class PortiaTelemetryTests
         var bus = busHost.Bus;
 
         // Act
-        _ = await bus.SendAsync(new TelemetrySuccessAction(), RequestActor.System);
+        _ = await bus.SendAsync(new TelemetrySuccessAction(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
 
         // The listener is process-wide (ActivitySource is a static, shared instance) and every
@@ -57,7 +57,7 @@ public sealed class PortiaTelemetryTests
         var bus = busHost.Bus;
 
         // Act
-        _ = await bus.SendAsync(new TelemetryFailureAction(), RequestActor.System);
+        _ = await bus.SendAsync(new TelemetryFailureAction(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         var activity = Assert.Single(activities,
@@ -82,7 +82,7 @@ public sealed class PortiaTelemetryTests
         var bus = busHost.Bus;
 
         // Act
-        _ = await bus.SendAsync(new TelemetryGuardedAction(), RequestActor.Anonymous);
+        _ = await bus.SendAsync(new TelemetryGuardedAction(), RequestActor.Anonymous, ct: TestContext.Current.CancellationToken);
 
         // Assert
         var activity = Assert.Single(activities,
@@ -111,7 +111,7 @@ public sealed class PortiaTelemetryTests
         // async iterator disposes on iterator completion/disposal, not on the first yield — so
         // nothing is captured until after this loop finishes.
         // Act
-        await foreach (var item in bus.StreamAsync(new TelemetrySequence(), RequestActor.System))
+        await foreach (var item in bus.StreamAsync(new TelemetrySequence(), RequestActor.System, ct: TestContext.Current.CancellationToken))
             items.Add(item);
 
         // Assert

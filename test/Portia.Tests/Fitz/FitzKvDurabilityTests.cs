@@ -22,11 +22,11 @@ public sealed class FitzKvDurabilityTests
         var checkpoint = new ProjectionCheckpoint(new EventCursor("1"));
 
         // Act
-        await store.SaveAsync(Identity, checkpoint);
+        await store.SaveAsync(Identity, checkpoint, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(durability, client.LastTransaction.Durability);
-        Assert.Equal(checkpoint, await store.LoadAsync(Identity));
+        Assert.Equal(checkpoint, await store.LoadAsync(Identity, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Projection data and progress still commit together for either persistence mode.</summary>
@@ -44,17 +44,17 @@ public sealed class FitzKvDurabilityTests
 
         // Assert
         await using (var batch =
-                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
+                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
         {
             await store.WriteAsync();
             Assert.Empty(client.Committed);
-            await batch.CommitAsync(checkpoint);
+            await batch.CommitAsync(checkpoint, TestContext.Current.CancellationToken);
         }
 
         Assert.Equal(durability, client.LastTransaction.Durability);
         Assert.Equal(1, client.LastTransaction.Commits);
         Assert.Equal(new byte[] { 42 }, client.Read("value"u8.ToArray()));
-        Assert.Equal(checkpoint, await store.LoadCheckpointAsync(Identity));
+        Assert.Equal(checkpoint, await store.LoadCheckpointAsync(Identity, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Tenant rosters and their cursors use the configured persistence choice.</summary>
@@ -71,10 +71,10 @@ public sealed class FitzKvDurabilityTests
         var snapshot = new TenantDirectorySnapshot(new EventCursor("1"), [new TenantId("acme")]);
 
         // Assert
-        Assert.True(await store.TrySaveAsync(Pattern, null, snapshot));
+        Assert.True(await store.TrySaveAsync(Pattern, null, snapshot, TestContext.Current.CancellationToken));
 
         Assert.Equal(durability, client.LastTransaction.Durability);
-        var loaded = await store.LoadAsync(Pattern);
+        var loaded = await store.LoadAsync(Pattern, TestContext.Current.CancellationToken);
         Assert.Equal(snapshot.Cursor, loaded!.Cursor);
         Assert.Equal(snapshot.ActiveTenants, loaded.ActiveTenants);
     }
@@ -95,7 +95,7 @@ public sealed class FitzKvDurabilityTests
         var store = provider.GetRequiredService<IProjectionCheckpointStore>();
 
         // Act
-        await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1")));
+        await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(durability, client.LastTransaction.Durability);
@@ -115,7 +115,7 @@ public sealed class FitzKvDurabilityTests
 
         // Act
         await provider.GetRequiredService<IProjectionCheckpointStore>()
-            .SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1")));
+            .SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(KvDurability.Buffered, client.LastTransaction.Durability);

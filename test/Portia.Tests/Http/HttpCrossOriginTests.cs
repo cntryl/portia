@@ -56,14 +56,14 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
         // Act
         HttpResponseMessage[] responses =
         [
-            await client.SendAsync(Request(HttpMethod.Post, "/optional", "cross-site", Attacker)),
-            await client.SendAsync(Request(HttpMethod.Post, "/optional", "same-site", "https://sub.localhost")),
-            await client.SendAsync(Request(HttpMethod.Post, "/optional", null, Attacker)),
-            await client.SendAsync(Request(HttpMethod.Post, "/optional", null, "null")),
-            await client.SendAsync(Request(HttpMethod.Put, "/optional", "cross-site", Attacker)),
-            await client.SendAsync(Request(HttpMethod.Patch, "/optional", "cross-site", Attacker)),
-            await client.SendAsync(Request(HttpMethod.Delete, "/optional", "cross-site", Attacker)),
-            await client.SendAsync(Request(HttpMethod.Post, "/custom", "cross-site", Attacker))
+            await client.SendAsync(Request(HttpMethod.Post, "/optional", "cross-site", Attacker), TestContext.Current.CancellationToken),
+            await client.SendAsync(Request(HttpMethod.Post, "/optional", "same-site", "https://sub.localhost"), TestContext.Current.CancellationToken),
+            await client.SendAsync(Request(HttpMethod.Post, "/optional", null, Attacker), TestContext.Current.CancellationToken),
+            await client.SendAsync(Request(HttpMethod.Post, "/optional", null, "null"), TestContext.Current.CancellationToken),
+            await client.SendAsync(Request(HttpMethod.Put, "/optional", "cross-site", Attacker), TestContext.Current.CancellationToken),
+            await client.SendAsync(Request(HttpMethod.Patch, "/optional", "cross-site", Attacker), TestContext.Current.CancellationToken),
+            await client.SendAsync(Request(HttpMethod.Delete, "/optional", "cross-site", Attacker), TestContext.Current.CancellationToken),
+            await client.SendAsync(Request(HttpMethod.Post, "/custom", "cross-site", Attacker), TestContext.Current.CancellationToken)
         ];
 
         // Assert
@@ -94,11 +94,11 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
         // Act
         HttpResponseMessage[] responses =
         [
-            await client.SendAsync(Request(HttpMethod.Post, "/optional", null, null)),
-            await client.SendAsync(Request(HttpMethod.Post, "/optional", "same-origin", "http://localhost")),
-            await client.SendAsync(Request(HttpMethod.Post, "/optional", "none", null)),
-            await client.SendAsync(Request(HttpMethod.Post, "/optional", null, "http://localhost")),
-            await client.SendAsync(Request(HttpMethod.Get, $"/widgets/{Uuid.CreateVersion4()}", "cross-site", Attacker))
+            await client.SendAsync(Request(HttpMethod.Post, "/optional", null, null), TestContext.Current.CancellationToken),
+            await client.SendAsync(Request(HttpMethod.Post, "/optional", "same-origin", "http://localhost"), TestContext.Current.CancellationToken),
+            await client.SendAsync(Request(HttpMethod.Post, "/optional", "none", null), TestContext.Current.CancellationToken),
+            await client.SendAsync(Request(HttpMethod.Post, "/optional", null, "http://localhost"), TestContext.Current.CancellationToken),
+            await client.SendAsync(Request(HttpMethod.Get, $"/widgets/{Uuid.CreateVersion4()}", "cross-site", Attacker), TestContext.Current.CancellationToken)
         ];
 
         // Assert
@@ -175,16 +175,16 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
             corsRegisteredFirst);
 
         using var trusted =
-            await client.SendAsync(Request(HttpMethod.Post, "/middleware-policy", "cross-site", Trusted));
+            await client.SendAsync(Request(HttpMethod.Post, "/middleware-policy", "cross-site", Trusted), TestContext.Current.CancellationToken);
         using var attacker =
-            await client.SendAsync(Request(HttpMethod.Post, "/middleware-policy", "cross-site", Attacker));
+            await client.SendAsync(Request(HttpMethod.Post, "/middleware-policy", "cross-site", Attacker), TestContext.Current.CancellationToken);
         using var endpointTrusted =
-            await client.SendAsync(Request(HttpMethod.Put, "/endpoint-policy", "cross-site", Admin));
+            await client.SendAsync(Request(HttpMethod.Put, "/endpoint-policy", "cross-site", Admin), TestContext.Current.CancellationToken);
         using var endpointOverridden =
-            await client.SendAsync(Request(HttpMethod.Put, "/endpoint-policy", "cross-site", Trusted));
+            await client.SendAsync(Request(HttpMethod.Put, "/endpoint-policy", "cross-site", Trusted), TestContext.Current.CancellationToken);
 
         // Act
-        using var disabled = await client.SendAsync(Request(HttpMethod.Patch, "/cors-disabled", "cross-site", Trusted));
+        using var disabled = await client.SendAsync(Request(HttpMethod.Patch, "/cors-disabled", "cross-site", Trusted), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, trusted.StatusCode);
@@ -207,10 +207,10 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
             },
             services => services.AddCors(options => options.AddDefaultPolicy(policy => policy.WithOrigins(Trusted))));
 
-        using var trusted = await client.SendAsync(Request(HttpMethod.Post, "/optional", "same-site", Trusted));
+        using var trusted = await client.SendAsync(Request(HttpMethod.Post, "/optional", "same-site", Trusted), TestContext.Current.CancellationToken);
 
         // Act
-        using var attacker = await client.SendAsync(Request(HttpMethod.Post, "/optional", "same-site", Attacker));
+        using var attacker = await client.SendAsync(Request(HttpMethod.Post, "/optional", "same-site", Attacker), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, trusted.StatusCode);

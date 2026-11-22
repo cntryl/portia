@@ -117,8 +117,8 @@ public sealed class TenantDirectoryConsumerTests
         var directory = CreateDirectory(store);
         var id = Uuid.CreateVersion4();
         using var cancellation = new CancellationTokenSource();
-        await using var first = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator();
-        await using var second = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator();
+        await using var first = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator(TestContext.Current.CancellationToken);
+        await using var second = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Act
         await SeedAsync(store, id, 0, new Activated("acme"));
@@ -137,7 +137,7 @@ public sealed class TenantDirectoryConsumerTests
         var move = second.MoveNextAsync().AsTask();
         try
         {
-            Assert.True(await move.WaitAsync(TimeSpan.FromSeconds(3)));
+            Assert.True(await move.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
             Assert.Equal(new TenantId("acme"), second.Current.TenantId);
             Assert.Equal(interveningSnapshot ? TenantLifecycleChangeKind.Removed : TenantLifecycleChangeKind.Added,
                 second.Current.Kind);
@@ -169,7 +169,7 @@ public sealed class TenantDirectoryConsumerTests
         using var cancellation = new CancellationTokenSource();
 
         // Act
-        await using var watch = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator();
+        await using var watch = directory.WatchAsync(cancellation.Token).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await watch.MoveNextAsync());
@@ -177,11 +177,11 @@ public sealed class TenantDirectoryConsumerTests
         var next = watch.MoveNextAsync().AsTask();
         try
         {
-            _ = await clock.WaitForDelayAsync();
+            _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
             Assert.False(next.IsCompleted);
             await SeedAsync(store, id, 3, new Deactivated("acme"));
             clock.Advance(TimeSpan.FromSeconds(1));
-            Assert.True(await next.WaitAsync(TimeSpan.FromSeconds(3)));
+            Assert.True(await next.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
             Assert.Equal(TenantLifecycleChangeKind.Removed, watch.Current.Kind);
         }
         finally

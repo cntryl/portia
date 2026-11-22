@@ -45,7 +45,7 @@ public sealed class RequestNotificationRunnerTests
             capture.Logger<RequestNotificationRunner>());
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Same(caller, Activity.Current);
@@ -78,7 +78,7 @@ public sealed class RequestNotificationRunnerTests
             new RequestNotificationRunner(consumer, RequestDeliveryScopes.Fixed(bus, new TestRequestActorValidator()));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(3, handler.LastValue);
@@ -106,7 +106,7 @@ public sealed class RequestNotificationRunnerTests
             new RequestNotificationRunner(consumer, RequestDeliveryScopes.Fixed(bus, new TestRequestActorValidator()));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, handler.LastValue);
@@ -133,7 +133,7 @@ public sealed class RequestNotificationRunnerTests
             RequestDeliveryScopes.Fixed(bus, new TestRequestActorValidator("expired-token")));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(handler.LastValue);
@@ -160,7 +160,7 @@ public sealed class RequestNotificationRunnerTests
             RequestDeliveryScopes.Fixed(bus, new TestRequestActorValidator("expired-token")));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, handler.LastValue);
@@ -208,7 +208,7 @@ public sealed class RequestNotificationRunnerTests
             RequestDeliveryScopes.Fixed(busHost.Bus, new TestRequestActorValidator()));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, handler.LastValue);

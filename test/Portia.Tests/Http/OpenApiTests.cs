@@ -49,15 +49,15 @@ public sealed class OpenApiTests : IAsyncDisposable
         _app = builder.Build();
         _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaPost<OpenApiConvertedRequest, OpenApiSelectionList>("/converted");
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
         using var client = _app.GetTestClient();
         using var response = await client.PostAsync("/converted", new StringContent(
             """{"payload":{"items":[{"item_id":"item-1","revision":2,"next":{"item_id":"child","revision":3}}],"optional_items":null}}""",
-            Encoding.UTF8, "application/json"));
+            Encoding.UTF8, "application/json"), TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 
         // Act
-        using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var actual = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal("item-1", actual.RootElement[0].GetProperty("item_id").GetString());
@@ -67,7 +67,7 @@ public sealed class OpenApiTests : IAsyncDisposable
         {
             var settings = new OpenApiReaderSettings();
             settings.AddYamlReader();
-            var rawDocument = await client.GetStringAsync("/openapi/v1." + format);
+            var rawDocument = await client.GetStringAsync("/openapi/v1." + format, TestContext.Current.CancellationToken);
             var parsed = OpenApiDocument.Parse(rawDocument,
                 format == "yml" ? "yaml" : "json", settings);
             Assert.Empty(parsed.Diagnostic!.Errors);
@@ -124,12 +124,12 @@ public sealed class OpenApiTests : IAsyncDisposable
         _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaPost<OpenApiCollectionNullabilityRequest, OpenApiMappedCollectionNullability>(
             "/collection-nullability");
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
         using var client = _app.GetTestClient();
 
         var settings = new OpenApiReaderSettings();
         settings.AddYamlReader();
-        var serialized = await client.GetStringAsync("/openapi/v1." + format);
+        var serialized = await client.GetStringAsync("/openapi/v1." + format, TestContext.Current.CancellationToken);
 
         // Act
         var parsed = OpenApiDocument.Parse(serialized, format == "yml" ? "yaml" : "json", settings);
@@ -172,14 +172,14 @@ public sealed class OpenApiTests : IAsyncDisposable
                     json.GetTypeInfo<OpenApiRootSelectionRequest>(), ct);
                 return request ?? throw new JsonException("The test request body was null.");
             }));
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
         using var client = _app.GetTestClient();
         using var response = await client.PostAsync("/converted-root", new StringContent(
-            """[{"item_id":"item-1","revision":2,"next":null}]""", Encoding.UTF8, "application/json"));
+            """[{"item_id":"item-1","revision":2,"next":null}]""", Encoding.UTF8, "application/json"), TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 
         // Act
-        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal("item-1", payload.RootElement[0].GetProperty("item_id").GetString());
@@ -188,7 +188,7 @@ public sealed class OpenApiTests : IAsyncDisposable
         {
             var settings = new OpenApiReaderSettings();
             settings.AddYamlReader();
-            var raw = await client.GetStringAsync("/openapi/v1." + format);
+            var raw = await client.GetStringAsync("/openapi/v1." + format, TestContext.Current.CancellationToken);
             var parsed = OpenApiDocument.Parse(raw, format == "yml" ? "yaml" : "json", settings);
             Assert.Empty(parsed.Diagnostic!.Errors);
             var operation = parsed.Document!.Paths!["/converted-root"].Operations![HttpMethod.Post];
@@ -218,7 +218,7 @@ public sealed class OpenApiTests : IAsyncDisposable
         _app = builder.Build();
         _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaPost<OpenApiConvertedRequest, OpenApiSelectionList>("/converted");
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         using var client = _app.GetTestClient();
@@ -228,11 +228,11 @@ public sealed class OpenApiTests : IAsyncDisposable
         {
             if (missingMetadata)
                 _ = await Assert.ThrowsAsync<NotSupportedException>(() =>
-                    client.GetStringAsync("/openapi/v1." + format));
+                    client.GetStringAsync("/openapi/v1." + format, TestContext.Current.CancellationToken));
             else
             {
                 var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                    client.GetStringAsync("/openapi/v1." + format));
+                    client.GetStringAsync("/openapi/v1." + format, TestContext.Current.CancellationToken));
                 Assert.Contains("Cyclic OpenAPI schema type mapping", error.Message, StringComparison.Ordinal);
             }
         }
@@ -284,29 +284,29 @@ public sealed class OpenApiTests : IAsyncDisposable
         _ = _app.MapGet("/ordinary-contract",
             () => new OpenApiContractNode("ordinary", "explicit", DayOfWeek.Monday, new HttpMoney("USD", 42),
                 Uuid.CreateVersion4(), null));
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
         using var client = _app.GetTestClient();
         using var response = await client.PostAsync("/contract", new StringContent(
             """{"payload":{"display_name":"nested","wire-name":"explicit","day_value":"Monday","custom_value":"42","team_id":"21f7f8de-8051-5b89-8680-0195ef798b6a","parent_team_id":null,"next_node":{"display_name":"child","wire-name":"child","day_value":"Tuesday","custom_value":"43","team_id":"6ba7b811-9dad-11d1-80b4-00c04fd430c8","parent_team_id":null}}}""",
-            Encoding.UTF8, "application/json"));
+            Encoding.UTF8, "application/json"), TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
 
         // Act
-        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        using var payload = JsonDocument.Parse(await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal("nested", payload.RootElement.GetProperty("display_name").GetString());
         Assert.Equal("42", payload.RootElement.GetProperty("custom_value").GetString());
-        using var stream = JsonDocument.Parse(await client.GetStringAsync("/contract-stream"));
+        using var stream = JsonDocument.Parse(await client.GetStringAsync("/contract-stream", TestContext.Current.CancellationToken));
         Assert.Equal("stream", stream.RootElement[0].GetProperty("display_name").GetString());
-        using var ordinary = JsonDocument.Parse(await client.GetStringAsync("/ordinary-contract"));
+        using var ordinary = JsonDocument.Parse(await client.GetStringAsync("/ordinary-contract", TestContext.Current.CancellationToken));
         Assert.Equal("ordinary", ordinary.RootElement.GetProperty("displayName").GetString());
 
         foreach (var format in new[] { "json", "yml" })
         {
             var settings = new OpenApiReaderSettings();
             settings.AddYamlReader();
-            var serialized = await client.GetStringAsync("/openapi/v1." + format);
+            var serialized = await client.GetStringAsync("/openapi/v1." + format, TestContext.Current.CancellationToken);
             var parsed = OpenApiDocument.Parse(serialized,
                 format == "yml" ? "yaml" : "json", settings);
             Assert.Empty(parsed.Diagnostic!.Errors);
@@ -409,20 +409,20 @@ public sealed class OpenApiTests : IAsyncDisposable
         _ = group.MapPortiaGetStream<HttpListWidgets, string>("/widgets");
         _ = group.MapPortiaGetSse<HttpListWidgets, string>("/widget-events").ExcludeFromDescription();
         _ = _app.MapGet("/health", () => Results.Ok(new { status = "ok" })).WithName("health");
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = _app.GetTestClient();
-        var jsonResponse = await client.GetAsync("/openapi/v1.json");
+        var jsonResponse = await client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
 
         // Act
-        var yamlResponse = await client.GetAsync("/openapi/v1.yml");
+        var yamlResponse = await client.GetAsync("/openapi/v1.yml", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, jsonResponse.StatusCode);
         Assert.Equal(HttpStatusCode.OK, yamlResponse.StatusCode);
 
-        var json = await jsonResponse.Content.ReadAsStringAsync();
-        var yaml = await yamlResponse.Content.ReadAsStringAsync();
+        var json = await jsonResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        var yaml = await yamlResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         var jsonResult = OpenApiDocument.Parse(json, "json", new OpenApiReaderSettings());
         var yamlSettings = new OpenApiReaderSettings();
         yamlSettings.AddYamlReader();
@@ -588,14 +588,14 @@ public sealed class OpenApiTests : IAsyncDisposable
         _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
         _app = builder.Build();
         _ = _app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}");
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = _app.GetTestClient();
-        var json = await client.GetAsync("/openapi/v1.json");
-        var yaml = await client.GetAsync("/openapi/v1.yml");
+        var json = await client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
+        var yaml = await client.GetAsync("/openapi/v1.yml", TestContext.Current.CancellationToken);
 
         // Act
-        var widget = await client.GetAsync($"/widgets/{Uuid.CreateVersion4()}");
+        var widget = await client.GetAsync($"/widgets/{Uuid.CreateVersion4()}", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.NotFound, json.StatusCode);
@@ -624,10 +624,10 @@ public sealed class OpenApiTests : IAsyncDisposable
         _app = builder.Build();
         _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaPost<HttpSendPing>("/ping");
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = _app.GetTestClient();
-        var raw = await client.GetStringAsync("/openapi/v1.json");
+        var raw = await client.GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
 
         // Act
         var parsed = OpenApiDocument.Parse(raw, "json", new OpenApiReaderSettings());
@@ -672,16 +672,16 @@ public sealed class OpenApiTests : IAsyncDisposable
                     Parameters: []));
         }
 
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
         using var client = _app.GetTestClient();
 
         // Act
-        var response = await client.GetAsync("/openapi/v1.json");
+        var response = await client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var json = await response.Content.ReadAsStringAsync();
+        var json = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         var jsonSize = System.Text.Encoding.UTF8.GetByteCount(json);
         Assert.True(jsonSize < 1_500_000, $"The 1,000-operation document was {jsonSize:N0} bytes.");
         var parsed = OpenApiDocument.Parse(json, "json", new OpenApiReaderSettings());
@@ -721,13 +721,13 @@ public sealed class OpenApiTests : IAsyncDisposable
         _app = builder.Build();
         _ = _app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}");
         _ = _app.MapOpenApi("/internal/openapi/{documentName}.json");
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = _app.GetTestClient();
-        var response = await client.GetAsync("/internal/openapi/v1.json");
+        var response = await client.GetAsync("/internal/openapi/v1.json", TestContext.Current.CancellationToken);
 
         // Act
-        var document = await response.Content.ReadAsStringAsync();
+        var document = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -754,9 +754,9 @@ public sealed class OpenApiTests : IAsyncDisposable
         _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaPost<HttpOptionalBody, string>("/unguarded");
         _ = _app.MapPortiaPost<HttpUpdateWidget, string>("/opted-out/{widget_id}").DisableAntiforgery();
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
 
-        var json = await _app.GetTestClient().GetStringAsync("/openapi/v1.json");
+        var json = await _app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
 
         using var raw = JsonDocument.Parse(json);
         var paths = raw.RootElement.GetProperty("paths");
@@ -791,12 +791,12 @@ public sealed class OpenApiTests : IAsyncDisposable
         _ = _app.MapGet("/ordinary", () => Results.Ok()).WithName("httpGetWidget");
 
         // Act
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
 
         // Assert
         var exception =
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                _app.GetTestClient().GetAsync("/openapi/v1.json"));
+                _app.GetTestClient().GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken));
         Assert.Contains("operationId 'httpGetWidget' is duplicated", exception.Message, StringComparison.Ordinal);
     }
 }

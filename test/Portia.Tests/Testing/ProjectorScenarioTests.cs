@@ -19,14 +19,14 @@ public sealed class ProjectorScenarioTests
         var projector = new WelcomeProjector(users, scenario.Store);
 
         // Act
-        await scenario.RunAsync(projector);
+        await scenario.RunAsync(projector, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(ids, users);
         var checkpoint =
-            await scenario.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern));
+            await scenario.Store.LoadCheckpointAsync(new CheckpointIdentity(projector.Name, projector.Pattern), TestContext.Current.CancellationToken);
         Assert.Equal(count.ToString(System.Globalization.CultureInfo.InvariantCulture), checkpoint.Cursor.ToString());
-        await scenario.RunAsync(projector);
+        await scenario.RunAsync(projector, TestContext.Current.CancellationToken);
         Assert.Equal(ids, users);
     }
 
@@ -41,7 +41,7 @@ public sealed class ProjectorScenarioTests
         var scenario = new ProjectorScenario().Given(new UserCreated(first), new UserCreated(second));
 
         // Act
-        await scenario.RunAsync(new WelcomeProjector(users, scenario.Store));
+        await scenario.RunAsync(new WelcomeProjector(users, scenario.Store), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal([first, second], users);
@@ -58,10 +58,10 @@ public sealed class ProjectorScenarioTests
         var scenario = new ProjectorScenario();
         var projector = new WelcomeProjector(users, scenario.Store);
 
-        await scenario.Given(new UserCreated(first)).RunAsync(projector);
+        await scenario.Given(new UserCreated(first)).RunAsync(projector, TestContext.Current.CancellationToken);
 
         // Act
-        await scenario.Given(new UserCreated(second)).RunAsync(projector);
+        await scenario.Given(new UserCreated(second)).RunAsync(projector, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal([first, second], users);
@@ -77,7 +77,7 @@ public sealed class ProjectorScenarioTests
         var scenario = new ProjectorScenario().Given(new UserCreated(user));
 
         // Act
-        await scenario.RunAsync(new WelcomeProjector(users, scenario.Store, EventStreamPattern.ForTenant("users")));
+        await scenario.RunAsync(new WelcomeProjector(users, scenario.Store, EventStreamPattern.ForTenant("users")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal([user], users);
@@ -94,7 +94,7 @@ public sealed class ProjectorScenarioTests
         var projector = new WelcomeProjector(users, scenario.Store, EventStreamPattern.ForTenant("users"));
 
         // Act
-        await scenario.RunAsync(projector);
+        await scenario.RunAsync(projector, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Single(users);
@@ -117,7 +117,7 @@ public sealed class ProjectorScenarioTests
         var projector = new WelcomeProjector(users, scenario.Store);
 
         // Act
-        await scenario.RunAsync(projector);
+        await scenario.RunAsync(projector, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal([first, second, third], users);
@@ -136,7 +136,7 @@ public sealed class ProjectorScenarioTests
         var scenario = new ProjectorScenario().Given("a", a1).Given("b", b1).Given("a", a2).Given(bare);
 
         // Act
-        await scenario.RunAsync(new WelcomeProjector([], scenario.Store));
+        await scenario.RunAsync(new WelcomeProjector([], scenario.Store), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal([1UL, 1UL, 2UL, 1UL],
@@ -157,7 +157,7 @@ public sealed class ProjectorScenarioTests
         var projector = new WelcomeProjector([], scenario.Store, EventStreamPattern.ForPattern("test", "users", "one"));
 
         // Act
-        var exception = await Record.ExceptionAsync(() => scenario.RunAsync(projector));
+        var exception = await Record.ExceptionAsync(() => scenario.RunAsync(projector, TestContext.Current.CancellationToken));
 
         // Assert
         var error = Assert.IsType<InvalidOperationException>(exception);

@@ -24,34 +24,34 @@ public sealed partial class OperationalExecutionTests
 
         // Assert
         _ = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
-            runner.RunAsync(first, Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
+            runner.RunAsync(first, Reactor(journal, effects), ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken).AsTask());
         Assert.Single(effects.Ids);
-        var failed = (await journal.ReadAsync(Target))!;
+        var failed = (await journal.ReadAsync(Target, TestContext.Current.CancellationToken))!;
         Assert.NotNull(failed.Block);
         Assert.Equal(2, Assert.Single(failed.Attempts).Sources.Count);
-        Assert.Equal(ProjectionCheckpoint.Start, await journal.LoadAsync(Target.Identity));
+        Assert.Equal(ProjectionCheckpoint.Start, await journal.LoadAsync(Target.Identity, TestContext.Current.CancellationToken));
 
         var restarted = await SessionAsync(journal);
-        Assert.False(await restarted.PrepareAsync(ProjectionCheckpoint.Start, default));
+        Assert.False(await restarted.PrepareAsync(ProjectionCheckpoint.Start, TestContext.Current.CancellationToken));
         var api = Api(journal);
         var agent = TestOperationalAuthorizer.AdministratorActor();
-        var plan = await api.PreviewRepairAsync(agent, Target);
+        var plan = await api.PreviewRepairAsync(agent, Target, TestContext.Current.CancellationToken);
         Assert.Equal("retry", plan.Action);
-        _ = await api.ApproveRepairAsync(TestOperationalAuthorizer.AdministratorActor(true), Target, plan.Id);
-        var queued = await api.ExecuteRepairAsync(agent, Target, plan.Id);
+        _ = await api.ApproveRepairAsync(TestOperationalAuthorizer.AdministratorActor(true), Target, plan.Id, TestContext.Current.CancellationToken);
+        var queued = await api.ExecuteRepairAsync(agent, Target, plan.Id, TestContext.Current.CancellationToken);
         Assert.Equal("queued", queued.Status);
         Assert.Equal(2, effects.Executions.Count);
-        Assert.True(await restarted.PrepareAsync(ProjectionCheckpoint.Start, default));
+        Assert.True(await restarted.PrepareAsync(ProjectionCheckpoint.Start, TestContext.Current.CancellationToken));
         effects.Fail = false;
         var committed = await new ReactorRunner(events).RunPassAsync(restarted, Reactor(journal, effects),
-            ProjectionCheckpoint.Start, restarted.BoundOptions(ProjectionRunOptions.Default));
+            ProjectionCheckpoint.Start, restarted.BoundOptions(ProjectionRunOptions.Default), TestContext.Current.CancellationToken);
         Assert.Equal("2", committed.Cursor.Value);
         Assert.Equal(2, effects.Ids.Count);
         Assert.Equal(4, effects.Executions.Distinct().Count());
-        var verification = await api.VerifyRepairAsync(agent, Target, plan.Id);
+        var verification = await api.VerifyRepairAsync(agent, Target, plan.Id, TestContext.Current.CancellationToken);
         Assert.Equal("committed", verification.Status);
         Assert.Equal(committed.Cursor.Value, verification.Checkpoint);
-        var evidence = (await journal.ReadAsync(Target))!;
+        var evidence = (await journal.ReadAsync(Target, TestContext.Current.CancellationToken))!;
         Assert.Null(evidence.Block);
         Assert.Equal(2, evidence.Attempts.Count);
         Assert.Contains(evidence.Attempts[^1].Trace, e => e.Kind == "handler" && e.Outcome == "success");
@@ -68,24 +68,24 @@ public sealed partial class OperationalExecutionTests
         var first = await SessionAsync(journal);
         var events = await EventsAsync();
         var checkpoint = ProjectionCheckpoint.Start;
-        var record = await events.ReadAsync(Target.Identity.Pattern, EventCursor.Start, default).FirstAsync();
-        _ = await first.BeginAsync([record], checkpoint, default);
+        var record = await events.ReadAsync(Target.Identity.Pattern, EventCursor.Start, TestContext.Current.CancellationToken).FirstAsync(cancellationToken: TestContext.Current.CancellationToken);
+        _ = await first.BeginAsync([record], checkpoint, TestContext.Current.CancellationToken);
         await first.RecordFailureAsync(new ProcessorFailureException(Target.Identity, checkpoint,
-            ProcessorFailureStage.Handling, error: RequestError.Validation("failed")), null, default);
+            ProcessorFailureStage.Handling, error: RequestError.Validation("failed")), null, TestContext.Current.CancellationToken);
         var api = Api(journal);
         var actor = TestOperationalAuthorizer.AdministratorActor(true);
-        var plan = await api.PreviewRepairAsync(actor, Target);
-        _ = await api.ApproveRepairAsync(actor, Target, plan.Id);
-        _ = await api.ExecuteRepairAsync(actor, Target, plan.Id);
-        Assert.True(await first.PrepareAsync(checkpoint, default));
+        var plan = await api.PreviewRepairAsync(actor, Target, TestContext.Current.CancellationToken);
+        _ = await api.ApproveRepairAsync(actor, Target, plan.Id, TestContext.Current.CancellationToken);
+        _ = await api.ExecuteRepairAsync(actor, Target, plan.Id, TestContext.Current.CancellationToken);
+        Assert.True(await first.PrepareAsync(checkpoint, TestContext.Current.CancellationToken));
 
         // Act
         var replacement = await SessionAsync(journal);
 
         // Assert
         Assert.Equal(first.State.Block, replacement.State.Block);
-        Assert.False(await replacement.PrepareAsync(checkpoint, default));
-        Assert.Equal("indeterminate", (await api.VerifyRepairAsync(actor, Target, plan.Id)).Status);
+        Assert.False(await replacement.PrepareAsync(checkpoint, TestContext.Current.CancellationToken));
+        Assert.Equal("indeterminate", (await api.VerifyRepairAsync(actor, Target, plan.Id, TestContext.Current.CancellationToken)).Status);
         Assert.Single(replacement.State.Attempts);
     }
 
@@ -97,14 +97,14 @@ public sealed partial class OperationalExecutionTests
         var journal = new MemoryOperationalStore();
         var first = await SessionAsync(journal);
         var events = await EventsAsync();
-        var records = await events.ReadAsync(Target.Identity.Pattern, EventCursor.Start, default).ToListAsync();
+        var records = await events.ReadAsync(Target.Identity.Pattern, EventCursor.Start, TestContext.Current.CancellationToken).ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
         var checkpoint = ProjectionCheckpoint.Start;
-        _ = await first.BeginAsync([records[0]], checkpoint, default);
+        _ = await first.BeginAsync([records[0]], checkpoint, TestContext.Current.CancellationToken);
         _ = await SessionAsync(journal);
         var replacement = await SessionAsync(journal);
 
         // Act
-        var error = await Record.ExceptionAsync(async () => await replacement.BeginAsync(records, checkpoint, default));
+        var error = await Record.ExceptionAsync(async () => await replacement.BeginAsync(records, checkpoint, TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<ProcessorFailureException>(error);
@@ -124,12 +124,12 @@ public sealed partial class OperationalExecutionTests
 
         // Act
         _ = await new ReactorRunner(await EventsAsync())
-            .RunAsync(session, Reactor(checkpoints, effects), ProjectionCheckpoint.Start);
+            .RunAsync(session, Reactor(checkpoints, effects), ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, effects.Executions.Count);
         Assert.Equal(1, checkpoints.Commits);
-        Assert.Equal("committed", Assert.Single((await journal.ReadAsync(Target))!.Attempts).Outcome);
+        Assert.Equal("committed", Assert.Single((await journal.ReadAsync(Target, TestContext.Current.CancellationToken))!.Attempts).Outcome);
     }
 
     /// <summary>A changed source set is rejected before any recovery handler starts.</summary>
@@ -145,20 +145,20 @@ public sealed partial class OperationalExecutionTests
         // Assert
         _ = await Assert.ThrowsAsync<ProcessorFailureException>(async () =>
             await new ReactorRunner(await EventsAsync()).RunAsync(first, Reactor(journal, new Effects { Fail = true }),
-                ProjectionCheckpoint.Start).AsTask());
+                ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken).AsTask());
         var session = await SessionAsync(journal);
         var api = Api(journal);
         var actor = TestOperationalAuthorizer.AdministratorActor(true);
-        var plan = await api.PreviewRepairAsync(actor, Target);
-        _ = await api.ApproveRepairAsync(actor, Target, plan.Id);
-        _ = await api.ExecuteRepairAsync(actor, Target, plan.Id);
-        Assert.True(await session.PrepareAsync(ProjectionCheckpoint.Start, default));
+        var plan = await api.PreviewRepairAsync(actor, Target, TestContext.Current.CancellationToken);
+        _ = await api.ApproveRepairAsync(actor, Target, plan.Id, TestContext.Current.CancellationToken);
+        _ = await api.ExecuteRepairAsync(actor, Target, plan.Id, TestContext.Current.CancellationToken);
+        Assert.True(await session.PrepareAsync(ProjectionCheckpoint.Start, TestContext.Current.CancellationToken));
         var effects = new Effects();
         _ = await Assert.ThrowsAsync<ProcessorFailureException>(async () =>
             await new ReactorRunner(await EventsAsync())
-                .RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask());
+                .RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken).AsTask());
         Assert.Empty(effects.Executions);
-        Assert.NotNull((await journal.ReadAsync(Target))!.Block);
+        Assert.NotNull((await journal.ReadAsync(Target, TestContext.Current.CancellationToken))!.Block);
     }
 
     /// <summary>Interrupted evidence survives automatic replay with stable effect identities.</summary>
@@ -169,16 +169,16 @@ public sealed partial class OperationalExecutionTests
         var journal = new MemoryOperationalStore();
         var events = await EventsAsync();
         var records = new List<DomainEventRecord>();
-        await foreach (var record in events.ReadAsync(Target.Identity.Pattern, EventCursor.Start, default))
+        await foreach (var record in events.ReadAsync(Target.Identity.Pattern, EventCursor.Start, TestContext.Current.CancellationToken))
             records.Add(record);
         var interrupted = await SessionAsync(journal);
-        var originalId = await interrupted.BeginAsync(records, ProjectionCheckpoint.Start, default);
+        var originalId = await interrupted.BeginAsync(records, ProjectionCheckpoint.Start, TestContext.Current.CancellationToken);
         var resumed = await SessionAsync(journal);
         var effects = new Effects();
-        _ = await new ReactorRunner(events).RunAsync(resumed, Reactor(journal, effects), ProjectionCheckpoint.Start);
+        _ = await new ReactorRunner(events).RunAsync(resumed, Reactor(journal, effects), ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken);
 
         // Act
-        var state = (await journal.ReadAsync(Target))!;
+        var state = (await journal.ReadAsync(Target, TestContext.Current.CancellationToken))!;
 
         // Assert
         Assert.Equal("interrupted", state.Attempts.Single(a => a.Id == originalId).Outcome);
@@ -210,7 +210,7 @@ public sealed partial class OperationalExecutionTests
             }
         };
         _ = await new ReactorRunner(await EventsAsync())
-            .RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start);
+            .RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken);
         Assert.Equal(2, effects.Ids.Count);
     }
 
@@ -222,21 +222,21 @@ public sealed partial class OperationalExecutionTests
         var journal = new MemoryOperationalStore();
         var clock = new ManualTestClock();
         var session = new OperationalSession(journal, new OperationalOptions(), new EmptyApplicationTopology(), clock);
-        await session.AcquireAsync(Target, "reactor", Settings, ProjectionCheckpoint.Start, default);
+        await session.AcquireAsync(Target, "reactor", Settings, ProjectionCheckpoint.Start, TestContext.Current.CancellationToken);
         var effects = new Effects();
         journal.Unavailable = true;
         var pending = new ReactorRunner(await EventsAsync())
-            .RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start).AsTask();
+            .RunAsync(session, Reactor(journal, effects), ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken).AsTask();
 
         // Act
-        var delay = await clock.WaitForDelayAsync();
+        var delay = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(effects.Executions);
         Assert.False(pending.IsCompleted);
         journal.Unavailable = false;
         clock.Advance(delay);
-        _ = await pending.WaitAsync(TimeSpan.FromSeconds(5));
+        _ = await pending.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.Equal(2, effects.Ids.Count);
     }
 
@@ -271,7 +271,7 @@ public sealed partial class OperationalExecutionTests
 
         // Act
         _ = await new ReactorRunner(await EventsAsync()).RunPassAsync(session, Reactor(journal, effects),
-            ProjectionCheckpoint.Start, new ProjectionRunOptions { MaxBatchSize = 1 });
+            ProjectionCheckpoint.Start, new ProjectionRunOptions { MaxBatchSize = 1 }, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, session.State.Attempts.Count);

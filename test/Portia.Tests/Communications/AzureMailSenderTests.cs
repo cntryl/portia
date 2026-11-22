@@ -24,7 +24,7 @@ public sealed class AzureMailSenderTests
         };
 
         // Act
-        var outcome = await sender.SendAsync(Tenant, new SendId("order-1.receipt"), message);
+        var outcome = await sender.SendAsync(Tenant, new SendId("order-1.receipt"), message, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(SendStatus.Accepted, outcome.Status);
@@ -50,7 +50,7 @@ public sealed class AzureMailSenderTests
         var sender = new AzureMailSender(client, new Resolver());
 
         // Act
-        var outcome = await sender.SendAsync(Tenant, new SendId("a"), Message());
+        var outcome = await sender.SendAsync(Tenant, new SendId("a"), Message(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(SendStatus.Rejected, outcome.Status);
@@ -68,7 +68,7 @@ public sealed class AzureMailSenderTests
 
         // Act
         var exception =
-            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
+            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message(), TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<SendThrottledException>(exception);
@@ -90,7 +90,7 @@ public sealed class AzureMailSenderTests
         var sender = new AzureMailSender(client, new Resolver());
 
         // Act
-        var outcome = await sender.SendAsync(Tenant, new SendId("a"), Message());
+        var outcome = await sender.SendAsync(Tenant, new SendId("a"), Message(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(SendStatus.Unknown, outcome.Status);
@@ -110,7 +110,7 @@ public sealed class AzureMailSenderTests
 
         // Act
         var exception =
-            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
+            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message(), TestContext.Current.CancellationToken));
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(exception);
@@ -131,7 +131,7 @@ public sealed class AzureMailSenderTests
 
         // Act
         var exception =
-            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message()));
+            await Record.ExceptionAsync(async () => await sender.SendAsync(Tenant, new SendId("a"), Message(), TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<RequestFailedException>(exception);

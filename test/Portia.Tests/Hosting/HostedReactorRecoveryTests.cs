@@ -31,7 +31,7 @@ public sealed class HostedReactorRecoveryTests
             Committed(new ValueChanged(2), id, 2),
             Committed(new ValueChanged(3), id, 3),
             Committed(new ValueChanged(4), id, 4)
-        ]);
+        ], TestContext.Current.CancellationToken);
         var checkpointStore = new TransientReloadFailureCheckpointStore();
         var reactor = new FlakyOnThirdAttemptReactor(checkpointStore);
         var services = new ServiceCollection();
@@ -49,14 +49,14 @@ public sealed class HostedReactorRecoveryTests
 
         // Assert
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
-        await hostedService.StartAsync(default);
+        await hostedService.StartAsync(TestContext.Current.CancellationToken);
         var executeTask = hostedService.ExecuteTask
                           ?? throw new InvalidOperationException("The reactor hosted service did not start.");
         var firstCompletion = await Task.WhenAny(checkpointStore.CheckpointReloaded, executeTask);
         Assert.Same(checkpointStore.CheckpointReloaded, firstCompletion);
         await checkpointStore.CheckpointReloaded;
         await WaitUntilAsync(() => reactor.HandledValues.Count >= 4);
-        await hostedService.StopAsync(default);
+        await hostedService.StopAsync(TestContext.Current.CancellationToken);
 
         // Batch 1 (events 1-2) was saved durably before the fault on event 3. If the workload
         // loop had retried from a stale, un-reloaded local checkpoint instead of the store's,

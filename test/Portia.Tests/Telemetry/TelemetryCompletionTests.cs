@@ -54,7 +54,7 @@ public sealed class TelemetryCompletionTests
             new RequestGuardRegistration<GuardTelemetryProbe, TelemetryOutcomeGuard>());
 
         // Act
-        _ = await bus.DispatchAsync(new GuardTelemetryProbe(), bus.CreateContext(RequestActor.System));
+        _ = await bus.DispatchAsync(new GuardTelemetryProbe(), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(expectedOutcome, measurements.SingleOutcome("portia.guard.duration",
@@ -98,7 +98,7 @@ public sealed class TelemetryCompletionTests
 
         // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(() => bus.DispatchAsync(
-            new GuardTelemetryProbe(), bus.CreateContext(RequestActor.System)).AsTask());
+            new GuardTelemetryProbe(), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken).AsTask());
 
         Assert.Equal("fault", measurements.SingleOutcome("portia.guard.duration",
             "portia.component.name", nameof(TelemetryUninitializedGuard)));
@@ -115,7 +115,7 @@ public sealed class TelemetryCompletionTests
             new RequestGuardRegistration<GuardTelemetryProbe, TelemetrySkippedGuard>());
 
         // Act
-        _ = await bus.DispatchAsync(new GuardTelemetryProbe(), bus.CreateContext(RequestActor.System));
+        _ = await bus.DispatchAsync(new GuardTelemetryProbe(), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("conflict", measurements.SingleOutcome("portia.guard.duration",
@@ -145,7 +145,7 @@ public sealed class TelemetryCompletionTests
         _ = await Assert.ThrowsAsync<RequestGuardException>(async () =>
         {
             await foreach (var _ in bus.DispatchStreamAsync(new GuardTelemetryStream(),
-                               bus.CreateContext(RequestActor.System)))
+                               bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken))
             {
             }
         });
@@ -173,7 +173,7 @@ public sealed class TelemetryCompletionTests
 
         // Assert
         var error = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() => bus.DispatchAsync(
-            new ConcurrencyTelemetryProbe(), bus.CreateContext(RequestActor.System)).AsTask());
+            new ConcurrencyTelemetryProbe(), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken).AsTask());
 
         Assert.Contains("sensitive", error.Message, StringComparison.Ordinal);
         Assert.Equal(1, handler.Attempts);
@@ -206,7 +206,7 @@ public sealed class TelemetryCompletionTests
         var error = await Assert.ThrowsAsync<EventStreamConcurrencyException>(async () =>
         {
             await foreach (var _ in bus.DispatchStreamAsync(new ConcurrencyTelemetryStream(),
-                               bus.CreateContext(RequestActor.System)))
+                               bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken))
             {
                 observed++;
                 if (onDispose)
@@ -436,7 +436,7 @@ public sealed class TelemetryCompletionTests
 
         // Assert
         _ = await Assert.ThrowsAsync<OperationCanceledException>(() =>
-            repository.HydrateAsync(new TestAggregate(Uuid.CreateVersion4())).AsTask());
+            repository.HydrateAsync(new TestAggregate(Uuid.CreateVersion4()), TestContext.Current.CancellationToken).AsTask());
 
         Assert.Equal("fault", measurements.SingleOutcome("portia.aggregate.operation.duration"));
     }
@@ -454,7 +454,7 @@ public sealed class TelemetryCompletionTests
 
         // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => runner.RunAsync(
-            new CancelingProjector(), ProjectionCheckpoint.Start).AsTask());
+            new CancelingProjector(), ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken).AsTask());
         Assert.IsType<OperationCanceledException>(failure.InnerException);
 
         Assert.Equal("fault", measurements.SingleOutcome("portia.processor.batch.duration", "projector"));
@@ -473,7 +473,7 @@ public sealed class TelemetryCompletionTests
 
         // Assert
         var failure = await Assert.ThrowsAsync<ProcessorFailureException>(() => runner.RunAsync(
-            new CancelingReactor(), ProjectionCheckpoint.Start).AsTask());
+            new CancelingReactor(), ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken).AsTask());
         Assert.IsType<OperationCanceledException>(failure.InnerException);
 
         Assert.Equal("fault", measurements.SingleOutcome("portia.processor.batch.duration", "reactor"));

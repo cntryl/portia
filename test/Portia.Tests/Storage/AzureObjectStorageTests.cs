@@ -28,14 +28,14 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = new AzureObjectStorage(CreateClient(service), resolver,
             new EphemeralDataProtectionProvider().CreateProtector("layout"));
-        var session = await storage.CreateUploadAsync(tenant, digest);
-        var part = await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1));
+        var session = await storage.CreateUploadAsync(tenant, digest, TestContext.Current.CancellationToken);
+        var part = await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken);
         var receipt = await service.UploadAsync(part, content);
         resolver.ContentRoot = "moved";
         resolver.UploadRoot = "new-uploads";
 
         // Act
-        await storage.CompleteUploadAsync(session, [receipt]);
+        await storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(service.Contains($"/{ApplicationStorageResolver.Bucket}/{expectedKey}"));
@@ -55,7 +55,7 @@ public sealed class AzureObjectStorageTests
 
         // Act
         await ObjectStorageConformance.VerifyAsync(storage, new TenantId("tenant-one"), new TenantId("tenant-two"),
-            async (part, bytes, _) => await service.UploadAsync(part, bytes.ToArray()));
+            async (part, bytes, _) => await service.UploadAsync(part, bytes.ToArray()), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(0, service.BlobCount);
@@ -80,7 +80,7 @@ public sealed class AzureObjectStorageTests
         service.AfterHead = () => service.SeedBlob(path, "tampered"u8.ToArray(), new string('0', 64));
 
         // Act
-        await using var stream = await storage.OpenReadAsync(new TenantId("tenant-one"), digest);
+        await using var stream = await storage.OpenReadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Null(stream);
@@ -100,12 +100,12 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
         var tenant = new TenantId("tenant-one");
-        var session = await storage.CreateUploadAsync(tenant, digest);
-        var signed = await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(4));
+        var session = await storage.CreateUploadAsync(tenant, digest, TestContext.Current.CancellationToken);
+        var signed = await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(4), TestContext.Current.CancellationToken);
         var receipt = await service.UploadAsync(signed, content);
 
         // Act
-        await storage.CompleteUploadAsync(session, [receipt]);
+        await storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken);
 
         // Assert
         Assert.DoesNotContain(FirstContainer, session.Token, StringComparison.Ordinal);
@@ -146,12 +146,12 @@ public sealed class AzureObjectStorageTests
         var digest = DigestOf("correct"u8.ToArray());
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
-        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)),
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
+        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken),
             "changed"u8.ToArray());
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt]));
+        var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidDataException>(exception);
@@ -168,12 +168,12 @@ public sealed class AzureObjectStorageTests
         var content = "declared"u8.ToArray();
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf(content));
-        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)),
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf(content), TestContext.Current.CancellationToken);
+        var receipt = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken),
             "declared plus extra"u8.ToArray());
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt]));
+        var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidDataException>(exception);
@@ -194,12 +194,12 @@ public sealed class AzureObjectStorageTests
         var digest = DigestOf(whole);
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
-        var one = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), first);
-        var two = await service.UploadAsync(await storage.SignPartAsync(session, 2, TimeSpan.FromMinutes(1)), second);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
+        var one = await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken), first);
+        var two = await service.UploadAsync(await storage.SignPartAsync(session, 2, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken), second);
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [one, two]));
+        var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [one, two], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidDataException>(exception);
@@ -218,18 +218,18 @@ public sealed class AzureObjectStorageTests
         var digest = DigestOf(content);
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
         var receipt =
-            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken), content);
         var rejected = await Record.ExceptionAsync(async () =>
-            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "forged")]));
+            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "forged")], TestContext.Current.CancellationToken));
 
         // Act
-        await storage.CompleteUploadAsync(session, [receipt]);
+        await storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken);
 
         // Assert
         Assert.IsType<InvalidDataException>(rejected);
-        Assert.True(await storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest));
+        Assert.True(await storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Checks that a block that was never uploaded is rejected as a bad receipt.</summary>
@@ -240,15 +240,15 @@ public sealed class AzureObjectStorageTests
         var content = "uploaded"u8.ToArray();
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf(content));
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf(content), TestContext.Current.CancellationToken);
         var uploaded =
-            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
-        var missing = (await storage.SignPartAsync(session, 2, TimeSpan.FromMinutes(1))).UploadUri;
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken), content);
+        var missing = (await storage.SignPartAsync(session, 2, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).UploadUri;
         var missingToken = HttpUtility.ParseQueryString(missing.Query)["blockid"]!;
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await storage.CompleteUploadAsync(session, [uploaded, new ObjectPartReceipt(2, missingToken)]));
+            await storage.CompleteUploadAsync(session, [uploaded, new ObjectPartReceipt(2, missingToken)], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidDataException>(exception);
@@ -264,13 +264,13 @@ public sealed class AzureObjectStorageTests
         var digest = DigestOf(content);
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
         var receipt =
-            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
-        await storage.CompleteUploadAsync(session, [receipt]);
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken), content);
+        await storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken);
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt]));
+        var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(exception);
@@ -288,20 +288,20 @@ public sealed class AzureObjectStorageTests
         var digest = DigestOf(content);
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
         var receipt =
-            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken), content);
         service.FailNextCopy = true;
-        var failed = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt]));
+        var failed = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken));
 
         // Act
-        await storage.CompleteUploadAsync(session, [receipt]);
+        await storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken);
 
         // Assert
         Assert.IsType<RequestFailedException>(failed);
         Assert.Single(service.Requests,
             static r => r.Method == HttpMethod.Put && r.Query.Contains("comp=blocklist", StringComparison.Ordinal));
-        Assert.True(await storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest));
+        Assert.True(await storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken));
         Assert.Equal(1, service.BlobCount);
     }
 
@@ -314,14 +314,14 @@ public sealed class AzureObjectStorageTests
         var digest = DigestOf(content);
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
         var receipt =
-            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken), content);
         service.SeedBlob($"/{FirstContainer}/content/sha256/{digest.Sha256[..2]}/{digest.Sha256}", content,
             digest.Sha256);
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt]));
+        var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(exception);
@@ -338,14 +338,14 @@ public sealed class AzureObjectStorageTests
         var digest = DigestOf(content);
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
         var receipt =
-            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken), content);
         service.SeedBlob($"/{FirstContainer}/content/sha256/{digest.Sha256[..2]}/{digest.Sha256}",
             "impostor"u8.ToArray(), "0".PadLeft(64, '0'));
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt]));
+        var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidDataException>(exception);
@@ -362,17 +362,17 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
         var tenant = new TenantId("tenant-one");
-        var session = await storage.CreateUploadAsync(tenant, digest);
+        var session = await storage.CreateUploadAsync(tenant, digest, TestContext.Current.CancellationToken);
         var receipt =
-            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken), content);
 
         // Act
         var results = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(async () =>
-            await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt])))));
+            await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken)))));
 
         // Assert
         Assert.All(results, Assert.Null);
-        Assert.True(await storage.HeadAndVerifyAsync(tenant, digest));
+        Assert.True(await storage.HeadAndVerifyAsync(tenant, digest, TestContext.Current.CancellationToken));
         Assert.Equal(1, service.BlobCount);
     }
 
@@ -384,9 +384,9 @@ public sealed class AzureObjectStorageTests
         var content = "cancel me"u8.ToArray();
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf(content));
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf(content), TestContext.Current.CancellationToken);
         var receipt =
-            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken), content);
         using var cancellation = new CancellationTokenSource();
         await cancellation.CancelAsync();
 
@@ -411,20 +411,20 @@ public sealed class AzureObjectStorageTests
         var storage = CreateStorage(service);
         var owner = new TenantId("tenant-one");
         var other = new TenantId("tenant-two");
-        var session = await storage.CreateUploadAsync(owner, digest);
+        var session = await storage.CreateUploadAsync(owner, digest, TestContext.Current.CancellationToken);
         var receipt =
-            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
-        await storage.CompleteUploadAsync(session, [receipt]);
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken), content);
+        await storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken);
 
         // Act
-        var otherVisible = await storage.HeadAndVerifyAsync(other, digest);
+        var otherVisible = await storage.HeadAndVerifyAsync(other, digest, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.True(await storage.HeadAndVerifyAsync(owner, digest));
+        Assert.True(await storage.HeadAndVerifyAsync(owner, digest, TestContext.Current.CancellationToken));
         Assert.False(otherVisible);
-        Assert.Null(await storage.OpenReadAsync(other, digest));
+        Assert.Null(await storage.OpenReadAsync(other, digest, TestContext.Current.CancellationToken));
         await Assert.ThrowsAsync<FileNotFoundException>(async () =>
-            await storage.CreateDownloadAsync(other, digest, TimeSpan.FromMinutes(1)));
+            await storage.CreateDownloadAsync(other, digest, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken));
         Assert.Contains(service.Requests,
             static r => r.Path.StartsWith("/tenant-two-container/", StringComparison.Ordinal));
         Assert.DoesNotContain(service.Requests,
@@ -439,13 +439,13 @@ public sealed class AzureObjectStorageTests
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
         var foreign = CreateStorage(service);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray()));
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray()), TestContext.Current.CancellationToken);
 
         // Act
         var foreignKeyRing =
-            await Record.ExceptionAsync(async () => await foreign.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)));
+            await Record.ExceptionAsync(async () => await foreign.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken));
         var garbage = await Record.ExceptionAsync(async () =>
-            await storage.SignPartAsync(new ObjectUploadSession("not-a-token"), 1, TimeSpan.FromMinutes(1)));
+            await storage.SignPartAsync(new ObjectUploadSession("not-a-token"), 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<ArgumentException>(foreignKeyRing);
@@ -466,14 +466,14 @@ public sealed class AzureObjectStorageTests
             digest.Sha256);
 
         // Act
-        var download = await storage.CreateDownloadAsync(tenant, digest, TimeSpan.FromMinutes(5));
+        var download = await storage.CreateDownloadAsync(tenant, digest, TimeSpan.FromMinutes(5), TestContext.Current.CancellationToken);
 
         // Assert
         var tooLong = await Record.ExceptionAsync(async () =>
             await storage.CreateDownloadAsync(tenant, digest,
-                ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromSeconds(1)));
+                ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken));
         var zero = await Record.ExceptionAsync(async () =>
-            await storage.CreateDownloadAsync(tenant, digest, TimeSpan.Zero));
+            await storage.CreateDownloadAsync(tenant, digest, TimeSpan.Zero, TestContext.Current.CancellationToken));
         Assert.IsType<ArgumentOutOfRangeException>(tooLong);
         Assert.IsType<ArgumentOutOfRangeException>(zero);
         Assert.InRange(download.ExpiresAt, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(5).AddSeconds(5));
@@ -490,12 +490,12 @@ public sealed class AzureObjectStorageTests
     {
         // Arrange
         var storage = CreateStorage(new FakeBlobService());
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray()));
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray()), TestContext.Current.CancellationToken);
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
             await storage.SignPartAsync(session, 1,
-                ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromSeconds(1)));
+                ObjectStorageLimits.MaximumDownloadLifetime + TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<ArgumentOutOfRangeException>(exception);
@@ -514,7 +514,7 @@ public sealed class AzureObjectStorageTests
             digest.Sha256);
 
         // Act
-        var verified = await storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest);
+        var verified = await storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(verified);
@@ -536,13 +536,13 @@ public sealed class AzureObjectStorageTests
             new string('f', 64));
 
         // Act
-        var unverifiedMetadata = await storage.HeadAndVerifyAsync(tenant, digest);
+        var unverifiedMetadata = await storage.HeadAndVerifyAsync(tenant, digest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(unverifiedMetadata);
-        Assert.False(await storage.HeadAndVerifyAsync(tenant, wrongLength));
-        Assert.False(await storage.HeadAndVerifyAsync(tenant, DigestOf("absent"u8.ToArray())));
-        Assert.Null(await storage.OpenReadAsync(tenant, digest));
+        Assert.False(await storage.HeadAndVerifyAsync(tenant, wrongLength, TestContext.Current.CancellationToken));
+        Assert.False(await storage.HeadAndVerifyAsync(tenant, DigestOf("absent"u8.ToArray()), TestContext.Current.CancellationToken));
+        Assert.Null(await storage.OpenReadAsync(tenant, digest, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Checks that a verified object streams back byte for byte and can be deleted.</summary>
@@ -559,15 +559,15 @@ public sealed class AzureObjectStorageTests
             digest.Sha256);
 
         // Act
-        await using var stream = await storage.OpenReadAsync(tenant, digest);
+        await using var stream = await storage.OpenReadAsync(tenant, digest, TestContext.Current.CancellationToken);
         using var copy = new MemoryStream();
-        await stream!.CopyToAsync(copy);
-        await storage.DeleteAsync(tenant, digest);
-        await storage.DeleteAsync(tenant, digest);
+        await stream!.CopyToAsync(copy, TestContext.Current.CancellationToken);
+        await storage.DeleteAsync(tenant, digest, TestContext.Current.CancellationToken);
+        await storage.DeleteAsync(tenant, digest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(content, copy.ToArray());
-        Assert.False(await storage.HeadAndVerifyAsync(tenant, digest));
+        Assert.False(await storage.HeadAndVerifyAsync(tenant, digest, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Checks that abort discards uncommitted blocks and committed staging, and is idempotent.</summary>
@@ -578,12 +578,12 @@ public sealed class AzureObjectStorageTests
         var content = "abort me"u8.ToArray();
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf(content));
-        await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf(content), TestContext.Current.CancellationToken);
+        await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken), content);
 
         // Act
-        await storage.AbortUploadAsync(session);
-        await storage.AbortUploadAsync(session);
+        await storage.AbortUploadAsync(session, TestContext.Current.CancellationToken);
+        await storage.AbortUploadAsync(session, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(0, service.UncommittedBlockCount);
@@ -599,17 +599,17 @@ public sealed class AzureObjectStorageTests
         var digest = DigestOf(content);
         var service = new FakeBlobService();
         var storage = CreateStorage(service);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
         var receipt =
-            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)), content);
+            await service.UploadAsync(await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken), content);
         service.FailDeletes = true;
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt]));
+        var exception = await Record.ExceptionAsync(async () => await storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(exception);
-        Assert.True(await storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest));
+        Assert.True(await storage.HeadAndVerifyAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Checks that an Entra ID client signs links with a user delegation key.</summary>
@@ -621,11 +621,11 @@ public sealed class AzureObjectStorageTests
         var client = new BlobServiceClient(new Uri("https://account.blob.core.windows.net"),
             new StaticTokenCredential(), ClientOptions(service));
         var storage = CreateStorage(client);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray()));
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray()), TestContext.Current.CancellationToken);
 
         // Act
-        var first = await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(2));
-        var second = await storage.SignPartAsync(session, 2, TimeSpan.FromMinutes(2));
+        var first = await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(2), TestContext.Current.CancellationToken);
+        var second = await storage.SignPartAsync(session, 2, TimeSpan.FromMinutes(2), TestContext.Current.CancellationToken);
 
         // Assert
         var query = HttpUtility.ParseQueryString(first.UploadUri.Query);
@@ -648,11 +648,11 @@ public sealed class AzureObjectStorageTests
         var client = new BlobServiceClient(new Uri("https://account.blob.core.windows.net"),
             new StaticTokenCredential(), ClientOptions(service));
         var storage = CreateStorage(client);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray()));
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray()), TestContext.Current.CancellationToken);
 
         // Act
         var exception =
-            await Record.ExceptionAsync(async () => await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1)));
+            await Record.ExceptionAsync(async () => await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidOperationException>(exception);
@@ -668,10 +668,10 @@ public sealed class AzureObjectStorageTests
             new StorageSharedKeyCredential("devstoreaccount1", Convert.ToBase64String(new byte[32])),
             ClientOptions(service));
         var storage = CreateStorage(client);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray()));
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray()), TestContext.Current.CancellationToken);
 
         // Act
-        var signed = await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1));
+        var signed = await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("http", signed.UploadUri.Scheme);
@@ -694,7 +694,7 @@ public sealed class AzureObjectStorageTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray())));
+            await storage.CreateUploadAsync(new TenantId("tenant-one"), DigestOf("x"u8.ToArray()), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidOperationException>(exception);

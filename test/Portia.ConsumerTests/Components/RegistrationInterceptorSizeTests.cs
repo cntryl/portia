@@ -19,7 +19,7 @@ public sealed class RegistrationInterceptorSizeTests
             .Append(typeof(Aggregate).Assembly.Location).Append(typeof(PortiaBuilder).Assembly.Location)
             .Distinct(StringComparer.Ordinal).Select(path => MetadataReference.CreateFromFile(path));
         var compilation = CSharpCompilation.Create("BoundedCatalog",
-            [CSharpSyntaxTree.ParseText(Source(3, 1000), options)],
+            [CSharpSyntaxTree.ParseText(Source(3, 1000), options, cancellationToken: TestContext.Current.CancellationToken)],
             references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             [
@@ -29,10 +29,10 @@ public sealed class RegistrationInterceptorSizeTests
             parseOptions: options);
 
         // Act
-        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.DoesNotContain(diagnostics.Concat(output.GetDiagnostics()),
+        Assert.DoesNotContain(diagnostics.Concat(output.GetDiagnostics(TestContext.Current.CancellationToken)),
             item => item.Severity == DiagnosticSeverity.Error);
         var files = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
         var methods = files

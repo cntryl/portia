@@ -14,16 +14,16 @@ public sealed class FitzOperationalStoreTests
         var client = new FakeKvClient();
         var checkpoints = new FitzKvCheckpointStore(client, "kv://test/state/progress", KvDurability.Sync);
         var checkpoint = new ProjectionCheckpoint(new EventCursor("opaque/not-a-number:99"));
-        await checkpoints.SaveAsync(Target.Identity, checkpoint);
+        await checkpoints.SaveAsync(Target.Identity, checkpoint, TestContext.Current.CancellationToken);
         var operations = new FitzOperationalStore(client, "kv://test/state/progress");
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await operations.SaveAsync(Target.Identity, ProjectionCheckpoint.Start));
+            await operations.SaveAsync(Target.Identity, ProjectionCheckpoint.Start, TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidOperationException>(exception);
-        Assert.Equal(checkpoint, await operations.LoadAsync(Target.Identity));
+        Assert.Equal(checkpoint, await operations.LoadAsync(Target.Identity, TestContext.Current.CancellationToken));
     }
 
     /// <summary>A failed commit preserves both progress and running evidence, and rejects stale owners.</summary>
@@ -44,7 +44,7 @@ public sealed class FitzOperationalStoreTests
             new OperationalProcessingSettings(1, 1, 3, 1, 1), [attempt], null, [], [], [], 0, DateTimeOffset.UtcNow);
 
         // Assert
-        Assert.True(await store.CompareExchangeAsync(state, 0, Guid.Empty));
+        Assert.True(await store.CompareExchangeAsync(state, 0, Guid.Empty, TestContext.Current.CancellationToken));
         var next = state with
         {
             Revision = 2,
@@ -57,16 +57,16 @@ public sealed class FitzOperationalStoreTests
                 }
             ]
         };
-        Assert.False(await store.CommitAsync(next, 1, Guid.NewGuid(), attemptId, null, "opaque:next"));
+        Assert.False(await store.CommitAsync(next, 1, Guid.NewGuid(), attemptId, null, "opaque:next", TestContext.Current.CancellationToken));
         client.CommitFailure = new IOException("injected commit failure");
         _ = await Assert.ThrowsAsync<IOException>(() =>
-            store.CommitAsync(next, 1, owner, attemptId, null, "opaque:next").AsTask());
+            store.CommitAsync(next, 1, owner, attemptId, null, "opaque:next", TestContext.Current.CancellationToken).AsTask());
         client.CommitFailure = null;
-        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(Target.Identity));
-        Assert.Equal("running", Assert.Single((await store.ReadAsync(Target))!.Attempts).Outcome);
-        Assert.True(await store.CommitAsync(next, 1, owner, attemptId, null, "opaque:next"));
-        Assert.Equal("opaque:next", (await store.LoadAsync(Target.Identity)).Cursor.Value);
-        Assert.Equal("committed", Assert.Single((await store.ReadAsync(Target))!.Attempts).Outcome);
+        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadAsync(Target.Identity, TestContext.Current.CancellationToken));
+        Assert.Equal("running", Assert.Single((await store.ReadAsync(Target, TestContext.Current.CancellationToken))!.Attempts).Outcome);
+        Assert.True(await store.CommitAsync(next, 1, owner, attemptId, null, "opaque:next", TestContext.Current.CancellationToken));
+        Assert.Equal("opaque:next", (await store.LoadAsync(Target.Identity, TestContext.Current.CancellationToken)).Cursor.Value);
+        Assert.Equal("committed", Assert.Single((await store.ReadAsync(Target, TestContext.Current.CancellationToken))!.Attempts).Outcome);
         Assert.All(client.Transactions.Where(t => t.Commits > 0), t => Assert.Equal(KvDurability.Sync, t.Durability));
         Assert.Empty(client.WriteLocks);
     }
@@ -78,7 +78,7 @@ public sealed class FitzOperationalStoreTests
         // Arrange
         var client = new FakeKvClient();
         var store = new FitzOperationalStore(client, "kv://test/state/progress");
-        _ = await store.ReadAsync(Target);
+        _ = await store.ReadAsync(Target, TestContext.Current.CancellationToken);
         var firstRoute = client.LastTransaction.Route;
         var other = Target with
         {
@@ -87,7 +87,7 @@ public sealed class FitzOperationalStoreTests
         };
 
         // Act
-        _ = await store.ReadAsync(other);
+        _ = await store.ReadAsync(other, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotEqual(firstRoute, client.LastTransaction.Route);

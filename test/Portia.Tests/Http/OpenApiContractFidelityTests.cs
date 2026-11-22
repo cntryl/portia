@@ -27,12 +27,12 @@ public sealed class OpenApiContractFidelityTests
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaGet<InvalidDefaultRequest, string>("/query-default");
-        await app.StartAsync();
-        using var omitted = await app.GetTestClient().GetAsync("/query-default");
-        using var valid = await app.GetTestClient().GetAsync("/query-default?limit=1");
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        using var omitted = await app.GetTestClient().GetAsync("/query-default", TestContext.Current.CancellationToken);
+        using var valid = await app.GetTestClient().GetAsync("/query-default?limit=1", TestContext.Current.CancellationToken);
 
         // Act
-        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
+        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken)).Document!;
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, omitted.StatusCode);
@@ -59,11 +59,11 @@ public sealed class OpenApiContractFidelityTests
             .OnResult((http, result) => Results.Json(result.Value,
                 http.RequestServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json),
                 statusCode: 201)));
-        await app.StartAsync();
-        var actual = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/explicit-response"))!;
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        var actual = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/explicit-response", TestContext.Current.CancellationToken))!;
 
         // Act
-        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
+        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken)).Document!;
 
         // Assert
         Assert.Equal("accepted", actual["long_property_name"]!.GetValue<string>());
@@ -104,17 +104,17 @@ public sealed class OpenApiContractFidelityTests
         await using var app = builder.Build();
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
         _ = app.MapPortiaGet<ReadAudit, AuditReply>("/secured").RequireAuthorization("alpha-policy", "beta-policy");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         var client = app.GetTestClient();
-        using var anonymous = await client.GetAsync("/secured");
+        using var anonymous = await client.GetAsync("/secured", TestContext.Current.CancellationToken);
         _ = client.DefaultRequestHeaders.TryAddWithoutValidation("X-Alpha", "yes");
-        using var alphaOnly = await client.GetAsync("/secured");
+        using var alphaOnly = await client.GetAsync("/secured", TestContext.Current.CancellationToken);
         _ = client.DefaultRequestHeaders.Remove("X-Alpha");
         _ = client.DefaultRequestHeaders.TryAddWithoutValidation("X-Beta", "yes");
-        using var betaOnly = await client.GetAsync("/secured");
+        using var betaOnly = await client.GetAsync("/secured", TestContext.Current.CancellationToken);
 
         // Act
-        var document = JsonNode.Parse(await client.GetStringAsync("/openapi/v1.json"))!;
+        var document = JsonNode.Parse(await client.GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken))!;
 
         // Assert
         Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
@@ -138,10 +138,10 @@ public sealed class OpenApiContractFidelityTests
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaPost<RoundTripAudit, AuditReply>("/round-trip");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
+        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken)).Document!;
 
         // Assert
         var operation = document.Paths["/round-trip"].Operations![System.Net.Http.HttpMethod.Post];
@@ -162,15 +162,15 @@ public sealed class OpenApiContractFidelityTests
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaPost<ConfirmAudit, string>("/confirm").DisableAntiforgery();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var missing = await app.GetTestClient().PostAsync("/confirm", new System.Net.Http.FormUrlEncodedContent(
-            new System.Collections.Generic.Dictionary<string, string> { ["marker"] = "present" }));
+            new System.Collections.Generic.Dictionary<string, string> { ["marker"] = "present" }), TestContext.Current.CancellationToken);
         using var valid = await app.GetTestClient().PostAsync("/confirm", new System.Net.Http.FormUrlEncodedContent(
             new System.Collections.Generic.Dictionary<string, string>
-            { ["accepted"] = "true", ["marker"] = "present" }));
+            { ["accepted"] = "true", ["marker"] = "present" }), TestContext.Current.CancellationToken);
 
         // Act
-        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
+        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken)).Document!;
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, missing.StatusCode);

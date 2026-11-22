@@ -24,8 +24,8 @@ public sealed class FleetBrokerTests
         // Act
         try
         {
-            hold = Task.Run(() => Hold(route, active, starts, lifetime.Token));
-            await comparer.RecordingStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            hold = Task.Run(() => Hold(route, active, starts, lifetime.Token), TestContext.Current.CancellationToken);
+            await comparer.RecordingStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             publishedBeforeStartRecorded = active.ContainsKey(route);
         }
         finally
@@ -33,7 +33,7 @@ public sealed class FleetBrokerTests
             comparer.Resume();
             await lifetime.CancelAsync();
             if (hold is not null)
-                stopped = await Record.ExceptionAsync(() => hold.WaitAsync(TimeSpan.FromSeconds(5)));
+                stopped = await Record.ExceptionAsync(() => hold.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         }
 
         // Assert
@@ -130,10 +130,10 @@ public sealed class FleetBrokerTests
         {
             cancelA.Cancel();
             cancelB.Cancel();
-            await runA.WaitAsync(TimeSpan.FromSeconds(10));
+            await runA.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             if (runB is not null)
             {
-                await runB.WaitAsync(TimeSpan.FromSeconds(10));
+                await runB.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             }
 
             await second.DisposeAsync();
@@ -167,8 +167,8 @@ public sealed class FleetBrokerTests
         // Unmanaged leases intentionally receive no renewals. Keep the connection alive to
         // distinguish TTL expiry from a broker's session-disconnect cleanup.
         await using var member = await stalled.Lease.AcquireAsync($"lease://{realm}/members/{ghost}",
-            TimeSpan.FromSeconds(2));
-        await using var lease = await stalled.Lease.AcquireAsync(partition, TimeSpan.FromSeconds(2));
+            TimeSpan.FromSeconds(2), ct: TestContext.Current.CancellationToken);
+        await using var lease = await stalled.Lease.AcquireAsync(partition, TimeSpan.FromSeconds(2), ct: TestContext.Current.CancellationToken);
         var acquired = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var cancellation = new CancellationTokenSource();
         var runner = new FleetPartitionRunner(new FitzPartitionLeaseCompetitor(survivor.Lease),
@@ -186,9 +186,9 @@ public sealed class FleetBrokerTests
         }, cancellation.Token);
         try
         {
-            await Task.Delay(300);
+            await Task.Delay(300, TestContext.Current.CancellationToken);
             Assert.False(acquired.Task.IsCompleted);
-            await acquired.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            await acquired.Task.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
         }
         finally
         {

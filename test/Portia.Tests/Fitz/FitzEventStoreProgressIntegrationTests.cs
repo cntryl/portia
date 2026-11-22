@@ -22,9 +22,9 @@ public sealed class FitzEventStoreProgressIntegrationTests(FitzBrokerFixture bro
         [
             DomainEventSeed.Attach(new ValueChanged(1), firstId, 1),
             DomainEventSeed.Attach(new ValueChanged(2), firstId, 2)
-        ]);
+        ], TestContext.Current.CancellationToken);
         await store.AppendAsync(second, 0,
-            [DomainEventSeed.Attach(new ValueChanged(3), Uuid.CreateVersion4(), 1)]);
+            [DomainEventSeed.Attach(new ValueChanged(3), Uuid.CreateVersion4(), 1)], TestContext.Current.CancellationToken);
 
         // Act
         var patterns = new[]
@@ -41,20 +41,20 @@ public sealed class FitzEventStoreProgressIntegrationTests(FitzBrokerFixture bro
             var expectedCount = pattern.Resource is null ? 3UL : 2UL;
             Assert.Equal(expectedCount, (ulong)records.Count);
 
-            var initial = await store.GetProgressAsync(pattern, EventCursor.Start);
+            var initial = await store.GetProgressAsync(pattern, EventCursor.Start, TestContext.Current.CancellationToken);
             Assert.Equal(EventCursor.Start, initial.Position);
             Assert.Equal(expectedCount, initial.PendingEvents);
             Assert.Equal(expectedCount, initial.PendingEventsLowerBound);
             Assert.False(initial.IsCaughtUp);
             Assert.Equal(records[^1].NextCursor, initial.SourcePosition);
 
-            var partial = await store.GetProgressAsync(pattern, records[0].NextCursor);
+            var partial = await store.GetProgressAsync(pattern, records[0].NextCursor, TestContext.Current.CancellationToken);
             Assert.Equal(records[0].NextCursor, partial.Position);
             Assert.Equal(expectedCount - 1, partial.PendingEvents);
             Assert.Equal(records[^1].NextCursor, partial.SourcePosition);
             Assert.False(partial.IsCaughtUp);
 
-            var complete = await store.GetProgressAsync(pattern, records[^1].NextCursor);
+            var complete = await store.GetProgressAsync(pattern, records[^1].NextCursor, TestContext.Current.CancellationToken);
             Assert.Equal(records[^1].NextCursor, complete.Position);
             Assert.Equal(0UL, complete.PendingEvents);
             Assert.Equal(0UL, complete.PendingEventsLowerBound);
@@ -65,8 +65,8 @@ public sealed class FitzEventStoreProgressIntegrationTests(FitzBrokerFixture bro
                 unchanged.Select(record => record.Event.Metadata.EventId));
         }
 
-        Assert.Equal(2UL, (await client.Stream.MetadataAsync(first.ToString())).RecordCount);
-        Assert.Equal(1UL, (await client.Stream.MetadataAsync(second.ToString())).RecordCount);
+        Assert.Equal(2UL, (await client.Stream.MetadataAsync(first.ToString(), TestContext.Current.CancellationToken)).RecordCount);
+        Assert.Equal(1UL, (await client.Stream.MetadataAsync(second.ToString(), TestContext.Current.CancellationToken)).RecordCount);
     }
 
     static async Task<List<DomainEventRecord>> ReadAsync(FitzEventStore store, EventStreamPattern pattern)
