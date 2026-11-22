@@ -1,12 +1,1 @@
 #nullable enable
-Cntryl.Portia.Communications.MailAttachment
-const Cntryl.Portia.Communications.MailAttachment.MaximumContentBytes = 5242880 -> int
-Cntryl.Portia.Communications.MailAttachment.MailAttachment(string! fileName, string! mediaType, System.ReadOnlySpan<byte> content) -> void
-Cntryl.Portia.Communications.MailAttachment.FileName.get -> string!
-Cntryl.Portia.Communications.MailAttachment.MediaType.get -> string!
-Cntryl.Portia.Communications.MailAttachment.Content.get -> System.Collections.Immutable.ImmutableArray<byte>
-override Cntryl.Portia.Communications.MailAttachment.ToString() -> string!
-const Cntryl.Portia.Communications.MailMessage.MaximumAttachments = 8 -> int
-const Cntryl.Portia.Communications.MailMessage.MaximumAttachmentBytes = 5242880 -> int
-Cntryl.Portia.Communications.MailMessage.Attachments.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Communications.MailAttachment!>!
-Cntryl.Portia.Communications.MailMessage.Attachments.init -> void

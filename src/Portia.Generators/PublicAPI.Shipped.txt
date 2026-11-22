@@ -40,3 +40,7 @@ override Cntryl.Portia.ApplicationContractAnalyzer.Initialize(Microsoft.CodeAnal
 override Cntryl.Portia.ApplicationContractAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>
 override Cntryl.Portia.ApplicationStructureAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
 override Cntryl.Portia.ApplicationStructureAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>
+Cntryl.Portia.AggregateOnHandlerAnalyzer
+Cntryl.Portia.AggregateOnHandlerAnalyzer.AggregateOnHandlerAnalyzer() -> void
+override Cntryl.Portia.AggregateOnHandlerAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
+override Cntryl.Portia.AggregateOnHandlerAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>

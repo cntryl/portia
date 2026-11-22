@@ -32,6 +32,11 @@ Cntryl.Portia.Communications.IMailSender
 Cntryl.Portia.Communications.IMailSender.SendAsync(Cntryl.Portia.TenantId tenant, Cntryl.Portia.Communications.SendId id, Cntryl.Portia.Communications.MailMessage! message, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Communications.SendOutcome!>
 Cntryl.Portia.Communications.ISmsSender
 Cntryl.Portia.Communications.ISmsSender.SendAsync(Cntryl.Portia.TenantId tenant, Cntryl.Portia.Communications.SendId id, Cntryl.Portia.Communications.SmsMessage! message, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Communications.SendOutcome!>
+Cntryl.Portia.Communications.MailAttachment
+Cntryl.Portia.Communications.MailAttachment.MailAttachment(string! fileName, string! mediaType, System.ReadOnlySpan<byte> content) -> void
+Cntryl.Portia.Communications.MailAttachment.FileName.get -> string!
+Cntryl.Portia.Communications.MailAttachment.MediaType.get -> string!
+Cntryl.Portia.Communications.MailAttachment.Content.get -> System.Collections.Immutable.ImmutableArray<byte>
 Cntryl.Portia.Communications.MailMessage
 Cntryl.Portia.Communications.MailMessage.Html.get -> string?
 Cntryl.Portia.Communications.MailMessage.Html.init -> void
@@ -41,6 +46,8 @@ Cntryl.Portia.Communications.MailMessage.ReplyTo.init -> void
 Cntryl.Portia.Communications.MailMessage.Subject.get -> string!
 Cntryl.Portia.Communications.MailMessage.Text.get -> string!
 Cntryl.Portia.Communications.MailMessage.To.get -> System.Collections.Generic.IReadOnlyList<string!>!
+Cntryl.Portia.Communications.MailMessage.Attachments.get -> System.Collections.Generic.IReadOnlyList<Cntryl.Portia.Communications.MailAttachment!>!
+Cntryl.Portia.Communications.MailMessage.Attachments.init -> void
 Cntryl.Portia.Communications.SendId
 Cntryl.Portia.Communications.SendId.Equals(Cntryl.Portia.Communications.SendId other) -> bool
 Cntryl.Portia.Communications.SendId.SendId() -> void
@@ -74,11 +81,15 @@ Cntryl.Portia.Communications.SmsMessage.Body.get -> string!
 Cntryl.Portia.Communications.SmsMessage.SmsMessage(string! to, string! body) -> void
 Cntryl.Portia.Communications.SmsMessage.To.get -> string!
 const Cntryl.Portia.Communications.MailMessage.MaximumRecipients = 50 -> int
+const Cntryl.Portia.Communications.MailAttachment.MaximumContentBytes = 5242880 -> int
+const Cntryl.Portia.Communications.MailMessage.MaximumAttachments = 8 -> int
+const Cntryl.Portia.Communications.MailMessage.MaximumAttachmentBytes = 5242880 -> int
 const Cntryl.Portia.Communications.SendId.MaximumLength = 128 -> int
 const Cntryl.Portia.Communications.SmsMessage.MaximumBodyLength = 1600 -> int
 override Cntryl.Portia.Communications.DeliveryEvent.Equals(object? obj) -> bool
 override Cntryl.Portia.Communications.DeliveryEvent.GetHashCode() -> int
 override Cntryl.Portia.Communications.DeliveryEvent.ToString() -> string!
+override Cntryl.Portia.Communications.MailAttachment.ToString() -> string!
 override Cntryl.Portia.Communications.MailMessage.ToString() -> string!
 override Cntryl.Portia.Communications.SendId.GetHashCode() -> int
 override Cntryl.Portia.Communications.SendId.ToString() -> string!
