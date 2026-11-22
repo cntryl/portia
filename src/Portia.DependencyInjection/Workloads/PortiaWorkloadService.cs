@@ -25,6 +25,12 @@ sealed class PortiaWorkloadService(
     static readonly Action<ILogger, string, string, int, string, TimeSpan, string, Exception?> LogFailureDecision =
         LoggerMessage.Define<string, string, int, string, TimeSpan, string>(LogLevel.Error, new EventId(2001),
             "Workload {Component} failed during {Stage} on attempt {Attempt}; decision {Decision}, retry delay {Delay}, failure kind {FailureKind}");
+    static readonly Action<ILogger, string, string, string, string, DateTimeOffset, Exception?> LogJournalWait =
+        LoggerMessage.Define<string, string, string, string, DateTimeOffset>(LogLevel.Warning, new EventId(2002),
+            "Workload {Component} ({Scope}) is waiting for journal transition {Transition}; reason {Reason}, next retry {NextRetry}");
+    static readonly Action<ILogger, string, string, string, TimeSpan, int, Exception?> LogJournalWaitEnded =
+        LoggerMessage.Define<string, string, string, TimeSpan, int>(LogLevel.Information, new EventId(2003),
+            "Workload {Component} ({Scope}) left journal wait for {Transition} after {Duration} and {Attempts} retries");
 
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
     readonly ILogger<PortiaWorkloadService>? _logger = logger;
@@ -234,6 +240,7 @@ sealed class PortiaWorkloadService(
         PortiaTelemetry.RecordWorkload(registration.Name, telemetryScope, true, _logger);
         var consecutiveFailures = 0;
         OperationalSession? operationalSession = null;
+        OperationalJournalWait? journalWait = null;
         var subscribeFailures = 0;
         var resubscribeAt = DateTimeOffset.MinValue;
         IDomainEventSubscription? subscription = null;
@@ -288,7 +295,7 @@ sealed class PortiaWorkloadService(
                         if (operationalSession is null)
                         {
                             var session = new OperationalSession(operationalStore, operationalOptions!,
-                                topology!, _clock);
+                                topology!, _clock, ObserveJournalWait);
                             var target = new OperationalTarget(registration.Name, passPattern.ToString(),
                                 new OperationalScope(identity.Tenant?.Value), processing.RebuildId);
                             await session.AcquireAsync(target,
@@ -540,6 +547,21 @@ sealed class PortiaWorkloadService(
                     PortiaTelemetry.RecordWorkload(registration.Name, telemetryScope, false, _logger);
                 }
             }
+        }
+
+        void ObserveJournalWait(OperationalJournalWait? wait)
+        {
+            if (_logger is not null)
+            {
+                if (wait is not null && journalWait is null)
+                    LogJournalWait(_logger, registration.Name, telemetryScope, wait.Transition, wait.Reason,
+                        wait.NextRetryAt, null);
+                else if (wait is null && journalWait is { } previous)
+                    LogJournalWaitEnded(_logger, registration.Name, telemetryScope, previous.Transition,
+                        _clock.GetUtcNow() - previous.Since, previous.Failures, null);
+            }
+
+            journalWait = wait;
         }
 
         async ValueTask ReleaseSubscriptionAsync()
