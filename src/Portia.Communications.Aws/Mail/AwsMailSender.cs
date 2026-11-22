@@ -53,6 +53,13 @@ public sealed class AwsMailSender : IMailSender
                     Subject = Utf8(message.Subject),
                     Body = new Body
                     { Text = Utf8(message.Text), Html = message.Html is null ? null : Utf8(message.Html) },
+                    Attachments = message.Attachments.Count == 0 ? null : message.Attachments.Select(static attachment => new Attachment
+                    {
+                        FileName = attachment.FileName,
+                        ContentType = attachment.MediaType,
+                        ContentTransferEncoding = "BASE64",
+                        RawContent = new MemoryStream(attachment.Content.ToArray()),
+                    }).ToList(),
                 },
             },
             EmailTags =

@@ -22,6 +22,7 @@ public sealed class AwsMailSenderTests
         {
             Html = "<p>Html</p>",
             ReplyTo = "reply@example.com",
+            Attachments = [new MailAttachment("receipt.pdf", "application/pdf", [1, 2, 3])],
         };
 
         // Act
@@ -38,9 +39,28 @@ public sealed class AwsMailSenderTests
         Assert.Equal("Subject", request.Content.Simple.Subject.Data);
         Assert.Equal("Text", request.Content.Simple.Body.Text.Data);
         Assert.Equal("<p>Html</p>", request.Content.Simple.Body.Html.Data);
+        var attachment = Assert.Single(request.Content.Simple.Attachments);
+        Assert.Equal("receipt.pdf", attachment.FileName);
+        Assert.Equal("application/pdf", attachment.ContentType);
+        Assert.Equal("BASE64", attachment.ContentTransferEncoding);
+        Assert.Equal(new byte[] { 1, 2, 3 }, attachment.RawContent.ToArray());
         Assert.Equal("order-1.receipt", request.EmailTags.Single(tag => tag.Name == "portia-send").Value);
         var tenantTag = request.EmailTags.Single(tag => tag.Name == "portia-tenant").Value;
         Assert.Matches("^[A-Za-z0-9_-]+$", tenantTag);
+    }
+
+    /// <summary>Attachment-free messages retain the SES request shape without an empty optional collection.</summary>
+    [Fact]
+    public async Task ShouldOmitAttachmentPartsGivenMessageWithoutAttachments()
+    {
+        // Arrange
+        var (sender, proxy) = CreateSender();
+
+        // Act
+        _ = await sender.SendAsync(Tenant, new SendId("order-1.receipt"), Message(), TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Null(Assert.Single(proxy.Requests).Content.Simple.Attachments);
     }
 
     /// <summary>A definitive SES refusal is a rejection with a provider-neutral reason, not an exception.</summary>

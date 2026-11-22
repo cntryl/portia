@@ -32,6 +32,12 @@ It throws when the message certainly did not reach the provider:
 Recipients and content never appear in exceptions, `ToString()` output or outcomes. Provider error text is not
 repeated because it can name recipients.
 
+`MailMessage.Attachments` accepts up to eight immutable `MailAttachment` snapshots, with at most 5 MiB of combined
+unencoded content. Each attachment has a single filename, a concrete MIME type and nonempty bytes. Azure Communication
+Services and SES receive native attachment parts. The limit applies before provider encoding; provider-side refusals
+retain their normal rejected or unknown outcome. Attachments are outbound transport data: Portia does not bind files
+from inbound HTTP requests, track attachment delivery separately, or retry a send.
+
 ## Tracking a send
 
 Reactors run at least once, so the aggregate that owns the send decides whether to call the sender. A send

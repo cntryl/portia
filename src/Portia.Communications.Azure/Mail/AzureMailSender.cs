@@ -40,6 +40,9 @@ public sealed class AzureMailSender : IMailSender
             identity.FromAddress,
             new EmailRecipients(message.To.Select(static address => new EmailAddress(address))),
             new EmailContent(message.Subject) { PlainText = message.Text, Html = message.Html });
+        foreach (var attachment in message.Attachments)
+            request.Attachments.Add(new EmailAttachment(attachment.FileName, attachment.MediaType,
+                BinaryData.FromBytes(attachment.Content.AsMemory())));
         if (message.ReplyTo is not null)
             request.ReplyTo.Add(new EmailAddress(message.ReplyTo));
 
