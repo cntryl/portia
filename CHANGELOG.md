@@ -4,6 +4,19 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.14.9
+
+### Added
+
+- Outbound email supports up to eight owned attachments and 5 MiB of combined content. AWS SES and Azure submit attachments with the message.
+- Twilio status callbacks can use loopback addresses for local emulators; public callback URLs require HTTPS, and signature verification uses the configured callback URL.
+- `PORTIA108` flags aggregate event handlers that contain business validation or expected failure behavior.
+- Application structure diagnostics enforce Api/Worker composition boundaries, same-feature entity ownership, and statically bound query/reactor hydration restrictions.
+
+### Fixed
+
+- `PORTIA024` rejects non-ASCII declared route segments before Fitz rejects them at runtime.
+
 ## 0.14.8
 
 ### Added

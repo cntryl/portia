@@ -12,4 +12,3 @@
 
  Rule ID   | Category | Severity | Notes
 -----------|----------|----------|------
- PORTIA108 | Portia   | Warning  | Registered aggregate event handlers should apply events deterministically; move business validation and expected failures to commands.

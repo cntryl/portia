@@ -1,5 +1,13 @@
 ; Shipped analyzer releases
 
+## Release 0.14.9
+
+### New Rules
+
+ Rule ID   | Category | Severity | Notes
+-----------|----------|----------|------
+ PORTIA108 | Portia   | Warning  | Registered aggregate event handlers should apply events deterministically; move business validation and expected failures to commands.
+
 ## Release 0.14.1
 
 ### New Rules

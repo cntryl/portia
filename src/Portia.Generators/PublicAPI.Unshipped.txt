@@ -1,5 +1,1 @@
 #nullable enable
-Cntryl.Portia.AggregateOnHandlerAnalyzer
-Cntryl.Portia.AggregateOnHandlerAnalyzer.AggregateOnHandlerAnalyzer() -> void
-override Cntryl.Portia.AggregateOnHandlerAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
-override Cntryl.Portia.AggregateOnHandlerAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>
