@@ -172,7 +172,9 @@ public sealed class ReactorRunner(
             }
             catch (Exception exception)
             {
-                outcome = PortiaTelemetry.ExceptionOutcome(exception, ct);
+                var outcomeUnknown = stage == ProcessorFailureStage.Committing &&
+                                     exception is not ProjectionConcurrencyException;
+                outcome = outcomeUnknown ? "commit_unknown" : PortiaTelemetry.ExceptionOutcome(exception, ct);
                 if (exception is OperationCanceledException && ct.IsCancellationRequested)
                     throw;
                 var failure = exception as ProcessorFailureException
@@ -180,8 +182,9 @@ public sealed class ReactorRunner(
                                   contexts[0].Source, contexts[^1].Source, UninitializedResult.Is(exception)
                                       ? UninitializedResult.ReturnedBy("reactor", reactor.ComponentType, exception)
                                       : exception);
+                failure.CommitOutcomeUnknown = outcomeUnknown;
                 if (session is { } operations)
-                    await operations.RecordFailureAsync(failure, null, ct).ConfigureAwait(false);
+                    await operations.RecordFailureAsync(failure, null, ct, outcomeUnknown).ConfigureAwait(false);
                 throw failure;
             }
             finally

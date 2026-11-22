@@ -6,7 +6,8 @@ sealed class OperationalSession(
     IOperationalStore store,
     OperationalOptions options,
     IApplicationTopology topology,
-    TimeProvider clock)
+    TimeProvider clock,
+    Action<OperationalJournalWait?>? observeWait = null)
 {
     readonly Guid _owner = Guid.NewGuid();
     OperationalTraceBuffer _trace = new(options.MaxTraceEntries);
@@ -49,6 +50,24 @@ sealed class OperationalSession(
             await ChangeAsync(state => state with { ConsecutiveFailures = 0 }, ct).ConfigureAwait(false);
     }
 
+    internal DateTimeOffset? RetryAt
+    {
+        get
+        {
+            if (_state.Block is not null || _state.ConsecutiveFailures <= 0 || _state.Attempts.Count == 0 ||
+                _state.Attempts[^1] is not
+                {
+                    Outcome: OperationalAttemptOutcomes.Failed or OperationalAttemptOutcomes.Indeterminate,
+                    CompletedAt: { } completed
+                } latest || latest.ExpectedCheckpoint != _state.Checkpoint)
+                return null;
+
+            var settings = _state.Settings;
+            return completed + WorkloadFailureBackoff.Delay(TimeSpan.FromTicks(settings.PollIntervalTicks),
+                TimeSpan.FromTicks(settings.MaximumFailureDelayTicks), _state.ConsecutiveFailures);
+        }
+    }
+
     internal RepairPlan? ActivePlan => _repairPlan is { } id ? _state.Plans.Single(p => p.Id == id) : null;
     internal IReadOnlyList<OperationalSource>? InterruptedSources { get; private set; }
 
@@ -65,7 +84,7 @@ sealed class OperationalSession(
         OperationalProcessingSettings settings, ProjectionCheckpoint? checkpoint, CancellationToken ct)
     {
         _target = target;
-        await RequiredAsync(async () =>
+        await RequiredAsync("ownership-acquisition", async () =>
         {
             var prior = await store.ReadAsync(target, ct).ConfigureAwait(false);
             var cursor = checkpoint is { } loaded ? loaded.Cursor.Value : prior?.Checkpoint;
@@ -165,19 +184,7 @@ sealed class OperationalSession(
         }
 
         if (_state.Block is null)
-        {
-            if (_state.ConsecutiveFailures > 0 && _state.Attempts.Count > 0 && _state.Attempts[^1] is
-                { Outcome: OperationalAttemptOutcomes.Failed, CompletedAt: { } ended })
-            {
-                var settings = _state.Settings;
-                if (clock.GetUtcNow() < ended + WorkloadFailureBackoff.Delay(
-                        TimeSpan.FromTicks(settings.PollIntervalTicks),
-                        TimeSpan.FromTicks(settings.MaximumFailureDelayTicks), _state.ConsecutiveFailures))
-                    return false;
-            }
-
-            return true;
-        }
+            return RetryAt is not { } eligibleAt || clock.GetUtcNow() >= eligibleAt;
 
         if (_repairPlan is not null)
             return true;
@@ -276,7 +283,7 @@ sealed class OperationalSession(
                 "local awaited generated dispatch; opaque dependencies and detached work unknown",
                 topology.Describe());
             return state with { Attempts = [.. state.Attempts, attempt] };
-        }, ct).ConfigureAwait(false);
+        }, ct, "attempt-start").ConfigureAwait(false);
         _attempt = id;
         return id;
     }
@@ -293,7 +300,7 @@ sealed class OperationalSession(
         ProjectionCheckpoint expected, ProjectionCheckpoint next, CancellationToken ct)
     {
         var id = _attempt ?? throw new InvalidOperationException("A durable attempt start is required.");
-        await RequiredAsync(async () =>
+        await RequiredAsync("reactor-completion", async () =>
         {
             var state = await ReadOwnedAsync(ct).ConfigureAwait(false);
             // A lost commit acknowledgement is settled by the atomically stored receipt.
@@ -318,14 +325,14 @@ sealed class OperationalSession(
     internal async ValueTask ConfirmProjectionAsync(ProjectionCheckpoint next, CancellationToken ct)
     {
         var id = _attempt ?? throw new InvalidOperationException("A durable attempt start is required.");
-        await ChangeAsync(state => Succeed(state, id, next.Cursor.Value), ct).ConfigureAwait(false);
+        await ChangeAsync(state => Succeed(state, id, next.Cursor.Value), ct, "projector-confirmation").ConfigureAwait(false);
         _attempt = null;
         _repairPlan = null;
         InterruptedSources = null;
     }
 
     internal async ValueTask RecordFailureAsync(Exception exception, ProjectionCheckpoint? committed,
-        CancellationToken ct)
+        CancellationToken ct, bool outcomeUnknown = false)
     {
         if (_failureRecorded)
             return;
@@ -348,13 +355,15 @@ sealed class OperationalSession(
             var attempt = prior with
             {
                 CompletedAt = now,
-                Outcome = committed is null
-                    ? OperationalAttemptOutcomes.Failed
-                    : OperationalAttemptOutcomes.CommittedCleanupFailed,
+                Outcome = outcomeUnknown
+                    ? OperationalAttemptOutcomes.Indeterminate
+                    : committed is null
+                        ? OperationalAttemptOutcomes.Failed
+                        : OperationalAttemptOutcomes.CommittedCleanupFailed,
                 Trace = _attempt is null ? [] : TraceSnapshot(),
                 Coverage = _attempt is null ? prior.Coverage : Coverage(prior),
                 FailureStage = diagnostic?.Stage.ToString() ?? "Pass",
-                FailureKind = diagnostic?.Error?.Kind.ToString() ?? exception.GetType().Name,
+                FailureKind = outcomeUnknown ? "commit_outcome_unknown" : diagnostic?.Error?.Kind.ToString() ?? exception.GetType().Name,
                 IsTransient = transient,
                 NextCheckpoint = committed?.Cursor.Value ?? prior.NextCheckpoint
             };
@@ -367,10 +376,11 @@ sealed class OperationalSession(
             };
             return terminal
                 ? CompleteRepair(next,
-                    committed is null ? OperationalRepairStatuses.Failed : OperationalRepairStatuses.Committed, id,
-                    committed?.Cursor.Value)
+                    outcomeUnknown ? OperationalRepairStatuses.Indeterminate :
+                    committed is null ? OperationalRepairStatuses.Failed : OperationalRepairStatuses.Committed,
+                    id, committed?.Cursor.Value)
                 : next;
-        }, ct).ConfigureAwait(false);
+        }, ct, "failure-recording").ConfigureAwait(false);
         _attempt = null;
         _failureRecorded = true;
     }
@@ -441,9 +451,10 @@ sealed class OperationalSession(
         return state;
     }
 
-    async ValueTask ChangeAsync(Func<OperationalProcessorState, OperationalProcessorState> change, CancellationToken ct)
+    async ValueTask ChangeAsync(Func<OperationalProcessorState, OperationalProcessorState> change, CancellationToken ct,
+        string transition = "journal-transition")
     {
-        await RequiredAsync(async () =>
+        await RequiredAsync(transition, async () =>
         {
             var current = await ReadOwnedAsync(ct).ConfigureAwait(false);
             var next = InvalidateObsoleteQueuedRepairs(change(current));
@@ -503,29 +514,57 @@ sealed class OperationalSession(
         };
     }
 
-    async ValueTask RequiredAsync(Func<ValueTask<bool>> operation, CancellationToken ct)
+    async ValueTask RequiredAsync(string transition, Func<ValueTask<bool>> operation, CancellationToken ct)
     {
-        while (true)
+        OperationalJournalWait? wait = null;
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            try
+            while (true)
             {
-                if (await operation().ConfigureAwait(false))
-                    return;
-            }
-            catch (Exception ex) when (ex is not (OperationalOwnershipException
-                                           or OperationalCheckpointConflictException or OperationCanceledException
-                                           or ArgumentException or InvalidOperationException
-                                           or UnauthorizedAccessException or InvalidDataException))
-            {
-                // Required journal outages pause invocation. Keep the exact pending write in memory;
-                // termination leaves the durable start visible for automatic crash replay.
-            }
+                ct.ThrowIfCancellationRequested();
+                var reason = "contention";
+                try
+                {
+                    if (await operation().ConfigureAwait(false))
+                        return;
+                }
+                catch (ProjectionConcurrencyException ex) when (!ct.IsCancellationRequested &&
+                                                               ex is not OperationalCheckpointConflictException)
+                {
+                    // A competing journal transaction can prevent acquiring the write transaction.
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested && ex is not (OperationalOwnershipException
+                                               or OperationalCheckpointConflictException or OperationCanceledException
+                                               or ArgumentException or InvalidOperationException
+                                               or UnauthorizedAccessException or InvalidDataException))
+                {
+                    reason = ex.GetType().Name;
+                }
 
-            await Task.Delay(options.JournalRetryDelay, clock, ct).ConfigureAwait(false);
+                var now = clock.GetUtcNow();
+                var failures = wait?.Failures ?? 0;
+                wait = new OperationalJournalWait(transition, reason, wait?.Since ?? now,
+                    now + options.JournalRetryDelay, failures == int.MaxValue ? failures : failures + 1);
+                observeWait?.Invoke(wait);
+                await Task.Delay(options.JournalRetryDelay, clock, ct).ConfigureAwait(false);
+            }
+        }
+        finally
+        {
+            if (wait is not null)
+                observeWait?.Invoke(null);
         }
     }
+
 }
+
+/// <summary>Live, bounded evidence while a required operational journal call is retrying.</summary>
+sealed record OperationalJournalWait(
+    string Transition,
+    string Reason,
+    DateTimeOffset Since,
+    DateTimeOffset NextRetryAt,
+    int Failures);
 
 sealed class OperationalOwnershipException() : InvalidOperationException("Operational workload ownership changed.");
 

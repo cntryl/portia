@@ -80,6 +80,34 @@ public sealed partial class OperationalProjectionTests
         Assert.Equal("indeterminate", Assert.Single(resumed.State.Attempts).Outcome);
     }
 
+    /// <summary>A native commit that loses its acknowledgement is immediately indeterminate.</summary>
+    [Fact]
+    public async Task ShouldRecordIndeterminateImmediatelyGivenCommittedProjectionAcknowledgementLoss()
+    {
+        // Arrange
+        var journal = new MemoryOperationalStore();
+        var native = new NativeStore
+        {
+            AfterCommit = () => throw new IOException("projection acknowledgement lost")
+        };
+        var session = await SessionAsync(journal, ProjectionCheckpoint.Start);
+        var events = await OperationalExecutionTests.EventsAsync();
+
+        // Act
+        var exception = await Record.ExceptionAsync(() => new ProjectorRunner(events)
+            .RunAsync(session, new ProbeProjector(native), ProjectionCheckpoint.Start,
+                ct: TestContext.Current.CancellationToken).AsTask());
+
+        // Assert
+        Assert.IsType<ProcessorFailureException>(exception);
+        var attempt = Assert.Single(session.State.Attempts);
+        Assert.Equal(OperationalAttemptOutcomes.Indeterminate, attempt.Outcome);
+        Assert.Equal(ProjectionCheckpoint.Start.Cursor.Value, attempt.ExpectedCheckpoint);
+        Assert.Equal("2", attempt.NextCheckpoint);
+        Assert.Equal("2", native.Checkpoint.Cursor.Value);
+        Assert.Equal(2, native.Changes);
+    }
+
     /// <summary>
     ///     A confirmation that fails after the native commit is reported at the commit stage with the
     ///     checkpoint the repository already holds, not as a failure to read events from the old one.

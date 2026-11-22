@@ -126,6 +126,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         var stage = ProcessorFailureStage.Beginning;
         var confirmed = checkpoint;
         var committed = false;
+        var outcomeUnknown = false;
         IProjectionBatch? batch = null;
         Exception? failure = null;
         try
@@ -152,17 +153,20 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         }
         catch (OperationCanceledException ex) when (ct.IsCancellationRequested)
         {
-            outcome = "canceled";
+            outcome = stage == ProcessorFailureStage.Committing ? "commit_unknown" : "canceled";
             failure = ex;
         }
         catch (Exception ex)
         {
-            outcome = "fault";
             var diagnostic = ex as ProcessorFailureException
                              ?? new ProcessorFailureException(identity, checkpoint, stage, first, last,
                                  UninitializedResult.Is(ex)
                                      ? UninitializedResult.ReturnedBy("projector", projector.ApplicationType ?? projector.GetType(), ex)
                                      : ex);
+            outcomeUnknown = stage == ProcessorFailureStage.Committing &&
+                             diagnostic.InnerException is not ProjectionConcurrencyException;
+            diagnostic.CommitOutcomeUnknown = outcomeUnknown;
+            outcome = outcomeUnknown ? "commit_unknown" : "fault";
             failure = diagnostic;
         }
 
@@ -190,7 +194,8 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         if (failure is not null)
         {
             if (session is { } operations && !(failure is OperationCanceledException && ct.IsCancellationRequested))
-                await operations.RecordFailureAsync(failure, committed ? confirmed : null, ct).ConfigureAwait(false);
+                await operations.RecordFailureAsync(failure, committed ? confirmed : null, ct, outcomeUnknown)
+                    .ConfigureAwait(false);
             ExceptionDispatchInfo.Capture(failure).Throw();
         }
 

@@ -221,7 +221,9 @@ public sealed partial class OperationalExecutionTests
         // Arrange
         var journal = new MemoryOperationalStore();
         var clock = new ManualTestClock();
-        var session = new OperationalSession(journal, new OperationalOptions(), new EmptyApplicationTopology(), clock);
+        OperationalJournalWait? observed = null;
+        var session = new OperationalSession(journal, new OperationalOptions(), new EmptyApplicationTopology(), clock,
+            wait => observed = wait);
         await session.AcquireAsync(Target, "reactor", Settings, ProjectionCheckpoint.Start, TestContext.Current.CancellationToken);
         var effects = new Effects();
         journal.Unavailable = true;
@@ -234,10 +236,14 @@ public sealed partial class OperationalExecutionTests
         // Assert
         Assert.Empty(effects.Executions);
         Assert.False(pending.IsCompleted);
+        Assert.Equal("attempt-start", observed?.Transition);
+        Assert.Equal(nameof(IOException), observed?.Reason);
+        Assert.NotNull(observed?.NextRetryAt);
         journal.Unavailable = false;
         clock.Advance(delay);
         _ = await pending.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.Equal(2, effects.Ids.Count);
+        Assert.Null(observed);
     }
 
     /// <summary>Detached work from an earlier unit cannot appear as a child of the next attempt.</summary>
