@@ -50,6 +50,24 @@ sealed class OperationalSession(
             await ChangeAsync(state => state with { ConsecutiveFailures = 0 }, ct).ConfigureAwait(false);
     }
 
+    internal DateTimeOffset? RetryAt
+    {
+        get
+        {
+            if (_state.Block is not null || _state.ConsecutiveFailures <= 0 || _state.Attempts.Count == 0 ||
+                _state.Attempts[^1] is not
+                {
+                    Outcome: OperationalAttemptOutcomes.Failed or OperationalAttemptOutcomes.Indeterminate,
+                    CompletedAt: { } completed
+                } latest || latest.ExpectedCheckpoint != _state.Checkpoint)
+                return null;
+
+            var settings = _state.Settings;
+            return completed + WorkloadFailureBackoff.Delay(TimeSpan.FromTicks(settings.PollIntervalTicks),
+                TimeSpan.FromTicks(settings.MaximumFailureDelayTicks), _state.ConsecutiveFailures);
+        }
+    }
+
     internal RepairPlan? ActivePlan => _repairPlan is { } id ? _state.Plans.Single(p => p.Id == id) : null;
     internal IReadOnlyList<OperationalSource>? InterruptedSources { get; private set; }
 
@@ -166,19 +184,7 @@ sealed class OperationalSession(
         }
 
         if (_state.Block is null)
-        {
-            if (_state.ConsecutiveFailures > 0 && _state.Attempts.Count > 0 && _state.Attempts[^1] is
-                { Outcome: OperationalAttemptOutcomes.Failed, CompletedAt: { } ended })
-            {
-                var settings = _state.Settings;
-                if (clock.GetUtcNow() < ended + WorkloadFailureBackoff.Delay(
-                        TimeSpan.FromTicks(settings.PollIntervalTicks),
-                        TimeSpan.FromTicks(settings.MaximumFailureDelayTicks), _state.ConsecutiveFailures))
-                    return false;
-            }
-
-            return true;
-        }
+            return RetryAt is not { } eligibleAt || clock.GetUtcNow() >= eligibleAt;
 
         if (_repairPlan is not null)
             return true;
@@ -353,7 +359,7 @@ sealed class OperationalSession(
                     ? OperationalAttemptOutcomes.Indeterminate
                     : committed is null
                         ? OperationalAttemptOutcomes.Failed
-                    : OperationalAttemptOutcomes.CommittedCleanupFailed,
+                        : OperationalAttemptOutcomes.CommittedCleanupFailed,
                 Trace = _attempt is null ? [] : TraceSnapshot(),
                 Coverage = _attempt is null ? prior.Coverage : Coverage(prior),
                 FailureStage = diagnostic?.Stage.ToString() ?? "Pass",
@@ -510,75 +516,49 @@ sealed class OperationalSession(
     async ValueTask RequiredAsync(string transition, Func<ValueTask<bool>> operation, CancellationToken ct)
     {
         OperationalJournalWait? wait = null;
-        var failures = 0;
-        var reason = "dependency";
-        while (true)
+        try
         {
-            try
+            while (true)
             {
                 ct.ThrowIfCancellationRequested();
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                if (wait is not null)
-                    observeWait?.Invoke(null);
-                throw;
-            }
-            try
-            {
-                if (await operation().ConfigureAwait(false))
+                var reason = "contention";
+                try
                 {
-                    if (wait is not null)
-                        observeWait?.Invoke(null);
-                    return;
+                    if (await operation().ConfigureAwait(false))
+                        return;
                 }
-                reason = "contention";
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
-                observeWait?.Invoke(null);
-                throw;
-            }
-            catch (Exception ex) when (ex is not (OperationalOwnershipException
-                                           or OperationalCheckpointConflictException or OperationCanceledException
-                                           or ArgumentException or InvalidOperationException
-                                           or UnauthorizedAccessException or InvalidDataException))
-            {
-                // Required journal outages pause invocation. Keep the exact pending write in memory;
-                // termination leaves the durable start visible for automatic crash replay.
-                if (failures < int.MaxValue)
-                    failures++;
-                reason = "dependency";
-            }
+                catch (ProjectionConcurrencyException ex) when (!ct.IsCancellationRequested &&
+                                                               ex is not OperationalCheckpointConflictException)
+                {
+                    // A competing journal transaction can prevent acquiring the write transaction.
+                }
+                catch (Exception ex) when (!ct.IsCancellationRequested && ex is not (OperationalOwnershipException
+                                               or OperationalCheckpointConflictException or OperationCanceledException
+                                               or ArgumentException or InvalidOperationException
+                                               or UnauthorizedAccessException or InvalidDataException))
+                {
+                    reason = ex.GetType().Name;
+                }
 
-            if (wait is null)
-            {
                 var now = clock.GetUtcNow();
-                wait = new OperationalJournalWait(transition, reason, now,
-                    now + options.JournalRetryDelay, failures);
+                var failures = wait?.Failures ?? 0;
+                wait = new OperationalJournalWait(transition, reason, wait?.Since ?? now,
+                    now + options.JournalRetryDelay, failures == int.MaxValue ? failures : failures + 1);
                 observeWait?.Invoke(wait);
-            }
-            else
-            {
-                wait = wait with { NextRetryAt = clock.GetUtcNow() + options.JournalRetryDelay, Failures = failures };
-                observeWait?.Invoke(wait);
-            }
-
-            try
-            {
                 await Task.Delay(options.JournalRetryDelay, clock, ct).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
-            {
+        }
+        finally
+        {
+            if (wait is not null)
                 observeWait?.Invoke(null);
-                throw;
-            }
         }
     }
+
 }
 
 /// <summary>Live, bounded evidence while a required operational journal call is retrying.</summary>
-internal sealed record OperationalJournalWait(
+sealed record OperationalJournalWait(
     string Transition,
     string Reason,
     DateTimeOffset Since,

@@ -153,20 +153,19 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         }
         catch (OperationCanceledException ex) when (ct.IsCancellationRequested)
         {
-            outcome = "canceled";
+            outcome = stage == ProcessorFailureStage.Committing ? "commit_unknown" : "canceled";
             failure = ex;
         }
         catch (Exception ex)
         {
-            outcome = "fault";
             var diagnostic = ex as ProcessorFailureException
                              ?? new ProcessorFailureException(identity, checkpoint, stage, first, last,
                                  UninitializedResult.Is(ex)
                                      ? UninitializedResult.ReturnedBy("projector", projector.ApplicationType ?? projector.GetType(), ex)
                                      : ex);
             outcomeUnknown = stage == ProcessorFailureStage.Committing &&
-                             diagnostic.InnerException is not ProjectionConcurrencyException &&
-                             diagnostic.InnerException is not OperationalCheckpointConflictException;
+                             diagnostic.InnerException is not ProjectionConcurrencyException;
+            outcome = outcomeUnknown ? "commit_unknown" : "fault";
             failure = diagnostic;
         }
 
