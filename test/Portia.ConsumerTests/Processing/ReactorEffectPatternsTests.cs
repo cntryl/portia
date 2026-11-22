@@ -66,7 +66,11 @@ public sealed class ReactorEffectPatternsTests
         var unknownCheckpoint = await checkpoints.LoadAsync(identity, TestContext.Current.CancellationToken);
         var resolvedBeforeReplay = participant.RejectedOrders.Count;
         var resolvedCheckpoint = await runner.RunAsync(reactor, unknownCheckpoint, ct: TestContext.Current.CancellationToken);
-        _ = await runner.RunAsync(reactor, ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken);
+        // Deliberate redelivery uses a fresh local checkpoint store. Reusing the committed store
+        // with Start would be an invalid stale-checkpoint write rather than a redelivery exercise.
+        var redelivery = new ReservationReaction(new InMemoryProjectionCheckpointStore(), participant, orderId);
+        _ = await new ReactorRunner(store).RunAsync(redelivery, ProjectionCheckpoint.Start,
+            ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.IsType<ProcessorFailureException>(firstFailure);

@@ -30,7 +30,7 @@ public sealed class BatchDispatchTests
                                   public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity id, CancellationToken ct = default) => ValueTask.FromResult(ProjectionCheckpoint.Start);
                                   public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity id, CancellationToken ct = default) => checkpoints.LoadAsync(id, ct);
                                   public ValueTask SaveAsync(CheckpointIdentity id, ProjectionCheckpoint checkpoint, CancellationToken ct = default) => checkpoints.SaveAsync(id, checkpoint, ct);
-                                  public ValueTask SaveAsync(CheckpointIdentity id, ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct = default) => checkpoints.SaveAsync(id, expected, checkpoint, ct);
+                                  public ValueTask SaveAsync(CheckpointIdentity id, ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct = default) => ((IConditionalProjectionCheckpointStore)checkpoints).SaveAsync(id, expected, checkpoint, ct);
                                   public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default) => ValueTask.FromResult<IProjectionBatch>(new Batch());
                                   public sealed class Batch : IProjectionBatch
                                   {

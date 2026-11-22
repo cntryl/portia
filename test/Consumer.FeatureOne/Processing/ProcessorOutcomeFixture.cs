@@ -7,9 +7,11 @@ public static partial class ProcessorOutcomeFixture
     [Discriminator("processor-outcome.changed")]
     public sealed record Changed(int Value) : DomainEvent;
 
-    public sealed class State : IProjectionStore, IProjectionCheckpointStore
+    public sealed class State : IProjectionStore, IProjectionCheckpointStore,
+        IConditionalProjectionCheckpointStore
     {
         int _pending;
+        readonly object _checkpointGate = new();
         public bool Projection { get; set; } = true;
         public RequestError? Error { get; set; }
         public Exception? Exception { get; set; }
@@ -67,6 +69,21 @@ public static partial class ProcessorOutcomeFixture
                 Value += _pending;
             _pending = 0;
             Checkpoint = checkpoint;
+            return ValueTask.CompletedTask;
+        }
+
+        ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
+            ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            lock (_checkpointGate)
+            {
+                if (Checkpoint != expected)
+                    throw new ProjectionConcurrencyException(
+                        $"Checkpoint for '{identity.ComponentName}' changed from the expected value before save.");
+                Checkpoint = checkpoint;
+            }
+
             return ValueTask.CompletedTask;
         }
 
