@@ -1,6 +1,6 @@
 namespace Cntryl.Portia;
 
-sealed class TransientReloadFailureCheckpointStore : IProjectionCheckpointStore
+sealed class TransientReloadFailureCheckpointStore : IProjectionCheckpointStore, IConditionalProjectionCheckpointStore
 {
     readonly TaskCompletionSource _checkpointReloaded = new(TaskCreationOptions.RunContinuationsAsynchronously);
     readonly InMemoryProjectionCheckpointStore _inner = new();
@@ -31,4 +31,8 @@ sealed class TransientReloadFailureCheckpointStore : IProjectionCheckpointStore
         CheckpointIdentity identity,
         ProjectionCheckpoint checkpoint,
         CancellationToken ct = default) => _inner.SaveAsync(identity, checkpoint, ct);
+
+    public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint expected,
+        ProjectionCheckpoint checkpoint, CancellationToken ct = default) =>
+        _inner.SaveAsync(identity, expected, checkpoint, ct);
 }

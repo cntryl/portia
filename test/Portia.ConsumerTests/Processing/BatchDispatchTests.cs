@@ -19,16 +19,18 @@ public sealed class BatchDispatchTests
                               using Microsoft.Extensions.DependencyInjection;
                               public record Root(int Amount) : DomainEvent;
                               public sealed record Child(int Amount) : Root(Amount);
-                              public sealed class Repository : IProjectionStore, IProjectionCheckpointStore
+                              public sealed class Repository : IProjectionStore, IProjectionCheckpointStore, IConditionalProjectionCheckpointStore
                               {
+                                  private readonly InMemoryProjectionCheckpointStore checkpoints = new();
                                   public List<string> Calls = new();
                                   public List<IReactorContext> Reactions = new();
                                   public List<IProjectorContext<Root>> Projections = new();
                                   public DomainEvent[] Events = Array.Empty<DomainEvent>();
                                   public CancellationToken Token;
                                   public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity id, CancellationToken ct = default) => ValueTask.FromResult(ProjectionCheckpoint.Start);
-                                  public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity id, CancellationToken ct = default) => ValueTask.FromResult(ProjectionCheckpoint.Start);
-                                  public ValueTask SaveAsync(CheckpointIdentity id, ProjectionCheckpoint checkpoint, CancellationToken ct = default) => ValueTask.CompletedTask;
+                                  public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity id, CancellationToken ct = default) => checkpoints.LoadAsync(id, ct);
+                                  public ValueTask SaveAsync(CheckpointIdentity id, ProjectionCheckpoint checkpoint, CancellationToken ct = default) => checkpoints.SaveAsync(id, checkpoint, ct);
+                                  public ValueTask SaveAsync(CheckpointIdentity id, ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct = default) => checkpoints.SaveAsync(id, expected, checkpoint, ct);
                                   public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default) => ValueTask.FromResult<IProjectionBatch>(new Batch());
                                   public sealed class Batch : IProjectionBatch
                                   {
