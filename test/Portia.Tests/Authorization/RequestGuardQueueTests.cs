@@ -29,7 +29,7 @@ public sealed class RequestGuardQueueTests
             provider.GetRequiredService<IServiceScopeFactory>());
 
         // Act
-        await new QueueRunner(new Queue([first, second]), scopeFactory).RunAsync();
+        await new QueueRunner(new Queue([first, second]), scopeFactory).RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(first.Abandoned);

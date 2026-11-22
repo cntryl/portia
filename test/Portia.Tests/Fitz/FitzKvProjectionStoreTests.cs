@@ -76,7 +76,7 @@ public sealed class FitzKvProjectionStoreTests
         if (failureKind == "read")
         {
             error = await Assert.ThrowsAsync<IOException>(async () =>
-                await repository.BeginAsync(new ProjectionBatchContext(Identity, supplied)));
+                await repository.BeginAsync(new ProjectionBatchContext(Identity, supplied), TestContext.Current.CancellationToken));
             Assert.Same(original, error);
         }
         else if (failureKind == "cancellation")
@@ -88,12 +88,12 @@ public sealed class FitzKvProjectionStoreTests
         else if (failureKind == "decode")
         {
             error = await Assert.ThrowsAsync<InvalidDataException>(async () =>
-                await repository.BeginAsync(new ProjectionBatchContext(Identity, supplied)));
+                await repository.BeginAsync(new ProjectionBatchContext(Identity, supplied), TestContext.Current.CancellationToken));
         }
         else
         {
             error = await Assert.ThrowsAsync<ProjectionConcurrencyException>(async () =>
-                await repository.BeginAsync(new ProjectionBatchContext(Identity, supplied)));
+                await repository.BeginAsync(new ProjectionBatchContext(Identity, supplied), TestContext.Current.CancellationToken));
         }
 
         var failed = client.LastTransaction;
@@ -111,10 +111,10 @@ public sealed class FitzKvProjectionStoreTests
         client.DisposeFailure = null;
         client.Committed.Remove(Encoding.UTF8.GetString(key.Span));
         await using (var batch = await repository.BeginAsync(
-                         new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
+                         new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
         {
             await repository.AddAsync("total", 12);
-            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("reused")));
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("reused")), TestContext.Current.CancellationToken);
         }
 
         Assert.Equal("12", Encoding.UTF8.GetString(client.Read(TotalsRepository.DataKey("total"))!));
@@ -131,21 +131,21 @@ public sealed class FitzKvProjectionStoreTests
         var store = new TotalsRepository(client, route);
         var progress = new ProjectionCheckpoint(new EventCursor("progress"));
         await using (var batch =
-                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
-            await batch.CommitAsync(progress);
+                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
+            await batch.CommitAsync(progress, TestContext.Current.CancellationToken);
 
         // Act
-        await using (var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, progress)))
-            await batch.CommitAsync(ProjectionCheckpoint.Start);
+        await using (var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, progress), TestContext.Current.CancellationToken))
+            await batch.CommitAsync(ProjectionCheckpoint.Start, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal(ProjectionCheckpoint.Start, await new FitzKvCheckpointStore(client, route).LoadAsync(Identity));
+        Assert.Equal(ProjectionCheckpoint.Start, await new FitzKvCheckpointStore(client, route).LoadAsync(Identity, TestContext.Current.CancellationToken));
         var fresh = new TotalsRepository(client, route);
-        Assert.Equal(ProjectionCheckpoint.Start, await fresh.LoadCheckpointAsync(Identity));
+        Assert.Equal(ProjectionCheckpoint.Start, await fresh.LoadCheckpointAsync(Identity, TestContext.Current.CancellationToken));
         await using (var batch =
-                     await fresh.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
-            await batch.CommitAsync(progress);
-        Assert.Equal(progress, await fresh.LoadCheckpointAsync(Identity));
+                     await fresh.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
+            await batch.CommitAsync(progress, TestContext.Current.CancellationToken);
+        Assert.Equal(progress, await fresh.LoadCheckpointAsync(Identity, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -163,17 +163,17 @@ public sealed class FitzKvProjectionStoreTests
 
         // Assert
         await using (var batch =
-                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
+                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
         {
             await store.AddAsync("total", 12);
             Assert.Empty(client.Committed);
-            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("9")));
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("9")), TestContext.Current.CancellationToken);
         }
 
         Assert.Equal(1, client.LastTransaction.Commits);
         Assert.Equal(KvDurability.Buffered, client.LastTransaction.Durability);
         Assert.Equal("12", Encoding.UTF8.GetString(client.Read(TotalsRepository.DataKey("total"))!));
-        Assert.Equal(new ProjectionCheckpoint(new EventCursor("9")), await store.LoadCheckpointAsync(Identity));
+        Assert.Equal(new ProjectionCheckpoint(new EventCursor("9")), await store.LoadCheckpointAsync(Identity, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Unversioned checkpoint bytes are rejected before a projection can stage writes.</summary>
@@ -191,7 +191,7 @@ public sealed class FitzKvProjectionStoreTests
         // Act
         var exception = await Record.ExceptionAsync(async () =>
             await store.BeginAsync(new ProjectionBatchContext(Identity,
-                new ProjectionCheckpoint(new EventCursor("8")))));
+                new ProjectionCheckpoint(new EventCursor("8"))), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidDataException>(exception);
@@ -212,7 +212,7 @@ public sealed class FitzKvProjectionStoreTests
         var store = new TotalsRepository(client, "kv://portia/state/orders");
 
         // Act
-        await using (await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
+        await using (await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
             await store.AddAsync("total", 12);
 
         // Assert
@@ -220,7 +220,7 @@ public sealed class FitzKvProjectionStoreTests
         Assert.Equal(0, client.LastTransaction.Commits);
         Assert.Equal(1, client.LastTransaction.Disposals);
         Assert.Empty(client.Committed);
-        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadCheckpointAsync(Identity));
+        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadCheckpointAsync(Identity, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -236,8 +236,8 @@ public sealed class FitzKvProjectionStoreTests
 
         // Act
         await using (var batch =
-                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
-            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(0, client.LastTransaction.Rollbacks);
@@ -258,14 +258,14 @@ public sealed class FitzKvProjectionStoreTests
         var client = new FakeKvClient { CommitFailure = conflict };
         var store = new TotalsRepository(client, "kv://portia/state/orders");
         await using var batch =
-            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
+            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken);
 
         // Act
         await store.AddAsync("total", 12);
 
         // Assert
         var error = await Assert.ThrowsAsync<ProjectionConcurrencyException>(async () =>
-            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1"))));
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken));
 
         Assert.Same(conflict, error.InnerException);
         Assert.Contains("orders", error.Message, StringComparison.Ordinal);
@@ -286,11 +286,11 @@ public sealed class FitzKvProjectionStoreTests
         var store = new TotalsRepository(client, "kv://portia/state/orders");
 
         // Act
-        var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
+        var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken);
 
         // Assert
         var error = await Assert.ThrowsAsync<KvException>(async () =>
-            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1"))));
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken));
         await batch.DisposeAsync();
 
         Assert.Same(failure, error);
@@ -312,11 +312,11 @@ public sealed class FitzKvProjectionStoreTests
 
         // Act
         await using var batch =
-            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
+            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken);
 
         // Assert
         var error = await Assert.ThrowsAsync<KvException>(async () =>
-            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1"))));
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken));
 
         Assert.Same(failure, error);
     }
@@ -332,7 +332,7 @@ public sealed class FitzKvProjectionStoreTests
         var client = new FakeKvClient();
 
         // Act
-        var checkpoint = await new TotalsRepository(client, "kv://portia/state/orders").LoadCheckpointAsync(Identity);
+        var checkpoint = await new TotalsRepository(client, "kv://portia/state/orders").LoadCheckpointAsync(Identity, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(ProjectionCheckpoint.Start, checkpoint);
@@ -352,17 +352,17 @@ public sealed class FitzKvProjectionStoreTests
         var rebuild = new CheckpointIdentity(
             Identity.ComponentName, EventStreamPattern.ForPattern("tenant", "orders"), "rebuild-1");
         await using (var live = await store.BeginAsync(new ProjectionBatchContext(Identity,
-                         ProjectionCheckpoint.Start)))
-            await live.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")));
+                         ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
+            await live.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")), TestContext.Current.CancellationToken);
 
         // Act
         await using (var batch =
-                     await store.BeginAsync(new ProjectionBatchContext(rebuild, ProjectionCheckpoint.Start)))
-            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("7")));
+                     await store.BeginAsync(new ProjectionBatchContext(rebuild, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("7")), TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal(new ProjectionCheckpoint(new EventCursor("2")), await store.LoadCheckpointAsync(Identity));
-        Assert.Equal(new ProjectionCheckpoint(new EventCursor("7")), await store.LoadCheckpointAsync(rebuild));
+        Assert.Equal(new ProjectionCheckpoint(new EventCursor("2")), await store.LoadCheckpointAsync(Identity, TestContext.Current.CancellationToken));
+        Assert.Equal(new ProjectionCheckpoint(new EventCursor("7")), await store.LoadCheckpointAsync(rebuild, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -379,11 +379,11 @@ public sealed class FitzKvProjectionStoreTests
 
         // Act
         await using var batch =
-            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
+            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken);
 
         // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)));
+            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken));
 
         Assert.Contains("already open", error.Message, StringComparison.OrdinalIgnoreCase);
         _ = Assert.Single(client.Transactions);
@@ -400,18 +400,18 @@ public sealed class FitzKvProjectionStoreTests
         var client = new FakeKvClient();
         var store = new TotalsRepository(client, "kv://portia/state/orders");
         await using (var first =
-                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
-            await first.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
+            await first.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
 
         // Act
         await using (var second =
                      await store.BeginAsync(new ProjectionBatchContext(Identity,
-                         new ProjectionCheckpoint(new EventCursor("1")))))
-            await second.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")));
+                         new ProjectionCheckpoint(new EventCursor("1"))), TestContext.Current.CancellationToken))
+            await second.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, client.Transactions.Count);
-        Assert.Equal(new ProjectionCheckpoint(new EventCursor("2")), await store.LoadCheckpointAsync(Identity));
+        Assert.Equal(new ProjectionCheckpoint(new EventCursor("2")), await store.LoadCheckpointAsync(Identity, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -464,11 +464,11 @@ public sealed class FitzKvProjectionStoreTests
         {
             if (beginning)
             {
-                _ = await store.BeginAsync(null!);
+                _ = await store.BeginAsync(null!, TestContext.Current.CancellationToken);
             }
             else
             {
-                _ = await store.LoadCheckpointAsync(null!);
+                _ = await store.LoadCheckpointAsync(null!, TestContext.Current.CancellationToken);
             }
         });
 
@@ -496,8 +496,8 @@ public sealed class FitzKvProjectionStoreTests
         {
             await using var batch = await new TotalsRepository(client, "kv://portia/state/orders",
                     workload.ComponentName)
-                .BeginAsync(new ProjectionBatchContext(workload, ProjectionCheckpoint.Start));
-            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+                .BeginAsync(new ProjectionBatchContext(workload, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken);
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
         }
 
         // Act
@@ -520,14 +520,14 @@ public sealed class FitzKvProjectionStoreTests
         var tenantA = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-a", "orders"));
         var tenantB = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-b", "orders"));
         await using var open = await new TotalsRepository(client, "kv://portia/state/orders")
-            .BeginAsync(new ProjectionBatchContext(tenantA, ProjectionCheckpoint.Start));
+            .BeginAsync(new ProjectionBatchContext(tenantA, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken);
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
         {
             await using var other = await new TotalsRepository(client, "kv://portia/state/orders")
-                .BeginAsync(new ProjectionBatchContext(tenantB, ProjectionCheckpoint.Start));
-            await other.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+                .BeginAsync(new ProjectionBatchContext(tenantB, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken);
+            await other.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
         });
 
         // Assert
@@ -547,10 +547,10 @@ public sealed class FitzKvProjectionStoreTests
         var store = new TotalsRepository(client, "kv://portia/state/orders");
         var identity = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-a", "orders"));
         await using (var batch =
-                     await store.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)))
+                     await store.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
         {
             await store.AddAsync("widgets", 12);
-            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
         }
 
         // Act
@@ -574,8 +574,8 @@ public sealed class FitzKvProjectionStoreTests
         var store = new TotalsRepository(client, "kv://portia/state/orders");
         var tenantB = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant-b", "orders"));
         await using (var batch =
-                     await store.BeginAsync(new ProjectionBatchContext(tenantB, ProjectionCheckpoint.Start)))
-            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+                     await store.BeginAsync(new ProjectionBatchContext(tenantB, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
 
         _ = await store.ReadTotalAsync("tenant-a", "widgets");
         var tenantARoute = client.LastTransaction.Route;
@@ -603,7 +603,7 @@ public sealed class FitzKvProjectionStoreTests
 
         // Act
         await using var batch =
-            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
+            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken);
 
         // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
@@ -636,11 +636,11 @@ public sealed class FitzKvProjectionStoreTests
         {
             if (beginning)
             {
-                _ = await store.BeginAsync(new ProjectionBatchContext(other, ProjectionCheckpoint.Start));
+                _ = await store.BeginAsync(new ProjectionBatchContext(other, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken);
             }
             else
             {
-                _ = await store.LoadCheckpointAsync(other);
+                _ = await store.LoadCheckpointAsync(other, TestContext.Current.CancellationToken);
             }
         });
 

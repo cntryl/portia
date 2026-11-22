@@ -24,7 +24,7 @@ public sealed class ManualReactorRebuildTests
 
         // Assert
         _ = await Assert.ThrowsAsync<ArgumentException>(() => new ReactorRunner(reader).RunPassAsync(
-            reactor, ProjectionCheckpoint.Start, new ProjectionRunOptions { RebuildId = "candidate" }).AsTask());
+            reactor, ProjectionCheckpoint.Start, new ProjectionRunOptions { RebuildId = "candidate" }, TestContext.Current.CancellationToken).AsTask());
 
         Assert.Equal(0, reader.Reads);
         Assert.Empty(effects);
@@ -48,7 +48,7 @@ public sealed class ManualReactorRebuildTests
 
         // Act
         var checkpoint = await new ReactorRunner(reader).RunPassAsync(
-            reactor, ProjectionCheckpoint.Start, ProjectionRunOptions.Default);
+            reactor, ProjectionCheckpoint.Start, ProjectionRunOptions.Default, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(1, reader.Reads);

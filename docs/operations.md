@@ -140,7 +140,7 @@ approves and verifies recovery, checks independent workload progress, and projec
 into Cassie. Run it with the normal Fitz and Cassie integration environment.
 
 ```shell
-dotnet test test/Portia.Tests/Portia.Tests.csproj -c Release --filter "Category=DurabilityIntegration"
+dotnet test --project test/Portia.Tests/Portia.Tests.csproj -c Release --filter-trait "Category=DurabilityIntegration"
 ```
 
 The durability test owns an isolated Fitz container and named persistent volume, uses an executable

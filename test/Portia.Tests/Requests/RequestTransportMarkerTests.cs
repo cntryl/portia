@@ -22,7 +22,7 @@ public sealed class RequestTransportMarkerTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await sender.SendAsync(request, new RequestRouteValues(), null, (IExecutionContext)null!));
+            await sender.SendAsync(request, new RequestRouteValues(), null, (IExecutionContext)null!, ct: TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<ArgumentNullException>(exception);
@@ -43,20 +43,20 @@ public sealed class RequestTransportMarkerTests
         var query = new RequestIdentityTests.IdentifiedQuery(Uuid.CreateVersion4());
 
         // Act
-        _ = await ((IRemoteRequestSender)remote).SendAsync(request, route, null);
+        _ = await ((IRemoteRequestSender)remote).SendAsync(request, route, null, TestContext.Current.CancellationToken);
         var sendId = remote.LastMetadata!.RequestId;
-        _ = await ((IRemoteRequestSender)remote).SendWithOutcomeAsync(request, route, null);
+        _ = await ((IRemoteRequestSender)remote).SendWithOutcomeAsync(request, route, null, TestContext.Current.CancellationToken);
         var sendWithOutcomeId = remote.LastMetadata!.RequestId;
         _ = await ((IRemoteRequestSender)remote).SendAsync<RequestIdentityTests.IdentifiedQuery, Uuid>(query, route,
-            null);
+            null, TestContext.Current.CancellationToken);
         var queryId = remote.LastMetadata!.RequestId;
         _ = await ((IRemoteRequestSender)remote).SendWithOutcomeAsync<RequestIdentityTests.IdentifiedQuery, Uuid>(query,
-            route, null);
+            route, null, TestContext.Current.CancellationToken);
         var queryWithOutcomeId = remote.LastMetadata!.RequestId;
-        await ((IRequestQueuePublisher)queue).EnqueueAsync(request, route, null);
-        await ((INoticeRequestSender)notice).PublishAsync(request, route, null);
+        await ((IRequestQueuePublisher)queue).EnqueueAsync(request, route, null, TestContext.Current.CancellationToken);
+        await ((INoticeRequestSender)notice).PublishAsync(request, route, null, TestContext.Current.CancellationToken);
         _ = await ((IRequestScheduler)scheduler).ScheduleAsync(request, new RequestScheduleSpec("* * * * *"),
-            route, RequestActor.System);
+            route, RequestActor.System, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(request.CommandId, sendId);
@@ -83,7 +83,7 @@ public sealed class RequestTransportMarkerTests
         var routeValues = new RequestRouteValues("tenant-123");
 
         // Act
-        var result = await sender.SendAsync<CreateUser, Uuid>(request, routeValues, null);
+        var result = await sender.SendAsync<CreateUser, Uuid>(request, routeValues, null, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -106,13 +106,13 @@ public sealed class RequestTransportMarkerTests
         var request = new SendWelcomeEmail(Uuid.CreateVersion4());
         var routeValues = new RequestRouteValues("tenant-123");
 
-        var sendResult = await remoteSender.SendAsync(request, routeValues, null);
-        await queuePublisher.EnqueueAsync(request, routeValues, null);
-        await noticeSender.PublishAsync(request, routeValues, null);
+        var sendResult = await remoteSender.SendAsync(request, routeValues, null, TestContext.Current.CancellationToken);
+        await queuePublisher.EnqueueAsync(request, routeValues, null, TestContext.Current.CancellationToken);
+        await noticeSender.PublishAsync(request, routeValues, null, TestContext.Current.CancellationToken);
 
         // Act
         var scheduleId = await scheduler.ScheduleAsync(request, new RequestScheduleSpec("0 0 * * *"), routeValues,
-            RequestActor.System);
+            RequestActor.System, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(sendResult.IsSuccess);
@@ -128,7 +128,7 @@ public sealed class RequestTransportMarkerTests
 
         // Act
         var outcome = await sender.SendWithOutcomeAsync<CreateUser, Uuid>(
-            new CreateUser("ada@example.com", "Ada Lovelace"), new RequestRouteValues("tenant-123"), null);
+            new CreateUser("ada@example.com", "Ada Lovelace"), new RequestRouteValues("tenant-123"), null, TestContext.Current.CancellationToken);
 
         // Assert
         var completed = Assert.IsType<RemoteRequestOutcome<Uuid>.Completed>(outcome);
@@ -167,11 +167,11 @@ public sealed class RequestTransportMarkerTests
             new CreateUser("ada@example.com", "Ada Lovelace"), new RequestRouteValues("tenant-123"), null,
             cancellation.Token).AsTask();
 
-        await implementation.Dispatched.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await implementation.Dispatched.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         cancellation.Cancel();
 
         // Act
-        var outcome = await sending.WaitAsync(TimeSpan.FromSeconds(5));
+        var outcome = await sending.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Assert
         _ = Assert.IsType<RemoteRequestOutcome<Uuid>.OutcomeUnknown>(outcome);
@@ -191,7 +191,7 @@ public sealed class RequestTransportMarkerTests
 
         // Act
         var noResultOutcome = await sender.SendWithOutcomeAsync(
-            new SendWelcomeEmail(Uuid.CreateVersion4()), routeValues, null, parent);
+            new SendWelcomeEmail(Uuid.CreateVersion4()), routeValues, null, parent, ct: TestContext.Current.CancellationToken);
 
         // Assert
         var noResultMetadata = Assert.IsType<RequestMetadata>(implementation.LastMetadata);
@@ -201,7 +201,7 @@ public sealed class RequestTransportMarkerTests
         Assert.Equal(parent.RequestId, noResultMetadata.CausationId);
 
         var resultOutcome = await sender.SendWithOutcomeAsync<CreateUser, Uuid>(
-            new CreateUser("ada@example.com", "Ada Lovelace"), routeValues, null, parent);
+            new CreateUser("ada@example.com", "Ada Lovelace"), routeValues, null, parent, ct: TestContext.Current.CancellationToken);
         var resultMetadata = Assert.IsType<RequestMetadata>(implementation.LastMetadata);
         _ = Assert.IsType<RemoteRequestOutcome<Uuid>.Completed>(resultOutcome);
         Assert.NotEqual(parent.RequestId, resultMetadata.RequestId);

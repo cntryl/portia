@@ -58,7 +58,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var hosted = Assert.Single(provider.GetServices<IHostedService>(),
             service => service is RequestScheduleStartupService);
 
-        await hosted.StartAsync(default);
+        await hosted.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(["first", "second"], scheduler.Requests);
     }
@@ -80,7 +80,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var hosted = Assert.Single(provider.GetServices<IHostedService>(),
             service => service is RequestScheduleStartupService);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => hosted.StartAsync(default));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => hosted.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains(nameof(IRequestScheduler), error.Message, StringComparison.Ordinal);
     }
@@ -104,7 +104,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var hosted = Assert.Single(provider.GetServices<IHostedService>(),
             service => service is RequestScheduleStartupService);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => hosted.StartAsync(default));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => hosted.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("system actor", error.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(scheduler.Requests);
@@ -129,7 +129,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var hosted = Assert.Single(provider.GetServices<IHostedService>(),
             service => service is RequestScheduleStartupService);
 
-        var error = await Assert.ThrowsAsync<IOException>(() => hosted.StartAsync(default));
+        var error = await Assert.ThrowsAsync<IOException>(() => hosted.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal("broker unavailable", error.Message);
     }
@@ -146,7 +146,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         using var host = builder.Build();
 
         // Assert
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.StartsWith("IPermissionEvaluator is required by permission-protected request types: ",
             failure.Message, StringComparison.Ordinal);
@@ -174,8 +174,8 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         // Act
         var exception = await Record.ExceptionAsync(async () =>
         {
-            await host.StartAsync();
-            await host.StopAsync();
+            await host.StartAsync(TestContext.Current.CancellationToken);
+            await host.StopAsync(TestContext.Current.CancellationToken);
         });
 
         // Assert
@@ -194,8 +194,8 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         // Act
         var exception = await Record.ExceptionAsync(async () =>
         {
-            await host.StartAsync();
-            await host.StopAsync();
+            await host.StartAsync(TestContext.Current.CancellationToken);
+            await host.StopAsync(TestContext.Current.CancellationToken);
         });
 
         // Assert
@@ -219,7 +219,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         using var host = builder.Build();
 
         // Assert
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("ForPattern", error.Message, StringComparison.Ordinal);
     }
@@ -242,7 +242,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         using var host = builder.Build();
 
         // Assert
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("ForTenant", error.Message, StringComparison.Ordinal);
     }
@@ -359,7 +359,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         // Assert
         var validator = Assert.Single(provider.GetServices<IHostedService>(),
             service => service is not BackgroundService);
-        await validator.StartAsync(default);
+        await validator.StartAsync(TestContext.Current.CancellationToken);
 
         _ = Assert.IsType<PassthroughDomainEventSerializer>(provider.GetRequiredService<IDomainEventSerializer>());
     }
@@ -377,7 +377,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         using var host = builder.Build();
 
         // Assert
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("Invalid JSON domain-event upcaster registrations", exception.Message,
             StringComparison.Ordinal);
@@ -428,9 +428,9 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
         // Assert
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
-        await hostedService.StartAsync(default);
+        await hostedService.StartAsync(TestContext.Current.CancellationToken);
         await WaitUntilAsync(() => handler.LastValue == 42);
-        await hostedService.StopAsync(default);
+        await hostedService.StopAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(42, handler.LastValue);
     }
@@ -455,9 +455,9 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
         // Assert
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
-        await hostedService.StartAsync(default);
+        await hostedService.StartAsync(TestContext.Current.CancellationToken);
         await WaitUntilAsync(() => state.StartedTenants.Count == 1);
-        await hostedService.StopAsync(default);
+        await hostedService.StopAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal([new TenantId("acme")], state.StartedTenants);
         Assert.Equal([new TenantId("acme")], state.StoppedTenants);
@@ -475,7 +475,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "projectors", id.ToString());
         var store = new InMemoryEventStore();
-        await store.AppendAsync(stream, 0, [Committed(new ValueChanged(42), id, 1)]);
+        await store.AppendAsync(stream, 0, [Committed(new ValueChanged(42), id, 1)], TestContext.Current.CancellationToken);
         var target = new RecordingProjectionTarget();
 
         var services = new ServiceCollection();
@@ -492,14 +492,14 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
         // Assert
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
-        await hostedService.StartAsync(default);
+        await hostedService.StartAsync(TestContext.Current.CancellationToken);
         await WaitUntilAsync(() => target.Projection.Value == 42);
-        await hostedService.StopAsync(default);
+        await hostedService.StopAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(42, target.Projection.Value);
         Assert.Equal(new EventCursor("1"),
             (await target.LoadCheckpointAsync(new CheckpointIdentity("test-projector",
-                EventStreamPattern.ForPattern("test", "projectors")))).Cursor);
+                EventStreamPattern.ForPattern("test", "projectors")), TestContext.Current.CancellationToken)).Cursor);
     }
 
     /// <summary>
@@ -513,7 +513,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "projectors", id.ToString());
         var store = new InMemoryEventStore();
-        await store.AppendAsync(stream, 0, [Committed(new ValueChanged(42), id, 1)]);
+        await store.AppendAsync(stream, 0, [Committed(new ValueChanged(42), id, 1)], TestContext.Current.CancellationToken);
         var target = new LateFaultProjectionTarget();
         var services = new ServiceCollection();
         _ = services.AddSingleton<IDomainEventReader>(store);
@@ -530,15 +530,15 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         // Assert
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
 
-        await hostedService.StartAsync(default);
+        await hostedService.StartAsync(TestContext.Current.CancellationToken);
         await WaitUntilAsync(() => target.CommitAttempts == 1);
-        await Task.Delay(50);
-        await hostedService.StopAsync(default);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
+        await hostedService.StopAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(1, target.Projection.HandlerCount);
         Assert.Equal(new EventCursor("1"),
             (await target.LoadCheckpointAsync(new CheckpointIdentity("test-projector",
-                EventStreamPattern.ForPattern("test", "projectors")))).Cursor);
+                EventStreamPattern.ForPattern("test", "projectors")), TestContext.Current.CancellationToken)).Cursor);
     }
 
     /// <summary>
@@ -553,7 +553,7 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         var id = Uuid.CreateVersion4();
         var stream = new EventStreamAddress("test", "projectors", id.ToString());
         var store = new InMemoryEventStore();
-        await store.AppendAsync(stream, 0, [Committed(new ValueChanged(42), id, 1)]);
+        await store.AppendAsync(stream, 0, [Committed(new ValueChanged(42), id, 1)], TestContext.Current.CancellationToken);
         var target = new TransientReloadFailureProjectionTarget();
         var services = new ServiceCollection();
         _ = services.AddSingleton<IDomainEventReader>(store);
@@ -567,20 +567,20 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
 
         // Assert
         var hostedService = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
-        await hostedService.StartAsync(default);
+        await hostedService.StartAsync(TestContext.Current.CancellationToken);
         var executeTask = hostedService.ExecuteTask
                           ?? throw new InvalidOperationException("The projector hosted service did not start.");
         var firstCompletion = await Task.WhenAny(target.CheckpointReloaded, executeTask);
         Assert.Same(target.CheckpointReloaded, firstCompletion);
         await target.CheckpointReloaded;
-        await hostedService.StopAsync(default);
+        await hostedService.StopAsync(TestContext.Current.CancellationToken);
 
         Assert.False(executeTask.IsFaulted);
         Assert.True(target.LoadAttempts >= 3);
         Assert.Equal(1, target.Projection.HandlerCount);
         Assert.Equal(new EventCursor("1"),
             (await target.LoadCheckpointAsync(new CheckpointIdentity("test-projector",
-                EventStreamPattern.ForPattern("test", "projectors")))).Cursor);
+                EventStreamPattern.ForPattern("test", "projectors")), TestContext.Current.CancellationToken)).Cursor);
     }
 
     static async Task WaitUntilAsync(Func<bool> condition)

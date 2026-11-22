@@ -40,12 +40,12 @@ public sealed class ConvertedRequestBindingTests
         _ = builder.Services.AddPortia().AddHttp().AddRequestHandler<ConvertedHttpHandler>();
         await using var app = builder.Build();
         _ = app.MapPortiaPost<ConvertedHttpRequest>("/converted");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var client = app.GetTestClient();
         using var content = new StringContent("""{"body":{"amount":42}}""", Encoding.UTF8, "application/json");
 
         // Act
-        using var response = await client.PostAsync("/converted", content);
+        using var response = await client.PostAsync("/converted", content, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);

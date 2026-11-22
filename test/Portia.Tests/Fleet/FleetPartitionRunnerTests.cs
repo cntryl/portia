@@ -47,7 +47,7 @@ public sealed class FleetPartitionRunnerTests
         await lifetime.CancelAsync();
 
         // Act
-        _ = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(2)));
+        _ = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.All(delays, delay => Assert.InRange(delay, TimeSpan.Zero, FleetPartitionRunner.MaximumRetryBackoff));
@@ -94,11 +94,11 @@ public sealed class FleetPartitionRunnerTests
             started.SetResult();
             return release.Task;
         }, options, lifetime.Token);
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
 
         lifetime.Cancel();
         var exception = await Assert.ThrowsAsync<FleetPartitionTerminationTimeoutException>(() =>
-            run.WaitAsync(TimeSpan.FromSeconds(2)));
+            run.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
 
         Assert.Equal([partition], exception.Partitions);
         Assert.Equal(options.PartitionStopTimeout, exception.Timeout);
@@ -125,7 +125,7 @@ public sealed class FleetPartitionRunnerTests
 
         // Assert
         _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
-            runner.RunAsync(["lease://portia/fleet/p"], (_, _) => Task.CompletedTask, options));
+            runner.RunAsync(["lease://portia/fleet/p"], (_, _) => Task.CompletedTask, options, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -149,8 +149,8 @@ public sealed class FleetPartitionRunnerTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            runner.RunAsync(["lease://portia/fleet/p"], (_, _) => Task.CompletedTask, options)
-                .WaitAsync(TimeSpan.FromSeconds(2)));
+            runner.RunAsync(["lease://portia/fleet/p"], (_, _) => Task.CompletedTask, options, TestContext.Current.CancellationToken)
+                .WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<ArgumentOutOfRangeException>(exception);
@@ -188,7 +188,7 @@ public sealed class FleetPartitionRunnerTests
 
                 await stuckStarted.Task;
                 throw terminal;
-            }, options).WaitAsync(TimeSpan.FromSeconds(5)));
+            }, options, TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         release.SetResult();
 
         // Assert
@@ -269,7 +269,7 @@ public sealed class FleetPartitionRunnerTests
         var run = runner.RunAsync(["lease://portia/fleet/p"], (_, _) => Task.CompletedTask,
             SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), cts.Token);
 
-        await Task.Delay(300);
+        await Task.Delay(300, TestContext.Current.CancellationToken);
         cts.Cancel();
 
         // Act
@@ -297,7 +297,7 @@ public sealed class FleetPartitionRunnerTests
 
         // Assert
         var failure = await Assert.ThrowsAsync<WorkloadFailureException>(() => runner.RunAsync(
-            ["lease://portia/fleet/poison"], (_, _) => throw terminal, options).WaitAsync(TimeSpan.FromSeconds(5)));
+            ["lease://portia/fleet/poison"], (_, _) => throw terminal, options, TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
 
         Assert.Same(terminal, failure);
     }
@@ -318,7 +318,7 @@ public sealed class FleetPartitionRunnerTests
         // Assert
         _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             runner.RunAsync(["lease://portia/fleet/p"], (_, _) => Task.CompletedTask,
-                SingleWorkerMembership.Options(TimeSpan.Zero)));
+                SingleWorkerMembership.Options(TimeSpan.Zero), TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -416,7 +416,7 @@ public sealed class FleetPartitionRunnerTests
         // Assert
         _ = await Assert.ThrowsAsync<ArgumentException>(() =>
             runner.RunAsync(["lease://portia/fleet/p", "lease://portia/fleet/p"], (_, _) => Task.CompletedTask,
-                SingleWorkerMembership.Options(TimeSpan.FromSeconds(30))));
+                SingleWorkerMembership.Options(TimeSpan.FromSeconds(30)), TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -547,7 +547,7 @@ public sealed class FleetPartitionRunnerTests
         await WaitUntil(() => leases.Acquisitions.Count >= 1);
         // Give the loser a real chance to have (incorrectly) run concurrently, if the
         // implementation had a bug — not just an immediate race with the winner's own start.
-        await Task.Delay(50);
+        await Task.Delay(50, TestContext.Current.CancellationToken);
 
         ctsA.Cancel();
         ctsB.Cancel();

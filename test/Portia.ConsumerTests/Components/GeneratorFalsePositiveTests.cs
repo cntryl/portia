@@ -321,7 +321,7 @@ public sealed class GeneratorFalsePositiveTests
                                            using Cntryl.Portia;
                                            [Discriminator("evt", 2)] public sealed record Evt : DomainEvent;
                                            public sealed partial class Up : IJsonDomainEventUpcaster;
-                                           """, parseOptions, "a.cs"),
+                                           """, parseOptions, "a.cs", cancellationToken: TestContext.Current.CancellationToken),
                 CSharpSyntaxTree.ParseText("""
                                            using System.Text.Json.Nodes;
                                            public sealed partial class Up
@@ -330,7 +330,7 @@ public sealed class GeneratorFalsePositiveTests
                                                public int FromVersion => 1;
                                                public JsonObject Upcast(JsonObject payload) => payload;
                                            }
-                                           """, parseOptions, "b.cs")
+                                           """, parseOptions, "b.cs", cancellationToken: TestContext.Current.CancellationToken)
             ], ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Append(typeof(Aggregate).Assembly.Location).Append(typeof(PortiaBuilder).Assembly.Location)
             .Distinct(StringComparer.Ordinal).Select(path => MetadataReference.CreateFromFile(path)),
@@ -338,7 +338,7 @@ public sealed class GeneratorFalsePositiveTests
 
         // Act
         var result = CSharpGeneratorDriver.Create([new DomainEventCatalogGenerator().AsSourceGenerator()],
-            parseOptions: parseOptions).RunGenerators(compilation).GetRunResult();
+            parseOptions: parseOptions).RunGenerators(compilation, TestContext.Current.CancellationToken).GetRunResult();
 
         // Assert
         Assert.Null(result.Results.Single().Exception);

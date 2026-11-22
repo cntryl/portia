@@ -38,7 +38,7 @@ public sealed class CompilerCancellationProbeTests
         try
         {
             result = await CancellationProbe.RunTrialAsync(_ => Task.FromResult(operation), 0, CancellationToken.None)
-                .WaitAsync(TimeSpan.FromSeconds(15));
+                .WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
             disposedAtTimeout = disposed.Task.IsCompleted;
         }
         finally
@@ -49,7 +49,7 @@ public sealed class CompilerCancellationProbeTests
         // Assert
         Assert.Equal("unresponsive", result.Status);
         Assert.False(disposedAtTimeout);
-        await disposed.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        await disposed.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
     }
 
     [Fact]

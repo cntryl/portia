@@ -41,7 +41,7 @@ public sealed class JwtRequestActorValidatorTests
         var token = CreateToken(DateTime.UtcNow.AddMinutes(5), "user-1");
 
         // Act
-        var result = await validator.ValidateAsync(token);
+        var result = await validator.ValidateAsync(token, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -63,7 +63,7 @@ public sealed class JwtRequestActorValidatorTests
             claims: new Dictionary<string, object> { ["unique_name"] = "alice", ["role"] = "admin" });
 
         // Act
-        var actor = (await validator.ValidateAsync(token)).Value;
+        var actor = (await validator.ValidateAsync(token, TestContext.Current.CancellationToken)).Value;
 
         // Assert
         Assert.Equal("alice", actor.Identity?.Name);
@@ -81,7 +81,7 @@ public sealed class JwtRequestActorValidatorTests
             claims: new Dictionary<string, object> { ["role"] = "admin" });
 
         // Act
-        var actor = (await validator.ValidateAsync(token)).Value;
+        var actor = (await validator.ValidateAsync(token, TestContext.Current.CancellationToken)).Value;
 
         // Assert
         Assert.Equal("user-1", actor.FindFirst("sub")?.Value);
@@ -101,7 +101,7 @@ public sealed class JwtRequestActorValidatorTests
         var token = CreateToken(DateTime.UtcNow.AddMinutes(-5), "user-1");
 
         // Act
-        var result = await validator.ValidateAsync(token);
+        var result = await validator.ValidateAsync(token, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -125,7 +125,7 @@ public sealed class JwtRequestActorValidatorTests
         var token = CreateToken(DateTime.UtcNow.AddMinutes(5), "user-1", wrongKey);
 
         // Act
-        var result = await validator.ValidateAsync(token);
+        var result = await validator.ValidateAsync(token, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -163,7 +163,7 @@ public sealed class JwtRequestActorValidatorTests
         var token = CreateToken(DateTime.UtcNow.AddMinutes(-1), "user-1", notBefore: DateTime.UtcNow.AddMinutes(-10));
 
         // Act
-        var result = await validator.ValidateAsync(token);
+        var result = await validator.ValidateAsync(token, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -209,7 +209,7 @@ public sealed class JwtRequestActorValidatorTests
         var validator = new JwtRequestActorValidator(ValidationParameters);
 
         // Act
-        var result = await validator.ValidateAsync(token);
+        var result = await validator.ValidateAsync(token, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -227,7 +227,7 @@ public sealed class JwtRequestActorValidatorTests
         var validator = new JwtRequestActorValidator(ValidationParameters);
 
         // Act
-        var result = await validator.ValidateAsync("not-a-real-token");
+        var result = await validator.ValidateAsync("not-a-real-token", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -247,7 +247,7 @@ public sealed class JwtRequestActorValidatorTests
         var token = CreateToken(DateTime.UtcNow.AddMinutes(-5), "user-1");
 
         // Act
-        var result = await validator.ValidateAsync(token);
+        var result = await validator.ValidateAsync(token, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);

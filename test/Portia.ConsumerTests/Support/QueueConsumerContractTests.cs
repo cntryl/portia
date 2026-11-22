@@ -20,12 +20,12 @@ public sealed class QueueConsumerContractTests
             timeProvider: new ManualClock());
 
         // Act
-        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var reader = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
 
-        await reader.Current.AbandonAsync();
+        await reader.Current.AbandonAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(1, item.Nacks);
         Assert.Equal(TimeSpan.FromSeconds(leaseSeconds), item.NackDelay);
@@ -45,12 +45,12 @@ public sealed class QueueConsumerContractTests
             "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), timeProvider: new ManualClock());
 
         // Act
-        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var reader = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
 
-        await reader.Current.RetryAsync(TimeSpan.FromSeconds(seconds));
+        await reader.Current.RetryAsync(TimeSpan.FromSeconds(seconds), TestContext.Current.CancellationToken);
 
         Assert.Equal(1, item.Nacks);
         Assert.Equal(TimeSpan.FromSeconds(seconds), item.NackDelay);
@@ -69,18 +69,18 @@ public sealed class QueueConsumerContractTests
             "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), timeProvider: new ManualClock());
 
         // Act
-        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var reader = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
-        await reader.Current.AbandonAsync();
+        await reader.Current.AbandonAsync(TestContext.Current.CancellationToken);
         Assert.Equal(1, implicitItem.NackCalls);
         Assert.Equal(0, implicitItem.Nacks);
         Assert.Equal(0, implicitItem.Completions);
 
         Assert.True(await reader.MoveNextAsync());
         _ = await Assert.ThrowsAsync<NotSupportedException>(() =>
-            reader.Current.RetryAsync(TimeSpan.FromSeconds(7)).AsTask());
+            reader.Current.RetryAsync(TimeSpan.FromSeconds(7), TestContext.Current.CancellationToken).AsTask());
         Assert.Equal(1, explicitItem.NackCalls);
         Assert.Equal(0, explicitItem.Nacks);
         Assert.Equal(0, explicitItem.Completions);
@@ -99,13 +99,13 @@ public sealed class QueueConsumerContractTests
             "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), 4, timeProvider: clock);
 
         // Act
-        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var reader = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
-        _ = await clock.WaitForDelayAsync();
-        var retry = reader.Current.RetryAsync(TimeSpan.FromSeconds(7)).AsTask();
-        await item.NackStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
+        var retry = reader.Current.RetryAsync(TimeSpan.FromSeconds(7), TestContext.Current.CancellationToken).AsTask();
+        await item.NackStarted.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
         try
         {
             clock.Advance(TimeSpan.FromSeconds(2));
@@ -132,14 +132,14 @@ public sealed class QueueConsumerContractTests
             "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), timeProvider: new ManualClock());
 
         // Act
-        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var reader = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
-        _ = await Assert.ThrowsAsync<IOException>(() => reader.Current.CompleteAsync().AsTask());
+        _ = await Assert.ThrowsAsync<IOException>(() => reader.Current.CompleteAsync(TestContext.Current.CancellationToken).AsTask());
 
         _ = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            reader.Current.RetryAsync(TimeSpan.Zero).AsTask());
+            reader.Current.RetryAsync(TimeSpan.Zero, TestContext.Current.CancellationToken).AsTask());
 
         Assert.Equal(0, item.NackCalls);
         Assert.Equal(0, item.Completions);
@@ -157,18 +157,18 @@ public sealed class QueueConsumerContractTests
             "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), 4, timeProvider: clock);
 
         // Act
-        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var reader = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
         var lost = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var observed = reader.Current.ReservationCancellation.Register(lost.SetResult);
-        _ = await clock.WaitForDelayAsync();
+        _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
         clock.Advance(TimeSpan.FromSeconds(2));
-        await lost.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        await lost.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
 
         _ = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            reader.Current.RetryAsync(TimeSpan.Zero).AsTask());
+            reader.Current.RetryAsync(TimeSpan.Zero, TestContext.Current.CancellationToken).AsTask());
 
         Assert.Equal(0, item.NackCalls);
         Assert.Equal(0, item.Completions);
@@ -186,14 +186,14 @@ public sealed class QueueConsumerContractTests
 
         // Act
         _ = await queue.EnqueueAsync("queue://consumer/scopes/delivery", ReadOnlyMemory<byte>.Empty,
-            new QueueEnqueueOptions(Delay: delay));
+            new QueueEnqueueOptions(Delay: delay), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(1, queue.Enqueues);
         Assert.Equal(delay, queue.EnqueueDelay);
         await Assert.ThrowsAsync<NotSupportedException>(() => queue.EnqueueAsync(
             "queue://consumer/scopes/delivery", ReadOnlyMemory<byte>.Empty,
-            new QueueEnqueueOptions(TimeToLive: TimeSpan.FromHours(1))));
+            new QueueEnqueueOptions(TimeToLive: TimeSpan.FromHours(1)), TestContext.Current.CancellationToken));
         Assert.Equal(1, queue.Enqueues);
     }
 
@@ -204,7 +204,7 @@ public sealed class QueueConsumerContractTests
         var item = new Reserved(ReadOnlyMemory<byte>.Empty);
 
         // Act
-        var error = await Record.ExceptionAsync(() => item.NackAsync());
+        var error = await Record.ExceptionAsync(() => item.NackAsync(ct: TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<NotSupportedException>(error);
@@ -226,18 +226,18 @@ public sealed class QueueConsumerContractTests
             ConsumerJson.Catalog(), 4, timeProvider: clock);
 
         // Act
-        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var reader = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
-        Assert.Equal(TimeSpan.FromSeconds(2), await clock.WaitForDelayAsync());
+        Assert.Equal(TimeSpan.FromSeconds(2), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         clock.Advance(TimeSpan.FromSeconds(2));
-        await item.Extended.Task.WaitAsync(TimeSpan.FromSeconds(3));
-        _ = await clock.WaitForDelayAsync();
+        await item.Extended.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+        _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
         if (acknowledge)
-            await reader.Current.CompleteAsync();
+            await reader.Current.CompleteAsync(TestContext.Current.CancellationToken);
         else
-            await reader.Current.AbandonAsync();
+            await reader.Current.AbandonAsync(TestContext.Current.CancellationToken);
 
         clock.Advance(TimeSpan.FromDays(1));
         Assert.Equal(1, item.Extensions);
@@ -256,14 +256,14 @@ public sealed class QueueConsumerContractTests
             "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), 4, timeProvider: new ManualClock());
 
         // Act
-        var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        var reader = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
         if (acknowledge)
-            await reader.Current.CompleteAsync();
+            await reader.Current.CompleteAsync(TestContext.Current.CancellationToken);
         else
-            await reader.Current.AbandonAsync();
+            await reader.Current.AbandonAsync(TestContext.Current.CancellationToken);
 
         await reader.DisposeAsync();
 
@@ -289,14 +289,14 @@ public sealed class QueueConsumerContractTests
             ConsumerJson.Catalog(), 4, timeProvider: clock);
 
         // Act
-        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var reader = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
         var delivery = reader.Current;
-        _ = await clock.WaitForDelayAsync();
-        var complete = delivery.CompleteAsync().AsTask();
-        await item.CompletionStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
+        var complete = delivery.CompleteAsync(TestContext.Current.CancellationToken).AsTask();
+        await item.CompletionStarted.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
         try
         {
             clock.Advance(TimeSpan.FromSeconds(2));
@@ -327,13 +327,13 @@ public sealed class QueueConsumerContractTests
             ConsumerJson.Catalog(), 4, timeProvider: new ManualClock());
 
         // Act
-        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var reader = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         for (var round = 0; round < 12; round++)
         {
             Assert.True(await reader.MoveNextAsync());
-            await reader.Current.CompleteAsync();
+            await reader.Current.CompleteAsync(TestContext.Current.CancellationToken);
             queue.Enqueue(new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4()))));
         }
 
@@ -357,13 +357,13 @@ public sealed class QueueConsumerContractTests
             ConsumerJson.Catalog(), 4, timeProvider: new ManualClock());
 
         // Act
-        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var reader = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
         for (var index = 0; index < 5; index++)
             queue.Enqueue(new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4()))));
-        await reader.Current.CompleteAsync();
+        await reader.Current.CompleteAsync(TestContext.Current.CancellationToken);
 
         await DrainAndWakeAsync(reader, queue, serializer, 5);
 
@@ -418,10 +418,10 @@ public sealed class QueueConsumerContractTests
         try
         {
             await provider.GetRequiredService<ConsumerHost.Effects>().WaitForAsync("nested");
-            _ = await clock.WaitForDelayAsync();
-            _ = await clock.WaitForDelayAsync();
+            _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
+            _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
             clock.Advance(TimeSpan.FromSeconds(2));
-            await queue.Idle.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            await queue.Idle.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
             Assert.Equal(0, failed.Completions);
             Assert.Equal(0, failed.NackCalls);
             Assert.Equal(1, success.Completions);
@@ -455,7 +455,7 @@ public sealed class QueueConsumerContractTests
             "queue://consumer/scopes/delivery", ConsumerJson.Catalog(), 4, timeProvider: clock);
 
         // Act
-        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var reader = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
@@ -463,14 +463,14 @@ public sealed class QueueConsumerContractTests
         using var failingCallback = reader.Current.ReservationCancellation.Register(() =>
             throw new IOException("Application cancellation callback failed"));
         using var observed = reader.Current.ReservationCancellation.Register(lost.SetResult);
-        _ = await clock.WaitForDelayAsync();
-        _ = await clock.WaitForDelayAsync();
+        _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
+        _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
         clock.Advance(TimeSpan.FromSeconds(2));
-        await lost.Task.WaitAsync(TimeSpan.FromSeconds(3));
-        await reader.Current.AbandonAsync();
+        await lost.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+        await reader.Current.AbandonAsync(TestContext.Current.CancellationToken);
         Assert.Equal(0, failed.NackCalls);
         Assert.True(await reader.MoveNextAsync());
-        await reader.Current.CompleteAsync();
+        await reader.Current.CompleteAsync(TestContext.Current.CancellationToken);
         Assert.Equal(0, failed.Completions);
         Assert.Equal(1, success.Completions);
     }
@@ -486,7 +486,7 @@ public sealed class QueueConsumerContractTests
             ConsumerJson.Catalog());
 
         // Act
-        await using var reader = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var reader = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
@@ -494,7 +494,7 @@ public sealed class QueueConsumerContractTests
         Assert.Equal((0, 1), (queue.WaitSeconds, queue.BatchSize));
         Assert.Equal(0U, reader.Current.Attempt);
         Assert.False(reader.Current.SupportsDurableAttempts);
-        await reader.Current.CompleteAsync();
+        await reader.Current.CompleteAsync(TestContext.Current.CancellationToken);
         Assert.Equal(1, item.Completions);
         Assert.Equal(0, queue.Enqueues);
     }
@@ -526,7 +526,7 @@ public sealed class QueueConsumerContractTests
         // Assert
         try
         {
-            var completed = await Task.WhenAny(queue.Idle.Task, run).WaitAsync(TimeSpan.FromSeconds(10));
+            var completed = await Task.WhenAny(queue.Idle.Task, run).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             await completed;
             Assert.Same(queue.Idle.Task, completed);
             Assert.Equal(0, malformed.Completions);
@@ -590,7 +590,7 @@ public sealed class QueueConsumerContractTests
         // Assert
         try
         {
-            var completed = await Task.WhenAny(queue.Idle.Task, run).WaitAsync(TimeSpan.FromSeconds(10));
+            var completed = await Task.WhenAny(queue.Idle.Task, run).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             await completed;
 
             Assert.Same(queue.Idle.Task, completed);

@@ -25,49 +25,49 @@ public sealed class SharedDeploymentTests
         using var api = apiBuilder.Build();
 
         // Act
-        await api.StartAsync();
+        await api.StartAsync(TestContext.Current.CancellationToken);
 
         // Assert
         try
         {
             var publisher = api.Services.GetRequiredService<IRequestQueuePublisher>();
             await publisher.EnqueueAsync(new DepositAccount(id, 3), new RequestRouteValues(Resource: id.ToString()),
-                null);
+                null, TestContext.Current.CancellationToken);
             Assert.Empty(effects.Items);
             var workerBuilder = Host.CreateApplicationBuilder();
             _ = Shared(workerBuilder.Services, client, effects, id).AddWorkers().AddWorkers();
             using var worker = workerBuilder.Build();
-            await worker.StartAsync();
+            await worker.StartAsync(TestContext.Current.CancellationToken);
             try
             {
                 await effects.WaitForAsync("business", aggregateId: id);
                 await effects.WaitForAsync("first-projector", aggregateId: id);
                 await publisher.EnqueueAsync(new DepositAccount(secondId, 4),
-                    new RequestRouteValues(Resource: secondId.ToString()), null);
+                    new RequestRouteValues(Resource: secondId.ToString()), null, TestContext.Current.CancellationToken);
                 await effects.WaitForAsync("business", aggregateId: secondId);
                 var response = await api.Services.GetRequiredService<IRemoteRequestSender>().SendAsync(
-                    new DepositAccount(id, 5), new RequestRouteValues(Resource: id.ToString()), null);
+                    new DepositAccount(id, 5), new RequestRouteValues(Resource: id.ToString()), null, TestContext.Current.CancellationToken);
                 Assert.True(response.IsSuccess);
                 await using var scope = api.Services.CreateAsyncScope();
                 var repository = scope.ServiceProvider.Aggregates();
-                Assert.Equal(8, (await repository.HydrateAsync(new Account(id))).Balance);
+                Assert.Equal(8, (await repository.HydrateAsync(new Account(id), TestContext.Current.CancellationToken)).Balance);
                 var store = api.Services.GetRequiredService<IEventStore>();
                 Assert.Same(store, api.Services.GetRequiredService<IDomainEventReader>());
                 Assert.Same(store, api.Services.GetRequiredService<IDomainEventWriter>());
             }
             finally
             {
-                await worker.StopAsync();
+                await worker.StopAsync(TestContext.Current.CancellationToken);
             }
         }
         finally
         {
-            await api.StopAsync();
+            await api.StopAsync(TestContext.Current.CancellationToken);
         }
 
         // Disposing both hosts must not dispose a supplied application-owned connection.
         api.Dispose();
-        _ = await client.Queue.EnqueueAsync($"queue://consumer/business/{Uuid.CreateVersion4()}", new byte[] { 1 });
+        _ = await client.Queue.EnqueueAsync($"queue://consumer/business/{Uuid.CreateVersion4()}", new byte[] { 1 }, ct: TestContext.Current.CancellationToken);
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public sealed class SharedDeploymentTests
         using var host = builder.Build();
 
         // Act
-        await host.StartAsync();
+        await host.StartAsync(TestContext.Current.CancellationToken);
 
         // Assert
         try
@@ -96,12 +96,12 @@ public sealed class SharedDeploymentTests
             var repository = scope.ServiceProvider.Aggregates();
             var account = new Account(Uuid.CreateVersion4());
             account.Deposit(10);
-            await repository.SaveAsync(account, _saveContext);
-            Assert.Equal(10, (await repository.HydrateAsync(new Account(account.Id))).Balance);
+            await repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken);
+            Assert.Equal(10, (await repository.HydrateAsync(new Account(account.Id), TestContext.Current.CancellationToken)).Balance);
         }
         finally
         {
-            await host.StopAsync();
+            await host.StopAsync(TestContext.Current.CancellationToken);
         }
     }
 
@@ -120,7 +120,7 @@ public sealed class SharedDeploymentTests
         using var host = builder.Build();
 
         // Assert
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(TestContext.Current.CancellationToken));
         Assert.Contains(nameof(IRequestActorValidator), error.Message, StringComparison.Ordinal);
     }
 
@@ -142,7 +142,7 @@ public sealed class SharedDeploymentTests
         using var host = builder.Build();
 
         // Assert
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(TestContext.Current.CancellationToken));
         Assert.Contains(nameof(ITenantDirectory), error.Message, StringComparison.Ordinal);
     }
 

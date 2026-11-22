@@ -80,7 +80,7 @@ public sealed class McpPrimitiveTests
         {
             if (!process.HasExited)
                 process.Kill();
-            await process.WaitForExitAsync();
+            await process.WaitForExitAsync(TestContext.Current.CancellationToken);
         }
     }
 
@@ -153,16 +153,16 @@ public sealed class McpPrimitiveTests
             return next(context);
         });
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         // Template discovery and read are exercised through the official client below.
         var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
-        await using var raw = await McpClient.CreateAsync(transport);
+        await using var raw = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
-        var templates = await raw.ListResourceTemplatesAsync();
+        var templates = await raw.ListResourceTemplatesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         var template = Assert.Single(templates);
@@ -170,7 +170,7 @@ public sealed class McpPrimitiveTests
         Assert.Equal("Greeting resource", template.Name);
         Assert.Equal("Greeting", template.Title);
         Assert.Equal("Reads a greeting as resource text.", template.Description);
-        var result = await raw.ReadResourceAsync("greetings://local/Portia");
+        var result = await raw.ReadResourceAsync("greetings://local/Portia", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("Hello, Portia.", Assert.IsType<TextResourceContents>(Assert.Single(result.Contents)).Text);
     }
 
@@ -229,38 +229,38 @@ public sealed class McpPrimitiveTests
             .AddMcpHttp();
         await using var app = builder.Build();
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
-        var resources = await client.ListResourcesAsync();
+        var resources = await client.ListResourcesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(["greetings://index/fixed-first", "greetings://index/fixed-second"],
             resources.Select(resource => resource.Uri));
-        var templates = await client.ListResourceTemplatesAsync();
+        var templates = await client.ListResourceTemplatesAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(["greetings://index/template/{name}", "greetings://index/alternate/{name}"],
             templates.Select(resource => resource.UriTemplate));
-        var firstFixed = await client.ReadResourceAsync("greetings://index/fixed-first");
+        var firstFixed = await client.ReadResourceAsync("greetings://index/fixed-first", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("Hello, fixed-first.",
             Assert.IsType<TextResourceContents>(Assert.Single(firstFixed.Contents)).Text);
-        var lastTemplate = await client.ReadResourceAsync("greetings://index/alternate/Portia");
+        var lastTemplate = await client.ReadResourceAsync("greetings://index/alternate/Portia", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("Hello, alternate:Portia.",
             Assert.IsType<TextResourceContents>(Assert.Single(lastTemplate.Contents)).Text);
-        var escapedTemplate = await client.ReadResourceAsync("greetings://index/template/Portia%20Smith");
+        var escapedTemplate = await client.ReadResourceAsync("greetings://index/template/Portia%20Smith", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("Hello, template:Portia Smith.",
             Assert.IsType<TextResourceContents>(Assert.Single(escapedTemplate.Contents)).Text);
 
-        var prompts = await client.ListPromptsAsync();
+        var prompts = await client.ListPromptsAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(["prompt-first", "prompt-last"], prompts.Select(prompt => prompt.Name));
         var firstPrompt =
-            await client.GetPromptAsync("prompt-first", new Dictionary<string, object?> { ["name"] = "Portia" });
+            await client.GetPromptAsync("prompt-first", new Dictionary<string, object?> { ["name"] = "Portia" }, cancellationToken: TestContext.Current.CancellationToken);
         var lastPrompt =
-            await client.GetPromptAsync("prompt-last", new Dictionary<string, object?> { ["name"] = "Portia" });
+            await client.GetPromptAsync("prompt-last", new Dictionary<string, object?> { ["name"] = "Portia" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("Hello, first:Portia.",
             Assert.IsType<TextContentBlock>(Assert.Single(firstPrompt.Messages).Content).Text);
         Assert.Equal("Hello, last:Portia.",
@@ -293,23 +293,23 @@ public sealed class McpPrimitiveTests
             return next(context);
         });
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
 
         // Act
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
-        var prompt = Assert.Single(await client.ListPromptsAsync());
+        var prompt = Assert.Single(await client.ListPromptsAsync(cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal("greeting", prompt.Name);
         Assert.Equal("Greeting prompt", prompt.ProtocolPrompt.Title);
         Assert.Equal("Renders a greeting for a supplied name.", prompt.ProtocolPrompt.Description);
         Assert.Equal("The person whose greeting should be read.",
             Assert.Single(prompt.ProtocolPrompt.Arguments!).Description);
-        var result = await client.GetPromptAsync("greeting", new Dictionary<string, object?> { ["name"] = "Portia" });
+        var result = await client.GetPromptAsync("greeting", new Dictionary<string, object?> { ["name"] = "Portia" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("Hello, Portia.", Assert.IsType<TextContentBlock>(Assert.Single(result.Messages).Content).Text);
     }
 
@@ -334,23 +334,23 @@ public sealed class McpPrimitiveTests
             .AddMcpHttp();
         await using var app = builder.Build();
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
 
         // Act
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
-        var prompt = Assert.Single(await client.ListPromptsAsync());
+        var prompt = Assert.Single(await client.ListPromptsAsync(cancellationToken: TestContext.Current.CancellationToken));
         var argument = Assert.Single(prompt.ProtocolPrompt.Arguments!);
         Assert.Equal("name", argument.Name);
         Assert.Equal(argumentDescription, argument.Description);
         Assert.Equal(false, argument.Required);
 
-        var result = await client.GetPromptAsync("optional-greeting", new Dictionary<string, object?>());
+        var result = await client.GetPromptAsync("optional-greeting", new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("Hello, Guest.", Assert.IsType<TextContentBlock>(Assert.Single(result.Messages).Content).Text);
     }
 
@@ -384,7 +384,7 @@ public sealed class McpPrimitiveTests
             return next(context);
         });
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var outsiderHttp = app.GetTestClient();
         outsiderHttp.DefaultRequestHeaders.Add("X-Actor", "outsider");
@@ -394,19 +394,19 @@ public sealed class McpPrimitiveTests
         }, outsiderHttp, null);
 
         // Act
-        await using var outsider = await McpClient.CreateAsync(outsiderTransport);
+        await using var outsider = await McpClient.CreateAsync(outsiderTransport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Empty(await outsider.ListResourcesAsync());
-        Assert.Empty(await outsider.ListPromptsAsync());
+        Assert.Empty(await outsider.ListResourcesAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Empty(await outsider.ListPromptsAsync(cancellationToken: TestContext.Current.CancellationToken));
         var resourceError = await Assert.ThrowsAnyAsync<Exception>(async () =>
-            await outsider.ReadResourceAsync("greetings://local/fixed"));
+            await outsider.ReadResourceAsync("greetings://local/fixed", cancellationToken: TestContext.Current.CancellationToken));
         var missingResource = await Assert.ThrowsAnyAsync<Exception>(async () =>
-            await outsider.ReadResourceAsync("greetings://local/missing"));
+            await outsider.ReadResourceAsync("greetings://local/missing", cancellationToken: TestContext.Current.CancellationToken));
         var promptError = await Assert.ThrowsAnyAsync<Exception>(async () =>
-            await outsider.GetPromptAsync("owner-greeting"));
+            await outsider.GetPromptAsync("owner-greeting", cancellationToken: TestContext.Current.CancellationToken));
         var missingPrompt = await Assert.ThrowsAnyAsync<Exception>(async () =>
-            await outsider.GetPromptAsync("missing-prompt"));
+            await outsider.GetPromptAsync("missing-prompt", cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(missingResource.Message, resourceError.Message);
         Assert.Equal(missingPrompt.Message, promptError.Message);
         Assert.DoesNotContain("Owner", resourceError.Message, StringComparison.Ordinal);
@@ -418,10 +418,10 @@ public sealed class McpPrimitiveTests
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, ownerHttp, null);
-        await using var owner = await McpClient.CreateAsync(ownerTransport);
-        Assert.Single(await owner.ListResourcesAsync());
-        Assert.Single(await owner.ListPromptsAsync());
-        var resource = await owner.ReadResourceAsync("greetings://local/fixed");
+        await using var owner = await McpClient.CreateAsync(ownerTransport, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Single(await owner.ListResourcesAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Single(await owner.ListPromptsAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var resource = await owner.ReadResourceAsync("greetings://local/fixed", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("\"Hello, Owner.\"", Assert.IsType<TextResourceContents>(Assert.Single(resource.Contents)).Text);
     }
 
@@ -465,7 +465,7 @@ public sealed class McpPrimitiveTests
             return next(context);
         });
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var http = app.GetTestClient();
         http.DefaultRequestHeaders.Add("X-Actor", "tenant-a");
         var transport = new HttpClientTransport(new HttpClientTransportOptions
@@ -474,17 +474,17 @@ public sealed class McpPrimitiveTests
         }, http, null);
 
         // Act
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Single(await client.ListResourceTemplatesAsync());
-        Assert.Single(await client.ListPromptsAsync());
-        var owned = await client.ReadResourceAsync("tenant://records/tenant-a");
+        Assert.Single(await client.ListResourceTemplatesAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Single(await client.ListPromptsAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var owned = await client.ReadResourceAsync("tenant://records/tenant-a", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("tenant-a:tenant-a", Assert.IsType<TextResourceContents>(Assert.Single(owned.Contents)).Text);
         var foreignResource = await Assert.ThrowsAnyAsync<Exception>(async () =>
-            await client.ReadResourceAsync("tenant://records/tenant-b"));
+            await client.ReadResourceAsync("tenant://records/tenant-b", cancellationToken: TestContext.Current.CancellationToken));
         var foreignPrompt = await Assert.ThrowsAnyAsync<Exception>(async () =>
-            await client.GetPromptAsync("tenant-summary", new Dictionary<string, object?> { ["tenant"] = "tenant-b" }));
+            await client.GetPromptAsync("tenant-summary", new Dictionary<string, object?> { ["tenant"] = "tenant-b" }, cancellationToken: TestContext.Current.CancellationToken));
         Assert.DoesNotContain("secret", foreignResource.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("secret", foreignPrompt.Message, StringComparison.Ordinal);
     }
@@ -788,22 +788,22 @@ public sealed class McpPrimitiveTests
             .AddMcpHttp();
         await using var app = builder.Build();
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
-        var result = await client.ReadResourceAsync("greetings://local/image");
+        var result = await client.ReadResourceAsync("greetings://local/image", cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("Hello, Portia.", System.Text.Encoding.UTF8.GetString(
             Assert.IsType<BlobResourceContents>(Assert.Single(result.Contents)).DecodedData.Span));
-        _ = await Assert.ThrowsAnyAsync<Exception>(async () => await client.GetPromptAsync("bound-greeting"));
+        _ = await Assert.ThrowsAnyAsync<Exception>(async () => await client.GetPromptAsync("bound-greeting", cancellationToken: TestContext.Current.CancellationToken));
         _ = await Assert.ThrowsAnyAsync<Exception>(async () => await client.GetPromptAsync("bound-greeting",
-            new Dictionary<string, object?> { ["name"] = "Portia", ["extra"] = "bad" }));
+            new Dictionary<string, object?> { ["name"] = "Portia", ["extra"] = "bad" }, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(0, bound);
     }
 
@@ -835,17 +835,17 @@ public sealed class McpPrimitiveTests
             .AddMcpHttp();
         await using var app = builder.Build();
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
 
         // Act
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
-        _ = await Assert.ThrowsAnyAsync<Exception>(async () => await client.ReadResourceAsync(uri));
+        _ = await Assert.ThrowsAnyAsync<Exception>(async () => await client.ReadResourceAsync(uri, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(0, bound);
     }
 
@@ -891,25 +891,25 @@ public sealed class McpPrimitiveTests
             .AddMcpHttp();
         await using var app = builder.Build();
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
 
         // Act
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         _ = await Assert.ThrowsAnyAsync<Exception>(async () =>
-            await client.ReadResourceAsync("greetings://local/fixed"));
+            await client.ReadResourceAsync("greetings://local/fixed", cancellationToken: TestContext.Current.CancellationToken));
         _ = await Assert.ThrowsAnyAsync<Exception>(async () =>
-            await client.GetPromptAsync("too-many-messages"));
+            await client.GetPromptAsync("too-many-messages", cancellationToken: TestContext.Current.CancellationToken));
         _ = await Assert.ThrowsAnyAsync<Exception>(async () =>
             await client.GetPromptAsync("too-many-argument-bytes",
-                new Dictionary<string, object?> { ["name"] = "Portia" }));
+                new Dictionary<string, object?> { ["name"] = "Portia" }, cancellationToken: TestContext.Current.CancellationToken));
         var tool = await client.CallToolAsync("greetings.read",
-            new Dictionary<string, object?> { ["name"] = "Portia" });
+            new Dictionary<string, object?> { ["name"] = "Portia" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(tool.IsError);
         Assert.Equal(0, bound);
     }
@@ -933,12 +933,12 @@ public sealed class McpPrimitiveTests
             .AddMcpHttp();
         await using var app = builder.Build();
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient(), null);
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
         // Only the 100 ms deadline can end the read; this bound reports a deadline that never fires.
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 

@@ -34,9 +34,9 @@ public sealed partial class ComponentHostingTests
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
-            await worker.StartAsync(default);
+            await worker.StartAsync(TestContext.Current.CancellationToken);
             await effects.WaitForAsync("first-projector");
-            Assert.Equal(pollInterval, await clock.WaitForDelayAsync());
+            Assert.Equal(pollInterval, await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
             await ConsumerHost.SeedAsync(provider, id, 1);
             clock.Advance(pollInterval);
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
@@ -45,7 +45,7 @@ public sealed partial class ComponentHostingTests
         }
         finally
         {
-            await worker.StopAsync(default);
+            await worker.StopAsync(TestContext.Current.CancellationToken);
             (worker as IDisposable)?.Dispose();
         }
 

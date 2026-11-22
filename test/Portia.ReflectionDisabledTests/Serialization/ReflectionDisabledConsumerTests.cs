@@ -151,12 +151,12 @@ public sealed class ReflectionDisabledConsumerTests
             Encoding.UTF8, "application/json");
 
         // Act
-        using var response = await app.GetTestClient().PostAsync("/greetings", content);
+        using var response = await app.GetTestClient().PostAsync("/greetings", content, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("\"Hello, Portia!\"", await response.Content.ReadAsStringAsync());
+        Assert.Equal("\"Hello, Portia!\"", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -170,12 +170,12 @@ public sealed class ReflectionDisabledConsumerTests
             Encoding.UTF8, "application/json");
 
         // Act
-        using var invalid = await app.GetTestClient().PostAsync("/greetings", invalidContent);
+        using var invalid = await app.GetTestClient().PostAsync("/greetings", invalidContent, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
-        Assert.Contains("A name is required.", await invalid.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Contains("A name is required.", await invalid.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -185,12 +185,12 @@ public sealed class ReflectionDisabledConsumerTests
         await using var app = await StartGreetingAppAsync();
 
         // Act
-        using var openApi = await app.GetTestClient().GetAsync("/openapi/v1.json");
+        using var openApi = await app.GetTestClient().GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(JsonSerializer.IsReflectionEnabledByDefault);
         Assert.Equal(HttpStatusCode.OK, openApi.StatusCode);
-        var document = await openApi.Content.ReadAsStringAsync();
+        var document = await openApi.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
         Assert.Contains("\"openapi\": \"3.1.2\"", document, StringComparison.Ordinal);
         Assert.Contains("\"operationId\": \"createGreeting\"", document, StringComparison.Ordinal);
     }
@@ -207,7 +207,7 @@ public sealed class ReflectionDisabledConsumerTests
         await using var app = builder.Build();
 
         // Act
-        var thrown = await Record.ExceptionAsync(() => app.StartAsync());
+        var thrown = await Record.ExceptionAsync(() => app.StartAsync(TestContext.Current.CancellationToken));
 
         // Assert
         Assert.False(JsonSerializer.IsReflectionEnabledByDefault);

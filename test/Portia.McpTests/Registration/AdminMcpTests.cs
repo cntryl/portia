@@ -43,7 +43,7 @@ public sealed class AdminMcpTests
             return next(context);
         });
         app.MapPortiaAdminMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/admin/mcp")
         {
             Content = new StringContent("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"" + method +
@@ -53,7 +53,7 @@ public sealed class AdminMcpTests
         request.Headers.Accept.ParseAdd("application/json, text/event-stream");
 
         // Act
-        using var response = await app.GetTestClient().SendAsync(request);
+        using var response = await app.GetTestClient().SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(System.Net.HttpStatusCode.Forbidden, response.StatusCode);
@@ -83,11 +83,11 @@ public sealed class AdminMcpTests
             return next(context);
         });
         app.MapPortiaRepairApprovals().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var content = new StringContent("invalid-json", System.Text.Encoding.UTF8, "application/json");
 
         // Act
-        using var response = await app.GetTestClient().PostAsync($"/admin/repairs/{Guid.NewGuid()}/approve", content);
+        using var response = await app.GetTestClient().PostAsync($"/admin/repairs/{Guid.NewGuid()}/approve", content, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(System.Net.HttpStatusCode.Forbidden, response.StatusCode);
@@ -118,31 +118,31 @@ public sealed class AdminMcpTests
         });
         app.MapPortiaAdminMcp().AllowAnonymous();
         app.MapPortiaRepairApprovals().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var agent = await ClientAsync(app, "/admin/mcp");
         var arguments = new Dictionary<string, object?>
         { ["scope"] = new Dictionary<string, object?> { ["tenant"] = null }, ["target"] = store.State.Target };
 
         // Act
-        var preview = await agent.CallToolAsync("preview_repair", arguments);
+        var preview = await agent.CallToolAsync("preview_repair", arguments, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(preview.IsError);
         using var plan = JsonDocument.Parse(Assert.IsType<TextContentBlock>(Assert.Single(preview.Content)).Text);
         var id = plan.RootElement.GetProperty("id").GetGuid();
         var http = app.GetTestClient();
-        using (var denied = await http.PostAsJsonAsync($"/admin/repairs/{id}/approve", store.State.Target))
+        using (var denied = await http.PostAsJsonAsync($"/admin/repairs/{id}/approve", store.State.Target, cancellationToken: TestContext.Current.CancellationToken))
             Assert.Equal(System.Net.HttpStatusCode.Forbidden, denied.StatusCode);
         Assert.Empty(store.State.Approvals);
         http.DefaultRequestHeaders.Add("X-Test-Actor", "operator");
-        using (var approved = await http.PostAsJsonAsync($"/admin/repairs/{id}/approve", store.State.Target))
+        using (var approved = await http.PostAsJsonAsync($"/admin/repairs/{id}/approve", store.State.Target, cancellationToken: TestContext.Current.CancellationToken))
             Assert.Equal(System.Net.HttpStatusCode.OK, approved.StatusCode);
         Assert.Equal("operator", Assert.Single(store.State.Approvals).Actor.Subject);
         arguments["planId"] = id;
-        var execution = await agent.CallToolAsync("execute_repair", arguments);
+        var execution = await agent.CallToolAsync("execute_repair", arguments, cancellationToken: TestContext.Current.CancellationToken);
         Assert.False(execution.IsError);
         Assert.Equal("queued", Assert.Single(store.State.Repairs).Status);
-        Assert.True((await agent.CallToolAsync("approve_repair", arguments)).IsError);
+        Assert.True((await agent.CallToolAsync("approve_repair", arguments, cancellationToken: TestContext.Current.CancellationToken)).IsError);
     }
 
     [Theory]
@@ -191,33 +191,33 @@ public sealed class AdminMcpTests
         app.MapPortiaMcp().AllowAnonymous();
         app.MapPortiaAdminMcp().AllowAnonymous();
         app.MapPortiaRepairApprovals().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var admin = await ClientAsync(app, "/admin/mcp");
         await using var business = await ClientAsync(app, "/mcp");
 
         // Act
-        var adminTools = await admin.ListToolsAsync();
+        var adminTools = await admin.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(8, adminTools.Count);
         Assert.DoesNotContain(adminTools, t => t.Name.Contains("approve", StringComparison.Ordinal));
-        var applicationTool = Assert.Single(await business.ListToolsAsync());
+        var applicationTool = Assert.Single(await business.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken));
         Assert.DoesNotContain(adminTools, t => t.Name == applicationTool.Name);
         Assert.True((await admin.CallToolAsync(applicationTool.Name,
-            new Dictionary<string, object?> { ["name"] = "Portia" })).IsError);
+            new Dictionary<string, object?> { ["name"] = "Portia" }, cancellationToken: TestContext.Current.CancellationToken)).IsError);
         _ = await Assert.ThrowsAsync<McpProtocolException>(async () =>
-            await business.CallToolAsync("describe_application"));
+            await business.CallToolAsync("describe_application", cancellationToken: TestContext.Current.CancellationToken));
         _ = await Assert.ThrowsAsync<System.Net.Http.HttpRequestException>(async () =>
-            await admin.ReadResourceAsync("greetings://app/Portia"));
+            await admin.ReadResourceAsync("greetings://app/Portia", cancellationToken: TestContext.Current.CancellationToken));
         _ = await Assert.ThrowsAsync<System.Net.Http.HttpRequestException>(async () =>
-            await admin.GetPromptAsync("app_prompt"));
-        var missingScope = await admin.CallToolAsync("list_issues");
+            await admin.GetPromptAsync("app_prompt", cancellationToken: TestContext.Current.CancellationToken));
+        var missingScope = await admin.CallToolAsync("list_issues", cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(missingScope.IsError);
         var tenant = await admin.CallToolAsync("list_issues", new Dictionary<string, object?>
-        { ["scope"] = new Dictionary<string, object?> { ["tenant"] = "forbidden" } });
+        { ["scope"] = new Dictionary<string, object?> { ["tenant"] = "forbidden" } }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(tenant.IsError);
         var global = await admin.CallToolAsync("list_issues", new Dictionary<string, object?>
-        { ["scope"] = new Dictionary<string, object?> { ["tenant"] = null } });
+        { ["scope"] = new Dictionary<string, object?> { ["tenant"] = null } }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.False(global.IsError);
     }
 
@@ -276,17 +276,17 @@ public sealed class AdminMcpTests
             return next(context);
         });
         app.MapPortiaAdminMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         await using var admin = await ClientAsync(app, "/admin/mcp");
 
         // Assert
-        Assert.True((await admin.CallToolAsync("application_fallback")).IsError);
+        Assert.True((await admin.CallToolAsync("application_fallback", cancellationToken: TestContext.Current.CancellationToken)).IsError);
         _ = await Assert.ThrowsAsync<System.Net.Http.HttpRequestException>(async () =>
-            await admin.ReadResourceAsync("app://fallback"));
+            await admin.ReadResourceAsync("app://fallback", cancellationToken: TestContext.Current.CancellationToken));
         _ = await Assert.ThrowsAsync<System.Net.Http.HttpRequestException>(async () =>
-            await admin.GetPromptAsync("application_prompt"));
+            await admin.GetPromptAsync("application_prompt", cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(0, calls);
     }
 

@@ -27,7 +27,7 @@ public sealed class InMemoryLeaseClientTests
         {
             ran = true;
             return ValueTask.CompletedTask;
-        });
+        }, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(ran);

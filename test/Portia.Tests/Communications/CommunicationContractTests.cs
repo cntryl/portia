@@ -31,7 +31,7 @@ public sealed class CommunicationContractTests
         var message = new MailMessage(["person@example.com"], "Subject", "Body");
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await sender.SendAsync(tenant, id, message));
+        var exception = await Record.ExceptionAsync(async () => await sender.SendAsync(tenant, id, message, TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal(invalidTenant ? "tenant" : "id", Assert.IsType<ArgumentException>(exception).ParamName);
@@ -51,7 +51,7 @@ public sealed class CommunicationContractTests
         var message = new SmsMessage("+15005550006", "Hi");
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await sender.SendAsync(tenant, id, message));
+        var exception = await Record.ExceptionAsync(async () => await sender.SendAsync(tenant, id, message, TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal(invalidTenant ? "tenant" : "id", Assert.IsType<ArgumentException>(exception).ParamName);
@@ -133,11 +133,11 @@ public sealed class CommunicationContractTests
         fake.Throttle(TimeSpan.FromSeconds(2));
 
         // Act
-        var rejected = await sender.SendAsync(tenant, new SendId("a"), message);
-        var unknown = await sender.SendAsync(tenant, new SendId("b"), message);
+        var rejected = await sender.SendAsync(tenant, new SendId("a"), message, TestContext.Current.CancellationToken);
+        var unknown = await sender.SendAsync(tenant, new SendId("b"), message, TestContext.Current.CancellationToken);
         var throttled =
-            await Record.ExceptionAsync(async () => await sender.SendAsync(tenant, new SendId("c"), message));
-        var accepted = await sender.SendAsync(tenant, new SendId("d"), message);
+            await Record.ExceptionAsync(async () => await sender.SendAsync(tenant, new SendId("c"), message, TestContext.Current.CancellationToken));
+        var accepted = await sender.SendAsync(tenant, new SendId("d"), message, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(SendRejectionReason.OptedOut, rejected.RejectionReason);

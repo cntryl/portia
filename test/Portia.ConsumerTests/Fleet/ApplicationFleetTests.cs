@@ -15,34 +15,34 @@ public sealed class ApplicationFleetTests
         var store = new InMemoryEventStore();
         var id = Uuid.CreateVersion4();
         await store.AppendAsync(new EventStreamAddress("application-fleet", "events", id.ToString()), 0,
-            [DomainEventSeed.Attach(new Deposited(1), id, 1)]);
+            [DomainEventSeed.Attach(new Deposited(1), id, 1)], TestContext.Current.CancellationToken);
         var probe = new Probe();
         var realm = "app-" + id;
         using var first = Build(firstClient, "a", realm, store, probe);
         using var second = Build(secondClient, "b", realm, store, probe);
 
         // Act
-        await first.StartAsync();
+        await first.StartAsync(TestContext.Current.CancellationToken);
 
         // Assert
         try
         {
             await Until(() => probe.Owner == "a");
-            await second.StartAsync();
+            await second.StartAsync(TestContext.Current.CancellationToken);
             try
             {
-                await first.StopAsync();
+                await first.StopAsync(TestContext.Current.CancellationToken);
                 await Until(() => probe.Owner == "b");
                 Assert.Equal(1, probe.MaximumActive);
             }
             finally
             {
-                await second.StopAsync();
+                await second.StopAsync(TestContext.Current.CancellationToken);
             }
         }
         finally
         {
-            await first.StopAsync();
+            await first.StopAsync(TestContext.Current.CancellationToken);
         }
 
         Assert.Equal(0, probe.Active);

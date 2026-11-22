@@ -66,7 +66,7 @@ public sealed class ObservabilityContractTests
         using var host = TestRequestBus.Create();
 
         // Act
-        _ = await host.Bus.SendAsync(new TelemetrySuccessAction(), RequestActor.System);
+        _ = await host.Bus.SendAsync(new TelemetrySuccessAction(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         var activity = Assert.Single(activities,
@@ -97,7 +97,7 @@ public sealed class ObservabilityContractTests
         // Assert
         _ = await Assert.ThrowsAsync<RequestAuthorizationException>(async () =>
         {
-            await foreach (var _ in host.Bus.StreamAsync(new TelemetryGuardedSequence(), RequestActor.Anonymous))
+            await foreach (var _ in host.Bus.StreamAsync(new TelemetryGuardedSequence(), RequestActor.Anonymous, ct: TestContext.Current.CancellationToken))
             {
             }
         });

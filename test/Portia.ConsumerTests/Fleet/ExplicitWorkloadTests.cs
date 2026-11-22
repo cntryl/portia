@@ -51,16 +51,16 @@ public sealed class ExplicitWorkloadTests
 
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
-        await worker.StartAsync(default);
+        await worker.StartAsync(TestContext.Current.CancellationToken);
         try
         {
             var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(5)));
+                worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
             Assert.Contains("coordinator", error.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
-            await worker.StopAsync(default);
+            await worker.StopAsync(TestContext.Current.CancellationToken);
         }
     }
 
@@ -77,7 +77,7 @@ public sealed class ExplicitWorkloadTests
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => worker.StartAsync(default));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => worker.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains(nameof(IWorkloadCoordinator), error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(PortiaBuilder.UseSingleProcessWorkloads), error.Message, StringComparison.Ordinal);
@@ -98,7 +98,7 @@ public sealed class ExplicitWorkloadTests
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => worker.StartAsync(default));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => worker.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("exactly one", error.Message, StringComparison.Ordinal);
     }

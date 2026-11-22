@@ -24,7 +24,7 @@ public sealed class AggregateExecutorTests
         {
             aggregate.ChangeValue(aggregate.Value + 1);
             return AggregateOutcome.Commit(Result.Success);
-        }, Context());
+        }, Context(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -44,7 +44,7 @@ public sealed class AggregateExecutorTests
         {
             aggregate.Audit("login-failed");
             return AggregateOutcome.Commit(Result.Failure(Rejected));
-        }, Context());
+        }, Context(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Same(Rejected, result.Error);
@@ -66,7 +66,7 @@ public sealed class AggregateExecutorTests
         {
             aggregate.ChangeValue(9);
             return AggregateOutcome.Commit(Result.Failure(new RequestError(RequestErrorKind.Conflict, "locked")));
-        }, Context());
+        }, Context(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -89,7 +89,7 @@ public sealed class AggregateExecutorTests
             aggregate.ChangeValue(1);
             aggregate.ChangeValue(aggregate.Value + 1);
             return AggregateOutcome.Commit(Result.Success);
-        }, Context());
+        }, Context(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -112,7 +112,7 @@ public sealed class AggregateExecutorTests
         {
             aggregate.ChangeValue(5);
             return AggregateOutcome.Discard(Result.Failure(Rejected));
-        }, Context());
+        }, Context(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Same(Rejected, result.Error);
@@ -130,7 +130,7 @@ public sealed class AggregateExecutorTests
 
         // Act
         var result = await executor.ExecuteAsync(new TestAggregate(Uuid.CreateVersion4()),
-            _ => AggregateOutcome.Commit(Result.Success), Context());
+            _ => AggregateOutcome.Commit(Result.Success), Context(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -148,7 +148,7 @@ public sealed class AggregateExecutorTests
 
         // Act
         var result = await executor.ExecuteAsync(new TestAggregate(id),
-            aggregate => AggregateOutcome.Discard(Result<int>.Success(aggregate.Value)), Context());
+            aggregate => AggregateOutcome.Discard(Result<int>.Success(aggregate.Value)), Context(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(11, result.Value);
@@ -168,7 +168,7 @@ public sealed class AggregateExecutorTests
         {
             aggregate.ChangeValue(1);
             return AggregateOutcome.Commit(Result.Success);
-        }, context);
+        }, context, TestContext.Current.CancellationToken);
 
         // Assert
         var metadata = Assert.Single(store.Appended).Metadata;
@@ -195,7 +195,7 @@ public sealed class AggregateExecutorTests
 #pragma warning disable CS0162
                 return AggregateOutcome.Commit(Result.Success);
 #pragma warning restore CS0162
-            }, Context()).AsTask());
+            }, Context(), TestContext.Current.CancellationToken).AsTask());
 
         Assert.Equal(0, store.Appends);
     }
@@ -216,7 +216,7 @@ public sealed class AggregateExecutorTests
             {
                 aggregate.ChangeValue(1);
                 return AggregateOutcome.Commit(Result.Success);
-            }, Context()).AsTask());
+            }, Context(), TestContext.Current.CancellationToken).AsTask());
 
         Assert.Equal(1, store.Appends);
     }
@@ -237,7 +237,7 @@ public sealed class AggregateExecutorTests
             {
                 aggregate.ChangeValue(1);
                 return default;
-            }, Context()).AsTask());
+            }, Context(), TestContext.Current.CancellationToken).AsTask());
 
         Assert.Contains(nameof(AggregateOutcome), error.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(TestAggregate), error.Message, StringComparison.Ordinal);
@@ -323,12 +323,12 @@ public sealed class AggregateExecutorTests
         {
             current.ChangeValue(5);
             return AggregateOutcome.Discard(Result.Success);
-        }, Context());
+        }, Context(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(aggregate.UncommittedEvents);
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(
-            aggregate, _ => AggregateOutcome.Commit(Result.Success), Context()).AsTask());
+            aggregate, _ => AggregateOutcome.Commit(Result.Success), Context(), TestContext.Current.CancellationToken).AsTask());
 
         Assert.Contains("discarded", error.Message, StringComparison.Ordinal);
         Assert.Equal(0, store.Appends);
@@ -353,14 +353,14 @@ public sealed class AggregateExecutorTests
         {
             current.ChangeValue(5);
             throw new DivideByZeroException();
-        }, Context()).AsTask());
+        }, Context(), TestContext.Current.CancellationToken).AsTask());
 
         Assert.Empty(aggregate.UncommittedEvents);
         _ = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(aggregate, current =>
         {
             current.ChangeValue(6);
             return AggregateOutcome.Commit(Result.Success);
-        }, Context()).AsTask());
+        }, Context(), TestContext.Current.CancellationToken).AsTask());
         Assert.Equal(0, store.Appends);
     }
 
@@ -383,13 +383,13 @@ public sealed class AggregateExecutorTests
         {
             current.ChangeValue(-1);
             return AggregateOutcome.Commit(Result.Success);
-        }, Context()).AsTask());
+        }, Context(), TestContext.Current.CancellationToken).AsTask());
 
         _ = await Assert.ThrowsAsync<InvalidOperationException>(() => executor.ExecuteAsync(aggregate, current =>
         {
             current.ChangeValue(6);
             return AggregateOutcome.Commit(Result.Success);
-        }, Context()).AsTask());
+        }, Context(), TestContext.Current.CancellationToken).AsTask());
         Assert.Equal(0, store.Appends);
     }
 
@@ -410,7 +410,7 @@ public sealed class AggregateExecutorTests
             {
                 current.Audit("attempted");
                 throw new DivideByZeroException();
-            }, Context()).AsTask());
+            }, Context(), TestContext.Current.CancellationToken).AsTask());
 
         Assert.Empty(aggregate.UncommittedAudits);
         Assert.Equal(0, store.Appends);
@@ -425,11 +425,11 @@ public sealed class AggregateExecutorTests
         var id = await SeedAsync(store, 2);
         var executor = Executor(store);
         var aggregate = new TestAggregate(id);
-        _ = await executor.ExecuteAsync(aggregate, _ => AggregateOutcome.Discard(Result.Success), Context());
+        _ = await executor.ExecuteAsync(aggregate, _ => AggregateOutcome.Discard(Result.Success), Context(), TestContext.Current.CancellationToken);
 
         // Act
         var result = await executor.ExecuteAsync(aggregate,
-            current => AggregateOutcome.Discard(Result<int>.Success(current.Value)), Context());
+            current => AggregateOutcome.Discard(Result<int>.Success(current.Value)), Context(), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, result.Value);
@@ -476,7 +476,7 @@ public sealed class AggregateExecutorTests
                 aggregate.ChangeValue(1);
                 aggregate.Audit("after-change");
                 return AggregateOutcome.Commit(Result.Success);
-            }, Context()).AsTask());
+            }, Context(), TestContext.Current.CancellationToken).AsTask());
 
         Assert.Contains("before recording audits", error.Message, StringComparison.Ordinal);
         Assert.Equal(0, store.Appends);

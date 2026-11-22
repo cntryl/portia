@@ -34,19 +34,19 @@ public sealed class FitzWorkerSupervisionTests
                     cleanupFinished.TrySetResult();
                 }
             }
-        ], default);
+        ], TestContext.Current.CancellationToken);
 
         // Assert
         try
         {
             fail.TrySetResult();
-            await cleanupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await cleanupStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.False(run.IsCompleted);
             Assert.False(cleanupFinished.Task.IsCompleted);
             releaseCleanup.TrySetResult();
 
             var error = await Assert.ThrowsAsync<TerminalHandlerFailureException>(() =>
-                run.WaitAsync(TimeSpan.FromSeconds(5)));
+                run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
 
             Assert.Same(expected, error);
             Assert.True(cleanupFinished.Task.IsCompleted);
@@ -57,7 +57,7 @@ public sealed class FitzWorkerSupervisionTests
             releaseCleanup.TrySetResult();
             try
             {
-                await run.WaitAsync(TimeSpan.FromSeconds(5));
+                await run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             }
             catch (TerminalHandlerFailureException)
             {
@@ -98,14 +98,14 @@ public sealed class FitzWorkerSupervisionTests
 #pragma warning restore CA2219
                 }
             }
-        ], default);
+        ], TestContext.Current.CancellationToken);
 
         // Assert
         try
         {
             fail.TrySetResult();
 
-            var error = await Assert.ThrowsAsync<AggregateException>(() => run.WaitAsync(TimeSpan.FromSeconds(5)));
+            var error = await Assert.ThrowsAsync<AggregateException>(() => run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
             var faults = error.Flatten().InnerExceptions;
             Assert.Equal(3, faults.Count);
             Assert.Contains(expected, faults);
@@ -130,7 +130,7 @@ public sealed class FitzWorkerSupervisionTests
         await lifetime.CancelAsync();
 
         // Act
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        await run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, stopped);
@@ -170,10 +170,10 @@ public sealed class FitzWorkerSupervisionTests
                 }
             },
             _ => throw expected
-        ], default);
+        ], TestContext.Current.CancellationToken);
 
         // Assert
-        var error = await Assert.ThrowsAsync<QueueConfigurationException>(() => run.WaitAsync(TimeSpan.FromSeconds(5)));
+        var error = await Assert.ThrowsAsync<QueueConfigurationException>(() => run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
 
         Assert.Same(expected, error);
         Assert.True(stopped);

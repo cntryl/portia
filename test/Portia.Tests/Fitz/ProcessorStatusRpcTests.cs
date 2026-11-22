@@ -74,14 +74,14 @@ public sealed class ProcessorStatusRpcTests
         var serializer = new JsonRequestSerializer(provider.GetServices<RequestTransportRegistration>(),
             provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json));
         var server = new FitzRpcRequestServer(rpc, provider.GetRequiredService<IServiceScopeFactory>(), catalog);
-        await using var registrations = await server.RegisterRequestsAsync();
+        await using var registrations = await server.RegisterRequestsAsync(TestContext.Current.CancellationToken);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer, catalog);
 
         // Act
         var client = new FitzProcessorStatusClient(sender, () => "application");
 
         // Assert
-        await Assert.ThrowsAsync<InvalidOperationException>(async () => await client.GetAsync("balances"));
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await client.GetAsync("balances", ct: TestContext.Current.CancellationToken));
     }
 
     /// <summary>A concrete endpoint rejects a payload naming a different processor or tenant before dispatch.</summary>
@@ -113,13 +113,13 @@ public sealed class ProcessorStatusRpcTests
         var server = new FitzRpcRequestServer(rpc, provider.GetRequiredService<IServiceScopeFactory>(), catalog);
         await using var registration = await server.RegisterAsync<GetProcessorStatus, ProcessorStatus>(route,
             (request, received) => received == route && request.Processor == identity.Name
-                                                     && request.Tenant == identity.Tenant?.Value, default);
+                                                     && request.Tenant == identity.Tenant?.Value, TestContext.Current.CancellationToken);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer, catalog);
 
         // Act
         var result = await sender.SendAsync<GetProcessorStatus, ProcessorStatus>(
             new GetProcessorStatus(processor, tenant), FitzProcessorStatusRoutes.Values("application", identity),
-            "actor");
+            "actor", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -163,20 +163,20 @@ public sealed class ProcessorStatusRpcTests
         using var ownership = new CancellationTokenSource();
         await using var owned = new FitzProcessorStatusRpcRegistration(identity, route, ownership.Token);
         var server = new FitzRpcRequestServer(rpc, provider.GetRequiredService<IServiceScopeFactory>(), catalog);
-        owned.Attach(await server.RegisterAsync<GetProcessorStatus, ProcessorStatus>(route, owned.Accepts, default));
+        owned.Attach(await server.RegisterAsync<GetProcessorStatus, ProcessorStatus>(route, owned.Accepts, TestContext.Current.CancellationToken));
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer, catalog);
 
         // Act
         var client = new FitzProcessorStatusClient(sender, () => "application");
 
         // Assert
-        Assert.True((await client.GetAsync(identity.Name, actorToken: "actor")).IsSuccess);
+        Assert.True((await client.GetAsync(identity.Name, actorToken: "actor", ct: TestContext.Current.CancellationToken)).IsSuccess);
         Assert.Equal(1, handler.Calls);
 
         if (cancelOwnership)
         {
             ownership.Cancel();
-            var cancelledOwner = await client.GetAsync(identity.Name, actorToken: "actor");
+            var cancelledOwner = await client.GetAsync(identity.Name, actorToken: "actor", ct: TestContext.Current.CancellationToken);
             Assert.False(cancelledOwner.IsSuccess);
             Assert.Equal(RequestErrorKind.Validation, cancelledOwner.Error.Kind);
         }
@@ -184,7 +184,7 @@ public sealed class ProcessorStatusRpcTests
         await owned.DisposeAsync();
         Assert.Equal(1, rpc.FailedWithdrawals);
 
-        var disposedOwner = await client.GetAsync(identity.Name, actorToken: "actor");
+        var disposedOwner = await client.GetAsync(identity.Name, actorToken: "actor", ct: TestContext.Current.CancellationToken);
 
         Assert.False(disposedOwner.IsSuccess);
         Assert.Equal(RequestErrorKind.Validation, disposedOwner.Error.Kind);
@@ -229,16 +229,16 @@ public sealed class ProcessorStatusRpcTests
         var client = new FitzProcessorStatusClient(sender, () => "application");
 
         // Act
-        var first = await registrar.RegisterAsync(identity);
+        var first = await registrar.RegisterAsync(identity, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.True((await client.GetAsync(identity.Name, actorToken: "actor")).IsSuccess);
+        Assert.True((await client.GetAsync(identity.Name, actorToken: "actor", ct: TestContext.Current.CancellationToken)).IsSuccess);
         await first.DisposeAsync();
         Assert.Equal(1, rpc.FailedWithdrawals);
         rpc.AllowWithdrawal = true;
 
-        await using var second = await registrar.RegisterAsync(identity);
-        var resumed = await client.GetAsync(identity.Name, actorToken: "actor");
+        await using var second = await registrar.RegisterAsync(identity, TestContext.Current.CancellationToken);
+        var resumed = await client.GetAsync(identity.Name, actorToken: "actor", ct: TestContext.Current.CancellationToken);
 
         Assert.True(resumed.IsSuccess);
         Assert.Equal(2, handler.Calls);
@@ -261,18 +261,18 @@ public sealed class ProcessorStatusRpcTests
         var client = new FitzProcessorStatusClient(sender, () => "application");
 
         // Act
-        var endpoint = await registrar.RegisterAsync(identity);
+        var endpoint = await registrar.RegisterAsync(identity, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.True((await client.GetAsync(identity.Name, actorToken: "actor")).IsSuccess);
+        Assert.True((await client.GetAsync(identity.Name, actorToken: "actor", ct: TestContext.Current.CancellationToken)).IsSuccess);
 
         await endpoint.DisposeAsync();
         Assert.Equal(1, rpc.FailedWithdrawals);
-        await rpc.Withdrawn.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await rpc.Withdrawn.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         Assert.Equal(0, rpc.ActivePatterns);
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await client.GetAsync(identity.Name, actorToken: "actor"));
+            await client.GetAsync(identity.Name, actorToken: "actor", ct: TestContext.Current.CancellationToken));
         Assert.Equal(1, handler.Calls);
     }
 
@@ -288,8 +288,8 @@ public sealed class ProcessorStatusRpcTests
         var catalog = new RequestTransportCatalog(provider.GetServices<RequestTransportRegistration>());
         await using var registrar = new FitzProcessorStatusRpcRegistrar(rpc,
             provider.GetRequiredService<IServiceScopeFactory>(), catalog, () => "application", timeProvider: clock);
-        var first = await registrar.RegisterAsync(new WorkloadIdentity("first"));
-        var second = await registrar.RegisterAsync(new WorkloadIdentity("second"));
+        var first = await registrar.RegisterAsync(new WorkloadIdentity("first"), TestContext.Current.CancellationToken);
+        var second = await registrar.RegisterAsync(new WorkloadIdentity("second"), TestContext.Current.CancellationToken);
         await first.DisposeAsync();
 
         // Act
@@ -302,17 +302,17 @@ public sealed class ProcessorStatusRpcTests
         var shutdown = registrar.DisposeAsync().AsTask();
         try
         {
-            await rpc.FirstWithdrawalStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await rpc.FirstWithdrawalStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             clock.Advance(TimeSpan.FromSeconds(4));
             Assert.False(shutdown.IsCompleted);
             _ = rpc.FailFirstWithdrawal.TrySetResult();
-            await rpc.SecondWithdrawalStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await rpc.SecondWithdrawalStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
             // The second endpoint started four seconds into the shared five-second budget.
             // Its own attempt deadline would allow another five seconds, so shutdown must
             // instead cancel it when the original budget has only one second left.
             clock.Advance(TimeSpan.FromSeconds(1));
-            await shutdown.WaitAsync(TimeSpan.FromSeconds(5));
+            await shutdown.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
             Assert.Equal(2, rpc.BlockingWithdrawals);
             Assert.True(rpc.SecondWithdrawalCancelled);
@@ -324,7 +324,7 @@ public sealed class ProcessorStatusRpcTests
             _ = rpc.FailFirstWithdrawal.TrySetResult();
             _ = rpc.ReleaseSecondWithdrawal.TrySetResult();
             clock.Advance(TimeSpan.FromDays(1));
-            await shutdown.WaitAsync(TimeSpan.FromSeconds(5));
+            await shutdown.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         }
     }
 

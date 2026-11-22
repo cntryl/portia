@@ -39,20 +39,20 @@ public sealed class OpenApiDocumentCachingTests : IAsyncDisposable
         var client = await StartAsync();
 
         // Act
-        var first = await client.GetAsync("/openapi/v1.json");
+        var first = await client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
-        var documentBytes = (await first.Content.ReadAsByteArrayAsync()).Length;
+        var documentBytes = (await first.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken)).Length;
         for (var i = 0; i < 10; i++)
-            _ = await client.GetAsync("/openapi/v1.json");
+            _ = await client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
         var before = GC.GetTotalAllocatedBytes(true);
         for (var i = 0; i < iterations; i++)
-            _ = await client.GetAsync("/openapi/v1.json");
+            _ = await client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
         var allocated = (GC.GetTotalAllocatedBytes(true) - before) / iterations;
 
         Assert.True(allocated < documentBytes * 4L,
@@ -66,17 +66,17 @@ public sealed class OpenApiDocumentCachingTests : IAsyncDisposable
         // Arrange
         var client = await StartAsync();
 
-        var json = await client.GetAsync("/openapi/v1.json");
-        var yaml = await client.GetAsync("/openapi/v1.yml");
+        var json = await client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
+        var yaml = await client.GetAsync("/openapi/v1.yml", TestContext.Current.CancellationToken);
 
         // Act
-        var unknown = await client.GetAsync("/openapi/v2.json");
+        var unknown = await client.GetAsync("/openapi/v2.json", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("application/json; charset=utf-8", json.Content.Headers.ContentType?.ToString());
         Assert.Equal("text/plain+yaml; charset=utf-8", yaml.Content.Headers.ContentType?.ToString());
         Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
-        Assert.Equal(json.Content.Headers.ContentLength, (await json.Content.ReadAsByteArrayAsync()).Length);
+        Assert.Equal(json.Content.Headers.ContentLength, (await json.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken)).Length);
     }
 
     /// <summary>
@@ -97,7 +97,7 @@ public sealed class OpenApiDocumentCachingTests : IAsyncDisposable
         _ = _app.MapPortiaOpenApi();
         _ = _app.MapPortiaGet<HttpGetWidget, string>("/widgets/{widget_id}");
         _ = _app.MapGet("/ordinary", () => Results.Ok()).WithName("httpGetWidget");
-        await _app.StartAsync();
+        await _app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         using var client = _app.GetTestClient();
@@ -106,7 +106,7 @@ public sealed class OpenApiDocumentCachingTests : IAsyncDisposable
         for (var attempt = 0; attempt < 2; attempt++)
         {
             var failure = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                client.GetAsync("/openapi/v1.json"));
+                client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken));
             Assert.Contains("is duplicated", failure.Message, StringComparison.Ordinal);
         }
     }

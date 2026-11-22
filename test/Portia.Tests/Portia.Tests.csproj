@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
     <!-- RequestHttpBindingGenerator intercepts MapPortia* call sites to inline route/query/body
          binding — needed here so HttpBindingTests can exercise real generated bindings, not just
          the generator's own model, through a real ASP.NET Core TestServer. -->
@@ -9,6 +11,7 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    <None Include="../testconfig.json" Link="testconfig.json" CopyToOutputDirectory="PreserveNewest"/>
   </ItemGroup>
 
   <ItemGroup>
@@ -16,20 +19,12 @@
     <PackageReference Include="Cntryl.Conventions.Testing.CodeFixes"/>
     <PackageReference Include="Cntryl.Fitz.Core"/>
     <PackageReference Include="Cntryl.Fitz.Extensions"/>
-    <PackageReference Include="coverlet.collector">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="coverlet.MTP" PrivateAssets="all"/>
     <PackageReference Include="Microsoft.AspNetCore.TestHost"/>
     <PackageReference Include="Microsoft.OpenApi"/>
     <PackageReference Include="Microsoft.OpenApi.YamlReader"/>
     <PackageReference Include="OpenTelemetry.Exporter.InMemory"/>
-    <PackageReference Include="Microsoft.NET.Test.Sdk"/>
-    <PackageReference Include="xunit"/>
-    <PackageReference Include="xunit.runner.visualstudio">
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="xunit.v3"/>
   </ItemGroup>
 
   <ItemGroup>

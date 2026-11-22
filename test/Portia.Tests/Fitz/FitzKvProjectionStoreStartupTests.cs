@@ -25,7 +25,7 @@ public sealed class FitzKvProjectionStoreStartupTests
         using var host = Host(scope, registeredAs: "orders", repositoryServes: "OrdersProjector");
 
         // Act
-        var thrown = await Record.ExceptionAsync(() => host.StartAsync());
+        var thrown = await Record.ExceptionAsync(() => host.StartAsync(TestContext.Current.CancellationToken));
 
         // Assert
         var error = Assert.IsType<InvalidOperationException>(thrown);
@@ -43,8 +43,8 @@ public sealed class FitzKvProjectionStoreStartupTests
         // Act
         var exception = await Record.ExceptionAsync(async () =>
         {
-            await host.StartAsync();
-            await host.StopAsync();
+            await host.StartAsync(TestContext.Current.CancellationToken);
+            await host.StopAsync(TestContext.Current.CancellationToken);
         });
 
         // Assert

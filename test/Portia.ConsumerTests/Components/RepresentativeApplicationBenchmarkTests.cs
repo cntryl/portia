@@ -17,7 +17,7 @@ public sealed class RepresentativeApplicationBenchmarkTests
         var spec = new CaseSpec("applications", edit);
 
         // Act
-        var sample = await BenchmarkCase.MeasureAsync(spec, "minimal", 0);
+        var sample = await BenchmarkCase.MeasureAsync(spec, "minimal", 0, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(sample.Evidence.Files > 0);
@@ -32,8 +32,8 @@ public sealed class RepresentativeApplicationBenchmarkTests
         string[] roles = ["Common", "Core", "Api", "Worker"];
 
         // Act
-        var build = fixture.Build();
-        var diagnostics = await ApplicationFixture.AnalyzeAsync(build);
+        var build = fixture.Build(ct: TestContext.Current.CancellationToken);
+        var diagnostics = await ApplicationFixture.AnalyzeAsync(build, TestContext.Current.CancellationToken);
         var emissions = build.Projects.Select(project =>
         {
             using var output = new MemoryStream();

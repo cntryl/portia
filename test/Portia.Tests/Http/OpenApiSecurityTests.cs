@@ -33,10 +33,10 @@ public sealed class OpenApiSecurityTests
         await using var app = builder.Build();
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
         _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/secured").RequireAuthorization("either");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken))!;
 
         // Assert
         var security = document["paths"]!["/secured"]!["get"]!["security"]!.AsArray();
@@ -72,10 +72,10 @@ public sealed class OpenApiSecurityTests
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
         _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/composed")
             .RequireAuthorization("a", "b");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json"));
+        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken));
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(exception);
@@ -104,10 +104,10 @@ public sealed class OpenApiSecurityTests
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
         _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/composite")
             .RequireAuthorization("composite");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken))!;
 
         // Assert
         var security = Assert.Single(document["paths"]!["/composite"]!["get"]!["security"]!.AsArray())!.AsObject();
@@ -140,10 +140,10 @@ public sealed class OpenApiSecurityTests
         var endpoint = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/default-policy");
         if (!fallback)
             _ = endpoint.RequireAuthorization();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken))!;
 
         // Assert
         var security = Assert.Single(document["paths"]!["/default-policy"]!["get"]!["security"]!.AsArray());
@@ -169,10 +169,10 @@ public sealed class OpenApiSecurityTests
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/core").RequireAuthorization()
             .AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken))!;
 
         // Assert
         var security = Assert.Single(document["paths"]!["/core"]!["get"]!["security"]!.AsArray());
@@ -193,10 +193,10 @@ public sealed class OpenApiSecurityTests
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
         _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/missing")
             .RequireAuthorization("missing");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json"));
+        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken));
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(exception);
@@ -225,10 +225,10 @@ public sealed class OpenApiSecurityTests
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
         _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/optional")
             .RequireAuthorization("optional");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken))!;
 
         // Assert
         var security = document["paths"]!["/optional"]!["get"]!["security"]!.AsArray();
@@ -256,10 +256,10 @@ public sealed class OpenApiSecurityTests
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
         _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/explicit")
             .RequireAuthorization(new AuthorizeAttribute { Policy = "named", AuthenticationSchemes = "omitted" });
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json"));
+        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken));
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(exception);
@@ -283,10 +283,10 @@ public sealed class OpenApiSecurityTests
         await using var app = builder.Build();
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
         _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/custom-default").RequireAuthorization();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json"));
+        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken));
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(exception);
@@ -322,10 +322,10 @@ public sealed class OpenApiSecurityTests
         var endpoint = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/custom-policy");
         if (!fallback)
             _ = endpoint.RequireAuthorization();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken))!;
 
         // Assert
         var security = document["paths"]!["/custom-policy"]!["get"]!["security"] as JsonArray;

@@ -37,16 +37,16 @@ public sealed class McpSchemaFidelityTests
             return next(context);
         });
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         { Endpoint = new Uri("http://localhost/mcp") }, app.GetTestClient());
 
         // Act
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
-        var tool = Assert.Single(await client.ListToolsAsync(), candidate => candidate.Name == name);
-        var result = await client.CallToolAsync(name, new Dictionary<string, object?>());
+        var tool = Assert.Single(await client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken), candidate => candidate.Name == name);
+        var result = await client.CallToolAsync(name, new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken);
         Assert.False(result.IsError);
         if (!structured)
         {
@@ -159,23 +159,23 @@ public sealed class McpSchemaFidelityTests
             return next(context);
         });
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         await using var transport = new HttpClientTransport(new HttpClientTransportOptions
         {
             Endpoint = new Uri("http://localhost/mcp")
         }, app.GetTestClient());
 
         // Act
-        await using var client = await McpClient.CreateAsync(transport);
+        await using var client = await McpClient.CreateAsync(transport, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
-        var tool = Assert.Single(await client.ListToolsAsync());
+        var tool = Assert.Single(await client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken));
         var schema = JsonSchema.Build(tool.JsonSchema,
             new BuildOptions { Dialect = Dialect.Draft202012, SchemaRegistry = new() });
         using var document = JsonDocument.Parse(input);
         var arguments = document.RootElement.EnumerateObject()
             .ToDictionary(property => property.Name, property => (object?)property.Value.Clone());
-        var result = await client.CallToolAsync(tool.Name, arguments);
+        var result = await client.CallToolAsync(tool.Name, arguments, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True((result.IsError == true) == !valid,
             input + ": " + string.Join("; ",
                 result.Content.OfType<TextContentBlock>().Select(content => content.Text)));
@@ -210,21 +210,21 @@ public sealed class McpSchemaFidelityTests
                 Arguments = [host],
                 Name = "MCP schema qualification",
                 ShutdownTimeout = TimeSpan.FromSeconds(1)
-            }), StdioClientOptions.Create());
+            }), StdioClientOptions.Create(), cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
-        var tool = Assert.Single(await client.ListToolsAsync());
+        var tool = Assert.Single(await client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken));
         var schema = JsonSchema.Build(tool.JsonSchema,
             new BuildOptions { Dialect = Dialect.Draft202012, SchemaRegistry = new() });
         using var missing = JsonDocument.Parse("{}");
         Assert.False(schema.Evaluate(missing.RootElement).IsValid);
-        var rejected = await client.CallToolAsync(tool.Name, new Dictionary<string, object?>());
+        var rejected = await client.CallToolAsync(tool.Name, new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(rejected.IsError);
 
         var arguments = new Dictionary<string, object?> { ["name"] = "stdio" };
         using var valid = JsonDocument.Parse(JsonSerializer.Serialize(arguments));
         Assert.True(schema.Evaluate(valid.RootElement).IsValid);
-        var accepted = await client.CallToolAsync(tool.Name, arguments);
+        var accepted = await client.CallToolAsync(tool.Name, arguments, cancellationToken: TestContext.Current.CancellationToken);
         Assert.False(accepted.IsError);
         Assert.Contains("stdio", Assert.IsType<TextContentBlock>(Assert.Single(accepted.Content)).Text,
             StringComparison.Ordinal);

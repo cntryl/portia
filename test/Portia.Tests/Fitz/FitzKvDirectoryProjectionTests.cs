@@ -44,19 +44,19 @@ public sealed class FitzKvDirectoryProjectionTests(FitzBrokerFixture broker)
         await using var scope = services.CreateAsyncScope();
         var teams = scope.ServiceProvider.GetRequiredService<ITeamDirectory>();
 
-        var first = await teams.ListAsync(_tenantA, take: 2, cursor: null, default);
-        var second = await teams.ListAsync(_tenantA, take: 2, first.NextCursor, default);
+        var first = await teams.ListAsync(_tenantA, take: 2, cursor: null, TestContext.Current.CancellationToken);
+        var second = await teams.ListAsync(_tenantA, take: 2, first.NextCursor, TestContext.Current.CancellationToken);
 
         // Act
-        var tenantB = await teams.ListAsync(_tenantB, take: 2, cursor: null, default);
+        var tenantB = await teams.ListAsync(_tenantB, take: 2, cursor: null, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(["alpha", "Bravo"], first.Items.Select(static team => team.Name));
         Assert.Equal(["Charlie"], second.Items.Select(static team => team.Name));
         Assert.Null(second.NextCursor);
         Assert.Equal([new Team(other, "Other")], tenantB.Items);
-        Assert.Equal(new Team(delta, "Bravo"), await teams.GetAsync(_tenantA, delta, default));
-        Assert.Null(await teams.GetAsync(_tenantB, delta, default));
+        Assert.Equal(new Team(delta, "Bravo"), await teams.GetAsync(_tenantA, delta, TestContext.Current.CancellationToken));
+        Assert.Null(await teams.GetAsync(_tenantB, delta, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -77,11 +77,11 @@ public sealed class FitzKvDirectoryProjectionTests(FitzBrokerFixture broker)
         var teams = scope.ServiceProvider.GetRequiredService<ITeamDirectory>();
 
         // Act
-        var first = await teams.ListAsync(_tenantA, take: 1, cursor: null, default);
+        var first = await teams.ListAsync(_tenantA, take: 1, cursor: null, TestContext.Current.CancellationToken);
 
         // Assert
         var error = await Assert.ThrowsAsync<KvDirectoryQueryException>(async () =>
-            await teams.ListAsync(_tenantB, take: 1, first.NextCursor, default));
+            await teams.ListAsync(_tenantB, take: 1, first.NextCursor, TestContext.Current.CancellationToken));
 
         Assert.Equal(KvDirectoryQueryError.CursorMismatch, error.Kind);
     }

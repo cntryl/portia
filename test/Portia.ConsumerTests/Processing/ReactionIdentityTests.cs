@@ -18,7 +18,7 @@ public sealed class ReactionIdentityTests
             Actor = new ActorAttribution("alice", "users"),
             ExecutionId = Uuid.CreateVersion4()
         });
-        await store.AppendAsync(new EventStreamAddress("identity", "source", id.ToString()), 0, [source]);
+        await store.AppendAsync(new EventStreamAddress("identity", "source", id.ToString()), 0, [source], TestContext.Current.CancellationToken);
         var actor = userPrincipal
             ? new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, "alice")], "user"))
             : RequestActor.CreateSystem("billing", "services");
@@ -32,12 +32,12 @@ public sealed class ReactionIdentityTests
         if (userPrincipal)
         {
             _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-                await runner.RunAsync(reactor, ProjectionCheckpoint.Start));
+                await runner.RunAsync(reactor, ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken));
             Assert.Null(reactor.Context);
             return;
         }
 
-        _ = await runner.RunAsync(reactor, ProjectionCheckpoint.Start);
+        _ = await runner.RunAsync(reactor, ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken);
         var context = Assert.IsAssignableFrom<IExecutionContext>(reactor.Context);
         Assert.Equal("billing", context.Actor.FindFirst(ClaimTypes.NameIdentifier)!.Value);
         Assert.Equal(source.Metadata.EventId, context.CauseId);

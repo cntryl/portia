@@ -26,7 +26,7 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
         var aggregate = Uuid.CreateVersion4();
         var source = new ValueChanged(1);
         source.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregate, 1, DateTimeOffset.UtcNow));
-        await events.AppendAsync(new EventStreamAddress("status-source", "events", aggregate.ToString()), 0, [source]);
+        await events.AppendAsync(new EventStreamAddress("status-source", "events", aggregate.ToString()), 0, [source], TestContext.Current.CancellationToken);
         var services = new ServiceCollection();
         _ = services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(
             new Dictionary<string, string?> { ["PORTIA_SYSTEM_ADMIN_ROLE"] = "platform-operators" }).Build());
@@ -55,14 +55,14 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
         Assert.DoesNotContain(caller.GetServices<IHostedService>(), service => service is PortiaWorkloadService);
         var client = caller.GetRequiredService<IProcessorStatusClient>();
         var worker = provider.GetServices<IHostedService>().OfType<PortiaWorkloadService>().Single();
-        await worker.StartAsync(default);
+        await worker.StartAsync(TestContext.Current.CancellationToken);
         try
         {
             await Task.WhenAll(control.ProjectorEntered.Task, control.ReactorEntered.Task)
-                .WaitAsync(TimeSpan.FromSeconds(15));
+                .WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
             foreach (var name in new[] { StatusControl.ProjectorName, StatusControl.ReactorName })
             {
-                var pending = await GetStatusWhenReadyAsync(client, name, "global");
+                var pending = await GetStatusWhenReadyAsync(client, name, "global", TestContext.Current.CancellationToken);
                 Assert.True(pending.IsSuccess);
                 Assert.Equal(name, pending.Value.Processor);
                 Assert.Equal(EventCursor.Start, pending.Value.Progress.Position);
@@ -70,10 +70,10 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
                 Assert.False(pending.Value.Progress.IsCaughtUp);
             }
 
-            var denied = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName);
+            var denied = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, ct: TestContext.Current.CancellationToken);
             Assert.False(denied.IsSuccess);
             Assert.Equal(RequestErrorKind.Unauthorized, denied.Error.Kind);
-            var outsideScope = await GetStatusWhenReadyAsync(client, StatusControl.ReactorName, "tenant-a");
+            var outsideScope = await GetStatusWhenReadyAsync(client, StatusControl.ReactorName, "tenant-a", TestContext.Current.CancellationToken);
             Assert.Equal(!operationalPolicy, outsideScope.IsSuccess);
             if (operationalPolicy)
             {
@@ -81,7 +81,7 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
                 Assert.Equal(RequestErrorKind.Forbidden, outsideScope.Error.Kind);
             }
 
-            var member = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, "member");
+            var member = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, "member", TestContext.Current.CancellationToken);
             Assert.False(member.IsSuccess);
             Assert.Equal(RequestErrorKind.Forbidden, member.Error.Kind);
             control.Release.TrySetResult();
@@ -96,7 +96,7 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
         finally
         {
             control.Release.TrySetResult();
-            await worker.StopAsync(default);
+            await worker.StopAsync(TestContext.Current.CancellationToken);
             worker.Dispose();
         }
 

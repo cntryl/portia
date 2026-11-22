@@ -20,17 +20,17 @@ public sealed class JsonContextIncrementalTests
         // Arrange
         var options = Options();
         var unrelated = CSharpSyntaxTree.ParseText("public static class Unrelated { public static int Value() => 1; }",
-            options, "Unrelated.cs");
+            options, "Unrelated.cs", cancellationToken: TestContext.Current.CancellationToken);
         var compilation = Compilation(options, unrelated, ContextReference("FirstFactory"));
-        var driver = Driver(options).RunGenerators(compilation);
+        var driver = Driver(options).RunGenerators(compilation, TestContext.Current.CancellationToken);
         var original = Generated(driver);
 
-        driver = driver.RunGenerators(compilation);
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
         AssertReasons(driver, "PortiaSharedRegistrations", IncrementalStepRunReason.Cached);
 
         var edited = CSharpSyntaxTree.ParseText("public static class Unrelated { public static int Value() => 2; }",
-            options, "Unrelated.cs");
-        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(unrelated, edited));
+            options, "Unrelated.cs", cancellationToken: TestContext.Current.CancellationToken);
+        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(unrelated, edited), TestContext.Current.CancellationToken);
 
         AssertReasons(driver, "PortiaReferencedJsonContexts", IncrementalStepRunReason.Unchanged);
 
@@ -49,15 +49,15 @@ public sealed class JsonContextIncrementalTests
         var options = Options();
         var reference = ContextReference("FirstFactory");
         var compilation = Compilation(options,
-            CSharpSyntaxTree.ParseText("public sealed class Unrelated;", options, "Unrelated.cs"), reference);
+            CSharpSyntaxTree.ParseText("public sealed class Unrelated;", options, "Unrelated.cs", cancellationToken: TestContext.Current.CancellationToken), reference);
 
         // Act
-        var driver = Driver(options).RunGenerators(compilation);
+        var driver = Driver(options).RunGenerators(compilation, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Contains("global::Contracts.FirstFactory.Create(options)", Generated(driver), StringComparison.Ordinal);
 
-        driver = driver.RunGenerators(compilation.ReplaceReference(reference, ContextReference("SecondFactory")));
+        driver = driver.RunGenerators(compilation.ReplaceReference(reference, ContextReference("SecondFactory")), TestContext.Current.CancellationToken);
 
         AssertReasons(driver, "PortiaReferencedJsonContexts", IncrementalStepRunReason.Modified);
         AssertReasons(driver, "PortiaSharedRegistrations", IncrementalStepRunReason.Modified);

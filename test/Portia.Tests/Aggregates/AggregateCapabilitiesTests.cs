@@ -41,13 +41,13 @@ public sealed class AggregateCapabilitiesTests
             {
                 aggregate.ChangeValue(5);
                 return AggregateOutcome.Commit(Result.Success);
-            }, new RequestDispatchContext(RequestActor.System));
+            }, new RequestDispatchContext(RequestActor.System), TestContext.Current.CancellationToken);
         }
 
         await using var reading = provider.CreateAsyncScope();
 
         // Act
-        var hydrated = await reading.ServiceProvider.Aggregates().HydrateAsync(new TestAggregate(id));
+        var hydrated = await reading.ServiceProvider.Aggregates().HydrateAsync(new TestAggregate(id), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(5, hydrated.Value);
@@ -66,13 +66,13 @@ public sealed class AggregateCapabilitiesTests
             var capabilities = scope.ServiceProvider.Aggregates();
             var aggregate = new TestAggregate(id);
             aggregate.ChangeValue(9);
-            await capabilities.SaveAsync(aggregate, new RequestDispatchContext(RequestActor.System));
+            await capabilities.SaveAsync(aggregate, new RequestDispatchContext(RequestActor.System), TestContext.Current.CancellationToken);
         }
 
         await using var reading = provider.CreateAsyncScope();
 
         // Act
-        var hydrated = await reading.ServiceProvider.Aggregates().HydrateAsync(new TestAggregate(id));
+        var hydrated = await reading.ServiceProvider.Aggregates().HydrateAsync(new TestAggregate(id), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(9, hydrated.Value);

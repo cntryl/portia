@@ -29,7 +29,7 @@ public sealed class EventSourcedTenantDirectoryRegistrationTests
 
         // Assert
         _ = Assert.IsType<EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>>(directory);
-        Assert.Equal([new TenantId("acme")], await directory.GetActiveTenantsAsync().ToListAsync());
+        Assert.Equal([new TenantId("acme")], await directory.GetActiveTenantsAsync(TestContext.Current.CancellationToken).ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     /// <summary>A registered snapshot store is used, so a restart resumes from the saved roster.</summary>
@@ -47,10 +47,10 @@ public sealed class EventSourcedTenantDirectoryRegistrationTests
             .AddEventSourcedTenantDirectory<TenantRegistered, TenantDeregistered>(Registry, GetTenantId);
         await using var provider = services.BuildServiceProvider();
 
-        _ = await provider.GetRequiredService<ITenantDirectory>().GetActiveTenantsAsync().ToListAsync();
+        _ = await provider.GetRequiredService<ITenantDirectory>().GetActiveTenantsAsync(TestContext.Current.CancellationToken).ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
-        var snapshot = await snapshots.LoadAsync(Registry);
+        var snapshot = await snapshots.LoadAsync(Registry, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(snapshot);

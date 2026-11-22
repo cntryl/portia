@@ -18,8 +18,8 @@ public sealed class FixedTenantDirectoryTests
         var empty = new FixedTenantDirectory();
 
         // Act
-        var tenants = await directory.GetActiveTenantsAsync().ToListAsync();
-        var emptyTenants = await empty.GetActiveTenantsAsync().ToListAsync();
+        var tenants = await directory.GetActiveTenantsAsync(TestContext.Current.CancellationToken).ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var emptyTenants = await empty.GetActiveTenantsAsync(TestContext.Current.CancellationToken).ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal([new TenantId("acme"), new TenantId("beta")], tenants);
@@ -49,10 +49,10 @@ public sealed class FixedTenantDirectoryTests
         using var cancellation = new CancellationTokenSource();
 
         // Act
-        var watch = directory.WatchAsync(cancellation.Token).ToListAsync().AsTask();
+        var watch = directory.WatchAsync(cancellation.Token).ToListAsync(cancellationToken: TestContext.Current.CancellationToken).AsTask();
 
         // Assert
-        await Assert.ThrowsAsync<TimeoutException>(() => watch.WaitAsync(TimeSpan.FromMilliseconds(100)));
+        await Assert.ThrowsAsync<TimeoutException>(() => watch.WaitAsync(TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken));
 
         await cancellation.CancelAsync();
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await watch);
@@ -76,11 +76,11 @@ public sealed class FixedTenantDirectoryTests
         await Task.WhenAll(
                 started.GetOrAdd(new TenantId("acme"), _ => new TaskCompletionSource()).Task,
                 started.GetOrAdd(new TenantId("beta"), _ => new TaskCompletionSource()).Task)
-            .WaitAsync(TimeSpan.FromSeconds(5));
+            .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         await shutdown.CancelAsync();
 
         // Act
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        await run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, started.Count);

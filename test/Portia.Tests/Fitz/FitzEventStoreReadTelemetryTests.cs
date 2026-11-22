@@ -24,13 +24,13 @@ public sealed class FitzEventStoreReadTelemetryTests
         // Act
         if (pattern)
         {
-            await foreach (var _ in fixture.Store.ReadAsync(EventStreamPattern.ForPattern("test")))
+            await foreach (var _ in fixture.Store.ReadAsync(EventStreamPattern.ForPattern("test"), ct: TestContext.Current.CancellationToken))
                 if (stopEarly)
                     break;
         }
         else
         {
-            await foreach (var _ in fixture.Store.ReadAsync(fixture.Stream))
+            await foreach (var _ in fixture.Store.ReadAsync(fixture.Stream, ct: TestContext.Current.CancellationToken))
                 if (stopEarly)
                     break;
         }
@@ -104,7 +104,7 @@ public sealed class FitzEventStoreReadTelemetryTests
         // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await foreach (var _ in fixture.Store.ReadAsync(EventStreamPattern.ForPattern("test")))
+            await foreach (var _ in fixture.Store.ReadAsync(EventStreamPattern.ForPattern("test"), ct: TestContext.Current.CancellationToken))
             {
             }
         });

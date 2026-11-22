@@ -11,9 +11,10 @@ public sealed class AccountRebuildTests
     public async Task ShouldResumeCandidateGivenCommittedLiveAccount()
     {
         // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
         var endpoint = Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT") ?? "ws://127.0.0.1:4090/ws";
         await using var client = new FitzClient(new ClientConfig(new Uri(endpoint)));
-        await client.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(TimeSpan.FromSeconds(15)));
+        await client.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(TimeSpan.FromSeconds(15)), cancellationToken);
         var route = "kv://portia/accounts/test-" + Uuid.CreateVersion4();
         var account = Uuid.CreateVersion4();
         var pattern = EventStreamPattern.ForPattern("test", "accounts");
@@ -23,7 +24,7 @@ public sealed class AccountRebuildTests
         var events = new InMemoryEventStore();
         await events.AppendAsync(new EventStreamAddress("test", "accounts", account.ToString()), 0,
             [DomainEventSeed.Attach(new AccountOpened(500), account, 1),
-             DomainEventSeed.Attach(new FundsDeposited(125), account, 2)]);
+             DomainEventSeed.Attach(new FundsDeposited(125), account, 2)], cancellationToken);
         var services = new ServiceCollection();
         services.AddScoped<IAccountProjectionRepository>(_ => new AccountRepository(client.Kv, route));
         services.AddScoped<IProjectionStore>(_ => throw new InvalidOperationException("Unexpected store resolution."));
@@ -34,16 +35,16 @@ public sealed class AccountRebuildTests
             await using var scope = provider.CreateAsyncScope();
             var projector = scope.ServiceProvider.GetRequiredService<ProjectorRegistration>().Resolve(scope.ServiceProvider);
             var store = scope.ServiceProvider.GetRequiredService<IAccountProjectionRepository>();
-            await new ProjectorRunner(events).RunAsync(projector, await store.LoadCheckpointAsync(identity),
-                new ProjectionRunOptions { RebuildId = identity.RebuildId, MaxEventsPerPass = limit });
+            await new ProjectorRunner(events).RunAsync(projector, await store.LoadCheckpointAsync(identity, cancellationToken),
+                new ProjectionRunOptions { RebuildId = identity.RebuildId, MaxEventsPerPass = limit }, cancellationToken);
         }
 
         await RunAsync(live, 2);
 
         // Act
         await RunAsync(candidate, 1);
-        var liveMidpoint = await new AccountRepository(client.Kv, route).GetAsync(new TenantId("test"), account, default);
-        var candidateMidpoint = await new AccountRepository(client.Kv, route).GetAsync(candidate, account, default);
+        var liveMidpoint = await new AccountRepository(client.Kv, route).GetAsync(new TenantId("test"), account, cancellationToken);
+        var candidateMidpoint = await new AccountRepository(client.Kv, route).GetAsync(candidate, account, cancellationToken);
         await RunAsync(candidate, 2);
         await RunAsync(candidate, 2);
 
@@ -51,9 +52,9 @@ public sealed class AccountRebuildTests
         Assert.Equal(new AccountReadModel(account, 625), liveMidpoint);
         Assert.Equal(new AccountReadModel(account, 500), candidateMidpoint);
         var query = new AccountRepository(client.Kv, route);
-        Assert.Equal(liveMidpoint, await query.GetAsync(candidate, account, default));
-        Assert.Null(await query.GetAsync(second, account, default));
-        Assert.Equal(ProjectionCheckpoint.Start, await query.LoadCheckpointAsync(second));
+        Assert.Equal(liveMidpoint, await query.GetAsync(candidate, account, cancellationToken));
+        Assert.Null(await query.GetAsync(second, account, cancellationToken));
+        Assert.Equal(ProjectionCheckpoint.Start, await query.LoadCheckpointAsync(second, cancellationToken));
     }
 
     /// <summary>Only earlier committed batches survive a deposit handler failure.</summary>
@@ -64,9 +65,10 @@ public sealed class AccountRebuildTests
     public async Task ShouldRetryFailedDepositGivenConfiguredBatchSize(int batchSize, bool cancel)
     {
         // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
         var endpoint = Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT") ?? "ws://127.0.0.1:4090/ws";
         await using var client = new FitzClient(new ClientConfig(new Uri(endpoint)));
-        await client.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(TimeSpan.FromSeconds(15)));
+        await client.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(TimeSpan.FromSeconds(15)), cancellationToken);
         var route = "kv://portia/accounts/test-" + Uuid.CreateVersion4();
         var account = Uuid.CreateVersion4();
         var pattern = EventStreamPattern.ForPattern("test", "accounts");
@@ -74,8 +76,9 @@ public sealed class AccountRebuildTests
         var events = new InMemoryEventStore();
         await events.AppendAsync(new EventStreamAddress("test", "accounts", account.ToString()), 0,
             [DomainEventSeed.Attach(new AccountOpened(500), account, 1),
-             DomainEventSeed.Attach(new FundsDeposited(125), account, 2)]);
+             DomainEventSeed.Attach(new FundsDeposited(125), account, 2)], cancellationToken);
         using var cancellation = new CancellationTokenSource();
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, cancellation.Token);
         var failDeposit = true;
         void OnDeposit()
         {
@@ -99,16 +102,16 @@ public sealed class AccountRebuildTests
         {
             await using var scope = provider.CreateAsyncScope();
             var projector = scope.ServiceProvider.GetRequiredService<ProjectorRegistration>().Resolve(scope.ServiceProvider);
-            var checkpoint = await new AccountRepository(client.Kv, route).LoadCheckpointAsync(identity);
+            var checkpoint = await new AccountRepository(client.Kv, route).LoadCheckpointAsync(identity, cancellationToken);
             await new ProjectorRunner(events).RunAsync(projector, checkpoint,
-                new ProjectionRunOptions { MaxBatchSize = batchSize }, failDeposit ? cancellation.Token : default);
+                new ProjectionRunOptions { MaxBatchSize = batchSize }, failDeposit && cancel ? linkedCancellation.Token : cancellationToken);
         }
 
         // Act
         var exception = await Record.ExceptionAsync(RunAsync);
         var fresh = new AccountRepository(client.Kv, route);
-        var afterFailure = await fresh.GetAsync(identity, account, default);
-        var progress = await fresh.LoadCheckpointAsync(identity);
+        var afterFailure = await fresh.GetAsync(identity, account, cancellationToken);
+        var progress = await fresh.LoadCheckpointAsync(identity, cancellationToken);
         failDeposit = false;
         await RunAsync();
         await RunAsync();
@@ -120,7 +123,7 @@ public sealed class AccountRebuildTests
             Assert.Equal(ProcessorFailureStage.Handling, Assert.IsType<ProcessorFailureException>(exception).Stage);
         Assert.Equal(batchSize == 1 ? new AccountReadModel(account, 500) : null, afterFailure);
         Assert.Equal(batchSize != 1, progress == ProjectionCheckpoint.Start);
-        Assert.Equal(new AccountReadModel(account, 625), await fresh.GetAsync(identity, account, default));
+        Assert.Equal(new AccountReadModel(account, 625), await fresh.GetAsync(identity, account, cancellationToken));
     }
 
     sealed class DepositFailureRepository(AccountRepository repository, Action onDeposit) : IAccountProjectionRepository

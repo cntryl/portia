@@ -22,7 +22,7 @@ public sealed class WorkerStartupRequirementTests
         using var host = builder.Build();
 
         // Assert
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains(nameof(IDomainEventReader), error.Message, StringComparison.Ordinal);
         Assert.Contains("Register its application or infrastructure implementation", error.Message,
@@ -43,7 +43,7 @@ public sealed class WorkerStartupRequirementTests
         using var host = builder.Build();
 
         // Assert
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains(nameof(ITenantDirectory), error.Message, StringComparison.Ordinal);
     }
@@ -64,8 +64,8 @@ public sealed class WorkerStartupRequirementTests
         // Act
         var error = await Record.ExceptionAsync(async () =>
         {
-            await host.StartAsync();
-            await host.StopAsync();
+            await host.StartAsync(TestContext.Current.CancellationToken);
+            await host.StopAsync(TestContext.Current.CancellationToken);
         });
 
         // Assert
@@ -83,8 +83,8 @@ public sealed class WorkerStartupRequirementTests
         // Act
         var error = await Record.ExceptionAsync(async () =>
         {
-            await host.StartAsync();
-            await host.StopAsync();
+            await host.StartAsync(TestContext.Current.CancellationToken);
+            await host.StopAsync(TestContext.Current.CancellationToken);
         });
 
         // Assert

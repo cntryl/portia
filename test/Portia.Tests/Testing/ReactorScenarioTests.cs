@@ -18,11 +18,11 @@ public sealed class ReactorScenarioTests
         var reactor = new WelcomeReactor(scenario.Requests);
 
         // Act
-        await scenario.RunAsync(reactor);
+        await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(ids.Select(id => (IRequestBase)new SendWelcomeEmail(id)), scenario.SentRequests);
-        await scenario.RunAsync(reactor);
+        await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
         Assert.Equal(ids.Concat(ids).Select(id => (IRequestBase)new SendWelcomeEmail(id)), scenario.SentRequests);
     }
 
@@ -37,7 +37,7 @@ public sealed class ReactorScenarioTests
         var second = Uuid.CreateVersion4();
 
         // Act
-        await scenario.Given(new UserCreated(first), new UserCreated(second)).RunAsync(reactor);
+        await scenario.Given(new UserCreated(first), new UserCreated(second)).RunAsync(reactor, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal<IRequestBase>([new SendWelcomeEmail(first), new SendWelcomeEmail(second)],
@@ -57,7 +57,7 @@ public sealed class ReactorScenarioTests
             new UserCreated(first));
 
         // Act
-        await scenario.RunAsync(new WelcomeReactor(scenario.Requests));
+        await scenario.RunAsync(new WelcomeReactor(scenario.Requests), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal<IRequestBase>(
@@ -73,7 +73,7 @@ public sealed class ReactorScenarioTests
         var scenario = new ReactorScenario().RespondTo<GetValue, int>(Result<int>.Success(5));
 
         // Act
-        var result = await scenario.Requests.SendAsync(new GetValue(), RequestActor.System);
+        var result = await scenario.Requests.SendAsync(new GetValue(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(5, result.Value);
@@ -92,7 +92,7 @@ public sealed class ReactorScenarioTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await scenario.Requests.SendAsync(new GetValue(), RequestActor.System));
+            await scenario.Requests.SendAsync(new GetValue(), RequestActor.System, ct: TestContext.Current.CancellationToken));
 
         // Assert
         var error = Assert.IsType<InvalidOperationException>(exception);
@@ -112,7 +112,7 @@ public sealed class ReactorScenarioTests
             _ = scenario.RespondTo<GetValue, int>(Result<int>.Success(5));
 
         // Act
-        var result = await scenario.Requests.SendAsync(new GetValue(), RequestActor.System);
+        var result = await scenario.Requests.SendAsync(new GetValue(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(expected, result.Value);
@@ -128,7 +128,7 @@ public sealed class ReactorScenarioTests
         IUnaryRequest request = new GetValue();
 
         // Act
-        var result = await scenario.Requests.SendAsync(request, RequestActor.System);
+        var result = await scenario.Requests.SendAsync(request, RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Same(error, result.Error);
@@ -143,7 +143,7 @@ public sealed class ReactorScenarioTests
         var scenario = new ReactorScenario().RespondToStream<GuardedSequence, int>(1, 2, 3);
 
         // Act
-        var items = await scenario.Requests.StreamAsync(new GuardedSequence(), RequestActor.System).ToListAsync();
+        var items = await scenario.Requests.StreamAsync(new GuardedSequence(), RequestActor.System, ct: TestContext.Current.CancellationToken).ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal([1, 2, 3], items);
@@ -162,7 +162,7 @@ public sealed class ReactorScenarioTests
 
         // Act
         var result = await scenario.Requests.AuthorizeAsync(request,
-            scenario.Requests.CreateContext(RequestActor.System));
+            scenario.Requests.CreateContext(RequestActor.System), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -181,7 +181,7 @@ public sealed class ReactorScenarioTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await scenario.RunAsync(new WelcomeReactor(scenario.Requests)));
+            await scenario.RunAsync(new WelcomeReactor(scenario.Requests), TestContext.Current.CancellationToken));
 
         // Assert
         var error = Assert.IsType<ProcessorFailureException>(exception);
@@ -214,10 +214,10 @@ public sealed class ReactorScenarioTests
         var scenario = new ReactorScenario().Given(new UserCreated(Uuid.CreateVersion4()));
         var reactor = new WelcomeReactor(scenario.Requests);
 
-        await scenario.RunAsync(reactor);
+        await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
 
         // Act
-        await scenario.RunAsync(reactor);
+        await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, scenario.SentRequests.Count);
@@ -233,7 +233,7 @@ public sealed class ReactorScenarioTests
         var scenario = new ReactorScenario().Given(new UserCreated(user));
 
         // Act
-        await scenario.RunAsync(new WelcomeReactor(scenario.Requests, EventStreamPattern.ForTenant("users")));
+        await scenario.RunAsync(new WelcomeReactor(scenario.Requests, EventStreamPattern.ForTenant("users")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal<IRequestBase>([new SendWelcomeEmail(user)], scenario.SentRequests);
@@ -250,7 +250,7 @@ public sealed class ReactorScenarioTests
         var reactor = new WelcomeReactor(scenario.Requests, EventStreamPattern.ForTenant("users"));
 
         // Act
-        await scenario.RunAsync(reactor);
+        await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(tenant.Value, reactor.Pattern.Realm);
@@ -286,7 +286,7 @@ public sealed class ReactorScenarioTests
         var reactor = new WelcomeReactor(scenario.Requests);
 
         // Act
-        await scenario.RunAsync(reactor);
+        await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(["owner-a.record-1", "owner-b.record-2"], reactor.StreamResources);
@@ -306,7 +306,7 @@ public sealed class ReactorScenarioTests
         var reactor = new WelcomeReactor(scenario.Requests, EventStreamPattern.ForPattern("test", "users", "one"));
 
         // Act
-        var exception = await Record.ExceptionAsync(() => scenario.RunAsync(reactor));
+        var exception = await Record.ExceptionAsync(() => scenario.RunAsync(reactor, TestContext.Current.CancellationToken));
 
         // Assert
         var error = Assert.IsType<InvalidOperationException>(exception);
@@ -326,7 +326,7 @@ public sealed class ReactorScenarioTests
         var reactor = new WelcomeReactor(scenario.Requests);
 
         // Act
-        await scenario.RunAsync(reactor);
+        await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(eventId, reactor.LastEventId);

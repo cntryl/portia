@@ -25,10 +25,10 @@ public sealed class FitzNotificationFaultTests
 
         // Act
         _ = await scheduler.EnsureAsync(request, new RequestScheduleSpec("* * * * *"),
-            new RequestRouteValues(), RequestActor.System);
+            new RequestRouteValues(), RequestActor.System, TestContext.Current.CancellationToken);
         var first = client.CreatedBody.ToArray();
         _ = await scheduler.EnsureAsync(request, new RequestScheduleSpec("* * * * *"),
-            new RequestRouteValues(), RequestActor.System);
+            new RequestRouteValues(), RequestActor.System, TestContext.Current.CancellationToken);
         var scheduled = JsonSerializer.Deserialize(client.CreatedBody.Span,
             FitzJsonContext.Default.FitzScheduledRequestEnvelope)!;
 
@@ -55,7 +55,7 @@ public sealed class FitzNotificationFaultTests
 
         // Act
         var deliveries = new List<RequestNotification>();
-        await foreach (var delivery in consumer.ReadAsync())
+        await foreach (var delivery in consumer.ReadAsync(TestContext.Current.CancellationToken))
             deliveries.Add(delivery);
 
         // Assert
@@ -82,13 +82,13 @@ public sealed class FitzNotificationFaultTests
             "schedule://test/shared/action/run",
             TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)),
             provider.GetRequiredService<IServiceScopeFactory>(), clock);
-        await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var enumerator = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Act
         var move = enumerator.MoveNextAsync().AsTask();
 
         // Assert
-        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         Assert.Equal(1, tracker.Disposed);
         clock.Advance(TimeSpan.FromSeconds(1));
 
@@ -116,13 +116,13 @@ public sealed class FitzNotificationFaultTests
             TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)),
             provider.GetRequiredService<IServiceScopeFactory>(), clock);
         using var cancellation = new CancellationTokenSource();
-        await using var enumerator = consumer.ReadAsync(cancellation.Token).GetAsyncEnumerator();
+        await using var enumerator = consumer.ReadAsync(cancellation.Token).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Act
         var move = enumerator.MoveNextAsync().AsTask();
 
         // Assert
-        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         await cancellation.CancelAsync();
 
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => move);
@@ -145,17 +145,17 @@ public sealed class FitzNotificationFaultTests
             serializer, "schedule://test/shared/action/run",
             TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)),
             provider.GetRequiredService<IServiceScopeFactory>(), clock);
-        await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var enumerator = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Act
         var move = enumerator.MoveNextAsync().AsTask();
 
         // Assert
-        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         clock.Advance(TimeSpan.FromSeconds(1));
-        Assert.Equal(TimeSpan.FromSeconds(2), await clock.WaitForDelayAsync());
+        Assert.Equal(TimeSpan.FromSeconds(2), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         clock.Advance(TimeSpan.FromSeconds(2));
-        Assert.Equal(TimeSpan.FromSeconds(4), await clock.WaitForDelayAsync());
+        Assert.Equal(TimeSpan.FromSeconds(4), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         Assert.False(move.IsCompleted);
         clock.Advance(TimeSpan.FromSeconds(4));
 
@@ -181,7 +181,7 @@ public sealed class FitzNotificationFaultTests
             TestJson.Catalog(RequestTransportId.Schedule, typeof(UniversalAction)),
             provider.GetRequiredService<IServiceScopeFactory>(), clock);
         using var cancellation = new CancellationTokenSource();
-        await using var enumerator = consumer.ReadAsync(cancellation.Token).GetAsyncEnumerator();
+        await using var enumerator = consumer.ReadAsync(cancellation.Token).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Act
         var move = enumerator.MoveNextAsync().AsTask();
@@ -189,11 +189,11 @@ public sealed class FitzNotificationFaultTests
         // Assert
         foreach (var seconds in new[] { 1, 2, 4, 8, 16 })
         {
-            Assert.Equal(TimeSpan.FromSeconds(seconds), await clock.WaitForDelayAsync());
+            Assert.Equal(TimeSpan.FromSeconds(seconds), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
             clock.Advance(TimeSpan.FromSeconds(seconds));
         }
 
-        Assert.Equal(TimeSpan.FromSeconds(30), await clock.WaitForDelayAsync());
+        Assert.Equal(TimeSpan.FromSeconds(30), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         Assert.False(move.IsCompleted);
         await cancellation.CancelAsync();
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => move);
@@ -221,12 +221,12 @@ public sealed class FitzNotificationFaultTests
             provider.GetRequiredService<IServiceScopeFactory>(), clock);
 
         // Act
-        await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var enumerator = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await enumerator.MoveNextAsync());
         Assert.Equal(2, tracker.Attempts);
-        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+        Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
 
         var move = enumerator.MoveNextAsync().AsTask();
         clock.Advance(TimeSpan.FromSeconds(1));
@@ -255,7 +255,7 @@ public sealed class FitzNotificationFaultTests
             provider.GetRequiredService<IServiceScopeFactory>(), new ManualTestClock());
 
         // Act
-        await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var enumerator = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(await enumerator.MoveNextAsync());
@@ -279,7 +279,7 @@ public sealed class FitzNotificationFaultTests
             provider.GetRequiredService<IServiceScopeFactory>(), new ManualTestClock());
 
         // Act
-        await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var enumerator = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(await enumerator.MoveNextAsync());
@@ -309,7 +309,7 @@ public sealed class FitzNotificationFaultTests
         var delivered = 0;
 
         // Act
-        await foreach (var _ in consumer.ReadAsync())
+        await foreach (var _ in consumer.ReadAsync(TestContext.Current.CancellationToken))
             delivered++;
 
         // Assert

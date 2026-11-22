@@ -40,7 +40,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator("expired-token"), options: options));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(1, queued.Retries);
@@ -63,7 +63,7 @@ public sealed class QueueRunnerTests
             options: new QueueRunnerOptions { RetryDelay = TimeSpan.Zero }));
 
         // Assert
-        _ = await Assert.ThrowsAsync<IOException>(() => runner.RunAsync());
+        _ = await Assert.ThrowsAsync<IOException>(() => runner.RunAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(1, queued.Retries);
         Assert.Equal(0, queued.AbandonmentCount);
@@ -87,7 +87,7 @@ public sealed class QueueRunnerTests
             { RetryDelay = TimeSpan.FromMilliseconds(milliseconds) }));
 
         // Assert
-        _ = await Assert.ThrowsAsync<QueueConfigurationException>(() => runner.RunAsync());
+        _ = await Assert.ThrowsAsync<QueueConfigurationException>(() => runner.RunAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal(0, queued.InvocationReadCount);
         Assert.Equal(0, queued.CompletionCount);
@@ -113,7 +113,7 @@ public sealed class QueueRunnerTests
             options: new QueueRunnerOptions { RetryDelay = TimeSpan.Zero }));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(0, queued.Retries);
@@ -142,7 +142,7 @@ public sealed class QueueRunnerTests
             bus, new TestRequestActorValidator(), terminalHandler: new RecordingTerminalHandler()));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.All(items, item => Assert.True(item.Completed));
@@ -180,7 +180,7 @@ public sealed class QueueRunnerTests
             capture.Logger<QueueRunner>());
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Same(caller, Activity.Current);
@@ -236,7 +236,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), terminalHandler: terminal), logger);
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(["abandoned", "abandoned", "completed", "terminal"], outcomes.Order());
@@ -267,7 +267,7 @@ public sealed class QueueRunnerTests
             terminalHandler: new RecordingTerminalHandler()));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(3, handler.LastValue);
@@ -293,7 +293,7 @@ public sealed class QueueRunnerTests
             terminalHandler: new RecordingTerminalHandler()));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(failing.Completed);
@@ -318,7 +318,7 @@ public sealed class QueueRunnerTests
             RequestDeliveryScopes.FixedQueue(bus, new TestRequestActorValidator(), terminalHandler: terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         var failure = Assert.Single(terminal.Failures);
@@ -345,7 +345,7 @@ public sealed class QueueRunnerTests
             RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator()));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(1, consumer.EnumerationCount);
@@ -364,7 +364,7 @@ public sealed class QueueRunnerTests
             RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator()));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(queued.Completed);
@@ -390,7 +390,7 @@ public sealed class QueueRunnerTests
                 terminalHandler: terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         var failure = Assert.Single(terminal.Failures);
@@ -422,7 +422,7 @@ public sealed class QueueRunnerTests
                 terminalHandler: terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(expired.Completed);
@@ -444,7 +444,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), terminalHandler: terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(["terminal", "abandon"], operations);
@@ -464,7 +464,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), terminalHandler: terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(1, queued.InvocationReadCount);
@@ -499,7 +499,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), terminalHandler: terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         _ = Assert.Single(terminal.Failures);
@@ -527,7 +527,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }, terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(terminal.Failures);
@@ -554,7 +554,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }, terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(terminal.Failures);
@@ -585,7 +585,7 @@ public sealed class QueueRunnerTests
             new QueueRunnerOptions { TerminalAttempt = 3 }, terminal), logger);
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(terminal.Failures);
@@ -634,7 +634,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }, terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         var failure = Assert.Single(terminal.Failures);
@@ -658,7 +658,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }, terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(terminal.Failures);
@@ -679,7 +679,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }, terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(QueuedRequestTerminalReason.RetryLimitReached, Assert.Single(terminal.Failures).Reason);
@@ -702,7 +702,7 @@ public sealed class QueueRunnerTests
             RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator(), terminalHandler: terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(QueuedRequestTerminalReason.DeserializationFailure, Assert.Single(terminal.Failures).Reason);
@@ -734,7 +734,7 @@ public sealed class QueueRunnerTests
             new RecordingTerminalHandler()));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(queued.Abandoned);
@@ -756,7 +756,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), terminalHandler: terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(QueuedRequestTerminalReason.DeserializationFailure, Assert.Single(terminal.Failures).Reason);
@@ -777,7 +777,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }, terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(QueuedRequestTerminalReason.RetryLimitReached, Assert.Single(terminal.Failures).Reason);
@@ -799,7 +799,7 @@ public sealed class QueueRunnerTests
             new RecordingTerminalHandler()));
 
         // Assert
-        var error = await Assert.ThrowsAsync<QueueConfigurationException>(() => runner.RunAsync());
+        var error = await Assert.ThrowsAsync<QueueConfigurationException>(() => runner.RunAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("durable delivery-attempt count", error.Message, StringComparison.Ordinal);
         Assert.False(queued.Completed);
@@ -820,7 +820,7 @@ public sealed class QueueRunnerTests
             new RecordingTerminalHandler()));
 
         // Assert
-        var error = await Assert.ThrowsAsync<QueueConfigurationException>(() => runner.RunAsync());
+        var error = await Assert.ThrowsAsync<QueueConfigurationException>(() => runner.RunAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("must be positive", error.Message, StringComparison.Ordinal);
         Assert.False(queued.Completed);
@@ -848,12 +848,12 @@ public sealed class QueueRunnerTests
         using var hosted = new QueueRunnerHostedService(runner);
 
         // Act
-        await hosted.StartAsync(default);
+        await hosted.StartAsync(TestContext.Current.CancellationToken);
 
         // Assert
         _ = await Assert.ThrowsAsync<QueueConfigurationException>(async () =>
             await (hosted.ExecuteTask ?? throw new InvalidOperationException("The hosted runner did not start."))
-                .WaitAsync(TimeSpan.FromSeconds(5)));
+                .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
     }
 
     /// <summary>A request that did not declare queue delivery is terminal, never dispatched, and returned to transport.</summary>
@@ -868,7 +868,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), terminalHandler: terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         var failure = Assert.Single(terminal.Failures);
@@ -890,7 +890,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }, terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         var failure = Assert.Single(terminal.Failures);
@@ -916,7 +916,7 @@ public sealed class QueueRunnerTests
             terminal));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(terminal.Failures);
@@ -938,7 +938,7 @@ public sealed class QueueRunnerTests
             new RecordingTerminalHandler(true)));
 
         // Assert
-        var failure = await Assert.ThrowsAsync<TerminalHandlerFailureException>(() => runner.RunAsync());
+        var failure = await Assert.ThrowsAsync<TerminalHandlerFailureException>(() => runner.RunAsync(TestContext.Current.CancellationToken));
 
         Assert.Equal("terminal failed", failure.InnerException?.Message);
         Assert.False(queued.Completed);
@@ -958,7 +958,7 @@ public sealed class QueueRunnerTests
         using var hosted = new QueueRunnerHostedService(runner);
 
         // Act
-        await hosted.StartAsync(default);
+        await hosted.StartAsync(TestContext.Current.CancellationToken);
 
         // Assert
         var failure = await Assert.ThrowsAsync<TerminalHandlerFailureException>(async () =>
@@ -980,7 +980,7 @@ public sealed class QueueRunnerTests
             busHost.Bus, new TestRequestActorValidator(), new QueueRunnerOptions { TerminalAttempt = 3 }));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(queued.Completed);
@@ -999,7 +999,7 @@ public sealed class QueueRunnerTests
             new RecordingTerminalHandler()));
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(queued.Completed);
@@ -1018,11 +1018,11 @@ public sealed class QueueRunnerTests
             RequestDeliveryScopes.FixedQueue(busHost.Bus, new TestRequestActorValidator()));
         using var hosted = new QueueRunnerHostedService(runner);
 
-        await hosted.StartAsync(default);
-        await consumer.Waiting.WaitAsync(TimeSpan.FromSeconds(5));
+        await hosted.StartAsync(TestContext.Current.CancellationToken);
+        await consumer.Waiting.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Act
-        await hosted.StopAsync(default);
+        await hosted.StopAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(queued.Completed);
@@ -1046,7 +1046,7 @@ public sealed class QueueRunnerTests
             {
                 attempts++;
                 return Task.FromException(expected);
-            }, TimeSpan.FromSeconds(1), TimeProvider.System, null, default));
+            }, TimeSpan.FromSeconds(1), TimeProvider.System, null, TestContext.Current.CancellationToken));
 
         Assert.Same(expected, failure);
         Assert.Equal(1, attempts);
@@ -1068,7 +1068,7 @@ public sealed class QueueRunnerTests
             {
                 attempts++;
                 return Task.FromException(expected);
-            }, TimeSpan.FromSeconds(1), TimeProvider.System, null, default));
+            }, TimeSpan.FromSeconds(1), TimeProvider.System, null, TestContext.Current.CancellationToken));
 
         Assert.Same(expected, failure);
         Assert.Equal(1, attempts);
@@ -1085,7 +1085,7 @@ public sealed class QueueRunnerTests
         var queued = new FakeQueuedRequest(new ChangeValue(1));
 
         // Act
-        await new QueueRunner(new FakeQueueConsumer([queued]), scopes).RunAsync();
+        await new QueueRunner(new FakeQueueConsumer([queued]), scopes).RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, scopes.Created.Count);
@@ -1105,7 +1105,7 @@ public sealed class QueueRunnerTests
         var queued = new FakeQueuedRequest(new ChangeValue(1));
 
         // Act
-        await new QueueRunner(new FakeQueueConsumer([queued]), scopes).RunAsync();
+        await new QueueRunner(new FakeQueueConsumer([queued]), scopes).RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, scopes.Created.Count);
@@ -1140,7 +1140,7 @@ public sealed class QueueRunnerTests
             handler), logger);
 
         // Act
-        await runner.RunAsync();
+        await runner.RunAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(terminal ? 1 : 0, handler.Failures.Count);
@@ -1202,7 +1202,7 @@ public sealed class QueueRunnerTests
             options: new QueueRunnerOptions { RetryDelay = TimeSpan.Zero }, terminalHandler: terminal));
 
         // Assert
-        _ = await Assert.ThrowsAsync<TerminalHandlerFailureException>(() => runner.RunAsync());
+        _ = await Assert.ThrowsAsync<TerminalHandlerFailureException>(() => runner.RunAsync(TestContext.Current.CancellationToken));
 
         Assert.Single(terminal.Failures);
         Assert.False(failed.Completed);

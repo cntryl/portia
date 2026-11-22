@@ -106,7 +106,7 @@ public sealed class ComponentRegistrationTests
         var store = new InMemoryEventStore();
         var ev = new ValueChanged(42);
         ev.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), id, 1, DateTimeOffset.UtcNow));
-        await store.AppendAsync(stream, 0, [ev]);
+        await store.AppendAsync(stream, 0, [ev], TestContext.Current.CancellationToken);
         var target = new RecordingProjectionTarget();
         var services = new ServiceCollection();
         _ = services.AddSingleton<ITestProjectionRepository>(target);
@@ -119,7 +119,7 @@ public sealed class ComponentRegistrationTests
         // Assert
         var registration = Assert.Single(provider.GetServices<ProjectorRegistration>(),
             r => r.ProjectorType == typeof(TestProjector));
-        _ = await runner.RunAsync(registration.Resolve(provider), ProjectionCheckpoint.Start);
+        _ = await runner.RunAsync(registration.Resolve(provider), ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken);
 
         Assert.Equal(42, target.Projection.Value);
     }

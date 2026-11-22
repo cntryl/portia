@@ -42,7 +42,7 @@ public sealed class FleetRedistributionTests
         try
         {
             await Until(() => state.Active.Count == 8);
-            await clock.WaitForDelayAsync(options.ReconciliationInterval);
+            await clock.WaitForDelayAsync(options.ReconciliationInterval, TestContext.Current.CancellationToken);
             var original = state.Active.ToDictionary();
             membership.Observer.Set("b", "a");
             await AdvanceReconciliation(clock, options.ReconciliationInterval);
@@ -145,7 +145,7 @@ public sealed class FleetRedistributionTests
         // Act
         var error = await Record.ExceptionAsync(() => runner.RunAsync(Partitions,
             static (_, _) => Task.CompletedTask,
-            Options with { MembershipSelector = selector, WorkerId = workerId, LeaseTtl = TimeSpan.FromSeconds(ttl) }));
+            Options with { MembershipSelector = selector, WorkerId = workerId, LeaseTtl = TimeSpan.FromSeconds(ttl) }, TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsAssignableFrom<ArgumentException>(error);
@@ -175,7 +175,7 @@ public sealed class FleetRedistributionTests
         {
             // The retry delay is chosen by the runner's backoff policy, so the test observes it
             // instead of restating it: what matters is that the retry waits for it and no longer.
-            var retry = await clock.WaitForDelayAsync();
+            var retry = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
             Assert.InRange(retry, TimeSpan.Zero, FleetPartitionRunner.MaximumRetryBackoff);
             _ = Assert.Single(membership.Attempts);
             clock.Advance(retry - TimeSpan.FromTicks(1));
@@ -225,7 +225,7 @@ public sealed class FleetRedistributionTests
         // Assert
         try
         {
-            _ = await clock.WaitForDelayAsync();
+            _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
             await Until(() => active == 8);
             membership.Observer.FailView = true;
             clock.Advance(Options.ReconciliationInterval);
@@ -275,7 +275,7 @@ public sealed class FleetRedistributionTests
             // Six failed sessions in a row grow the retry delay to its ceiling.
             for (var failure = 1; failure <= 6; failure++)
             {
-                var delay = await clock.WaitForDelayAsync();
+                var delay = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
                 membership.Observer.FailView = failure < 6;
                 clock.Advance(delay);
             }
@@ -287,7 +287,7 @@ public sealed class FleetRedistributionTests
             membership.Observer.FailView = true;
             do
             {
-                retry = await clock.WaitForDelayAsync();
+                retry = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
                 clock.Advance(options.ReconciliationInterval);
             } while (retry == options.ReconciliationInterval || retry == options.PartitionStopTimeout);
         }

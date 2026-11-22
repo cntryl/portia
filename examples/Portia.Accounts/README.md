@@ -41,7 +41,7 @@ NUGET_PACKAGES=/tmp/portia-account-nuget dotnet restore \
   examples/Portia.Accounts/Portia.Accounts.Tests/Portia.Accounts.Tests.csproj \
   --configfile examples/Portia.Accounts/NuGet.Config
 NUGET_PACKAGES=/tmp/portia-account-nuget dotnet test \
-  examples/Portia.Accounts/Portia.Accounts.Tests/Portia.Accounts.Tests.csproj \
+  --project examples/Portia.Accounts/Portia.Accounts.Tests/Portia.Accounts.Tests.csproj \
   --configuration Release
 docker compose -f examples/Portia.Accounts/compose.yaml up -d --wait
 ```

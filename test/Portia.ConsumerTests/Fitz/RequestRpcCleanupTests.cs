@@ -45,12 +45,12 @@ public sealed class RequestRpcCleanupTests
         if (registrationFails)
         {
             var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-                await server.RegisterRequestsAsync());
+                await server.RegisterRequestsAsync(TestContext.Current.CancellationToken));
             Assert.Equal("Registration failed", error.Message);
         }
         else
         {
-            var workers = await server.RegisterRequestsAsync();
+            var workers = await server.RegisterRequestsAsync(TestContext.Current.CancellationToken);
             _ = await Assert.ThrowsAsync<AggregateException>(async () => await workers.DisposeAsync());
             await workers.DisposeAsync();
         }

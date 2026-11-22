@@ -72,7 +72,7 @@ public sealed class CompleteWorkflowTests
         _ = builder.Services.AddPortiaQueueRunner();
         await using var app = builder.Build();
         map(app);
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         var effects = app.Services.GetRequiredService<ConsumerHost.Effects>();
@@ -83,34 +83,34 @@ public sealed class CompleteWorkflowTests
             await using (var scope = app.Services.CreateAsyncScope())
             {
                 Assert.True((await scope.ServiceProvider.GetRequiredService<IRequestBus>()
-                    .SendAsync(new DepositAccount(id, 5), RequestActor.System)).IsSuccess);
+                    .SendAsync(new DepositAccount(id, 5), RequestActor.System, ct: TestContext.Current.CancellationToken)).IsSuccess);
             }
 
             using var http = app.GetTestClient();
-            using var response = await http.PostAsJsonAsync("/accounts/" + id, new { amount = 7 });
-            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+            using var response = await http.PostAsJsonAsync("/accounts/" + id, new { amount = 7 }, cancellationToken: TestContext.Current.CancellationToken);
+            Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
             var serializer = requestSerializer;
             var server = new FitzRpcRequestServer(client.Rpc, app.Services.GetRequiredService<IServiceScopeFactory>());
-            await using var registrations = await server.RegisterRequestsAsync();
+            await using var registrations = await server.RegisterRequestsAsync(TestContext.Current.CancellationToken);
             var sender = new FitzRemoteRequestSender(client.Rpc, serializer, serializer);
-            Assert.True((await sender.SendAsync(new DepositAccount(id, 11), route, null)).IsSuccess);
+            Assert.True((await sender.SendAsync(new DepositAccount(id, 11), route, null, TestContext.Current.CancellationToken)).IsSuccess);
             var publisher = app.Services.GetRequiredService<IRequestQueuePublisher>();
-            await publisher.EnqueueAsync(new DepositAccount(id, 13), route, null);
+            await publisher.EnqueueAsync(new DepositAccount(id, 13), route, null, TestContext.Current.CancellationToken);
             await effects.WaitForAsync("business", 4, id);
             await using (var scope = app.Services.CreateAsyncScope())
             {
                 var declined = await scope.ServiceProvider.GetRequiredService<IRequestBus>()
-                    .SendAsync(new DepositAccount(id, -1), RequestActor.System);
+                    .SendAsync(new DepositAccount(id, -1), RequestActor.System, ct: TestContext.Current.CancellationToken);
                 Assert.False(declined.IsSuccess);
                 var account = await scope.ServiceProvider.Aggregates()
-                    .HydrateAsync(new Account(id));
+                    .HydrateAsync(new Account(id), TestContext.Current.CancellationToken);
                 Assert.NotNull(account);
                 Assert.Equal(36, account.Balance);
                 Assert.Equal(4UL, account.Version);
                 Assert.Equal(4UL, account.CommittedStreamPosition);
                 var records = new List<DomainEventRecord>();
                 await foreach (var record in scope.ServiceProvider.GetRequiredService<IEventStore>()
-                                   .ReadAsync(ConsumerStreams.AccountsPattern))
+                                   .ReadAsync(ConsumerStreams.AccountsPattern, ct: TestContext.Current.CancellationToken))
                 {
                     if (record.Event.Metadata.AggregateId == id)
                     {
@@ -155,7 +155,7 @@ public sealed class CompleteWorkflowTests
         }
         finally
         {
-            await app.StopAsync();
+            await app.StopAsync(TestContext.Current.CancellationToken);
         }
 
         Assert.All(effects.Scopes.Values, Assert.True);

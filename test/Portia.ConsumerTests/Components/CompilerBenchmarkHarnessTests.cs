@@ -65,7 +65,7 @@ public sealed class CompilerBenchmarkHarnessTests
     public async Task ShouldRejectSecondExecutionGivenPreparedIndependentCase()
     {
         // Arrange
-        using var operation = await BenchmarkCase.PrepareAsync(new CaseSpec("generators", "body"), "minimal");
+        using var operation = await BenchmarkCase.PrepareAsync(new CaseSpec("generators", "body"), "minimal", TestContext.Current.CancellationToken);
         await operation.ExecuteAsync();
 
         // Act
@@ -87,7 +87,7 @@ public sealed class CompilerBenchmarkHarnessTests
         var spec = new CaseSpec("fixes", "fix-all", fix);
 
         // Act
-        var sample = await BenchmarkCase.MeasureAsync(spec, "minimal", 0);
+        var sample = await BenchmarkCase.MeasureAsync(spec, "minimal", 0, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(sample.Evidence.Files > 0);
@@ -145,7 +145,7 @@ public sealed class CompilerBenchmarkHarnessTests
         var spec = new CaseSpec("generators", edit);
 
         // Act
-        var sample = await BenchmarkCase.MeasureAsync(spec, "minimal", 0);
+        var sample = await BenchmarkCase.MeasureAsync(spec, "minimal", 0, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(sample.Evidence.Files > 0);
@@ -168,7 +168,7 @@ public sealed class CompilerBenchmarkHarnessTests
         var spec = new CaseSpec("fixes", "complete", fix);
 
         // Act
-        var sample = await BenchmarkCase.MeasureAsync(spec, "minimal", 0);
+        var sample = await BenchmarkCase.MeasureAsync(spec, "minimal", 0, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(sample.Evidence.Files > 0);

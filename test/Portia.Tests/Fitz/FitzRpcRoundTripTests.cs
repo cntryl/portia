@@ -32,11 +32,11 @@ public sealed class FitzRpcRoundTripTests
         var serializer = TestJson.Serializer(typeof(RpcGetValue));
         using var busHost = TestRequestBus.Create();
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
-        await using var registration = await server.RegisterAsync<RpcGetValue, int>();
+        await using var registration = await server.RegisterAsync<RpcGetValue, int>(TestContext.Current.CancellationToken);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
 
         // Act
-        var result = await sender.SendAsync<RpcGetValue, int>(new RpcGetValue(), new RequestRouteValues(), null);
+        var result = await sender.SendAsync<RpcGetValue, int>(new RpcGetValue(), new RequestRouteValues(), null, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -52,12 +52,12 @@ public sealed class FitzRpcRoundTripTests
         var serializer = TestJson.Serializer(typeof(RpcGetValue));
         using var busHost = TestRequestBus.Create();
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
-        await using var registration = await server.RegisterAsync<RpcGetValue, int>();
+        await using var registration = await server.RegisterAsync<RpcGetValue, int>(TestContext.Current.CancellationToken);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
 
         // Act
         var outcome = await sender.SendWithOutcomeAsync<RpcGetValue, int>(
-            new RpcGetValue(), new RequestRouteValues(), null);
+            new RpcGetValue(), new RequestRouteValues(), null, TestContext.Current.CancellationToken);
 
         // Assert
         var completed = Assert.IsType<RemoteRequestOutcome<int>.Completed>(outcome);
@@ -79,12 +79,12 @@ public sealed class FitzRpcRoundTripTests
         {
             Interlocked.Increment(ref dispatched);
             return ValueTask.CompletedTask;
-        });
+        }, ct: TestContext.Current.CancellationToken);
         await using var changeWorker = await rpc.RegisterWorkerAsync(RpcChangeValueRoute, (_, _, _) =>
         {
             Interlocked.Increment(ref changeDispatched);
             return ValueTask.CompletedTask;
-        });
+        }, ct: TestContext.Current.CancellationToken);
         using var telemetry = new SendTelemetryCapture();
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
         var noResultSender = new FitzRemoteRequestSender(rpc, changeSerializer, changeSerializer);
@@ -119,17 +119,17 @@ public sealed class FitzRpcRoundTripTests
         {
             started.TrySetResult();
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
-        });
+        }, ct: TestContext.Current.CancellationToken);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
         using var cancellation = new CancellationTokenSource();
         var sending = sender.SendWithOutcomeAsync<RpcGetValue, int>(
             new RpcGetValue(), new RequestRouteValues(), null, cancellation.Token).AsTask();
 
-        await started.Task.WaitAsync(HangGuard);
+        await started.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
         cancellation.Cancel();
 
         // Act
-        var outcome = await sending.WaitAsync(HangGuard);
+        var outcome = await sending.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
 
         // Assert
         _ = Assert.IsType<RemoteRequestOutcome<int>.CancellationForwarded>(outcome);
@@ -143,12 +143,12 @@ public sealed class FitzRpcRoundTripTests
         var rpc = new InMemoryRpcClient();
         var serializer = TestJson.Serializer(typeof(RpcGetValue));
         await using var worker = await rpc.RegisterWorkerAsync(RpcGetValueRoute,
-            (_, _, _) => ValueTask.CompletedTask);
+            (_, _, _) => ValueTask.CompletedTask, ct: TestContext.Current.CancellationToken);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
 
         // Act
         var outcome = await sender.SendWithOutcomeAsync<RpcGetValue, int>(
-            new RpcGetValue(), new RequestRouteValues(), null);
+            new RpcGetValue(), new RequestRouteValues(), null, TestContext.Current.CancellationToken);
 
         // Assert
         _ = Assert.IsType<RemoteRequestOutcome<int>.OutcomeUnknown>(outcome);
@@ -172,7 +172,7 @@ public sealed class FitzRpcRoundTripTests
 
         // Act
         var outcome = await sender.SendWithOutcomeAsync<RpcGetValue, int>(
-            new RpcGetValue(), new RequestRouteValues(), null);
+            new RpcGetValue(), new RequestRouteValues(), null, TestContext.Current.CancellationToken);
 
         // Assert
         _ = Assert.IsType<RemoteRequestOutcome<int>.OutcomeUnknown>(outcome);
@@ -195,7 +195,7 @@ public sealed class FitzRpcRoundTripTests
 
         // Assert
         var exception = await Assert.ThrowsAsync<OperationCanceledException>(() =>
-            sender.SendWithOutcomeAsync<RpcGetValue, int>(new RpcGetValue(), new RequestRouteValues(), null).AsTask());
+            sender.SendWithOutcomeAsync<RpcGetValue, int>(new RpcGetValue(), new RequestRouteValues(), null, TestContext.Current.CancellationToken).AsTask());
 
         Assert.Equal("Transport canceled.", exception.Message);
     }
@@ -208,18 +208,18 @@ public sealed class FitzRpcRoundTripTests
         var serializer = TestJson.Serializer(typeof(RpcGetValue));
         var response = serializer.SerializeResult(Result<int>.Success(7));
         var responseReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var rpc = new ScriptedRpcClient(new RpcCall(YieldResponseThenWait(response, responseReceived),
+        var rpc = new ScriptedRpcClient(new RpcCall(YieldResponseThenWait(response, responseReceived, TestContext.Current.CancellationToken),
             Task.FromResult(RpcCancellationOutcome.Forwarded)));
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
         using var cancellation = new CancellationTokenSource();
         var sending = sender.SendWithOutcomeAsync<RpcGetValue, int>(
             new RpcGetValue(), new RequestRouteValues(), null, cancellation.Token).AsTask();
 
-        await responseReceived.Task.WaitAsync(HangGuard);
+        await responseReceived.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
         cancellation.Cancel();
 
         // Act
-        var outcome = await sending.WaitAsync(HangGuard);
+        var outcome = await sending.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
 
         // Assert
         _ = Assert.IsType<RemoteRequestOutcome<int>.OutcomeUnknown>(outcome);
@@ -237,11 +237,11 @@ public sealed class FitzRpcRoundTripTests
         var handler = new RpcChangeValueHandler();
         using var busHost = TestRequestBus.Create(rpcChangeValueHandler: handler);
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
-        await using var registration = await server.RegisterAsync<RpcChangeValue>();
+        await using var registration = await server.RegisterAsync<RpcChangeValue>(TestContext.Current.CancellationToken);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
 
         // Act
-        var result = await sender.SendAsync(new RpcChangeValue(99), new RequestRouteValues(), null);
+        var result = await sender.SendAsync(new RpcChangeValue(99), new RequestRouteValues(), null, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -263,11 +263,11 @@ public sealed class FitzRpcRoundTripTests
         using var busHost =
             TestRequestBus.Create(rpcChangeValueHandler: handler, actorValidator: new RejectingActorValidator());
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
-        await using var registration = await server.RegisterAsync<RpcChangeValue>();
+        await using var registration = await server.RegisterAsync<RpcChangeValue>(TestContext.Current.CancellationToken);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
 
         // Act
-        var result = await sender.SendAsync(new RpcChangeValue(1), new RequestRouteValues(), "any-token");
+        var result = await sender.SendAsync(new RpcChangeValue(1), new RequestRouteValues(), "any-token", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -293,12 +293,12 @@ public sealed class FitzRpcRoundTripTests
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
 
         // No server.RegisterAsync<RpcGetValue, int>() call anywhere — this alone must cover it.
-        await using var registration = await server.RegisterRequestsAsync();
+        await using var registration = await server.RegisterRequestsAsync(TestContext.Current.CancellationToken);
 
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
 
         // Act
-        var result = await sender.SendAsync<RpcGetValue, int>(new RpcGetValue(), new RequestRouteValues(), null);
+        var result = await sender.SendAsync<RpcGetValue, int>(new RpcGetValue(), new RequestRouteValues(), null, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);

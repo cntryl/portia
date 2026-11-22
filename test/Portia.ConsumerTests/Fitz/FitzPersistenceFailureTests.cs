@@ -34,7 +34,7 @@ public sealed class FitzPersistenceFailureTests
         var scenario = new AggregateScenario<Account>(account);
 
         // Act
-        var error = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext).AsTask());
+        var error = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         if (failureAt == "success")
@@ -70,7 +70,7 @@ public sealed class FitzPersistenceFailureTests
         using var listener = ListenToCleanupFaults(out var faults);
 
         // Act
-        await new AggregateRepository(store).SaveAsync(account, _saveContext);
+        await new AggregateRepository(store).SaveAsync(account, _saveContext, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(new AggregateScenario<Account>(account).PendingAudits);
@@ -99,12 +99,12 @@ public sealed class FitzPersistenceFailureTests
         Exception? unconfirmed = null;
         if (readFailsInitially)
         {
-            unconfirmed = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext).AsTask());
+            unconfirmed = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken).AsTask());
             streams.ReadFails = false;
         }
 
         // Act
-        await repository.SaveAsync(account, _saveContext);
+        await repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken);
 
         // Assert
         if (readFailsInitially)
@@ -126,10 +126,10 @@ public sealed class FitzPersistenceFailureTests
         account.Deposit(10);
         account.Deposit(5);
         var repository = new AggregateRepository(store);
-        _ = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext).AsTask());
+        _ = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken).AsTask());
 
         // Act
-        var failure = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext).AsTask());
+        var failure = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         Assert.IsType<EventStreamConcurrencyException>(failure);
@@ -157,7 +157,7 @@ public sealed class FitzPersistenceFailureTests
         account.Audit(payload);
 
         // Act
-        var error = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext).AsTask());
+        var error = await Record.ExceptionAsync(() => repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         if (conflict)
@@ -194,7 +194,7 @@ public sealed class FitzPersistenceFailureTests
 
         // Act
         var error = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() =>
-            repository.SaveAsync(account, _saveContext).AsTask());
+            repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         Assert.Same(original, error.InnerException);
@@ -225,7 +225,7 @@ public sealed class FitzPersistenceFailureTests
 
         // Assert
         var error = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() =>
-            new AggregateRepository(store).SaveAsync(account, _saveContext).AsTask());
+            new AggregateRepository(store).SaveAsync(account, _saveContext, TestContext.Current.CancellationToken).AsTask());
 
         var stream = EventStreamAddress.Parse(streams.Route!);
         Assert.Contains(stream.Area, error.Message, StringComparison.Ordinal);

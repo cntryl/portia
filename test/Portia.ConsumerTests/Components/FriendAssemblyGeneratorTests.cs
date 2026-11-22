@@ -37,13 +37,13 @@ public sealed class FriendAssemblyGeneratorTests
                                              public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Query>("/items/{id}");
                                              public static DomainEventTypeCatalog Catalog(DomainEventTypeCatalog catalog) => catalog.AddPortiaGeneratedDomainEvents();
                                          }
-                                         """, options, "First.cs")
+                                         """, options, "First.cs", cancellationToken: TestContext.Current.CancellationToken)
         ], references, compileOptions);
         first = Generate(first, options);
         using var image = new MemoryStream();
 
         // Act
-        var emitted = first.Emit(image);
+        var emitted = first.Emit(image, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
@@ -61,14 +61,14 @@ public sealed class FriendAssemblyGeneratorTests
                                            public static PortiaBuilder Register(IServiceCollection services) => services.AddPortia();
                                            public static void Map(IEndpointRouteBuilder app) => app.MapPortiaGet<Shared.Query>("/tests/{id}");
                                        }
-                                       """, options, "Second.cs")
+                                       """, options, "Second.cs", cancellationToken: TestContext.Current.CancellationToken)
         ], [.. references, MetadataReference.CreateFromImage(image.ToArray())], compileOptions);
         second = Generate(second, options);
-        var diagnostics = second.GetDiagnostics();
+        var diagnostics = second.GetDiagnostics(TestContext.Current.CancellationToken);
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "CS0436");
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         using var secondImage = new MemoryStream();
-        var secondEmit = second.Emit(secondImage);
+        var secondEmit = second.Emit(secondImage, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(secondEmit.Success, string.Join(Environment.NewLine, secondEmit.Diagnostics));
     }
 

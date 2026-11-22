@@ -19,7 +19,7 @@ public sealed class InMemoryEventStoreProgressTests
         var position = Cursor(1);
 
         // Act
-        var progress = await store.GetProgressAsync(EventStreamPattern.ForPattern("tenant", area, resource), position);
+        var progress = await store.GetProgressAsync(EventStreamPattern.ForPattern("tenant", area, resource), position, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(position, progress.Position);
@@ -29,7 +29,7 @@ public sealed class InMemoryEventStoreProgressTests
         Assert.False(progress.IsCaughtUp);
 
         var caughtUp =
-            await store.GetProgressAsync(EventStreamPattern.ForPattern("tenant", area, resource), Cursor(head));
+            await store.GetProgressAsync(EventStreamPattern.ForPattern("tenant", area, resource), Cursor(head), TestContext.Current.CancellationToken);
         Assert.True(caughtUp.IsCaughtUp);
         Assert.Equal(0UL, caughtUp.PendingEvents);
     }
@@ -42,7 +42,7 @@ public sealed class InMemoryEventStoreProgressTests
         var store = new InMemoryEventStore();
 
         // Act
-        var progress = await store.GetProgressAsync(EventStreamPattern.ForPattern("tenant"), Cursor(5));
+        var progress = await store.GetProgressAsync(EventStreamPattern.ForPattern("tenant"), Cursor(5), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(Cursor(0), progress.SourcePosition);

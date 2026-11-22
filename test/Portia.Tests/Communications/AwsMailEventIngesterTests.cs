@@ -28,7 +28,7 @@ public sealed class AwsMailEventIngesterTests
         var json = Wrap(envelope, await SesEventAsync(eventType, detailProperty));
 
         // Act
-        var ingested = await ingester.IngestAsync(json);
+        var ingested = await ingester.IngestAsync(json, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(ingested);
@@ -53,7 +53,7 @@ public sealed class AwsMailEventIngesterTests
         var ingester = new AwsMailEventIngester(receiver);
 
         // Act
-        var ingested = await ingester.IngestAsync(json);
+        var ingested = await ingester.IngestAsync(json, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(ingested);
@@ -68,7 +68,7 @@ public sealed class AwsMailEventIngesterTests
         var ingester = new AwsMailEventIngester(new RecordingReceiver());
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await ingester.IngestAsync("person@example.com {"));
+        var exception = await Record.ExceptionAsync(async () => await ingester.IngestAsync("person@example.com {", TestContext.Current.CancellationToken));
 
         // Assert
         var failure = Assert.IsType<FormatException>(exception);
@@ -85,7 +85,7 @@ public sealed class AwsMailEventIngesterTests
         var json = await SesEventAsync("Delivery", "delivery");
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await ingester.IngestAsync(json));
+        var exception = await Record.ExceptionAsync(async () => await ingester.IngestAsync(json, TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<IOException>(exception);

@@ -22,7 +22,7 @@ public sealed class TestRequestActorValidatorTests
         var validator = new TestRequestActorValidator();
 
         // Act
-        var result = await validator.ValidateAsync(null);
+        var result = await validator.ValidateAsync(null, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -40,7 +40,7 @@ public sealed class TestRequestActorValidatorTests
         var validator = new TestRequestActorValidator();
 
         // Act
-        var result = await validator.ValidateAsync("any-token");
+        var result = await validator.ValidateAsync("any-token", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -59,7 +59,7 @@ public sealed class TestRequestActorValidatorTests
         var validator = new TestRequestActorValidator("expired-token");
 
         // Act
-        var result = await validator.ValidateAsync("expired-token");
+        var result = await validator.ValidateAsync("expired-token", TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);

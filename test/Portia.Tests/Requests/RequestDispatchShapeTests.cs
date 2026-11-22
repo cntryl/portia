@@ -23,7 +23,7 @@ public sealed class RequestDispatchShapeTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await bus.DispatchAsync(request, bus.CreateContext(RequestActor.System)));
+            await bus.DispatchAsync(request, bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken));
 
         // Assert
         var error = Assert.IsType<InvalidOperationException>(exception);
@@ -46,7 +46,7 @@ public sealed class RequestDispatchShapeTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await bus.DispatchAsync(request, bus.CreateContext(RequestActor.System)));
+            await bus.DispatchAsync(request, bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken));
 
         // Assert
         var error = Assert.IsType<InvalidOperationException>(exception);
@@ -67,7 +67,7 @@ public sealed class RequestDispatchShapeTests
         var context = bus.CreateContext(RequestActor.System);
 
         // Act
-        var exception = Record.Exception(() => bus.DispatchStreamAsync<int>(null!, context));
+        var exception = Record.Exception(() => bus.DispatchStreamAsync<int>(null!, context, TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<ArgumentNullException>(exception);
@@ -93,7 +93,7 @@ public sealed class RequestDispatchShapeTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await bus.DispatchAsync(new UniversalAction(1), bus.CreateContext(RequestActor.System)));
+            await bus.DispatchAsync(new UniversalAction(1), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken));
 
         // Assert
         var error = Assert.IsType<InvalidOperationException>(exception);

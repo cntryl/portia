@@ -47,10 +47,10 @@ public sealed class AggregateReplayFailureTests
         var context = new RequestDispatchContext(RequestActor.System);
         var saveFailure =
             await Assert.ThrowsAsync<InvalidOperationException>(() =>
-                repository.SaveAsync(aggregate, context).AsTask());
+                repository.SaveAsync(aggregate, context, TestContext.Current.CancellationToken).AsTask());
         Assert.Contains("discarded", saveFailure.Message, StringComparison.Ordinal);
         var hydrationFailure =
-            await Assert.ThrowsAsync<InvalidOperationException>(() => repository.HydrateAsync(aggregate).AsTask());
+            await Assert.ThrowsAsync<InvalidOperationException>(() => repository.HydrateAsync(aggregate, TestContext.Current.CancellationToken).AsTask());
         Assert.Contains("discarded", hydrationFailure.Message, StringComparison.Ordinal);
         var fresh = new ReplayAggregate(id, -1, useOverride, failure);
         fresh.Load(history);

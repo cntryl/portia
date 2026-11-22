@@ -34,7 +34,7 @@ public sealed class TwilioStatusCallbackTests
             Sign(PublicAddress.GetLeftPart(UriPartial.Authority) + path, form, AuthToken));
 
         // Act
-        using var response = await client.SendAsync(request);
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
@@ -65,7 +65,7 @@ public sealed class TwilioStatusCallbackTests
         using var request = Request(path, form, signature);
 
         // Act
-        using var response = await client.SendAsync(request);
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -87,7 +87,7 @@ public sealed class TwilioStatusCallbackTests
         using var request = Request(otherPath, form, signature);
 
         // Act
-        using var response = await client.SendAsync(request);
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -108,7 +108,7 @@ public sealed class TwilioStatusCallbackTests
             Sign(PublicAddress.GetLeftPart(UriPartial.Authority) + path, form, AuthToken));
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await client.SendAsync(request));
+        var exception = await Record.ExceptionAsync(async () => await client.SendAsync(request, TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<IOException>(exception);

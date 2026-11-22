@@ -19,14 +19,14 @@ public sealed class FitzKvCheckpointStoreTests
         // Arrange
         var client = new FakeKvClient();
         var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
-        await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("progress")));
+        await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("progress")), TestContext.Current.CancellationToken);
 
         // Act
-        await store.SaveAsync(Identity, ProjectionCheckpoint.Start);
+        await store.SaveAsync(Identity, ProjectionCheckpoint.Start, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(ProjectionCheckpoint.Start,
-            await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints").LoadAsync(Identity));
+            await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints").LoadAsync(Identity, TestContext.Current.CancellationToken));
         Assert.Equal("portia-checkpoint-v1\0"u8.ToArray(), Assert.Single(client.Committed).Value);
     }
 
@@ -41,7 +41,7 @@ public sealed class FitzKvCheckpointStoreTests
         var client = new FakeKvClient();
 
         // Act
-        var checkpoint = await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints").LoadAsync(Identity);
+        var checkpoint = await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints").LoadAsync(Identity, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(ProjectionCheckpoint.Start, checkpoint);
@@ -61,10 +61,10 @@ public sealed class FitzKvCheckpointStoreTests
         var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
 
         // Act
-        await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("4096")));
+        await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("4096")), TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal(new ProjectionCheckpoint(new EventCursor("4096")), await store.LoadAsync(Identity));
+        Assert.Equal(new ProjectionCheckpoint(new EventCursor("4096")), await store.LoadAsync(Identity, TestContext.Current.CancellationToken));
         var stored = Assert.Single(client.Committed).Value;
         Assert.Equal("portia-checkpoint-v1\0"u8.ToArray().Concat("4096"u8.ToArray()), stored);
         Assert.Equal(KvDurability.Buffered, client.Transactions[0].Durability);
@@ -83,7 +83,7 @@ public sealed class FitzKvCheckpointStoreTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints").LoadAsync(Identity));
+            await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints").LoadAsync(Identity, TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidDataException>(exception);
@@ -99,10 +99,10 @@ public sealed class FitzKvCheckpointStoreTests
         var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
 
         // Act
-        await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("cursor-8")));
+        await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("cursor-8")), TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal(new ProjectionCheckpoint(new EventCursor("cursor-8")), await store.LoadAsync(Identity));
+        Assert.Equal(new ProjectionCheckpoint(new EventCursor("cursor-8")), await store.LoadAsync(Identity, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Rejects bytes which are neither a current prefixed cursor nor a legacy fixed-width offset.</summary>
@@ -117,7 +117,7 @@ public sealed class FitzKvCheckpointStoreTests
 
         // Assert
         _ = await Assert.ThrowsAsync<InvalidDataException>(async () =>
-            await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints").LoadAsync(Identity));
+            await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints").LoadAsync(Identity, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -143,13 +143,13 @@ public sealed class FitzKvCheckpointStoreTests
         // Act
         for (var index = 0; index < identities.Length; index++)
             await store.SaveAsync(identities[index], new ProjectionCheckpoint(
-                new EventCursor(((ulong)index + 1).ToString(CultureInfo.InvariantCulture))));
+                new EventCursor(((ulong)index + 1).ToString(CultureInfo.InvariantCulture))), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(identities.Length, client.Committed.Count);
         for (var index = 0; index < identities.Length; index++)
             Assert.Equal(((ulong)index + 1).ToString(CultureInfo.InvariantCulture),
-                (await store.LoadAsync(identities[index])).Cursor.ToString());
+                (await store.LoadAsync(identities[index], TestContext.Current.CancellationToken)).Cursor.ToString());
     }
 
     /// <summary>
@@ -167,9 +167,9 @@ public sealed class FitzKvCheckpointStoreTests
         var pattern = EventStreamPattern.ForPattern("tenant", "orders");
 
         await store.SaveAsync(new CheckpointIdentity("reactor-a", pattern),
-            new ProjectionCheckpoint(new EventCursor("1")));
+            new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
         await store.SaveAsync(new CheckpointIdentity("reactor-b", pattern),
-            new ProjectionCheckpoint(new EventCursor("1")));
+            new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
 
         // Act
         var routes = client.Transactions.Select(tx => tx.Route).Distinct().ToArray();
@@ -188,10 +188,10 @@ public sealed class FitzKvCheckpointStoreTests
         var client = new FakeKvClient();
         var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
 
-        await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1")));
+        await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
 
         // Act
-        _ = await store.LoadAsync(Identity);
+        _ = await store.LoadAsync(Identity, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, client.Transactions.Count);
@@ -211,11 +211,11 @@ public sealed class FitzKvCheckpointStoreTests
         var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
 
         await store.SaveAsync(new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-a", "orders")),
-            new ProjectionCheckpoint(new EventCursor("1")));
+            new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
 
         // Act
         await store.SaveAsync(new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-b", "orders")),
-            new ProjectionCheckpoint(new EventCursor("1")));
+            new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, client.Transactions.Select(tx => tx.Route).Distinct().Count());
@@ -233,14 +233,14 @@ public sealed class FitzKvCheckpointStoreTests
         var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
         var tenantA = new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-a", "orders"));
         var tenantB = new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("tenant-b", "orders"));
-        await store.SaveAsync(tenantA, new ProjectionCheckpoint(new EventCursor("1")));
-        await using var held = await client.BeginAsync(client.LastTransaction.Route);
+        await store.SaveAsync(tenantA, new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
+        await using var held = await client.BeginAsync(client.LastTransaction.Route, cancellationToken: TestContext.Current.CancellationToken);
 
         // Act
-        await store.SaveAsync(tenantB, new ProjectionCheckpoint(new EventCursor("1")));
+        await store.SaveAsync(tenantB, new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal("1", (await store.LoadAsync(tenantB)).Cursor.ToString());
+        Assert.Equal("1", (await store.LoadAsync(tenantB, TestContext.Current.CancellationToken)).Cursor.ToString());
     }
 
     /// <summary>
@@ -260,7 +260,7 @@ public sealed class FitzKvCheckpointStoreTests
 
         // Assert
         var error = await Assert.ThrowsAsync<ProjectionConcurrencyException>(async () =>
-            await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1"))));
+            await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken));
 
         Assert.Same(conflict, error.InnerException);
         Assert.Contains("reactor", error.Message, StringComparison.Ordinal);
@@ -288,7 +288,7 @@ public sealed class FitzKvCheckpointStoreTests
 
         // Assert
         var error = await Assert.ThrowsAsync<ProjectionConcurrencyException>(async () =>
-            await store.SaveAsync(identity, new ProjectionCheckpoint(new EventCursor("1"))));
+            await store.SaveAsync(identity, new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken));
 
         Assert.Contains("reactor", error.Message, StringComparison.Ordinal);
         Assert.Contains("orders", error.Message, StringComparison.Ordinal);
@@ -323,7 +323,7 @@ public sealed class FitzKvCheckpointStoreTests
 
         // Assert
         var error = await Assert.ThrowsAsync<KvException>(async () =>
-            await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1"))));
+            await store.SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken));
 
         Assert.Same(failure, error);
         Assert.Equal(1, client.LastTransaction.Rollbacks);
@@ -353,7 +353,7 @@ public sealed class FitzKvCheckpointStoreTests
         // Assert
         var error = await Assert.ThrowsAsync<KvException>(async () =>
             await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints")
-                .SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1"))));
+                .SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken));
 
         Assert.Same(failure, error);
         Assert.Equal(1, client.LastTransaction.Rollbacks);
@@ -374,7 +374,7 @@ public sealed class FitzKvCheckpointStoreTests
         // Act
         var exception = await Record.ExceptionAsync(async () =>
             await new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints")
-                .SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1"))));
+                .SaveAsync(Identity, new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<IOException>(exception);
@@ -433,11 +433,11 @@ public sealed class FitzKvCheckpointStoreTests
         {
             if (saving)
             {
-                await store.SaveAsync(null!, ProjectionCheckpoint.Start);
+                await store.SaveAsync(null!, ProjectionCheckpoint.Start, TestContext.Current.CancellationToken);
             }
             else
             {
-                _ = await store.LoadAsync(null!);
+                _ = await store.LoadAsync(null!, TestContext.Current.CancellationToken);
             }
         });
 

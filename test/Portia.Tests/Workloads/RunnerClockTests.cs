@@ -31,16 +31,16 @@ public sealed class RunnerClockTests
             return Task.Delay(Timeout.InfiniteTimeSpan, CancellationToken.None);
         }, (_, _) => Task.CompletedTask, lifetime.Token);
 
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Act
         lifetime.Cancel();
 
         // Assert
-        Assert.Equal(grace, await clock.WaitForDelayAsync());
+        Assert.Equal(grace, await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
         clock.Advance(grace);
 
-        await run.WaitAsync(TimeSpan.FromSeconds(5));
+        await run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
     }
 
     /// <summary>
@@ -69,7 +69,7 @@ public sealed class RunnerClockTests
             return release.Task;
         }, options, lifetime.Token);
 
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         lifetime.Cancel();
         await WaitForScheduledAsync(clock, timeout);
 
@@ -78,7 +78,7 @@ public sealed class RunnerClockTests
 
         // Assert
         var fault = await Assert.ThrowsAsync<FleetPartitionTerminationTimeoutException>(() =>
-            run.WaitAsync(TimeSpan.FromSeconds(5)));
+            run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
 
         Assert.Equal([partition], fault.Partitions);
         release.SetResult();

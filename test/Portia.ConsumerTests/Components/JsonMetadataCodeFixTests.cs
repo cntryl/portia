@@ -94,12 +94,12 @@ public sealed class JsonMetadataCodeFixTests
         // Assert
         var document = Assert.Single(created.Projects.Single().Documents,
             item => item.Name == "PortiaJsonContext.cs");
-        var text = (await document.GetTextAsync()).ToString();
+        var text = (await document.GetTextAsync(TestContext.Current.CancellationToken)).ToString();
         Assert.Contains("namespace App;", text, StringComparison.Ordinal);
         Assert.Contains("[PortiaJsonContext]", text, StringComparison.Ordinal);
         Assert.Contains("[JsonSerializable(typeof(global::App.Query))]", text, StringComparison.Ordinal);
         Assert.Contains("JsonSerializerContext", text, StringComparison.Ordinal);
-        Assert.DoesNotContain(CSharpSyntaxTree.ParseText(text).GetDiagnostics(),
+        Assert.DoesNotContain(CSharpSyntaxTree.ParseText(text, cancellationToken: TestContext.Current.CancellationToken).GetDiagnostics(TestContext.Current.CancellationToken),
             diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
     }
 
@@ -119,7 +119,7 @@ public sealed class JsonMetadataCodeFixTests
         var created = await ApplyAsync(solution, Assert.Single(actions));
         var document = Assert.Single(created.Projects.Single().Documents,
             item => item.Name == "ApplicationJsonContext.cs");
-        var text = (await document.GetTextAsync()).ToString();
+        var text = (await document.GetTextAsync(TestContext.Current.CancellationToken)).ToString();
         Assert.Contains("internal sealed partial class ApplicationJsonContext", text, StringComparison.Ordinal);
     }
 
@@ -191,9 +191,9 @@ public sealed class JsonMetadataCodeFixTests
 
         // Assert
         var changed = await ApplyAsync(solution, Assert.Single(actions));
-        var compilation = await changed.Projects.Single().GetCompilationAsync();
+        var compilation = await changed.Projects.Single().GetCompilationAsync(TestContext.Current.CancellationToken);
 
-        Assert.DoesNotContain(compilation!.GetDiagnostics(), diagnostic => diagnostic.Id is "CS0234" or "CS0246");
+        Assert.DoesNotContain(compilation!.GetDiagnostics(TestContext.Current.CancellationToken), diagnostic => diagnostic.Id is "CS0234" or "CS0246");
         Assert.Contains("typeof(global::Orders.Query)", await SingleDocumentTextAsync(changed),
             StringComparison.Ordinal);
     }
@@ -433,7 +433,7 @@ public sealed class JsonMetadataCodeFixTests
         var descriptor = new DiagnosticDescriptor("PORTIA025", "Missing Portia JSON metadata", "{0}", "Usage",
             DiagnosticSeverity.Warning, true);
         var diagnostic = Diagnostic.Create(descriptor,
-            Location.Create((await document.GetSyntaxTreeAsync())!, TextSpan.FromBounds(0, 1)), "no properties");
+            Location.Create((await document.GetSyntaxTreeAsync(TestContext.Current.CancellationToken))!, TextSpan.FromBounds(0, 1)), "no properties");
         var actions = new List<CodeAction>();
 
         // Act
@@ -486,7 +486,7 @@ public sealed class JsonMetadataCodeFixTests
 
         var generated = Assert.Single(changed.Projects.Single().Documents,
             item => item.Name == "PortiaJsonContext.cs");
-        var text = (await generated.GetTextAsync()).ToString();
+        var text = (await generated.GetTextAsync(TestContext.Current.CancellationToken)).ToString();
         Assert.Equal(1, CountOccurrences(text, "typeof(global::App.Query)"));
         Assert.Equal(1, CountOccurrences(text, "typeof(global::App.Answer)"));
     }
@@ -588,7 +588,7 @@ public sealed class JsonMetadataCodeFixTests
         // Assert
         var created = await ApplyAsync(solution, Assert.Single(actions));
         var text = (await Assert.Single(created.Projects.Single().Documents,
-            item => item.Name == "PortiaJsonContext.cs").GetTextAsync()).ToString();
+            item => item.Name == "PortiaJsonContext.cs").GetTextAsync(TestContext.Current.CancellationToken)).ToString();
 
         Assert.DoesNotContain("namespace System", text, StringComparison.Ordinal);
     }

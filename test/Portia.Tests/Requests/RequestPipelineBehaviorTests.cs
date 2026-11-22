@@ -23,7 +23,7 @@ public sealed class RequestPipelineBehaviorTests
 
         // Act
         var result = await provider.GetRequiredService<IRequestBus>()
-            .SendAsync(new PipelineAction(), RequestActor.System);
+            .SendAsync(new PipelineAction(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -73,7 +73,7 @@ public sealed class RequestPipelineBehaviorTests
 
         // Act
         var result = await provider.GetRequiredService<IRequestBus>()
-            .SendAsync(new PipelineAction(), RequestActor.System);
+            .SendAsync(new PipelineAction(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -98,11 +98,11 @@ public sealed class RequestPipelineBehaviorTests
         using var provider = services.BuildServiceProvider();
         var bus = provider.GetRequiredService<IRequestBus>();
 
-        var result = await bus.SendAsync(new PipelineQuery(), RequestActor.System);
+        var result = await bus.SendAsync(new PipelineQuery(), RequestActor.System, ct: TestContext.Current.CancellationToken);
         var items = new List<int>();
 
         // Act
-        await foreach (var item in bus.StreamAsync(new PipelineStream(), RequestActor.System))
+        await foreach (var item in bus.StreamAsync(new PipelineStream(), RequestActor.System, ct: TestContext.Current.CancellationToken))
             items.Add(item);
 
         // Assert
@@ -121,7 +121,7 @@ public sealed class RequestPipelineBehaviorTests
         // Act
         var error = await Record.ExceptionAsync(async () =>
             await provider.GetRequiredService<IRequestBus>()
-                .SendAsync(new InvalidPipelineAction(), RequestActor.System));
+                .SendAsync(new InvalidPipelineAction(), RequestActor.System, ct: TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<InvalidOperationException>(error);
@@ -151,7 +151,7 @@ public sealed class RequestPipelineBehaviorTests
         var bus = provider.GetRequiredService<IRequestBus>();
 
         // Act
-        var result = await bus.DispatchAsync<int>(new MixedShape(), bus.CreateContext(RequestActor.System));
+        var result = await bus.DispatchAsync<int>(new MixedShape(), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -175,7 +175,7 @@ public sealed class RequestPipelineBehaviorTests
 
         // Act
         var result = await provider.GetRequiredService<IRequestBus>()
-            .SendAsync(new PipelineAction(), RequestActor.System);
+            .SendAsync(new PipelineAction(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -201,11 +201,11 @@ public sealed class RequestPipelineBehaviorTests
         using var provider = services.BuildServiceProvider();
         var bus = provider.GetRequiredService<IRequestBus>();
 
-        var query = await bus.SendAsync(new PipelineQuery(), RequestActor.System);
+        var query = await bus.SendAsync(new PipelineQuery(), RequestActor.System, ct: TestContext.Current.CancellationToken);
         var stream = new List<int>();
 
         // Act
-        await foreach (var item in bus.StreamAsync(new PipelineStream(), RequestActor.System))
+        await foreach (var item in bus.StreamAsync(new PipelineStream(), RequestActor.System, ct: TestContext.Current.CancellationToken))
             stream.Add(item);
 
         // Assert
@@ -232,7 +232,7 @@ public sealed class RequestPipelineBehaviorTests
 
         // Assert
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await provider.GetRequiredService<IRequestBus>().SendAsync(new PipelineAction(), RequestActor.System));
+            await provider.GetRequiredService<IRequestBus>().SendAsync(new PipelineAction(), RequestActor.System, ct: TestContext.Current.CancellationToken));
 
         Assert.Equal(SingleUseMessage, failure.Message);
         Assert.Equal(["handler"], calls);
@@ -255,7 +255,7 @@ public sealed class RequestPipelineBehaviorTests
 
         // Act
         var result = await provider.GetRequiredService<IRequestBus>()
-            .SendAsync(new PipelineAction(), RequestActor.System);
+            .SendAsync(new PipelineAction(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -279,7 +279,7 @@ public sealed class RequestPipelineBehaviorTests
 
         // Act
         var result = await provider.GetRequiredService<IRequestBus>()
-            .SendAsync(new PipelineAction(), RequestActor.System);
+            .SendAsync(new PipelineAction(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -308,7 +308,7 @@ public sealed class RequestPipelineBehaviorTests
 
         // Assert
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await provider.GetRequiredService<IRequestBus>().SendAsync(new PipelineAction(), RequestActor.System));
+            await provider.GetRequiredService<IRequestBus>().SendAsync(new PipelineAction(), RequestActor.System, ct: TestContext.Current.CancellationToken));
 
         Assert.Equal(SingleUseMessage, failure.Message);
         Assert.Empty(calls);
@@ -331,11 +331,11 @@ public sealed class RequestPipelineBehaviorTests
 
         // Act
         var result = await provider.GetRequiredService<IRequestBus>()
-            .SendAsync(new PipelineAction(), RequestActor.System);
+            .SendAsync(new PipelineAction(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         var failure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await behavior.Continuation!(default));
+            await behavior.Continuation!(TestContext.Current.CancellationToken));
 
         Assert.True(result.IsSuccess);
         Assert.Equal(SingleUseMessage, failure.Message);
@@ -366,10 +366,10 @@ public sealed class RequestPipelineBehaviorTests
 
         // Assert
         var queryFailure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await bus.SendAsync(new PipelineQuery(), RequestActor.System));
+            await bus.SendAsync(new PipelineQuery(), RequestActor.System, ct: TestContext.Current.CancellationToken));
         var streamFailure = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await foreach (var _ in bus.StreamAsync(new PipelineStream(), RequestActor.System))
+            await foreach (var _ in bus.StreamAsync(new PipelineStream(), RequestActor.System, ct: TestContext.Current.CancellationToken))
             {
             }
         });
@@ -546,7 +546,7 @@ public sealed class RequestPipelineBehaviorTests
         using var provider = services.BuildServiceProvider();
 
         // Act
-        _ = await provider.GetRequiredService<IRequestBus>().SendAsync(new PipelineAction(), RequestActor.System);
+        _ = await provider.GetRequiredService<IRequestBus>().SendAsync(new PipelineAction(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, seen.Count);
@@ -575,14 +575,14 @@ public sealed class RequestPipelineBehaviorTests
 
         // Act
         var results = await Task.WhenAll(
-            bus.SendAsync(new NestedConcurrentAction(1, true), RequestActor.System).AsTask(),
-            bus.SendAsync(new NestedConcurrentAction(2, true), RequestActor.System).AsTask());
+            bus.SendAsync(new NestedConcurrentAction(1, true), RequestActor.System, ct: TestContext.Current.CancellationToken).AsTask(),
+            bus.SendAsync(new NestedConcurrentAction(2, true), RequestActor.System, ct: TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         Assert.All(results, result => Assert.True(result.IsSuccess));
 
         gate.Bypass = true;
-        var nested = await bus.SendAsync(new NestedConcurrentAction(3, false), RequestActor.System);
+        var nested = await bus.SendAsync(new NestedConcurrentAction(3, false), RequestActor.System, ct: TestContext.Current.CancellationToken);
         Assert.True(nested.IsSuccess);
         Assert.Equal([1, 2, 3, 103], handled.Order());
     }

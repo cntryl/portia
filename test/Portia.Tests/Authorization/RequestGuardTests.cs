@@ -23,7 +23,7 @@ public sealed class RequestGuardTests
             guards: [new RequestGuardRegistration<GuardedCommand, RecordingCommandGuard>()]);
 
         // Act
-        var result = await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System);
+        var result = await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -46,7 +46,7 @@ public sealed class RequestGuardTests
             ]);
 
         // Act
-        var result = await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System);
+        var result = await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -65,7 +65,7 @@ public sealed class RequestGuardTests
             guards: [new RequestGuardRegistration<GuardedQuery, FailingQueryGuard>()]);
 
         // Act
-        var result = await Bus(provider).SendAsync(new GuardedQuery(), RequestActor.System);
+        var result = await Bus(provider).SendAsync(new GuardedQuery(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -84,7 +84,7 @@ public sealed class RequestGuardTests
             guards: [new RequestGuardRegistration<FailingQuery, SuccessfulQueryGuard>()]);
 
         // Act
-        var result = await Bus(provider).SendAsync(new FailingQuery(), RequestActor.System);
+        var result = await Bus(provider).SendAsync(new FailingQuery(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -107,7 +107,7 @@ public sealed class RequestGuardTests
             ]);
 
         // Act
-        var result = await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System);
+        var result = await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -126,7 +126,7 @@ public sealed class RequestGuardTests
             guards: [new RequestGuardRegistration<GuardedCommand, RecordingCommandGuard>()]);
 
         // Act
-        var result = await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System);
+        var result = await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -145,7 +145,7 @@ public sealed class RequestGuardTests
             guards: [new RequestGuardRegistration<GuardedCommand, RecordingCommandGuard>()]);
 
         // Act
-        var result = await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System);
+        var result = await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -167,14 +167,14 @@ public sealed class RequestGuardTests
         var request = new GuardedCommand();
 
         // Act
-        var authorization = await bus.AuthorizeAsync(request, bus.CreateContext(RequestActor.System));
+        var authorization = await bus.AuthorizeAsync(request, bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(authorization.IsSuccess);
         Assert.Equal(["authorizer"], calls);
 
         calls.Clear();
-        var result = await bus.SendAsync(request, RequestActor.System);
+        var result = await bus.SendAsync(request, RequestActor.System, ct: TestContext.Current.CancellationToken);
         Assert.True(result.IsSuccess);
         Assert.Equal(["authorizer", "guard", "handler"], calls);
     }
@@ -192,7 +192,7 @@ public sealed class RequestGuardTests
         var probe = provider.GetRequiredService<CancellationProbe>();
 
         var dispatch = Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System, cancellation.Token).AsTask();
-        await probe.Started.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        await probe.Started.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
 
         // Act
         cancellation.Cancel();
@@ -221,7 +221,7 @@ public sealed class RequestGuardTests
 
         // Assert
         var error = await Assert.ThrowsAsync<GuardException>(async () =>
-            await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System));
+            await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System, ct: TestContext.Current.CancellationToken));
 
         Assert.Same(expected, error);
         Assert.Empty(calls);
@@ -241,7 +241,7 @@ public sealed class RequestGuardTests
 
         // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System));
+            await Bus(provider).SendAsync(new GuardedCommand(), RequestActor.System, ct: TestContext.Current.CancellationToken));
 
         Assert.Contains(typeof(UninitializedGuard).FullName!, error.Message, StringComparison.Ordinal);
         Assert.Contains("request guard", error.Message, StringComparison.Ordinal);
@@ -261,10 +261,10 @@ public sealed class RequestGuardTests
         ], guards: [new RequestGuardRegistration<IGuardedFamily, FirstFamilyGuard>()]);
         var bus = Bus(provider);
 
-        var command = await bus.SendAsync(new GuardedCommand(), RequestActor.System);
+        var command = await bus.SendAsync(new GuardedCommand(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Act
-        var query = await bus.SendAsync(new FamilyQuery(), RequestActor.System);
+        var query = await bus.SendAsync(new FamilyQuery(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(command.IsSuccess);
@@ -284,7 +284,7 @@ public sealed class RequestGuardTests
         var items = new List<int>();
 
         // Act
-        await foreach (var item in Bus(provider).StreamAsync(new GuardedStream(), RequestActor.System))
+        await foreach (var item in Bus(provider).StreamAsync(new GuardedStream(), RequestActor.System, ct: TestContext.Current.CancellationToken))
             items.Add(item);
 
         // Assert
@@ -312,7 +312,7 @@ public sealed class RequestGuardTests
         // Assert
         var error = await Assert.ThrowsAsync<RequestGuardException>(async () =>
         {
-            await foreach (var item in Bus(provider).StreamAsync(new GuardedStream(), RequestActor.System))
+            await foreach (var item in Bus(provider).StreamAsync(new GuardedStream(), RequestActor.System, ct: TestContext.Current.CancellationToken))
                 items.Add(item);
         });
 
@@ -333,7 +333,7 @@ public sealed class RequestGuardTests
             guards: [new RequestGuardRegistration<IRequestBase, BroadGuard>()]);
 
         // Act
-        await foreach (var _ in Bus(provider).StreamAsync(new GuardedStream(), RequestActor.System))
+        await foreach (var _ in Bus(provider).StreamAsync(new GuardedStream(), RequestActor.System, ct: TestContext.Current.CancellationToken))
         {
         }
 

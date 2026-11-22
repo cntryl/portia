@@ -21,7 +21,7 @@ public sealed class RequestAuthorizationTests
         var bus = busHost.Bus;
 
         // Act
-        var result = await bus.SendAsync(new GetValue(), RequestActor.System);
+        var result = await bus.SendAsync(new GetValue(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -41,7 +41,7 @@ public sealed class RequestAuthorizationTests
         var bus = busHost.Bus;
 
         // Act
-        var result = await bus.SendAsync(new GuardedAction(), RequestActor.Anonymous);
+        var result = await bus.SendAsync(new GuardedAction(), RequestActor.Anonymous, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -63,7 +63,7 @@ public sealed class RequestAuthorizationTests
         var bus = busHost.Bus;
 
         // Act
-        var result = await bus.SendAsync(new GuardedAction(), RequestActor.System);
+        var result = await bus.SendAsync(new GuardedAction(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -82,7 +82,7 @@ public sealed class RequestAuthorizationTests
         var bus = busHost.Bus;
 
         // Act
-        var result = await bus.SendAsync(new GuardedQuery(), RequestActor.Anonymous);
+        var result = await bus.SendAsync(new GuardedQuery(), RequestActor.Anonymous, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -103,10 +103,10 @@ public sealed class RequestAuthorizationTests
         using var busHost = TestRequestBus.Create(permissionEvaluator: evaluator);
         var bus = busHost.Bus;
 
-        _ = await bus.SendAsync(new GetOrder(42), RequestActor.System);
+        _ = await bus.SendAsync(new GetOrder(42), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Act
-        _ = await bus.SendAsync(new GetOrder(99), RequestActor.System);
+        _ = await bus.SendAsync(new GetOrder(99), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(["orders:42:read", "orders:99:read"], evaluator.EvaluatedPermissions);
@@ -127,7 +127,7 @@ public sealed class RequestAuthorizationTests
         var bus = busHost.Bus;
 
         // Act
-        var result = await bus.SendAsync(new AuthorizedAction(8), RequestActor.System);
+        var result = await bus.SendAsync(new AuthorizedAction(8), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -146,10 +146,10 @@ public sealed class RequestAuthorizationTests
         using var busHost = TestRequestBus.Create(authorizedActionAuthorizer: new AuthorizedActionAuthorizer());
         var bus = busHost.Bus;
 
-        var ownedResult = await bus.SendAsync(new AuthorizedAction(7), RequestActor.System);
+        var ownedResult = await bus.SendAsync(new AuthorizedAction(7), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Act
-        var deniedResult = await bus.SendAsync(new AuthorizedAction(8), RequestActor.System);
+        var deniedResult = await bus.SendAsync(new AuthorizedAction(8), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(ownedResult.IsSuccess);
@@ -173,7 +173,7 @@ public sealed class RequestAuthorizationTests
         var bus = busHost.Bus;
 
         // Act
-        var result = await bus.SendAsync(new GuardedAndAuthorizedAction(), RequestActor.System);
+        var result = await bus.SendAsync(new GuardedAndAuthorizedAction(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -195,7 +195,7 @@ public sealed class RequestAuthorizationTests
         var bus = busHost.Bus;
 
         // Act
-        var result = await bus.SendAsync(new GuardedAndAuthorizedAction(), RequestActor.System);
+        var result = await bus.SendAsync(new GuardedAndAuthorizedAction(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -221,7 +221,7 @@ public sealed class RequestAuthorizationTests
         // Assert
         var exception = await Assert.ThrowsAsync<RequestAuthorizationException>(async () =>
         {
-            await foreach (var _ in bus.StreamAsync(new GuardedSequence(), RequestActor.Anonymous))
+            await foreach (var _ in bus.StreamAsync(new GuardedSequence(), RequestActor.Anonymous, ct: TestContext.Current.CancellationToken))
             {
             }
         });
@@ -244,7 +244,7 @@ public sealed class RequestAuthorizationTests
         var items = new List<int>();
 
         // Act
-        await foreach (var item in bus.StreamAsync(new GuardedSequence(), RequestActor.System))
+        await foreach (var item in bus.StreamAsync(new GuardedSequence(), RequestActor.System, ct: TestContext.Current.CancellationToken))
             items.Add(item);
 
         // Assert
@@ -280,7 +280,7 @@ public sealed class RequestAuthorizationTests
 
         // Act
         var result = await scope.ServiceProvider.GetRequiredService<IRequestBus>()
-            .SendAsync(new TieredRequest(Uuid.CreateVersion4()), RequestActor.System);
+            .SendAsync(new TieredRequest(Uuid.CreateVersion4()), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -319,7 +319,7 @@ public sealed class RequestAuthorizationTests
 
         // Act
         var result = await scope.ServiceProvider.GetRequiredService<IRequestBus>()
-            .SendAsync(new TieredRequest(Uuid.CreateVersion4()), RequestActor.System);
+            .SendAsync(new TieredRequest(Uuid.CreateVersion4()), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -337,7 +337,7 @@ public sealed class RequestAuthorizationTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await busHost.Bus.SendAsync(new GuardedAction(), RequestActor.System));
+            await busHost.Bus.SendAsync(new GuardedAction(), RequestActor.System, ct: TestContext.Current.CancellationToken));
 
         // Assert
         var error = Assert.IsType<InvalidOperationException>(exception);

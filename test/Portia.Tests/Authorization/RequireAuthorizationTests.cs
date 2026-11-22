@@ -22,7 +22,7 @@ public sealed class RequireAuthorizationTests
 
         // Act
         var thrown = await Record.ExceptionAsync(() =>
-            bus.DispatchAsync(new UnprotectedCommand(), bus.CreateContext(RequestActor.System)).AsTask());
+            bus.DispatchAsync(new UnprotectedCommand(), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         var error = Assert.IsType<InvalidOperationException>(thrown);
@@ -39,7 +39,7 @@ public sealed class RequireAuthorizationTests
 
         // Act
         var thrown = await Record.ExceptionAsync(() =>
-            bus.DispatchAsync(new UnprotectedQuery(), bus.CreateContext(RequestActor.System)).AsTask());
+            bus.DispatchAsync(new UnprotectedQuery(), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         var error = Assert.IsType<InvalidOperationException>(thrown);
@@ -61,7 +61,7 @@ public sealed class RequireAuthorizationTests
         var error = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await foreach (var item in bus.DispatchStreamAsync(new UnprotectedStream(),
-                               bus.CreateContext(RequestActor.System)))
+                               bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken))
             {
                 items.Add(item);
             }
@@ -81,7 +81,7 @@ public sealed class RequireAuthorizationTests
 
         // Act
         var thrown = await Record.ExceptionAsync(() =>
-            bus.AuthorizeAsync(new UnprotectedCommand(), bus.CreateContext(RequestActor.System)).AsTask());
+            bus.AuthorizeAsync(new UnprotectedCommand(), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         var error = Assert.IsType<InvalidOperationException>(thrown);
@@ -96,7 +96,7 @@ public sealed class RequireAuthorizationTests
         var (bus, calls) = Bus(Required);
 
         // Act
-        var result = await bus.DispatchAsync(new AnonymousQuery(), bus.CreateContext(RequestActor.Anonymous));
+        var result = await bus.DispatchAsync(new AnonymousQuery(), bus.CreateContext(RequestActor.Anonymous), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -111,7 +111,7 @@ public sealed class RequireAuthorizationTests
         var (bus, calls) = Bus(Required);
 
         // Act
-        var result = await bus.DispatchAsync(new AuthorizedCommand(), bus.CreateContext(RequestActor.System));
+        var result = await bus.DispatchAsync(new AuthorizedCommand(), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -126,7 +126,7 @@ public sealed class RequireAuthorizationTests
         var (bus, calls) = Bus(Required);
 
         // Act
-        var result = await bus.DispatchAsync(new FamilyCommand(), bus.CreateContext(RequestActor.System));
+        var result = await bus.DispatchAsync(new FamilyCommand(), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -142,7 +142,7 @@ public sealed class RequireAuthorizationTests
             new RequestAuthorizerRegistration<IRequestBase, EveryRequestAuthorizer>(AuthorizationStage.Principal));
 
         // Act
-        var result = await bus.DispatchAsync(new UnprotectedCommand(), bus.CreateContext(RequestActor.System));
+        var result = await bus.DispatchAsync(new UnprotectedCommand(), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -157,7 +157,7 @@ public sealed class RequireAuthorizationTests
         var (bus, calls) = Bus(Required);
 
         // Act
-        var result = await bus.DispatchAsync(new PermissionCommand(), bus.CreateContext(RequestActor.System));
+        var result = await bus.DispatchAsync(new PermissionCommand(), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -172,7 +172,7 @@ public sealed class RequireAuthorizationTests
         var (bus, calls) = Bus(null);
 
         // Act
-        var result = await bus.DispatchAsync(new UnprotectedCommand(), bus.CreateContext(RequestActor.System));
+        var result = await bus.DispatchAsync(new UnprotectedCommand(), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -228,7 +228,7 @@ public sealed class RequireAuthorizationTests
 
         // Assert
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            bus.DispatchAsync(new UnprotectedCommand(), bus.CreateContext(RequestActor.System)).AsTask());
+            bus.DispatchAsync(new UnprotectedCommand(), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken).AsTask());
 
         AssertUnprotected<UnprotectedCommand>(error);
     }
@@ -244,7 +244,7 @@ public sealed class RequireAuthorizationTests
         var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
 
         // Act
-        var result = await bus.DispatchAsync(new AnonymousQuery(), bus.CreateContext(RequestActor.Anonymous));
+        var result = await bus.DispatchAsync(new AnonymousQuery(), bus.CreateContext(RequestActor.Anonymous), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("public", result.Value);
@@ -326,7 +326,7 @@ public sealed class RequireAuthorizationTests
         var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
 
         // Act
-        var result = await bus.DispatchAsync(new UnprotectedCommand(), bus.CreateContext(RequestActor.System));
+        var result = await bus.DispatchAsync(new UnprotectedCommand(), bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(result.IsSuccess);
@@ -356,7 +356,7 @@ public sealed class RequireAuthorizationTests
             portia.RequireAuthorization(options => options.AllowAnonymous<AnonymousQuery>()));
 
         // Act
-        var thrown = await Record.ExceptionAsync(() => host.StartAsync());
+        var thrown = await Record.ExceptionAsync(() => host.StartAsync(TestContext.Current.CancellationToken));
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(thrown);
@@ -383,8 +383,8 @@ public sealed class RequireAuthorizationTests
         // Act
         var exception = await Record.ExceptionAsync(async () =>
         {
-            await host.StartAsync();
-            await host.StopAsync();
+            await host.StartAsync(TestContext.Current.CancellationToken);
+            await host.StopAsync(TestContext.Current.CancellationToken);
         });
 
         // Assert
@@ -401,8 +401,8 @@ public sealed class RequireAuthorizationTests
         // Act
         var exception = await Record.ExceptionAsync(async () =>
         {
-            await host.StartAsync();
-            await host.StopAsync();
+            await host.StartAsync(TestContext.Current.CancellationToken);
+            await host.StopAsync(TestContext.Current.CancellationToken);
         });
 
         // Assert
@@ -422,7 +422,7 @@ public sealed class RequireAuthorizationTests
         using var host = builder.Build();
 
         // Assert
-        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+        var failure = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("RequireAuthorization()", failure.Message, StringComparison.Ordinal);
         Assert.Contains(nameof(RequestRegistry), failure.Message, StringComparison.Ordinal);

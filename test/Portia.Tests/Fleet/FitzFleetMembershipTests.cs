@@ -17,7 +17,7 @@ public sealed class FitzFleetMembershipTests
         var options = new FleetRunOptions { MembershipSelector = "lease://portia/members/*" };
 
         // Act
-        var exception = await Record.ExceptionAsync(() => membership.RunAsync(options, (_, _) => Task.CompletedTask));
+        var exception = await Record.ExceptionAsync(() => membership.RunAsync(options, (_, _) => Task.CompletedTask, TestContext.Current.CancellationToken));
 
         // Assert
         var error = Assert.IsType<ArgumentException>(exception);

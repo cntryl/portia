@@ -20,12 +20,12 @@ public sealed class CheckpointIdentityTests
         // Act
         for (var i = 0; i < identities.Length; i++)
             await store.SaveAsync(identities[i], new ProjectionCheckpoint(
-                new EventCursor(((ulong)i + 1).ToString(CultureInfo.InvariantCulture))));
+                new EventCursor(((ulong)i + 1).ToString(CultureInfo.InvariantCulture))), TestContext.Current.CancellationToken);
 
         // Assert
         for (var i = 0; i < identities.Length; i++)
             Assert.Equal(((ulong)i + 1).ToString(CultureInfo.InvariantCulture),
-                (await store.LoadAsync(identities[i])).Cursor.ToString());
+                (await store.LoadAsync(identities[i], TestContext.Current.CancellationToken)).Cursor.ToString());
         Assert.Equal(identities[0],
             new CheckpointIdentity("same", EventStreamPattern.ForPattern("tenant-a", "orders", "")));
     }
@@ -39,7 +39,7 @@ public sealed class CheckpointIdentityTests
         var pattern = EventStreamPattern.ForPattern("tenant", "orders");
         var stream = new EventStreamAddress("tenant", "orders", "one");
         var id = Uuid.CreateVersion4();
-        await events.AppendAsync(stream, 0, [DomainEventSeed.Attach(new Declined("one"), id, 1)]);
+        await events.AppendAsync(stream, 0, [DomainEventSeed.Attach(new Declined("one"), id, 1)], TestContext.Current.CancellationToken);
 
         async Task Pass(string? rebuildId)
         {
@@ -61,16 +61,16 @@ public sealed class CheckpointIdentityTests
 
         // Assert
         Assert.True(Assert.Single(target.Data[first]));
-        await events.AppendAsync(stream, 1, [DomainEventSeed.Attach(new Declined("two"), id, 2)]);
+        await events.AppendAsync(stream, 1, [DomainEventSeed.Attach(new Declined("two"), id, 2)], TestContext.Current.CancellationToken);
         await Pass("first");
         await Pass("first");
         await Pass("second");
         Assert.Equal(2, target.Data[first].Count);
         Assert.Equal(2, target.Data[second].Count);
         Assert.False(Assert.Single(target.Data[live]));
-        Assert.Equal("1", (await target.LoadCheckpointAsync(live)).Cursor.ToString());
-        Assert.Equal("2", (await target.LoadCheckpointAsync(first)).Cursor.ToString());
-        Assert.Equal("2", (await target.LoadCheckpointAsync(second)).Cursor.ToString());
+        Assert.Equal("1", (await target.LoadCheckpointAsync(live, TestContext.Current.CancellationToken)).Cursor.ToString());
+        Assert.Equal("2", (await target.LoadCheckpointAsync(first, TestContext.Current.CancellationToken)).Cursor.ToString());
+        Assert.Equal("2", (await target.LoadCheckpointAsync(second, TestContext.Current.CancellationToken)).Cursor.ToString());
         Assert.All(target.Loads, identity => Assert.Contains(identity, target.Begins));
     }
 
@@ -101,7 +101,7 @@ public sealed class CheckpointIdentityTests
             await events.AppendAsync(new EventStreamAddress(pattern.Realm, pattern.Area!, "one"), 0,
             [
                 DomainEventSeed.Attach(new Declined("one"), id, 1), DomainEventSeed.Attach(new Declined("two"), id, 2)
-            ]);
+            ], TestContext.Current.CancellationToken);
         }
 
         async Task Pass(EventStreamPattern pattern)
@@ -122,14 +122,14 @@ public sealed class CheckpointIdentityTests
         Assert.IsType<IOException>(diagnostic.InnerException);
         Assert.Equal(ProcessorFailureStage.Committing, diagnostic.Stage);
         var first = new CheckpointIdentity("same", patterns[0], "interrupted");
-        Assert.Equal("1", (await target.LoadCheckpointAsync(first)).Cursor.ToString());
+        Assert.Equal("1", (await target.LoadCheckpointAsync(first, TestContext.Current.CancellationToken)).Cursor.ToString());
         foreach (var pattern in patterns)
         {
             await Pass(pattern);
             await Pass(pattern);
             var identity = new CheckpointIdentity("same", pattern, "interrupted");
             Assert.Equal(2, target.Data[identity].Count);
-            Assert.Equal("2", (await target.LoadCheckpointAsync(identity)).Cursor.ToString());
+            Assert.Equal("2", (await target.LoadCheckpointAsync(identity, TestContext.Current.CancellationToken)).Cursor.ToString());
         }
     }
 

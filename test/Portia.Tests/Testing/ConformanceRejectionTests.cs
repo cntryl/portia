@@ -169,7 +169,7 @@ public sealed class ConformanceRejectionTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            EventStoreConformance.VerifyAsync(probe).AsTask());
+            EventStoreConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);
@@ -191,7 +191,7 @@ public sealed class ConformanceRejectionTests
 
         // Act
         var error = await Record.ExceptionAsync(() =>
-            EventStoreConformance.VerifyAsync(probe).AsTask());
+            EventStoreConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(error);
@@ -216,7 +216,7 @@ public sealed class ConformanceRejectionTests
 
         // Act
         var error = await Record.ExceptionAsync(() =>
-            EventStoreConformance.VerifyAsync(probe).AsTask());
+            EventStoreConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(error);
@@ -235,7 +235,7 @@ public sealed class ConformanceRejectionTests
         var probe = new DefectiveEventStoreProbe(StoreDefect.None);
 
         // Act
-        var exception = await Record.ExceptionAsync(async () => await EventStoreConformance.VerifyAsync(probe));
+        var exception = await Record.ExceptionAsync(async () => await EventStoreConformance.VerifyAsync(probe, TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(exception);
@@ -262,7 +262,7 @@ public sealed class ConformanceRejectionTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            ReactionDeduplicationConformance.VerifyAsync(probe).AsTask());
+            ReactionDeduplicationConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);
@@ -280,7 +280,7 @@ public sealed class ConformanceRejectionTests
 
         // Act
         var exception =
-            await Record.ExceptionAsync(async () => await ReactionDeduplicationConformance.VerifyAsync(probe));
+            await Record.ExceptionAsync(async () => await ReactionDeduplicationConformance.VerifyAsync(probe, TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(exception);
@@ -304,7 +304,7 @@ public sealed class ConformanceRejectionTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            ProjectionStoreConformance.VerifyAsync(probe).AsTask());
+            ProjectionStoreConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ArgumentException>(exception);
@@ -323,7 +323,7 @@ public sealed class ConformanceRejectionTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            ProjectionStoreConformance.VerifyAsync(probe).AsTask());
+            ProjectionStoreConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);
@@ -385,7 +385,7 @@ public sealed class ConformanceRejectionTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            ProjectionStoreConformance.VerifyAsync(probe).AsTask());
+            ProjectionStoreConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);
@@ -404,7 +404,7 @@ public sealed class ConformanceRejectionTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            ProjectionStoreConformance.VerifyAsync(probe).AsTask());
+            ProjectionStoreConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);

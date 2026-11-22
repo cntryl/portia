@@ -18,19 +18,19 @@ public sealed class FitzKvTenantDirectorySnapshotStoreTests
         var second = new TenantDirectorySnapshot(new EventCursor("2"), [new TenantId("beta")]);
 
         // Assert
-        Assert.True(await store.TrySaveAsync(pattern, null, first));
+        Assert.True(await store.TrySaveAsync(pattern, null, first, TestContext.Current.CancellationToken));
         Assert.Equal(KvDurability.Buffered, kv.LastTransaction.Durability);
-        Assert.True(await store.TrySaveAsync(pattern, first.Cursor, second));
+        Assert.True(await store.TrySaveAsync(pattern, first.Cursor, second, TestContext.Current.CancellationToken));
         Assert.Equal(KvDurability.Buffered, kv.LastTransaction.Durability);
-        Assert.False(await store.TrySaveAsync(pattern, first.Cursor, first));
-        Assert.Equal(second.Cursor, (await store.LoadAsync(pattern))!.Cursor);
-        Assert.Equal([new TenantId("beta")], (await store.LoadAsync(pattern))!.ActiveTenants);
-        _ = await store.LoadAsync(other);
+        Assert.False(await store.TrySaveAsync(pattern, first.Cursor, first, TestContext.Current.CancellationToken));
+        Assert.Equal(second.Cursor, (await store.LoadAsync(pattern, TestContext.Current.CancellationToken))!.Cursor);
+        Assert.Equal([new TenantId("beta")], (await store.LoadAsync(pattern, TestContext.Current.CancellationToken))!.ActiveTenants);
+        _ = await store.LoadAsync(other, TestContext.Current.CancellationToken);
         Assert.NotEqual(kv.Transactions[^2].Route, kv.Transactions[^1].Route);
 
-        _ = await store.LoadAsync(pattern);
-        await using var held = await kv.BeginAsync(kv.LastTransaction.Route);
+        _ = await store.LoadAsync(pattern, TestContext.Current.CancellationToken);
+        await using var held = await kv.BeginAsync(kv.LastTransaction.Route, cancellationToken: TestContext.Current.CancellationToken);
         Assert.False(await store.TrySaveAsync(pattern, second.Cursor,
-            new TenantDirectorySnapshot(new EventCursor("3"), [new TenantId("gamma")])));
+            new TenantDirectorySnapshot(new EventCursor("3"), [new TenantId("gamma")]), TestContext.Current.CancellationToken));
     }
 }

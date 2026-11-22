@@ -19,7 +19,7 @@ public sealed class InMemoryEventStoreTests
         var store = new InMemoryEventStore();
         var first = Committed(new ValueChanged(40), id, 1);
         var second = Committed(new ValueIncremented(2), id, 2);
-        await store.AppendAsync(stream, 0, [first, second]);
+        await store.AppendAsync(stream, 0, [first, second], TestContext.Current.CancellationToken);
 
         var events = new List<DomainEvent>();
 
@@ -42,17 +42,17 @@ public sealed class InMemoryEventStoreTests
         var stream = new EventStreamAddress("test", "aggregates", id.ToString());
         var store = new InMemoryEventStore();
         var first = Committed(new ValueChanged(40), id, 1);
-        await store.AppendAsync(stream, 0, [first]);
+        await store.AppendAsync(stream, 0, [first], TestContext.Current.CancellationToken);
 
         // Act
         var stale = Committed(new ValueIncremented(2), id, 1);
 
         // Assert
         _ = await Assert.ThrowsAsync<EventStreamConcurrencyException>(async () =>
-            await store.AppendAsync(stream, 0, [stale]));
+            await store.AppendAsync(stream, 0, [stale], TestContext.Current.CancellationToken));
 
         var events = new List<DomainEvent>();
-        await foreach (var ev in store.ReadAsync(stream))
+        await foreach (var ev in store.ReadAsync(stream, ct: TestContext.Current.CancellationToken))
             events.Add(ev.Event);
 
         Assert.Same(first, Assert.Single(events));
@@ -70,15 +70,15 @@ public sealed class InMemoryEventStoreTests
         var firstStream = new EventStreamAddress("test", "orders", firstId.ToString());
         var secondStream = new EventStreamAddress("test", "customers", secondId.ToString());
         var store = new InMemoryEventStore();
-        await store.AppendAsync(firstStream, 0, [Committed(new ValueChanged(40), firstId, 1)]);
+        await store.AppendAsync(firstStream, 0, [Committed(new ValueChanged(40), firstId, 1)], TestContext.Current.CancellationToken);
         var second = Committed(new ValueChanged(42), secondId, 1);
-        await store.AppendAsync(secondStream, 0, [second]);
+        await store.AppendAsync(secondStream, 0, [second], TestContext.Current.CancellationToken);
 
         var records = new List<DomainEventRecord>();
 
         // Act
         await foreach (var record in store.ReadAsync(EventStreamPattern.ForPattern("test"), new EventCursor("1"),
-                           default))
+                           TestContext.Current.CancellationToken))
             records.Add(record);
 
         // Assert
@@ -99,33 +99,33 @@ public sealed class InMemoryEventStoreTests
         var second = new EventStreamAddress("test", "orders", "second");
         var store = new InMemoryEventStore();
         var shared = Committed(new ValueChanged(1), id, 2);
-        await store.AppendAsync(first, 0, [shared]);
+        await store.AppendAsync(first, 0, [shared], TestContext.Current.CancellationToken);
         var other = Committed(new ValueChanged(2), id, 1);
-        await store.AppendAsync(second, 0, [other, shared]);
+        await store.AppendAsync(second, 0, [other, shared], TestContext.Current.CancellationToken);
 
         // Act
         var rejected = Committed(new ValueChanged(3), id, 1);
 
         // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await store.AppendAsync(second, 2, [rejected, shared]));
-        await store.AppendAsync(second, 2, [rejected]);
-        await store.AppendAsync(first, 1, [Committed(new ValueChanged(4), id, 2)]);
+            await store.AppendAsync(second, 2, [rejected, shared], TestContext.Current.CancellationToken));
+        await store.AppendAsync(second, 2, [rejected], TestContext.Current.CancellationToken);
+        await store.AppendAsync(first, 1, [Committed(new ValueChanged(4), id, 2)], TestContext.Current.CancellationToken);
 
         foreach (var pattern in new[]
                      { EventStreamPattern.ForPattern("test"), EventStreamPattern.ForPattern("test", "orders") })
         {
-            var records = await store.ReadAsync(pattern, EventCursor.Start, default).ToListAsync();
+            var records = await store.ReadAsync(pattern, EventCursor.Start, TestContext.Current.CancellationToken).ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(Enumerable.Range(1, 5).Select(value => value.ToString(CultureInfo.InvariantCulture)),
                 records.Select(record => record.NextCursor.ToString()));
             Assert.Equal(new[] { first, second, second, second, first }, records.Select(record => record.Stream));
             Assert.Equal(new ulong[] { 0, 0, 1, 2, 1 }, records.Select(record => record.ResourceOffset));
-            Assert.Equal(records.Skip(3), await store.ReadAsync(pattern, new EventCursor("3"), default).ToListAsync());
+            Assert.Equal(records.Skip(3), await store.ReadAsync(pattern, new EventCursor("3"), TestContext.Current.CancellationToken).ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
         }
 
         var resource = await store
-            .ReadAsync(EventStreamPattern.ForPattern("test", "orders", "second"), EventCursor.Start, default)
-            .ToListAsync();
+            .ReadAsync(EventStreamPattern.ForPattern("test", "orders", "second"), EventCursor.Start, TestContext.Current.CancellationToken)
+            .ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(Enumerable.Range(1, 3).Select(value => value.ToString(CultureInfo.InvariantCulture)),
             resource.Select(record => record.NextCursor.ToString()));
         Assert.Equal(new DomainEvent[] { other, shared, rejected }, resource.Select(record => record.Event));
@@ -140,17 +140,17 @@ public sealed class InMemoryEventStoreTests
         var stream = new EventStreamAddress("test", "aggregates", id.ToString());
         var store = new InMemoryEventStore();
         var first = Committed(new ValueChanged(1), id, 1);
-        await store.AppendAsync(stream, 0, [first]);
+        await store.AppendAsync(stream, 0, [first], TestContext.Current.CancellationToken);
 
         // Act
         var fresh = Committed(new ValueChanged(2), id, 2);
 
         // Assert
         _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await store.AppendAsync(stream, 1, [fresh, first]));
-        await store.AppendAsync(stream, 1, [fresh]);
+            await store.AppendAsync(stream, 1, [fresh, first], TestContext.Current.CancellationToken));
+        await store.AppendAsync(stream, 1, [fresh], TestContext.Current.CancellationToken);
 
-        var events = await store.ReadAsync(stream).Select(record => record.Event).ToListAsync();
+        var events = await store.ReadAsync(stream, ct: TestContext.Current.CancellationToken).Select(record => record.Event).ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(new DomainEvent[] { first, fresh }, events);
     }
 

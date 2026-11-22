@@ -23,7 +23,7 @@ public sealed class TwilioSmsSenderTests
 
         // Act
         var outcome =
-            await sender.SendAsync(Tenant, new SendId("order-1.shipped"), new SmsMessage(Recipient, "Hi there"));
+            await sender.SendAsync(Tenant, new SendId("order-1.shipped"), new SmsMessage(Recipient, "Hi there"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(SendStatus.Accepted, outcome.Status);
@@ -52,7 +52,7 @@ public sealed class TwilioSmsSenderTests
             new Resolver(new TwilioTenant("ACtestaccount", "SKkey", Secret, "+15005550001")), null);
 
         // Act
-        _ = await sender.SendAsync(Tenant, new SendId("a"), new SmsMessage(Recipient, "Hi"));
+        _ = await sender.SendAsync(Tenant, new SendId("a"), new SmsMessage(Recipient, "Hi"), TestContext.Current.CancellationToken);
 
         // Assert
         var request = Assert.Single(handler.Requests);
@@ -78,7 +78,7 @@ public sealed class TwilioSmsSenderTests
         var sender = CreateSender(handler, Callbacks);
 
         // Act
-        var outcome = await sender.SendAsync(Tenant, new SendId("a"), new SmsMessage(Recipient, "Hi"));
+        var outcome = await sender.SendAsync(Tenant, new SendId("a"), new SmsMessage(Recipient, "Hi"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(SendStatus.Rejected, outcome.Status);
@@ -99,7 +99,7 @@ public sealed class TwilioSmsSenderTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await sender.SendAsync(Tenant, new SendId("a"), new SmsMessage(Recipient, "Hi")));
+            await sender.SendAsync(Tenant, new SendId("a"), new SmsMessage(Recipient, "Hi"), TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Equal(TimeSpan.FromSeconds(3), Assert.IsType<SendThrottledException>(exception).RetryAfter);
@@ -120,7 +120,7 @@ public sealed class TwilioSmsSenderTests
         var sender = CreateSender(handler, Callbacks);
 
         // Act
-        var outcome = await sender.SendAsync(Tenant, new SendId("a"), new SmsMessage(Recipient, "Hi"));
+        var outcome = await sender.SendAsync(Tenant, new SendId("a"), new SmsMessage(Recipient, "Hi"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(SendStatus.Unknown, outcome.Status);
@@ -139,7 +139,7 @@ public sealed class TwilioSmsSenderTests
         var sender = CreateSender(handler, Callbacks);
 
         // Act
-        var outcome = await sender.SendAsync(Tenant, new SendId("a"), new SmsMessage(Recipient, "Hi"));
+        var outcome = await sender.SendAsync(Tenant, new SendId("a"), new SmsMessage(Recipient, "Hi"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(SendStatus.Unknown, outcome.Status);
@@ -158,7 +158,7 @@ public sealed class TwilioSmsSenderTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await sender.SendAsync(Tenant, new SendId("a"), new SmsMessage(Recipient, "Hi")));
+            await sender.SendAsync(Tenant, new SendId("a"), new SmsMessage(Recipient, "Hi"), TestContext.Current.CancellationToken));
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(exception);
@@ -179,7 +179,7 @@ public sealed class TwilioSmsSenderTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () =>
-            await sender.SendAsync(Tenant, new SendId("a"), new SmsMessage(Recipient, "Hi")));
+            await sender.SendAsync(Tenant, new SendId("a"), new SmsMessage(Recipient, "Hi"), TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<HttpRequestException>(exception);

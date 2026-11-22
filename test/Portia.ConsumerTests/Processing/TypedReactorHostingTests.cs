@@ -29,7 +29,7 @@ public sealed class TypedReactorHostingTests
         var aggregateId = Uuid.CreateVersion4();
         var trigger = DomainEventSeed.Attach(new Deposited(7), aggregateId, 1);
         var stream = new EventStreamAddress(realm, "plain", aggregateId.ToString());
-        await store.AppendAsync(stream, 0, [trigger]);
+        await store.AppendAsync(stream, 0, [trigger], TestContext.Current.CancellationToken);
         var identity = new CheckpointIdentity(name, EventStreamPattern.ForPattern(realm, "plain"));
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));

@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <LangVersion>15</LangVersion>
@@ -7,9 +9,7 @@
   <ItemGroup>
     <PackageReference Include="Cntryl.Conventions.Testing.Analyzers"/>
     <PackageReference Include="Cntryl.Conventions.Testing.CodeFixes"/>
-    <PackageReference Include="Microsoft.NET.Test.Sdk"/>
-    <PackageReference Include="xunit"/>
-    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all"/>
+    <PackageReference Include="xunit.v3"/>
     <ProjectReference Include="../../src/Portia.Abstractions/Portia.Abstractions.csproj"/>
   </ItemGroup>
 </Project>

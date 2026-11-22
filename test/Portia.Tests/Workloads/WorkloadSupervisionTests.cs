@@ -19,21 +19,22 @@ public sealed class WorkloadSupervisionTests
             () => EventStreamPattern.ForTenant("events"));
         using var worker =
             WorkloadLifecycleTestHost.Worker(provider, descriptor, coordinator: coordinator, directory: directory);
-        await worker.StartAsync(default);
+        await worker.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        await directory.DisposalStarted.Task.WaitAsync(TimeSpan.FromSeconds(3));
-        _ = await Record.ExceptionAsync(() => worker.ExecuteTask!.WaitAsync(TimeSpan.FromMilliseconds(100)));
+        await directory.DisposalStarted.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+        _ = await Record.ExceptionAsync(() => worker.ExecuteTask!.WaitAsync(TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken));
         var finishedWhileCleanupPending = worker.ExecuteTask!.IsCompleted && !directory.Disposed;
         directory.ReleaseCleanup.TrySetResult();
-        await directory.CleanupDone.Task.WaitAsync(TimeSpan.FromSeconds(3));
-        var failure = await Record.ExceptionAsync(() => worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(3)));
-        await worker.StopAsync(default);
+        await directory.CleanupDone.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+        var failure = await Record.ExceptionAsync(() => worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
+        await worker.StopAsync(TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Same(coordinator.Failure, failure);
+        var observedFailure = Assert.IsType<IOException>(failure);
+        Assert.Same(coordinator.Failure, observedFailure);
         if (throwsOnCancel)
-            Assert.IsType<AggregateException>(failure.Data["Portia.CleanupException"]);
+            Assert.IsType<AggregateException>(observedFailure.Data["Portia.CleanupException"]);
         Assert.False(finishedWhileCleanupPending,
             "The hosted workload service finished before observing its tenant manager cleanup.");
     }

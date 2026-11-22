@@ -30,7 +30,7 @@ public sealed class ApplicationStructureCodeFixTests
         Assert.True(workspace.TryApplyChanges(document.Project.AddAnalyzerReference(new GeneratedConstructorReference())
             .Solution));
         document = workspace.CurrentSolution.GetDocument(document.Id)!;
-        Assert.Single(await document.Project.GetSourceGeneratedDocumentsAsync());
+        Assert.Single(await document.Project.GetSourceGeneratedDocumentsAsync(TestContext.Current.CancellationToken));
         CodeAction action;
         if (fixAll)
         {
@@ -50,10 +50,10 @@ public sealed class ApplicationStructureCodeFixTests
         var project = solution.GetProject(document.Project.Id)!;
         await AssertCompilesAsync(project);
         Assert.Contains("namespace Shop.Core.Features.Orders.Values",
-            (await solution.GetDocument(document.Id)!.GetTextAsync()).ToString(), StringComparison.Ordinal);
-        var generated = Assert.Single(await project.GetSourceGeneratedDocumentsAsync());
+            (await solution.GetDocument(document.Id)!.GetTextAsync(TestContext.Current.CancellationToken)).ToString(), StringComparison.Ordinal);
+        var generated = Assert.Single(await project.GetSourceGeneratedDocumentsAsync(TestContext.Current.CancellationToken));
         Assert.Contains("new global::Shop.Core.Features.Orders.Values.Price",
-            (await generated.GetTextAsync()).ToString(), StringComparison.Ordinal);
+            (await generated.GetTextAsync(TestContext.Current.CancellationToken)).ToString(), StringComparison.Ordinal);
     }
 
     sealed class GeneratedConstructorReference : AnalyzerReference
@@ -126,7 +126,7 @@ public sealed class ApplicationStructureCodeFixTests
         var project = solution.GetProject(document.Project.Id)!;
         Assert.Equal(["Currency.cs", "Price.cs", "Tax.cs"],
             project.Documents.Select(item => item.Name).OrderBy(name => name));
-        Assert.Contains("class Fixture", (await solution.GetDocument(document.Id)!.GetTextAsync()).ToString(),
+        Assert.Contains("class Fixture", (await solution.GetDocument(document.Id)!.GetTextAsync(TestContext.Current.CancellationToken)).ToString(),
             StringComparison.Ordinal);
         await AssertCompilesAsync(project);
         foreach (var item in project.Documents)
@@ -209,7 +209,7 @@ public sealed class ApplicationStructureCodeFixTests
         var project = solution.GetProject(first.Project.Id)!;
         foreach (var document in project.Documents)
         {
-            var text = (await document.GetTextAsync()).ToString();
+            var text = (await document.GetTextAsync(TestContext.Current.CancellationToken)).ToString();
             var diagnostics = await DiagnosticsAsync(document, new ApplicationStructureAnalyzer());
             if (scope == FixAllScope.Document && document.Name == "Currency.cs")
             {
@@ -274,12 +274,12 @@ public sealed class ApplicationStructureCodeFixTests
         var documents = solution.GetProject(document.Project.Id)!.Documents.ToArray();
         Assert.Equal(2, documents.Length);
         var moved = Assert.Single(documents, item => item.Name == "Currency.cs");
-        var movedText = (await moved.GetTextAsync()).ToString();
+        var movedText = (await moved.GetTextAsync(TestContext.Current.CancellationToken)).ToString();
         Assert.Contains("Business currency.", movedText, StringComparison.Ordinal);
         Assert.Contains("[Obsolete", movedText, StringComparison.Ordinal);
         Assert.Contains("using System;", movedText, StringComparison.Ordinal);
         Assert.EndsWith("/Features/Orders/Values/Currency.cs", moved.FilePath, StringComparison.Ordinal);
-        Assert.DoesNotContain("record Currency", (await solution.GetDocument(document.Id)!.GetTextAsync()).ToString(),
+        Assert.DoesNotContain("record Currency", (await solution.GetDocument(document.Id)!.GetTextAsync(TestContext.Current.CancellationToken)).ToString(),
             StringComparison.Ordinal);
         await AssertCompilesAsync(solution.GetProject(document.Project.Id)!);
         foreach (var item in documents)
@@ -304,7 +304,7 @@ public sealed class ApplicationStructureCodeFixTests
         var changed = solution.GetDocument(document.Id)!;
         Assert.Equal("PageOfT.cs", changed.Name);
         Assert.EndsWith("/PageOfT.cs", changed.FilePath, StringComparison.Ordinal);
-        Assert.Equal(source, (await changed.GetTextAsync()).ToString());
+        Assert.Equal(source, (await changed.GetTextAsync(TestContext.Current.CancellationToken)).ToString());
         Assert.Empty(await DiagnosticsAsync(changed, new ApplicationStructureAnalyzer()));
         await AssertCompilesAsync(changed.Project);
     }
@@ -326,7 +326,7 @@ public sealed class ApplicationStructureCodeFixTests
         // Assert
         Assert.Equal("Move 'Price' to 'Price.cs'", action.Title);
         Assert.Equal(2, solution.GetProject(document.Project.Id)!.DocumentIds.Count);
-        Assert.Contains("record Currency", (await solution.GetDocument(document.Id)!.GetTextAsync()).ToString(),
+        Assert.Contains("record Currency", (await solution.GetDocument(document.Id)!.GetTextAsync(TestContext.Current.CancellationToken)).ToString(),
             StringComparison.Ordinal);
         Assert.Empty(await DiagnosticsAsync(solution.GetDocument(document.Id)!, new ApplicationStructureAnalyzer()));
         await AssertCompilesAsync(solution.GetProject(document.Project.Id)!);
@@ -354,7 +354,7 @@ public sealed class ApplicationStructureCodeFixTests
         // Assert
         await AssertCompilesAsync(solution.GetProject(document.Project.Id)!);
         await AssertCompilesAsync(solution.GetProject(consumer.Project.Id)!);
-        Assert.DoesNotContain("Old.Price", (await solution.GetDocument(consumer.Id)!.GetTextAsync()).ToString(),
+        Assert.DoesNotContain("Old.Price", (await solution.GetDocument(consumer.Id)!.GetTextAsync(TestContext.Current.CancellationToken)).ToString(),
             StringComparison.Ordinal);
     }
 
@@ -382,10 +382,10 @@ public sealed class ApplicationStructureCodeFixTests
         // Assert
         Assert.Equal("Change namespace to 'Shop.Core.Features.Orders.Values' and update references", action.Title);
         var changed = solution.GetDocument(document.Id)!;
-        Assert.Contains("namespace Shop.Core.Features.Orders.Values", (await changed.GetTextAsync()).ToString(),
+        Assert.Contains("namespace Shop.Core.Features.Orders.Values", (await changed.GetTextAsync(TestContext.Current.CancellationToken)).ToString(),
             StringComparison.Ordinal);
         var other = Assert.Single(changed.Project.Documents, item => item.Name == "Other.cs");
-        Assert.Contains("namespace Old", (await other.GetTextAsync()).ToString(), StringComparison.Ordinal);
+        Assert.Contains("namespace Old", (await other.GetTextAsync(TestContext.Current.CancellationToken)).ToString(), StringComparison.Ordinal);
         Assert.Equal(document.FilePath, changed.FilePath);
         Assert.Equal(document.Folders, changed.Folders);
         Assert.Empty(await DiagnosticsAsync(changed, new ApplicationStructureAnalyzer()));
@@ -411,11 +411,11 @@ public sealed class ApplicationStructureCodeFixTests
         // Assert
         Assert.Equal("Make schema version 1 explicit", action.Title);
         var changed = solution.GetDocument(document.Id)!;
-        var text = (await changed.GetTextAsync()).ToString();
+        var text = (await changed.GetTextAsync(TestContext.Current.CancellationToken)).ToString();
         Assert.Contains("orders.place_order", text, StringComparison.Ordinal);
         Assert.Contains("version: 1", text, StringComparison.Ordinal);
         Assert.Empty(await DiagnosticsAsync(changed, new ApplicationContractAnalyzer()));
-        var compilation = await changed.Project.GetCompilationAsync();
+        var compilation = await changed.Project.GetCompilationAsync(TestContext.Current.CancellationToken);
         var symbol = compilation!.GetTypeByMetadataName("Shop.Common.Features.Orders.Commands.PlaceOrder")!;
         var attribute = Assert.Single(symbol.GetAttributes());
         Assert.Equal("orders.place_order", attribute.ConstructorArguments[0].Value);
@@ -477,7 +477,7 @@ public sealed class ApplicationStructureCodeFixTests
 
         var moved = Assert.Single(solution.GetProject(document.Project.Id)!.Documents,
             item => item.Name == "Currency.cs");
-        Assert.StartsWith(directive, (await moved.GetTextAsync()).ToString(), StringComparison.Ordinal);
+        Assert.StartsWith(directive, (await moved.GetTextAsync(TestContext.Current.CancellationToken)).ToString(), StringComparison.Ordinal);
         await AssertCompilesAsync(solution.GetProject(document.Project.Id)!);
     }
 
@@ -515,7 +515,7 @@ public sealed class ApplicationStructureCodeFixTests
         // Assert
         try
         {
-            await File.WriteAllTextAsync(Path.Combine(directory, "Currency.cs"), "public record Existing;");
+            await File.WriteAllTextAsync(Path.Combine(directory, "Currency.cs"), "public record Existing;", TestContext.Current.CancellationToken);
             using var workspace = new AdhocWorkspace();
             var project = workspace.AddProject(ProjectInfo.Create(ProjectId.CreateNewId(), VersionStamp.Create(),
                     "Shop.Core", "Shop.Core", LanguageNames.CSharp).WithDefaultNamespace("Shop.Core"))
@@ -624,12 +624,12 @@ public sealed class ApplicationStructureCodeFixTests
         var (actions, diagnostic) = await ActionsAsync(document, "PORTIA200");
 
         // Assert
-        Assert.Equal("Currency", diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan));
+        Assert.Equal("Currency", diagnostic.Location.SourceTree!.GetText(TestContext.Current.CancellationToken).ToString(diagnostic.Location.SourceSpan));
         var solution = await ApplyAsync(Assert.Single(actions));
         var project = solution.GetProject(document.Project.Id)!;
         var moved = Assert.Single(project.Documents, item => item.Name == "Currency.cs");
-        Assert.Contains("record Currency", (await moved.GetTextAsync()).ToString(), StringComparison.Ordinal);
-        Assert.Contains("partial record Price", (await solution.GetDocument(document.Id)!.GetTextAsync()).ToString(),
+        Assert.Contains("record Currency", (await moved.GetTextAsync(TestContext.Current.CancellationToken)).ToString(), StringComparison.Ordinal);
+        Assert.Contains("partial record Price", (await solution.GetDocument(document.Id)!.GetTextAsync(TestContext.Current.CancellationToken)).ToString(),
             StringComparison.Ordinal);
         await AssertCompilesAsync(project);
     }
@@ -661,7 +661,7 @@ public sealed class ApplicationStructureCodeFixTests
         Assert.Equal(["Bar.cs", "Foo.cs"], solution.GetProject(first.Project.Id)!.Documents
             .Select(document => document.Name).OrderBy(name => name, StringComparer.Ordinal));
         Assert.Equal("namespace Shop.Core.Features.Orders.Values; public record Foo;",
-            (await solution.GetDocument(first.Id)!.GetTextAsync()).ToString());
+            (await solution.GetDocument(first.Id)!.GetTextAsync(TestContext.Current.CancellationToken)).ToString());
         foreach (var document in solution.GetProject(first.Project.Id)!.Documents)
             Assert.Contains(await DiagnosticsAsync(document, new ApplicationStructureAnalyzer()),
                 diagnostic => diagnostic.Id == "PORTIA201");

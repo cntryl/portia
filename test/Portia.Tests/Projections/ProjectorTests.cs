@@ -21,11 +21,11 @@ public sealed class ProjectorTests
         var second = Committed(new ValueIncremented(2), 2);
         var context = new ProjectorContext(new CheckpointIdentity(projector.Name, projector.Pattern));
 
-        await projector.ProjectAsync([new DomainEventRecord(stream, first, 0, new EventCursor("1"))], context, default);
+        await projector.ProjectAsync([new DomainEventRecord(stream, first, 0, new EventCursor("1"))], context, TestContext.Current.CancellationToken);
 
         // Act
         await projector.ProjectAsync([new DomainEventRecord(stream, second, 1, new EventCursor("2"))], context,
-            default);
+            TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(42, projection.Value);
@@ -47,7 +47,7 @@ public sealed class ProjectorTests
             Committed(new ValueChanged(40), id, 1),
             Committed(new ValueIncremented(1), id, 2),
             Committed(new ValueIncremented(1), id, 3)
-        ]);
+        ], TestContext.Current.CancellationToken);
         var target = new RecordingProjectionTarget();
         var projector = new TestProjector(target);
         var runner = new ProjectorRunner(store);
@@ -56,7 +56,7 @@ public sealed class ProjectorTests
         var checkpoint = await runner.RunAsync(
             projector,
             ProjectionCheckpoint.Start,
-            new ProjectionRunOptions { MaxBatchSize = 2, RebuildId = "rebuild-1" });
+            new ProjectionRunOptions { MaxBatchSize = 2, RebuildId = "rebuild-1" }, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(42, target.Projection.Value);
@@ -77,16 +77,16 @@ public sealed class ProjectorTests
             Committed(new ValueChanged(40), id, 1),
             Committed(new ValueIncremented(1), id, 2),
             Committed(new ValueIncremented(1), id, 3)
-        ]);
+        ], TestContext.Current.CancellationToken);
         var target = new RecordingProjectionTarget();
         var projector = new TestProjector(target);
         var runner = new ProjectorRunner(store);
         var options = new ProjectionRunOptions { MaxBatchSize = 8, MaxEventsPerPass = 2 };
 
-        var first = await runner.RunAsync(projector, ProjectionCheckpoint.Start, options);
+        var first = await runner.RunAsync(projector, ProjectionCheckpoint.Start, options, TestContext.Current.CancellationToken);
 
         // Act
-        var second = await runner.RunAsync(projector, first, options);
+        var second = await runner.RunAsync(projector, first, options, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("2", first.Cursor.ToString());
@@ -110,16 +110,16 @@ public sealed class ProjectorTests
             Committed(new ValueIncremented(1), id, 4),
             Committed(new ValueIncremented(1), id, 5),
             Committed(new ValueIncremented(1), id, 6)
-        ]);
+        ], TestContext.Current.CancellationToken);
         var target = new RecordingProjectionTarget();
         var projector = new TestProjector(target);
         var runner = new ProjectorRunner(store);
         var options = new ProjectionRunOptions { MaxBatchSize = 3, MaxEventsPerPass = 5 };
 
-        var first = await runner.RunAsync(projector, ProjectionCheckpoint.Start, options);
+        var first = await runner.RunAsync(projector, ProjectionCheckpoint.Start, options, TestContext.Current.CancellationToken);
 
         // Act
-        var second = await runner.RunAsync(projector, first, options);
+        var second = await runner.RunAsync(projector, first, options, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal("5", first.Cursor.ToString());
@@ -140,7 +140,7 @@ public sealed class ProjectorTests
 
         // Act
         var result = await runner.RunPassAsync(null, projector, new ProjectionCheckpoint(new EventCursor("1")),
-            new ProjectionRunOptions { MaxEventsPerPass = 1 });
+            new ProjectionRunOptions { MaxEventsPerPass = 1 }, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.ContinueImmediately);
@@ -159,7 +159,7 @@ public sealed class ProjectorTests
 
         // Assert
         _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => runner.RunAsync(projector,
-            ProjectionCheckpoint.Start, new ProjectionRunOptions { MaxEventsPerPass = 0 }).AsTask());
+            ProjectionCheckpoint.Start, new ProjectionRunOptions { MaxEventsPerPass = 0 }, TestContext.Current.CancellationToken).AsTask());
     }
 
     /// <summary>
@@ -178,7 +178,7 @@ public sealed class ProjectorTests
 
         // Act
         await projector.ProjectAsync([new DomainEventRecord(stream, ev, 0, new EventCursor("1"))],
-            new ProjectorContext(new CheckpointIdentity(projector.Name, projector.Pattern)), default);
+            new ProjectorContext(new CheckpointIdentity(projector.Name, projector.Pattern)), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(0, projection.Value);

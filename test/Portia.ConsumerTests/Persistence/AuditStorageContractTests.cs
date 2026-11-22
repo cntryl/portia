@@ -19,7 +19,7 @@ public sealed class AuditStorageContractTests
         var account = new Account(Uuid.CreateVersion4());
         for (var index = 0; index < 1025; index++)
             account.Audit(new Declined(index.ToString(CultureInfo.InvariantCulture)));
-        await fixture.Repository.SaveAsync(account, _saveContext);
+        await fixture.Repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken);
 
         // Act
         var scenario = new AggregateScenario<Account>(account);
@@ -30,7 +30,7 @@ public sealed class AuditStorageContractTests
         Assert.Equal(0UL, account.CommittedStreamPosition);
         EventStreamAddress? session = null;
         await foreach (var record in fixture.Store.ReadAsync(
-                           EventStreamPattern.ForPattern(account.Stream.Realm, account.Stream.Area)))
+                           EventStreamPattern.ForPattern(account.Stream.Realm, account.Stream.Area), ct: TestContext.Current.CancellationToken))
         {
             if (record.Event.Metadata.AggregateId == account.Id)
             {
@@ -41,7 +41,7 @@ public sealed class AuditStorageContractTests
 
         Assert.NotNull(session);
         var records = new List<DomainEventRecord>();
-        await foreach (var record in fixture.Store.ReadAsync(session))
+        await foreach (var record in fixture.Store.ReadAsync(session, ct: TestContext.Current.CancellationToken))
             records.Add(record);
         Assert.Equal(1025, records.Count);
         Assert.Equal(1024UL, records[^1].ResourceOffset);
@@ -50,7 +50,7 @@ public sealed class AuditStorageContractTests
             Assert.True(record.Event.Metadata.IsAudit);
             Assert.Equal(0UL, record.Event.Metadata.AggregateVersion);
         });
-        Assert.Equal(0UL, (await fixture.Repository.HydrateAsync(new Account(account.Id))).CommittedStreamPosition);
+        Assert.Equal(0UL, (await fixture.Repository.HydrateAsync(new Account(account.Id), TestContext.Current.CancellationToken)).CommittedStreamPosition);
     }
 
     [Fact]

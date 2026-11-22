@@ -31,11 +31,11 @@ public sealed class HttpTenantBindingTests : IAsyncDisposable
         var client = await StartAsync();
 
         // Act
-        using var response = await client.PostAsJsonAsync("/tenants/acme/probe", new { name = "savings" });
+        using var response = await client.PostAsJsonAsync("/tenants/acme/probe", new { name = "savings" }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("acme:savings", await response.Content.ReadFromJsonAsync<string>());
+        Assert.Equal("acme:savings", await response.Content.ReadFromJsonAsync<string>(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     /// <summary>A route token that is not a realm segment is rejected before the handler runs.</summary>
@@ -46,7 +46,7 @@ public sealed class HttpTenantBindingTests : IAsyncDisposable
         var client = await StartAsync();
 
         // Act
-        using var response = await client.PostAsJsonAsync("/tenants/a*b/probe", new { name = "savings" });
+        using var response = await client.PostAsJsonAsync("/tenants/a*b/probe", new { name = "savings" }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -65,7 +65,7 @@ public sealed class HttpTenantBindingTests : IAsyncDisposable
         var client = await StartAsync();
 
         // Act
-        using var response = await client.PostAsJsonAsync("/probe", new { tenant, name = "savings" });
+        using var response = await client.PostAsJsonAsync("/probe", new { tenant, name = "savings" }, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(expected, response.StatusCode);
@@ -78,7 +78,7 @@ public sealed class HttpTenantBindingTests : IAsyncDisposable
         // Arrange
         var client = await StartAsync();
 
-        using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json"));
+        using var document = JsonDocument.Parse(await client.GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken));
 
         // Act
         var routed = document.RootElement.GetProperty("paths").GetProperty("/tenants/{tenant}/probe")

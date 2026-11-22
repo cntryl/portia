@@ -18,13 +18,13 @@ public sealed class ReactorEffectPatternsTests
 
         // Assert
         _ = await Assert.ThrowsAsync<ProcessorFailureException>(() =>
-            new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start).AsTask());
+            new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken).AsTask());
 
         Assert.Equal(ProjectionCheckpoint.Start,
-            await checkpoints.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern)));
+            await checkpoints.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), TestContext.Current.CancellationToken));
         bus.Outcome = Result.Success;
         Assert.Equal("1",
-            (await new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start)).Cursor.ToString());
+            (await new ReactorRunner(store).RunAsync(reactor, ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken)).Cursor.ToString());
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public sealed class ReactorEffectPatternsTests
 
         // Act
         _ = await new ReactorRunner(await StoreWithDeposit(aggregateId))
-            .RunAsync(reactor, ProjectionCheckpoint.Start);
+            .RunAsync(reactor, ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(1, effects.Receipts);
@@ -51,7 +51,7 @@ public sealed class ReactorEffectPatternsTests
         var trigger = DomainEventSeed.Attach(new PlacedAfterAvailabilityCheck(), orderId, 1);
         var store = new InMemoryEventStore();
         var stream = new EventStreamAddress("testing", "orders", orderId.ToString());
-        await store.AppendAsync(stream, 0, [trigger]);
+        await store.AppendAsync(stream, 0, [trigger], TestContext.Current.CancellationToken);
         var participant = new InventoryParticipant(store);
         Assert.True(participant.CanReserve);
         participant.CanReserve = false;
@@ -62,11 +62,11 @@ public sealed class ReactorEffectPatternsTests
 
         // Act
         var firstFailure = await Record.ExceptionAsync(() =>
-            runner.RunAsync(reactor, ProjectionCheckpoint.Start).AsTask());
-        var unknownCheckpoint = await checkpoints.LoadAsync(identity);
+            runner.RunAsync(reactor, ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken).AsTask());
+        var unknownCheckpoint = await checkpoints.LoadAsync(identity, TestContext.Current.CancellationToken);
         var resolvedBeforeReplay = participant.RejectedOrders.Count;
-        var resolvedCheckpoint = await runner.RunAsync(reactor, unknownCheckpoint);
-        _ = await runner.RunAsync(reactor, ProjectionCheckpoint.Start);
+        var resolvedCheckpoint = await runner.RunAsync(reactor, unknownCheckpoint, ct: TestContext.Current.CancellationToken);
+        _ = await runner.RunAsync(reactor, ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.IsType<ProcessorFailureException>(firstFailure);

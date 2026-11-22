@@ -20,12 +20,12 @@ public sealed class ContractNestedBindingTests
         _ = builder.Services.AddPortia().AddHttp().AddRequestHandler<ContractNestedBindingHandler>();
         await using var app = builder.Build();
         _ = app.MapPortiaPost<ContractNestedBindingRequest, string>("/nested-binding");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var body = new StringContent(json, Encoding.UTF8, "application/json");
         using var client = app.GetTestClient();
 
         // Act
-        using var response = await client.PostAsync("/nested-binding", body);
+        using var response = await client.PostAsync("/nested-binding", body, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);

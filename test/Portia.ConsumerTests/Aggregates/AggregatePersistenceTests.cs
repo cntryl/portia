@@ -19,33 +19,33 @@ public sealed class AggregatePersistenceTests
         account.Deposit(10);
 
         // Act
-        await repository.SaveAsync(account, _saveContext);
+        await repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken);
 
         // Assert
-        var competingWriter = Assert.IsType<Account>(await repository.HydrateAsync(new Account(account.Id)));
+        var competingWriter = Assert.IsType<Account>(await repository.HydrateAsync(new Account(account.Id), TestContext.Current.CancellationToken));
         account.Audit(new Declined("limit"));
         account.Audit(new Declined("reviewed"));
-        await repository.SaveAsync(account, _saveContext);
+        await repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken);
         Assert.Equal(1UL, account.CommittedStreamPosition);
         account.Audit(new Declined("next session"));
-        await repository.SaveAsync(account, _saveContext);
+        await repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken);
 
         // Audit writes do not conflict with a writer loaded from the same raised-event version.
         competingWriter.Deposit(5);
-        await repository.SaveAsync(competingWriter, _saveContext);
-        var reloaded = Assert.IsType<Account>(await repository.HydrateAsync(new Account(account.Id)));
+        await repository.SaveAsync(competingWriter, _saveContext, TestContext.Current.CancellationToken);
+        var reloaded = Assert.IsType<Account>(await repository.HydrateAsync(new Account(account.Id), TestContext.Current.CancellationToken));
         Assert.Equal(15, reloaded.Balance);
         Assert.Equal(2UL, reloaded.Version);
         Assert.Equal(2UL, reloaded.CommittedStreamPosition);
         var events = new List<DomainEventRecord>();
-        await foreach (var record in fixture.Store.ReadAsync(account.Stream))
+        await foreach (var record in fixture.Store.ReadAsync(account.Stream, ct: TestContext.Current.CancellationToken))
             events.Add(record);
         Assert.Equal([0UL, 1UL], events.Select(record => record.ResourceOffset));
         Assert.All(events, record => Assert.False(record.Event.Metadata.IsAudit));
 
         var records = new List<DomainEventRecord>();
         await foreach (var record in fixture.Store.ReadAsync(
-                           EventStreamPattern.ForPattern(account.Stream.Realm, account.Stream.Area)))
+                           EventStreamPattern.ForPattern(account.Stream.Realm, account.Stream.Area), ct: TestContext.Current.CancellationToken))
         {
             if (record.Event.Metadata.AggregateId == account.Id)
             {
@@ -83,16 +83,16 @@ public sealed class AggregatePersistenceTests
         account.Audit(new Declined("declined before creation"));
 
         // Act
-        await fixture.Repository.SaveAsync(account, _saveContext);
+        await fixture.Repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.Equal(0UL, (await fixture.Repository.HydrateAsync(new Account(account.Id))).CommittedStreamPosition);
+        Assert.Equal(0UL, (await fixture.Repository.HydrateAsync(new Account(account.Id), TestContext.Current.CancellationToken)).CommittedStreamPosition);
         Assert.Equal(0, account.Balance);
         Assert.Equal(0UL, account.Version);
         Assert.Equal(0UL, account.CommittedStreamPosition);
         account.Deposit(3);
-        await fixture.Repository.SaveAsync(account, _saveContext);
-        Assert.Equal(3, (await fixture.Repository.HydrateAsync(new Account(account.Id)))!.Balance);
+        await fixture.Repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken);
+        Assert.Equal(3, (await fixture.Repository.HydrateAsync(new Account(account.Id), TestContext.Current.CancellationToken))!.Balance);
     }
 
     [Theory]
@@ -106,20 +106,20 @@ public sealed class AggregatePersistenceTests
         account.Deposit(1);
 
         // Act
-        await fixture.Repository.SaveAsync(account, _saveContext);
+        await fixture.Repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken);
 
         // Assert
-        var stale = Assert.IsType<Account>(await fixture.Repository.HydrateAsync(new Account(account.Id)));
+        var stale = Assert.IsType<Account>(await fixture.Repository.HydrateAsync(new Account(account.Id), TestContext.Current.CancellationToken));
         account.Deposit(2);
-        await fixture.Repository.SaveAsync(account, _saveContext);
+        await fixture.Repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken);
         stale.Deposit(4);
         _ = await Assert.ThrowsAsync<EventStreamConcurrencyException>(() =>
-            fixture.Repository.SaveAsync(stale, _saveContext).AsTask());
+            fixture.Repository.SaveAsync(stale, _saveContext, TestContext.Current.CancellationToken).AsTask());
         Assert.Equal(1UL, stale.CommittedStreamPosition);
         Assert.Equal(2UL, stale.Version);
         Assert.Equal(4,
             Assert.IsType<Deposited>(Assert.Single(new AggregateScenario<Account>(stale).PendingEvents)).Amount);
-        Assert.Equal(3, (await fixture.Repository.HydrateAsync(new Account(account.Id)))!.Balance);
+        Assert.Equal(3, (await fixture.Repository.HydrateAsync(new Account(account.Id), TestContext.Current.CancellationToken))!.Balance);
     }
 
     [Fact]

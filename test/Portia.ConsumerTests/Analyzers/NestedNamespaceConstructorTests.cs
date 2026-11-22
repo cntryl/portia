@@ -52,11 +52,11 @@ public sealed class NestedNamespaceConstructorTests
         // Assert
         Assert.True(workspace.TryApplyChanges(dependent.Project.Solution));
         document = workspace.CurrentSolution.GetDocument(document.Id)!;
-        var before = (await document.Project.GetCompilationAsync())!;
-        Assert.DoesNotContain(before.GetDiagnostics(), diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
+        var before = (await document.Project.GetCompilationAsync(TestContext.Current.CancellationToken))!;
+        Assert.DoesNotContain(before.GetDiagnostics(TestContext.Current.CancellationToken), diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         var diagnostics = await before.WithAnalyzers([new ApplicationStructureAnalyzer()],
-            ApplicationAnalyzerCompilation.Options("Shop.Core", "/workspace/Shop.Core")).GetAnalyzerDiagnosticsAsync();
-        var tree = await document.GetSyntaxTreeAsync();
+            ApplicationAnalyzerCompilation.Options("Shop.Core", "/workspace/Shop.Core")).GetAnalyzerDiagnosticsAsync(TestContext.Current.CancellationToken);
+        var tree = await document.GetSyntaxTreeAsync(TestContext.Current.CancellationToken);
         var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA202" && item.Location.SourceTree == tree);
         var actions = new List<CodeAction>();
         await new ApplicationStructureCodeFixProvider().RegisterCodeFixesAsync(new CodeFixContext(document, diagnostic,
@@ -65,9 +65,9 @@ public sealed class NestedNamespaceConstructorTests
         var operations = await Assert.Single(actions).GetOperationsAsync(CancellationToken.None);
         var changed = Assert.Single(operations.OfType<ApplyChangesOperation>()).ChangedSolution;
         var changedProject = changed.GetProject(document.Project.Id)!;
-        var after = (await changedProject.GetCompilationAsync())!;
-        var errors = after.GetDiagnostics().Where(item => item.Severity == DiagnosticSeverity.Error).ToArray();
-        var changedUse = (await changed.GetDocument(dependent.Id)!.GetTextAsync()).ToString();
+        var after = (await changedProject.GetCompilationAsync(TestContext.Current.CancellationToken))!;
+        var errors = after.GetDiagnostics(TestContext.Current.CancellationToken).Where(item => item.Severity == DiagnosticSeverity.Error).ToArray();
+        var changedUse = (await changed.GetDocument(dependent.Id)!.GetTextAsync(TestContext.Current.CancellationToken)).ToString();
 
         Assert.True(errors.Length == 0, string.Join(Environment.NewLine, errors.Select(item => item.ToString()))
                                         + Environment.NewLine + changedUse);

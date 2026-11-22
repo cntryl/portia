@@ -22,7 +22,7 @@ public sealed class ReactorTests
         var ev = Committed(new ValueChanged(42), sourceId, 1);
 
         // Act
-        await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, new EventCursor("1")), default);
+        await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, new EventCursor("1")), TestContext.Current.CancellationToken);
 
         // Assert
         var target = Assert.Single(repository.SavedAggregates);
@@ -42,7 +42,7 @@ public sealed class ReactorTests
         var ev = Committed(new ValueIncremented(3), Uuid.CreateVersion4(), 1);
 
         // Act
-        await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, new EventCursor("1")), default);
+        await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, new EventCursor("1")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(3, reactor.LastIncrementAmount);
@@ -63,7 +63,7 @@ public sealed class ReactorTests
         var ev = Committed(new ValueAudited("unhandled"), Uuid.CreateVersion4(), 1);
 
         // Act
-        await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, new EventCursor("1")), default);
+        await reactor.ReactAsync(new DomainEventRecord(stream, ev, 0, new EventCursor("1")), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Empty(repository.SavedAggregates);

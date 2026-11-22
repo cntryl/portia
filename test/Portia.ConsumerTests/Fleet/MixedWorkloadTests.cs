@@ -39,11 +39,11 @@ public sealed class MixedWorkloadTests
         for (var i = 0; i < realms.Length; i++)
         {
             await store.AppendAsync(new EventStreamAddress(realms[i], "accounts", ids[i].ToString()), 0,
-                [DomainEventSeed.Attach(new Deposited(i + 1), ids[i], 1)]);
+                [DomainEventSeed.Attach(new Deposited(i + 1), ids[i], 1)], TestContext.Current.CancellationToken);
         }
 
         // Act
-        await host.StartAsync();
+        await host.StartAsync(TestContext.Current.CancellationToken);
 
         // Assert
         try
@@ -68,7 +68,7 @@ public sealed class MixedWorkloadTests
                               && !coordinator.Active.ContainsKey(
                                   new WorkloadIdentity("reaction", new TenantId("alpha"))));
             await store.AppendAsync(new EventStreamAddress("alpha", "accounts", ids[0].ToString()), 1,
-                [DomainEventSeed.Attach(new Deposited(8), ids[0], 2)]);
+                [DomainEventSeed.Attach(new Deposited(8), ids[0], 2)], TestContext.Current.CancellationToken);
             tenants.Change(TenantLifecycleChangeKind.Added, "alpha");
             await effects.WaitForAsync("accounts", 2, ids[0]);
             await effects.WaitForAsync("reaction", 2, ids[0]);
@@ -82,7 +82,7 @@ public sealed class MixedWorkloadTests
         }
         finally
         {
-            await host.StopAsync();
+            await host.StopAsync(TestContext.Current.CancellationToken);
         }
 
         var scopes = host.Services.GetRequiredService<ObservedScopes>();

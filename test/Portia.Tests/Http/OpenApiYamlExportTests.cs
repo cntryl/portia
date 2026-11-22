@@ -29,12 +29,12 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
             _ = app.MapGet("/health", () => Results.Ok()).WithName("health");
 
             // Act
-            await app.WritePortiaOpenApiYamlAsync();
+            await app.WritePortiaOpenApiYamlAsync(cancellationToken: TestContext.Current.CancellationToken);
 
             // Assert
             var path = Path.Combine(directory, "openapi.yml");
             Assert.True(File.Exists(path));
-            AssertHealthEndpoint(await File.ReadAllTextAsync(path));
+            AssertHealthEndpoint(await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken));
         }
         finally
         {
@@ -59,11 +59,11 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
             _ = app.MapGet("/health", () => Results.Ok()).WithName("health");
 
             // Act
-            await app.WritePortiaOpenApiYamlAsync(path);
+            await app.WritePortiaOpenApiYamlAsync(path, cancellationToken: TestContext.Current.CancellationToken);
 
             // Assert
             Assert.True(File.Exists(path));
-            AssertHealthEndpoint(await File.ReadAllTextAsync(path));
+            AssertHealthEndpoint(await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken));
         }
         finally
         {
@@ -86,14 +86,14 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
         try
         {
             // Act
-            await app.WritePortiaOpenApiYamlAsync(path);
-            await app.StartAsync();
+            await app.WritePortiaOpenApiYamlAsync(path, cancellationToken: TestContext.Current.CancellationToken);
+            await app.StartAsync(TestContext.Current.CancellationToken);
             using var client = app.GetTestClient();
-            var served = await client.GetByteArrayAsync("/openapi/v1.yml");
+            var served = await client.GetByteArrayAsync("/openapi/v1.yml", TestContext.Current.CancellationToken);
 
             // Assert
-            Assert.Equal(await File.ReadAllBytesAsync(path), served);
-            Assert.Contains("/ops/health:", await File.ReadAllTextAsync(path), StringComparison.Ordinal);
+            Assert.Equal(await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken), served);
+            Assert.Contains("/ops/health:", await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken), StringComparison.Ordinal);
         }
         finally
         {
@@ -111,7 +111,7 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
         _app = app;
 
         // Act
-        var exception = await Record.ExceptionAsync(() => app.WritePortiaOpenApiYamlAsync(" "));
+        var exception = await Record.ExceptionAsync(() => app.WritePortiaOpenApiYamlAsync(" ", cancellationToken: TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<ArgumentException>(exception);
@@ -128,7 +128,7 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
         _app = app;
 
         // Act
-        var exception = await Record.ExceptionAsync(() => app.WritePortiaOpenApiYamlAsync());
+        var exception = await Record.ExceptionAsync(() => app.WritePortiaOpenApiYamlAsync(cancellationToken: TestContext.Current.CancellationToken));
 
         // Assert
         var invalidOperation = Assert.IsType<InvalidOperationException>(exception);
@@ -151,7 +151,7 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
             _ = app.MapGet("/health", () => Results.Ok()).WithName("health");
 
             // Act
-            var exception = await Record.ExceptionAsync(() => app.WritePortiaOpenApiYamlAsync(path));
+            var exception = await Record.ExceptionAsync(() => app.WritePortiaOpenApiYamlAsync(path, cancellationToken: TestContext.Current.CancellationToken));
 
             // Assert
             Assert.Same(generationFailure, exception);
@@ -170,7 +170,7 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
     {
         // Arrange
         var path = Path.Combine(Path.GetTempPath(), $"portia-openapi-{Guid.NewGuid():N}.yml");
-        await File.WriteAllTextAsync(path, "previous document");
+        await File.WriteAllTextAsync(path, "previous document", TestContext.Current.CancellationToken);
         using var cancellation = new CancellationTokenSource();
         var app = CreateApp(options => options.OpenApi.ConfigureDocument = _ => cancellation.Cancel());
         _app = app;
@@ -181,7 +181,7 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
 
             // Assert
             Assert.IsAssignableFrom<OperationCanceledException>(exception);
-            Assert.Equal("previous document", await File.ReadAllTextAsync(path));
+            Assert.Equal("previous document", await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken));
         }
         finally
         {

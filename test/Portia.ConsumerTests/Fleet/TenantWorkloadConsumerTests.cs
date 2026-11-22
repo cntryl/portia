@@ -31,7 +31,7 @@ public sealed class TenantWorkloadConsumerTests
         using var cancellation = new CancellationTokenSource();
         try
         {
-            await worker.StartAsync(default);
+            await worker.StartAsync(TestContext.Current.CancellationToken);
             await effects.WaitForAsync("tenant:acme");
             Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync(cancellation.Token));
             Assert.True(Assert.Single(effects.Scopes).Value);
@@ -53,7 +53,7 @@ public sealed class TenantWorkloadConsumerTests
         finally
         {
             cancellation.Cancel();
-            await worker.StopAsync(default);
+            await worker.StopAsync(TestContext.Current.CancellationToken);
             (worker as IDisposable)?.Dispose();
         }
 
@@ -87,16 +87,16 @@ public sealed class TenantWorkloadConsumerTests
         try
         {
             foreach (var worker in workers)
-                await worker.StartAsync(default);
-            _ = await clock.WaitForDelayAsync();
-            _ = await clock.WaitForDelayAsync();
+                await worker.StartAsync(TestContext.Current.CancellationToken);
+            _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
+            _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
             await TenantDirectoryConsumerTests.SeedAsync(store, id, 0,
                 new TenantDirectoryConsumerTests.Activated("globex"));
             clock.Advance(TimeSpan.FromSeconds(1));
             await effects.WaitForAsync("tenant:globex");
             await effects.WaitForAsync("second:globex");
-            _ = await clock.WaitForDelayAsync();
-            _ = await clock.WaitForDelayAsync();
+            _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
+            _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
             await TenantDirectoryConsumerTests.SeedAsync(store, id, 1,
                 new TenantDirectoryConsumerTests.Deactivated("globex"));
             clock.Advance(TimeSpan.FromSeconds(1));
@@ -110,7 +110,7 @@ public sealed class TenantWorkloadConsumerTests
         {
             foreach (var worker in workers)
             {
-                await worker.StopAsync(default);
+                await worker.StopAsync(TestContext.Current.CancellationToken);
                 (worker as IDisposable)?.Dispose();
             }
         }

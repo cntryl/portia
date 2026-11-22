@@ -32,8 +32,8 @@ public sealed class McpScenarioTests
         };
 
         // Act
-        await using (var scenario = await McpScenario.ConnectStdioAsync(options))
-            _ = await scenario.ListTools().ExpectExactly("stdio.greetings.read");
+        await using (var scenario = await McpScenario.ConnectStdioAsync(options, TestContext.Current.CancellationToken))
+            _ = await scenario.ListTools(TestContext.Current.CancellationToken).ExpectExactly("stdio.greetings.read");
 
         // Assert
         Assert.True(Volatile.Read(ref processId) > 0, "The child process did not report its PID.");
@@ -67,7 +67,7 @@ public sealed class McpScenarioTests
 
         // Assert
         await Assert.ThrowsAnyAsync<OperationCanceledException>(ConnectAsync);
-        var childProcessId = await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        var childProcessId = await started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
         Assert.True(await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(30)),
             "Canceling stdio connection left its child process running.");
     }
@@ -113,7 +113,7 @@ public sealed class McpScenarioTests
             var failure = await Assert.ThrowsAnyAsync<Exception>(ConnectAsync);
             Assert.False(failure is OperationCanceledException,
                 "MCP initialization should fail with a protocol error, not cancellation.");
-            childProcessId = await started.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            childProcessId = await started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
             Assert.True(await WaitForProcessExitAsync(childProcessId, TimeSpan.FromSeconds(30)),
                 "A failed MCP initialization left its stdio child process running.");
         }
@@ -124,7 +124,7 @@ public sealed class McpScenarioTests
                 if (childProcessId == 0)
                     childProcessId = Volatile.Read(ref observedProcessId);
                 if (childProcessId == 0 && File.Exists(processIdFile)
-                                        && int.TryParse(await File.ReadAllTextAsync(processIdFile),
+                                        && int.TryParse(await File.ReadAllTextAsync(processIdFile, TestContext.Current.CancellationToken),
                                             out var persistedProcessId))
                     childProcessId = persistedProcessId;
                 if (childProcessId > 0)
@@ -185,8 +185,8 @@ public sealed class McpScenarioTests
             Name = "Portia stdio scenario test"
         }, timeout.Token))
         {
-            _ = await scenario.ListTools().ExpectExactly("stdio.greetings.read");
-            _ = await scenario.When("stdio.greetings.read", new Dictionary<string, object?> { ["name"] = "Portia" })
+            _ = await scenario.ListTools(TestContext.Current.CancellationToken).ExpectExactly("stdio.greetings.read");
+            _ = await scenario.When("stdio.greetings.read", new Dictionary<string, object?> { ["name"] = "Portia" }, TestContext.Current.CancellationToken)
                 .ExpectResult(JsonSerializerOptions.Default.GetTypeInfo<string>(), value =>
                     Assert.Equal("Hello, Portia, from stdio-test-actor.", value));
         }
@@ -198,8 +198,8 @@ public sealed class McpScenarioTests
             Name = "Portia stdio resource test"
         }, timeout.Token))
         {
-            _ = await scenario.ListResourceTemplates().ExpectExactly("greetings://stdio/{name}");
-            var resource = await scenario.ReadResource("greetings://stdio/Portia");
+            _ = await scenario.ListResourceTemplates(TestContext.Current.CancellationToken).ExpectExactly("greetings://stdio/{name}");
+            var resource = await scenario.ReadResource("greetings://stdio/Portia", TestContext.Current.CancellationToken);
             Assert.Contains("stdio-test-actor", Assert.Single(resource).Text, StringComparison.Ordinal);
             Assert.Equal(TimeSpan.Zero, Assert.Single(resource).TimeToLive);
             Assert.Equal(CacheScope.Private, Assert.Single(resource).CacheScope);
@@ -211,9 +211,9 @@ public sealed class McpScenarioTests
             Arguments = [host, "--prompt-only"],
             Name = "Portia stdio prompt test"
         }, timeout.Token);
-        _ = await promptScenario.ListPrompts().ExpectExactly("stdio-greeting");
+        _ = await promptScenario.ListPrompts(TestContext.Current.CancellationToken).ExpectExactly("stdio-greeting");
         var prompt =
-            await promptScenario.GetPrompt("stdio-greeting", new Dictionary<string, object?> { ["name"] = "Portia" });
+            await promptScenario.GetPrompt("stdio-greeting", new Dictionary<string, object?> { ["name"] = "Portia" }, TestContext.Current.CancellationToken);
         Assert.Contains("stdio-test-actor", Assert.Single(prompt).Text, StringComparison.Ordinal);
     }
 
@@ -268,7 +268,7 @@ public sealed class McpScenarioTests
             return next(context);
         });
         _ = app.MapPortiaMcp().AllowAnonymous();
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
         using var http = app.GetTestClient();
         McpToolSnapshot greeting;
         McpCallSnapshot actor;
@@ -277,9 +277,9 @@ public sealed class McpScenarioTests
         McpCallSnapshot failure;
 
         // Assert
-        await using (var scenario = await McpScenario.ConnectAsync(http, new Uri("http://localhost/mcp")))
+        await using (var scenario = await McpScenario.ConnectAsync(http, new Uri("http://localhost/mcp"), TestContext.Current.CancellationToken))
         {
-            var tools = await scenario.ListTools().ExpectExactly(
+            var tools = await scenario.ListTools(TestContext.Current.CancellationToken).ExpectExactly(
                 "actors.read", "greetings.read", "greetings.reject");
             greeting = Assert.Single(tools, tool => tool.Name == "greetings.read");
             Assert.Equal("Reads a greeting without changing application state.", greeting.Description);
@@ -287,46 +287,46 @@ public sealed class McpScenarioTests
             Assert.True(greeting.ReadOnly);
             Assert.Equal("object", greeting.InputSchema.GetProperty("type").GetString());
 
-            var templates = await scenario.ListResourceTemplates().ExpectExactly("greetings://scenario/{name}");
+            var templates = await scenario.ListResourceTemplates(TestContext.Current.CancellationToken).ExpectExactly("greetings://scenario/{name}");
             Assert.True(Assert.Single(templates).IsTemplate);
-            var contents = await scenario.ReadResource("greetings://scenario/Portia")
+            var contents = await scenario.ReadResource("greetings://scenario/Portia", TestContext.Current.CancellationToken)
                 .Inspect(snapshots => Assert.Equal("Hello, Portia.", Assert.Single(snapshots).Text));
             Assert.Equal("Hello, Portia.", Assert.Single(contents).Text);
 
             Interlocked.Exchange(ref postRequests, 0);
-            var resourceListing = scenario.ListResources()
+            var resourceListing = scenario.ListResources(TestContext.Current.CancellationToken)
                 .ExpectExactly("greetings://local/fixed")
                 .Inspect(snapshots => Assert.Equal("fixed greeting", Assert.Single(snapshots).Name));
             var resources = await resourceListing;
             Assert.Same(resources, await resourceListing);
             Assert.Equal(1, Volatile.Read(ref postRequests));
 
-            var prompts = await scenario.ListPrompts().ExpectExactly("scenario-greeting");
+            var prompts = await scenario.ListPrompts(TestContext.Current.CancellationToken).ExpectExactly("scenario-greeting");
             Assert.True(Assert.Single(prompts).Arguments["name"]);
             var messages = await scenario.GetPrompt("scenario-greeting",
-                    new Dictionary<string, object?> { ["name"] = "Portia" })
+                    new Dictionary<string, object?> { ["name"] = "Portia" }, TestContext.Current.CancellationToken)
                 .Inspect(snapshots => Assert.Equal("Hello, Portia.", Assert.Single(snapshots).Text));
             Assert.Equal("User", Assert.Single(messages).Role);
 
-            actor = await scenario.When("actors.read")
+            actor = await scenario.When("actors.read", cancellationToken: TestContext.Current.CancellationToken)
                 .ExpectResult(JsonSerializerOptions.Default.GetTypeInfo<string>(), value =>
                     Assert.Equal("scenario-agent|mcp|actors.read", value));
             Assert.Equal("scenario-agent|mcp|actors.read",
                 actor.StructuredJson?.GetProperty("result").GetString());
 
-            failure = await scenario.When("greetings.reject").ExpectFailure("Conflict");
+            failure = await scenario.When("greetings.reject", cancellationToken: TestContext.Current.CancellationToken).ExpectFailure("Conflict");
             Assert.Null(failure.StructuredJson);
             Assert.Equal("Greeting already exists.", failure.Error?.GetProperty("message").GetString());
 
             var mismatch = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-                await scenario.When("greetings.reject").ExpectFailure("NotFound"));
+                await scenario.When("greetings.reject", cancellationToken: TestContext.Current.CancellationToken).ExpectFailure("NotFound"));
             Assert.Contains("'Conflict'", mismatch.Message, StringComparison.Ordinal);
             Assert.Contains("Greeting already exists.", mismatch.Message, StringComparison.Ordinal);
 
             var malformed = await scenario.When("greetings.read", new Dictionary<string, object?>
             {
                 ["name"] = 42
-            }).ExpectFailure("Binding");
+            }, TestContext.Current.CancellationToken).ExpectFailure("Binding");
             Assert.True(malformed.IsError);
         }
 
@@ -334,7 +334,7 @@ public sealed class McpScenarioTests
         Assert.Equal("scenario-agent|mcp|actors.read", actor.StructuredJson?.GetProperty("result").GetString());
         Assert.Equal("Greeting already exists.", failure.Error?.GetProperty("message").GetString());
 
-        using var response = await http.GetAsync("/not-found");
+        using var response = await http.GetAsync("/not-found", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 

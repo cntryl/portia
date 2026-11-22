@@ -40,7 +40,7 @@ public sealed class AzureObjectStorageIntegrationTests
         var storage = host.GetRequiredService<IObjectStorage>();
         foreach (var location in locations.Values)
         {
-            await service.CreateBlobContainerAsync(location.BucketReference);
+            await service.CreateBlobContainerAsync(location.BucketReference, cancellationToken: TestContext.Current.CancellationToken);
         }
 
         // Act
@@ -64,7 +64,7 @@ public sealed class AzureObjectStorageIntegrationTests
         {
             foreach (var location in locations.Values)
             {
-                await service.DeleteBlobContainerAsync(location.BucketReference);
+                await service.DeleteBlobContainerAsync(location.BucketReference, cancellationToken: TestContext.Current.CancellationToken);
             }
         }
     }

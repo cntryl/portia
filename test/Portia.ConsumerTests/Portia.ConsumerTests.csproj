@@ -1,5 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <UseMicrosoftTestingPlatformRunner>true</UseMicrosoftTestingPlatformRunner>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
     <InterceptorsNamespaces>$(InterceptorsNamespaces);Cntryl.Portia.Generated</InterceptorsNamespaces>
     <LangVersion>15</LangVersion>
@@ -11,14 +13,13 @@
     <PackageReference Include="Cntryl.Conventions.Testing.Analyzers"/>
     <PackageReference Include="Cntryl.Conventions.Testing.CodeFixes"/>
     <PackageReference Include="Cntryl.Fitz.Core"/>
-    <PackageReference Include="coverlet.collector" PrivateAssets="all"/>
+    <PackageReference Include="coverlet.MTP" PrivateAssets="all"/>
+    <None Include="../testconfig.json" Link="testconfig.json" CopyToOutputDirectory="PreserveNewest"/>
     <PackageReference Include="Microsoft.AspNetCore.TestHost"/>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp"/>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces"/>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Features" PrivateAssets="all"/>
-    <PackageReference Include="Microsoft.NET.Test.Sdk"/>
-    <PackageReference Include="xunit"/>
-    <PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all"/>
+    <PackageReference Include="xunit.v3"/>
     <ProjectReference Include="../Consumer.Contracts/Consumer.Contracts.csproj"/>
     <ProjectReference Include="../Portia.McpContracts/Portia.McpContracts.csproj"/>
     <ProjectReference Include="../Consumer.FeatureOne/Consumer.FeatureOne.csproj"/>

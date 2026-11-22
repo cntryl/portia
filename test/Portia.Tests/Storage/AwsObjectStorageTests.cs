@@ -15,7 +15,7 @@ public sealed class AwsObjectStorageTests
         services.AddAwsObjectStorage(builder => builder.UseClient(client));
         using var provider = services.BuildServiceProvider();
         var session = await provider.GetRequiredService<IObjectStorage>().CreateUploadAsync(
-            new TenantId("tenant-one"), new ObjectDigest(new string('a', 64), 1));
+            new TenantId("tenant-one"), new ObjectDigest(new string('a', 64), 1), TestContext.Current.CancellationToken);
         var legacyProtector = provider.GetRequiredService<IDataProtectionProvider>()
             .CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1");
 
@@ -41,12 +41,12 @@ public sealed class AwsObjectStorageTests
         proxy.Content = content;
         var storage = new AwsObjectStorage(client, resolver,
             new EphemeralDataProtectionProvider().CreateProtector("layout"));
-        var session = await storage.CreateUploadAsync(tenant, digest);
+        var session = await storage.CreateUploadAsync(tenant, digest, TestContext.Current.CancellationToken);
         resolver.ContentRoot = "moved";
         resolver.UploadRoot = "new-uploads";
 
         // Act
-        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "opaque-etag")]);
+        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "opaque-etag")], TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(ApplicationStorageResolver.Bucket, proxy.CopyRequest?.DestinationBucket);
@@ -75,15 +75,15 @@ public sealed class AwsObjectStorageTests
         var storage = new AwsObjectStorage(client, resolver, protector);
 
         // Act
-        var session = await storage.CreateUploadAsync(tenant, digest);
+        var session = await storage.CreateUploadAsync(tenant, digest, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.DoesNotContain("tenant-one-bucket", session.Token, StringComparison.Ordinal);
         Assert.DoesNotContain("alias/tenant-one-key", session.Token, StringComparison.Ordinal);
-        var signed = await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(4));
+        var signed = await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(4), TestContext.Current.CancellationToken);
         Assert.True(signed.ExpiresAt <= DateTimeOffset.UtcNow.AddMinutes(4));
         Assert.Equal(Protocol.HTTPS, proxy.PresignedRequest?.Protocol);
-        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "opaque-etag")]);
+        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "opaque-etag")], TestContext.Current.CancellationToken);
 
         Assert.Equal("tenant-one-bucket", resolver.LastTenantLocation?.BucketReference);
         Assert.Equal(ServerSideEncryptionMethod.AWSKMS, proxy.InitiateRequest?.ServerSideEncryptionMethod);
@@ -115,15 +115,15 @@ public sealed class AwsObjectStorageTests
         proxy.ExistingObject = true;
         var storage = CreateStorage(client);
         var tenant = new TenantId("tenant-one");
-        var session = await storage.CreateUploadAsync(tenant, digest);
+        var session = await storage.CreateUploadAsync(tenant, digest, TestContext.Current.CancellationToken);
 
         // Act
-        await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1));
+        await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(Protocol.HTTP, proxy.PresignedRequest?.Protocol);
 
-        await storage.CreateDownloadAsync(tenant, digest, TimeSpan.FromMinutes(1));
+        await storage.CreateDownloadAsync(tenant, digest, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken);
         Assert.Equal(Protocol.HTTP, proxy.PresignedRequest?.Protocol);
     }
 
@@ -137,10 +137,10 @@ public sealed class AwsObjectStorageTests
         proxy.UseHttp = true;
         var storage = CreateStorage(client);
         var digest = new ObjectDigest(new string('a', 64), 1);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Act
-        await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1));
+        await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(Protocol.HTTP, proxy.PresignedRequest?.Protocol);
@@ -167,11 +167,11 @@ public sealed class AwsObjectStorageTests
                 .CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1"));
 
         // Act
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Assert
         await Assert.ThrowsAsync<InvalidDataException>(async () =>
-            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]));
+            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")], TestContext.Current.CancellationToken));
 
         Assert.Null(proxy.CopyRequest);
         Assert.Equal(1, proxy.AbortCount);
@@ -197,13 +197,13 @@ public sealed class AwsObjectStorageTests
             new TestTenantResolver(),
             provider.GetRequiredService<IDataProtectionProvider>()
                 .CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1"));
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
         var parts = new[] { new ObjectPartReceipt(1, "etag") };
 
-        await storage.CompleteUploadAsync(session, parts);
+        await storage.CompleteUploadAsync(session, parts, TestContext.Current.CancellationToken);
 
         // Act
-        await storage.CompleteUploadAsync(session, parts);
+        await storage.CompleteUploadAsync(session, parts, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, proxy.CompleteCount);
@@ -234,11 +234,11 @@ public sealed class AwsObjectStorageTests
                 .CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v1"));
 
         // Act
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Assert
         await Assert.ThrowsAsync<AmazonS3Exception>(async () =>
-            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]));
+            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")], TestContext.Current.CancellationToken));
 
         Assert.Equal(0, proxy.AbortCount);
         Assert.Equal(0, proxy.StagingDeleteCount);
@@ -256,10 +256,10 @@ public sealed class AwsObjectStorageTests
         proxy.Content = content;
         proxy.FailAllCompletions = true;
         var storage = CreateStorage(client);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Act
-        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]);
+        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")], TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(1, proxy.CompleteCount);
@@ -280,13 +280,13 @@ public sealed class AwsObjectStorageTests
         proxy.Content = content;
         proxy.TimeoutAfterFirstCompletion = true;
         var storage = CreateStorage(client);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Act
         var parts = new[] { new ObjectPartReceipt(1, "etag") };
 
         // Assert
-        await Assert.ThrowsAsync<TimeoutException>(async () => await storage.CompleteUploadAsync(session, parts));
+        await Assert.ThrowsAsync<TimeoutException>(async () => await storage.CompleteUploadAsync(session, parts, TestContext.Current.CancellationToken));
         Assert.Equal(0, proxy.AbortCount);
         Assert.Equal(0, proxy.StagingDeleteCount);
 
@@ -297,7 +297,7 @@ public sealed class AwsObjectStorageTests
         Assert.Equal(0, proxy.AbortCount);
         Assert.Equal(0, proxy.StagingDeleteCount);
 
-        await storage.CompleteUploadAsync(session, parts);
+        await storage.CompleteUploadAsync(session, parts, TestContext.Current.CancellationToken);
         Assert.Equal(2, proxy.CompleteCount);
         Assert.Equal(1, proxy.CopyCount);
         Assert.Equal(1, proxy.StagingDeleteCount);
@@ -316,7 +316,7 @@ public sealed class AwsObjectStorageTests
         using var source = new CancellationTokenSource();
         proxy.CancelDuringFirstCompletion = source;
         var storage = CreateStorage(client);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Act
         var parts = new[] { new ObjectPartReceipt(1, "etag") };
@@ -327,7 +327,7 @@ public sealed class AwsObjectStorageTests
         Assert.Equal(0, proxy.AbortCount);
         Assert.Equal(0, proxy.StagingDeleteCount);
 
-        await storage.CompleteUploadAsync(session, parts);
+        await storage.CompleteUploadAsync(session, parts, TestContext.Current.CancellationToken);
         Assert.Equal(1, proxy.CopyCount);
         Assert.Equal(1, proxy.StagingDeleteCount);
     }
@@ -346,11 +346,11 @@ public sealed class AwsObjectStorageTests
         var storage = CreateStorage(client);
 
         // Act
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Assert
         await Assert.ThrowsAsync<InvalidDataException>(async () =>
-            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]));
+            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")], TestContext.Current.CancellationToken));
 
         Assert.Equal(0, proxy.CopyCount);
         Assert.Equal(1, proxy.StagingDeleteCount);
@@ -368,10 +368,10 @@ public sealed class AwsObjectStorageTests
         proxy.Content = content;
         proxy.ConditionalCopyConflictsRemaining = 1;
         var storage = CreateStorage(client);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Act
-        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]);
+        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")], TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, proxy.CopyCount);
@@ -392,11 +392,11 @@ public sealed class AwsObjectStorageTests
         var storage = CreateStorage(client);
 
         // Act
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Assert
         await Assert.ThrowsAsync<AmazonS3Exception>(async () =>
-            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]));
+            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")], TestContext.Current.CancellationToken));
 
         Assert.InRange(proxy.CopyCount, 1, 3);
         Assert.Equal(0, proxy.StagingDeleteCount);
@@ -415,10 +415,10 @@ public sealed class AwsObjectStorageTests
         proxy.FailCopyConditionally = true;
         proxy.ExistingObject = true;
         var storage = CreateStorage(client);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Act
-        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]);
+        await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")], TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(1, proxy.CopyCount);
@@ -442,14 +442,14 @@ public sealed class AwsObjectStorageTests
         proxy.MissingObject = true;
 
         // Assert
-        Assert.False(await storage.HeadAndVerifyAsync(tenant, digest));
+        Assert.False(await storage.HeadAndVerifyAsync(tenant, digest, TestContext.Current.CancellationToken));
         await Assert.ThrowsAsync<FileNotFoundException>(async () =>
-            await storage.CreateDownloadAsync(tenant, digest, TimeSpan.FromMinutes(1)));
+            await storage.CreateDownloadAsync(tenant, digest, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken));
 
         proxy.MissingObject = false;
         proxy.ExistingObject = true;
         proxy.MetadataDigest = new string('0', 64);
-        Assert.False(await storage.HeadAndVerifyAsync(tenant, digest));
+        Assert.False(await storage.HeadAndVerifyAsync(tenant, digest, TestContext.Current.CancellationToken));
     }
 
     /// <summary>A delete between metadata verification and reading has the same missing-object result.</summary>
@@ -469,7 +469,7 @@ public sealed class AwsObjectStorageTests
         var storage = CreateStorage(client);
 
         // Assert
-        Assert.Null(await storage.OpenReadAsync(new TenantId("tenant-one"), digest));
+        Assert.Null(await storage.OpenReadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Checks cancellation leaves a session recoverable until the caller explicitly aborts it.</summary>
@@ -484,7 +484,7 @@ public sealed class AwsObjectStorageTests
         proxy.Content = content;
         proxy.CancelCompletion = true;
         var storage = CreateStorage(client);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
         using var source = new CancellationTokenSource();
 
         // Act
@@ -498,7 +498,7 @@ public sealed class AwsObjectStorageTests
         Assert.Equal(0, proxy.StagingDeleteCount);
         Assert.Equal(0, proxy.CopyCount);
 
-        await storage.AbortUploadAsync(session);
+        await storage.AbortUploadAsync(session, TestContext.Current.CancellationToken);
         Assert.Equal(2, proxy.AbortCount);
         Assert.Equal(1, proxy.StagingDeleteCount);
     }
@@ -514,10 +514,10 @@ public sealed class AwsObjectStorageTests
         var proxy = (TestS3ClientProxy)(object)client;
         proxy.AbortReportsNoSuchUpload = true;
         var storage = CreateStorage(client);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Act
-        await storage.AbortUploadAsync(session);
+        await storage.AbortUploadAsync(session, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(2, proxy.AbortCount);
@@ -543,11 +543,11 @@ public sealed class AwsObjectStorageTests
         proxy.Content = content;
         proxy.CompletionErrorCode = s3ErrorCode;
         var storage = CreateStorage(client);
-        var session = await storage.CreateUploadAsync(tenant, digest);
+        var session = await storage.CreateUploadAsync(tenant, digest, TestContext.Current.CancellationToken);
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "\"etag-typed-by-the-client\"")]));
+            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "\"etag-typed-by-the-client\"")], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.IsType<InvalidDataException>(error);
@@ -559,14 +559,14 @@ public sealed class AwsObjectStorageTests
         // Act: the caller corrects the receipts and retries the same upload session.
         proxy.CompletionErrorCode = null;
         var retryError = await Record.ExceptionAsync(async () =>
-            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "corrected-etag")]));
+            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "corrected-etag")], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(retryError);
         Assert.Equal(2, proxy.CompleteCount);
         Assert.Equal(1, proxy.CopyCount);
         Assert.Equal(1, proxy.StagingDeleteCount);
-        Assert.True(await storage.HeadAndVerifyAsync(tenant, digest));
+        Assert.True(await storage.HeadAndVerifyAsync(tenant, digest, TestContext.Current.CancellationToken));
     }
 
     /// <summary>
@@ -585,16 +585,16 @@ public sealed class AwsObjectStorageTests
         proxy.Content = content;
         proxy.FailStagingDelete = true;
         var storage = CreateStorage(client);
-        var session = await storage.CreateUploadAsync(tenant, digest);
+        var session = await storage.CreateUploadAsync(tenant, digest, TestContext.Current.CancellationToken);
 
         // Act
         var error = await Record.ExceptionAsync(async () =>
-            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")]));
+            await storage.CompleteUploadAsync(session, [new ObjectPartReceipt(1, "etag")], TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(error);
         Assert.Equal(1, proxy.CopyCount);
-        Assert.True(await storage.HeadAndVerifyAsync(tenant, digest));
+        Assert.True(await storage.HeadAndVerifyAsync(tenant, digest, TestContext.Current.CancellationToken));
     }
 
     /// <summary>Checks that a failed abort reports its own failure rather than a later cleanup failure.</summary>
@@ -608,10 +608,10 @@ public sealed class AwsObjectStorageTests
         proxy.AbortFailuresRemaining = 1;
         proxy.FailStagingDelete = true;
         var storage = CreateStorage(client);
-        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest);
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
 
         // Act
-        var error = await Record.ExceptionAsync(async () => await storage.AbortUploadAsync(session));
+        var error = await Record.ExceptionAsync(async () => await storage.AbortUploadAsync(session, TestContext.Current.CancellationToken));
 
         // Assert
         var s3Error = Assert.IsType<AmazonS3Exception>(error);

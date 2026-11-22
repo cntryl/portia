@@ -37,7 +37,7 @@ public sealed class OpenApiDescriptionTests
             .DescribeResponse(409, "This endpoint's conflict."));
         _ = app.MapPortiaPost<OpenApiOtherDescribedRequest, OpenApiDescribedNode>("/second",
             c => c.FromQuery(x => x.Limit));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         var document = await ReadAsync(app, format);
@@ -72,10 +72,10 @@ public sealed class OpenApiDescriptionTests
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaPost<OpenApiDescribedRequest, OpenApiDescribedNode>("/missing",
             c => c.FromQuery(x => x.Limit));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json"));
+        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken));
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(exception);
@@ -104,7 +104,7 @@ public sealed class OpenApiDescriptionTests
         _ = app.MapPortiaPost<OpenApiDescribedRequest, OpenApiDescribedNode>("/complete",
                 c => c.FromQuery(x => x.Limit))
             .WithSummary("Echo a node.");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         var document = await ReadAsync(app, "json");
@@ -127,7 +127,7 @@ public sealed class OpenApiDescriptionTests
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaPost<OpenApiDescribedRequest, OpenApiDescribedNode>("/shared", c => c.FromQuery(x => x.Limit));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         var document = await ReadAsync(app, "json");
@@ -157,10 +157,10 @@ public sealed class OpenApiDescriptionTests
             else
                 _ = c.DescribeResponse(418, "Not emitted.");
         });
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json"));
+        var exception = await Record.ExceptionAsync(() => app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken));
 
         // Assert
         var failure = Assert.IsType<InvalidOperationException>(exception);
@@ -182,7 +182,7 @@ public sealed class OpenApiDescriptionTests
             .Parameter<string>("X-Input", PortiaHttpParameterLocation.Header, description: "Custom input.")
             .Produces<OpenApiDescribedNode>(201).OnResult((_, _) => Results.StatusCode(201))
             .DescribeResponse("Created node."));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         var document = await ReadAsync(app, "json");
@@ -209,7 +209,7 @@ public sealed class OpenApiDescriptionTests
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaPost<OpenApiNullableTraversalRequest, OpenApiTraversalCounts>("/mapped-descriptions");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         var document = await ReadAsync(app, "json");
@@ -242,7 +242,7 @@ public sealed class OpenApiDescriptionTests
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaPost<OpenApiPolymorphicTraversalRequest, OpenApiTraversalVariant>("/branches");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         var document = await ReadAsync(app, "json");
@@ -273,7 +273,7 @@ public sealed class OpenApiDescriptionTests
         _ = app.MapPortiaGet<HttpGetWidget, string>("/described/{widget_id}", c => c
             .Describe(x => x.WidgetId, "Widget identifier.")
             .Describe(x => x.IncludeArchived, "Include archived widgets."));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         var document = await ReadAsync(app, "json");
@@ -299,7 +299,7 @@ public sealed class OpenApiDescriptionTests
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaPost<OpenApiAnnotatedRequest, OpenApiAnnotatedNode>("/attributes",
             c => c.FromQuery(x => x.Limit));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         var document = await ReadAsync(app, format);
@@ -339,7 +339,7 @@ public sealed class OpenApiDescriptionTests
             if (scope == "endpoint")
                 _ = c.Describe(x => x.Limit, "Endpoint limit.");
         });
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         var document = await ReadAsync(app, "json");
@@ -362,7 +362,7 @@ public sealed class OpenApiDescriptionTests
         _ = app.MapPortiaPost<OpenApiAnnotatedRequest, OpenApiAnnotatedNode>("/custom-attributes", c => c
             .Accepts<OpenApiAnnotatedRequest>("application/json")
             .OnBind(_ => new OpenApiAnnotatedRequest(1, new OpenApiAnnotatedNode("node"))));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         var document = await ReadAsync(app, "json");
@@ -384,7 +384,7 @@ public sealed class OpenApiDescriptionTests
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaGet<OpenApiTitleRequest, OpenApiTitleView>("/titles");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
         var document = await ReadAsync(app, "json");

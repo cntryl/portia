@@ -31,7 +31,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
             },
             lifetime.Token);
 
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Act
         await lifetime.CancelAsync();
@@ -85,7 +85,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
         _ = declared.TryRemove(second, out _);
 
         // Act
-        await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(running["second"]);
@@ -128,7 +128,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
                 {
                     survivorStopped = true;
                 }
-            });
+            }, TestContext.Current.CancellationToken);
 
         await WaitUntilAsync(() => running.Count == 3);
 
@@ -137,7 +137,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
         fault.SetResult();
 
         // Assert
-        var error = await Assert.ThrowsAsync<AggregateException>(() => run.WaitAsync(TimeSpan.FromSeconds(5)));
+        var error = await Assert.ThrowsAsync<AggregateException>(() => run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         Assert.Equal(["fault a", "fault b"],
             error.InnerExceptions.Select(inner => inner.Message).Order(StringComparer.Ordinal));
         Assert.True(survivorStopped);
@@ -164,7 +164,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
                 _ = Interlocked.Increment(ref starts);
                 await Task.Yield();
                 throw new OperationCanceledException("The workload's own operation was cancelled.");
-            }).WaitAsync(TimeSpan.FromSeconds(5)));
+            }, TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
 
         // Assert
         var cancellation = Assert.IsAssignableFrom<OperationCanceledException>(error);
@@ -186,7 +186,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
         var id = Uuid.CreateVersion4();
         var store = new InMemoryEventStore();
         await store.AppendAsync(new EventStreamAddress("test", "projectors", id.ToString()),
-            0, [Committed(new ValueChanged(7), id, 1)]);
+            0, [Committed(new ValueChanged(7), id, 1)], TestContext.Current.CancellationToken);
         var target = new RecordingProjectionTarget();
 
         var services = new ServiceCollection();
@@ -202,9 +202,9 @@ public sealed class SingleProcessWorkloadCoordinatorTests
 
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
-        await worker.StartAsync(default);
+        await worker.StartAsync(TestContext.Current.CancellationToken);
         await WaitUntilAsync(() => target.Projection.Value == 7);
-        await worker.StopAsync(default);
+        await worker.StopAsync(TestContext.Current.CancellationToken);
 
         var name = Assert.Single(target.Contexts.Select(context => context.Identity.ComponentName).Distinct());
         Assert.Equal(expected, name);

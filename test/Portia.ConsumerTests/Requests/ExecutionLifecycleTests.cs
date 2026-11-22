@@ -28,7 +28,7 @@ public sealed class ExecutionLifecycleTests
         var values = new List<int>();
 
         // Act
-        await foreach (var value in bus.StreamAsync(new Query(), parent))
+        await foreach (var value in bus.StreamAsync(new Query(), parent, ct: TestContext.Current.CancellationToken))
             values.Add(value);
 
         // Assert

@@ -35,20 +35,20 @@ public sealed class TenantCleanupTests
         }, cancellation.Token);
 
         // Act
-        await allStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await allStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Assert
         if (removeFirst)
         {
             await directory.Changes.Writer.WriteAsync(new TenantLifecycleChange(TenantLifecycleChangeKind.Removed,
-                new TenantId("a")));
-            await directory.RemovalObserved.Task.WaitAsync(TimeSpan.FromSeconds(3));
+                new TenantId("a")), TestContext.Current.CancellationToken);
+            await directory.RemovalObserved.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
             Assert.Equal(1, stopped.GetValueOrDefault(new TenantId("a")));
         }
 
         // Cancellation callback exceptions must be contained by the runner, including parent cancellation.
         var cancellationError = Record.Exception(cancellation.Cancel);
-        var runError = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3)));
+        var runError = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
         Assert.Null(cancellationError);
         Assert.Null(runError);
         Assert.Equal(3, stopped.Count);

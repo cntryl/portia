@@ -34,10 +34,10 @@ public sealed class ImmutableExampleTests
         else
             _ = app.MapPortiaPost<ImmutableExampleRequest, string>("/immutable", configuration => configuration
                 .RequestExample("sample", new ImmutableExampleRequest("example", null)));
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json"))!;
+        var document = JsonNode.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken))!;
 
         // Assert
         var value =

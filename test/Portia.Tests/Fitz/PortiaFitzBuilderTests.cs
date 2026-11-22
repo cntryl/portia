@@ -25,7 +25,7 @@ public sealed class PortiaFitzBuilderTests
         var lifecycle = Assert.IsAssignableFrom<IHostedLifecycleService>(
             Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
 
-        await lifecycle.StartingAsync(default);
+        await lifecycle.StartingAsync(TestContext.Current.CancellationToken);
     }
 
     /// <summary>Workloads using the effective Fitz coordinator still require a fleet identity.</summary>
@@ -46,7 +46,7 @@ public sealed class PortiaFitzBuilderTests
         var lifecycle = Assert.IsAssignableFrom<IHostedLifecycleService>(
             Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => lifecycle.StartingAsync(default));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => lifecycle.StartingAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("Fitz:ApplicationName", error.Message, StringComparison.Ordinal);
     }
@@ -71,7 +71,7 @@ public sealed class PortiaFitzBuilderTests
         var lifecycle = Assert.IsAssignableFrom<IHostedLifecycleService>(
             Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
 
-        await lifecycle.StartingAsync(default);
+        await lifecycle.StartingAsync(TestContext.Current.CancellationToken);
     }
 
     /// <summary>A scoped terminal observer remains available to queue workers.</summary>
@@ -95,7 +95,7 @@ public sealed class PortiaFitzBuilderTests
         var lifecycle = Assert.IsAssignableFrom<IHostedLifecycleService>(
             Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
 
-        await lifecycle.StartingAsync(default);
+        await lifecycle.StartingAsync(TestContext.Current.CancellationToken);
     }
 
     /// <summary>Fitz workers do not begin consuming before grouped HTTP endpoint validation completes.</summary>
@@ -120,13 +120,13 @@ public sealed class PortiaFitzBuilderTests
         var worker = Assert.IsType<FitzApplicationWorkers>(
             Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
 
-        await worker.StartAsync(default);
+        await worker.StartAsync(TestContext.Current.CancellationToken);
 
         Assert.Null(worker.ExecuteTask);
         validation.Complete();
-        await worker.StartedAsync(default);
+        await worker.StartedAsync(TestContext.Current.CancellationToken);
         Assert.NotNull(worker.ExecuteTask);
-        await worker.StopAsync(default);
+        await worker.StopAsync(TestContext.Current.CancellationToken);
     }
 
     /// <summary>A worker stopped while its deferred start waits for validation must not start afterwards.</summary>
@@ -146,13 +146,13 @@ public sealed class PortiaFitzBuilderTests
         var validation = provider.GetRequiredService<PortiaStartupValidationRegistry>().BeginEndpointValidation();
         var worker = Assert.IsType<FitzApplicationWorkers>(
             Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
-        await worker.StartAsync(default);
-        var started = worker.StartedAsync(default);
+        await worker.StartAsync(TestContext.Current.CancellationToken);
+        var started = worker.StartedAsync(TestContext.Current.CancellationToken);
 
         // Act
-        await worker.StopAsync(default);
+        await worker.StopAsync(TestContext.Current.CancellationToken);
         validation.Complete();
-        await started.WaitAsync(TimeSpan.FromSeconds(5));
+        await started.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Assert
         try
@@ -161,7 +161,7 @@ public sealed class PortiaFitzBuilderTests
         }
         finally
         {
-            await worker.StopAsync(default);
+            await worker.StopAsync(TestContext.Current.CancellationToken);
         }
     }
 
@@ -181,12 +181,12 @@ public sealed class PortiaFitzBuilderTests
                 _ = locked.TrySetResult();
                 _ = release.Wait(TimeSpan.FromSeconds(30));
             }
-        });
-        await locked.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        }, TestContext.Current.CancellationToken);
+        await locked.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Act
         var registration = Task.Run(() => application.UseFitzClient(client));
-        var failure = await Record.ExceptionAsync(() => registration.WaitAsync(TimeSpan.FromSeconds(5)));
+        var failure = await Record.ExceptionAsync(() => registration.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
 
         // Assert
         try
@@ -220,7 +220,7 @@ public sealed class PortiaFitzBuilderTests
         var lifecycle = Assert.IsAssignableFrom<IHostedLifecycleService>(
             Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
 
-        await lifecycle.StartingAsync(default);
+        await lifecycle.StartingAsync(TestContext.Current.CancellationToken);
     }
 
     /// <summary>Fitz rejects terminal thresholds before connecting because attempts are unavailable.</summary>
@@ -243,7 +243,7 @@ public sealed class PortiaFitzBuilderTests
         var lifecycle = Assert.IsAssignableFrom<IHostedLifecycleService>(
             Assert.Single(provider.GetServices<IHostedService>(), service => service is FitzApplicationWorkers));
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => lifecycle.StartingAsync(default));
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => lifecycle.StartingAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("does not expose durable attempt counts", error.Message, StringComparison.Ordinal);
     }
@@ -297,7 +297,7 @@ public sealed class PortiaFitzBuilderTests
         using var host = builder.Build();
 
         // Assert
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync());
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(TestContext.Current.CancellationToken));
 
         Assert.Contains("AddQueueWorkers()", error.Message, StringComparison.Ordinal);
     }
@@ -515,7 +515,7 @@ public sealed class PortiaFitzBuilderTests
             new FitzRpcRequestServer(new InMemoryRpcClient(), provider.GetRequiredService<IServiceScopeFactory>());
 
         // Act
-        await using var workers = await server.RegisterRequestsAsync();
+        await using var workers = await server.RegisterRequestsAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(1, calls);

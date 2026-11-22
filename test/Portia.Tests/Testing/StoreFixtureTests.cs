@@ -44,10 +44,10 @@ public sealed class StoreFixtureTests
 
         var aggregate = new TestAggregate(id);
         aggregate.ChangeValue(3);
-        await fixture.Repository.SaveAsync(aggregate, new RequestDispatchContext(RequestActor.System));
+        await fixture.Repository.SaveAsync(aggregate, new RequestDispatchContext(RequestActor.System), TestContext.Current.CancellationToken);
 
         // Act
-        var hydrated = await fixture.Repository.HydrateAsync(new TestAggregate(id));
+        var hydrated = await fixture.Repository.HydrateAsync(new TestAggregate(id), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(3, hydrated.Value);
@@ -65,10 +65,10 @@ public sealed class StoreFixtureTests
         {
             aggregate.ChangeValue(6);
             return AggregateOutcome.Commit(Result.Success);
-        }, new RequestDispatchContext(RequestActor.System));
+        }, new RequestDispatchContext(RequestActor.System), TestContext.Current.CancellationToken);
 
         // Act
-        var hydrated = await fixture.Repository.HydrateAsync(new TestAggregate(id));
+        var hydrated = await fixture.Repository.HydrateAsync(new TestAggregate(id), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(6, hydrated.Value);

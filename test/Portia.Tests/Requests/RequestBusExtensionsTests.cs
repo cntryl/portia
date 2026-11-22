@@ -18,7 +18,7 @@ public sealed class RequestBusExtensionsTests
         var bus = new RecordingRequestBus(Result.Success);
 
         // Act
-        await bus.SendReactionAsync(new ClockProbe(), source);
+        await bus.SendReactionAsync(new ClockProbe(), source, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(bus.Context);
@@ -36,7 +36,7 @@ public sealed class RequestBusExtensionsTests
         var bus = new RecordingRequestBus(Result.Failure(error));
 
         // Act
-        var result = await bus.SendReactionAsync(new ClockProbe(), CreateReactionContext());
+        var result = await bus.SendReactionAsync(new ClockProbe(), CreateReactionContext(), ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.False(result.IsSuccess);
@@ -69,13 +69,13 @@ public sealed class RequestBusExtensionsTests
         var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
 
         // Assert
-        Assert.True((await bus.SendAsync(new ClockProbe(), RequestActor.System)).IsSuccess);
+        Assert.True((await bus.SendAsync(new ClockProbe(), RequestActor.System, ct: TestContext.Current.CancellationToken)).IsSuccess);
         Assert.Equal(clock.GetUtcNow(), handler.StartedAt);
 
         // The child-context overload has to honour it too.
         handler.StartedAt = null;
         var parent = bus.CreateContext(RequestActor.System);
-        Assert.True((await bus.SendAsync(new ClockProbe(), parent)).IsSuccess);
+        Assert.True((await bus.SendAsync(new ClockProbe(), parent, ct: TestContext.Current.CancellationToken)).IsSuccess);
         Assert.Equal(clock.GetUtcNow(), handler.StartedAt);
         Assert.Equal(parent.CorrelationId, handler.CorrelationId);
     }

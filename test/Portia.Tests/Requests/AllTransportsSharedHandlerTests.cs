@@ -27,7 +27,7 @@ public sealed class AllTransportsSharedHandlerTests
 
         // Direct in-process dispatch — no transport at all.
         // Act
-        var directResult = await bus.SendAsync(new UniversalAction(1), RequestActor.System);
+        var directResult = await bus.SendAsync(new UniversalAction(1), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(directResult.IsSuccess);
@@ -38,7 +38,7 @@ public sealed class AllTransportsSharedHandlerTests
         var queueRunner = new QueueRunner(queueConsumer,
             RequestDeliveryScopes.FixedQueue(bus, new AlwaysValidActorValidator(),
                 terminalHandler: new IgnoreTerminalRequest()));
-        await queueRunner.RunAsync();
+        await queueRunner.RunAsync(TestContext.Current.CancellationToken);
         Assert.Equal([1, 2], handler.HandledValues);
 
         // RPC — a real send through FitzRemoteRequestSender, over FitzRpcRequestServer, into the
@@ -46,9 +46,9 @@ public sealed class AllTransportsSharedHandlerTests
         var rpc = new InMemoryRpcClient();
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var server = new FitzRpcRequestServer(rpc, busHost.ScopeFactory);
-        await using var registration = await server.RegisterAsync<UniversalAction>();
+        await using var registration = await server.RegisterAsync<UniversalAction>(TestContext.Current.CancellationToken);
         var sender = new FitzRemoteRequestSender(rpc, serializer, serializer);
-        var rpcResult = await sender.SendAsync(new UniversalAction(3), new RequestRouteValues(), null);
+        var rpcResult = await sender.SendAsync(new UniversalAction(3), new RequestRouteValues(), null, TestContext.Current.CancellationToken);
         Assert.True(rpcResult.IsSuccess);
         Assert.Equal([1, 2, 3], handler.HandledValues);
 
@@ -60,7 +60,7 @@ public sealed class AllTransportsSharedHandlerTests
         ]);
         var notificationRunner = new RequestNotificationRunner(
             notificationConsumer, RequestDeliveryScopes.Fixed(bus, new AlwaysValidActorValidator()));
-        await notificationRunner.RunAsync();
+        await notificationRunner.RunAsync(TestContext.Current.CancellationToken);
         Assert.Equal([1, 2, 3, 4], handler.HandledValues);
     }
 

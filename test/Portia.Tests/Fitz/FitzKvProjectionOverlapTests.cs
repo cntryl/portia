@@ -14,22 +14,22 @@ public sealed class FitzKvProjectionOverlapTests
         var repository = new OverlapRepository(client);
         var first = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("first", "orders"));
         var second = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("second", "orders"));
-        var firstOpen = repository.BeginAsync(new ProjectionBatchContext(first, ProjectionCheckpoint.Start)).AsTask();
-        await client.FirstArrived.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        var secondOpen = repository.BeginAsync(new ProjectionBatchContext(second, ProjectionCheckpoint.Start)).AsTask();
+        var firstOpen = repository.BeginAsync(new ProjectionBatchContext(first, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken).AsTask();
+        await client.FirstArrived.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        var secondOpen = repository.BeginAsync(new ProjectionBatchContext(second, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken).AsTask();
 
         // Act
-        _ = await Task.WhenAny(client.BothArrived.Task, secondOpen).WaitAsync(TimeSpan.FromSeconds(5));
+        _ = await Task.WhenAny(client.BothArrived.Task, secondOpen).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Assert
         if (secondOpen.IsFaulted)
         {
             _ = await Assert.ThrowsAsync<InvalidOperationException>(async () => await secondOpen);
             client.ReleaseFirst.TrySetResult();
-            await using var accepted = await firstOpen.WaitAsync(TimeSpan.FromSeconds(5));
+            await using var accepted = await firstOpen.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             await repository.StageAsync("first-batch-value");
             var acceptedNext = new ProjectionCheckpoint(new EventCursor("1"));
-            await accepted.CommitAsync(acceptedNext);
+            await accepted.CommitAsync(acceptedNext, TestContext.Current.CancellationToken);
             Assert.Equal(acceptedNext.Cursor,
                 FitzKvCheckpoints.Decode(client.Inner.Read(FitzKvCheckpoints.Key(first))!));
             Assert.Equal("first-batch-value", client.Inner.Read(OverlapRepository.DataKey) is { } acceptedBytes
@@ -39,14 +39,14 @@ public sealed class FitzKvProjectionOverlapTests
         }
 
         client.ReleaseFirst.TrySetResult();
-        await using var firstBatch = await firstOpen.WaitAsync(TimeSpan.FromSeconds(5));
+        await using var firstBatch = await firstOpen.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         client.ReleaseSecond.TrySetResult();
-        await using var secondBatch = await secondOpen.WaitAsync(TimeSpan.FromSeconds(5));
+        await using var secondBatch = await secondOpen.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         await repository.StageAsync("first-batch-value");
         Assert.Equal(client.Inner.Transactions[1].Route, repository.WriteRoute);
         var next = new ProjectionCheckpoint(new EventCursor("1"));
-        await firstBatch.CommitAsync(next);
+        await firstBatch.CommitAsync(next, TestContext.Current.CancellationToken);
 
         Assert.Equal(next.Cursor, FitzKvCheckpoints.Decode(client.Inner.Read(FitzKvCheckpoints.Key(first))!));
         Assert.Equal("first-batch-value", client.Inner.Read(OverlapRepository.DataKey) is { } bytes
@@ -62,16 +62,16 @@ public sealed class FitzKvProjectionOverlapTests
         var client = new GatedKvClient();
         var repository = new OverlapRepository(client);
         var identity = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "orders"));
-        var opening = repository.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start)).AsTask();
+        var opening = repository.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken).AsTask();
 
         // Act
-        await client.FirstArrived.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await client.FirstArrived.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 
         // Assert
         try
         {
             _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-                await repository.ReadAsync("tenant").AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+                await repository.ReadAsync("tenant").AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
             Assert.Single(client.Inner.Transactions);
         }
         finally
@@ -80,7 +80,7 @@ public sealed class FitzKvProjectionOverlapTests
             client.ReleaseSecond.TrySetResult();
         }
 
-        await using var batch = await opening.WaitAsync(TimeSpan.FromSeconds(5));
+        await using var batch = await opening.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
     }
 
     /// <summary>A failed native acquisition releases the reserved slot for the next batch.</summary>
@@ -96,11 +96,11 @@ public sealed class FitzKvProjectionOverlapTests
         var context = new ProjectionBatchContext(identity, ProjectionCheckpoint.Start);
 
         // Assert
-        _ = await Assert.ThrowsAsync<IOException>(async () => await repository.BeginAsync(context));
+        _ = await Assert.ThrowsAsync<IOException>(async () => await repository.BeginAsync(context, TestContext.Current.CancellationToken));
 
-        await using var batch = await repository.BeginAsync(context);
+        await using var batch = await repository.BeginAsync(context, TestContext.Current.CancellationToken);
         await repository.StageAsync("reused");
-        await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+        await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
 
         Assert.Equal("reused", Encoding.UTF8.GetString(client.Inner.Read(OverlapRepository.DataKey)!));
     }
@@ -116,15 +116,15 @@ public sealed class FitzKvProjectionOverlapTests
         var context = new ProjectionBatchContext(identity, ProjectionCheckpoint.Start);
 
         // Act
-        var failed = await repository.BeginAsync(context);
+        var failed = await repository.BeginAsync(context, TestContext.Current.CancellationToken);
 
         // Assert
         _ = await Assert.ThrowsAsync<IOException>(async () => await failed.DisposeAsync());
         client.DisposeFailure = null;
 
-        await using var batch = await repository.BeginAsync(context);
+        await using var batch = await repository.BeginAsync(context, TestContext.Current.CancellationToken);
         await repository.StageAsync("reused");
-        await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+        await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
 
         Assert.Equal("reused", Encoding.UTF8.GetString(client.Read(OverlapRepository.DataKey)!));
     }
@@ -137,17 +137,17 @@ public sealed class FitzKvProjectionOverlapTests
         var repository = new OverlapRepository(new FakeKvClient());
         var identity = new CheckpointIdentity("orders", EventStreamPattern.ForPattern("tenant", "orders"));
         var context = new ProjectionBatchContext(identity, ProjectionCheckpoint.Start);
-        var previous = await repository.BeginAsync(context);
+        var previous = await repository.BeginAsync(context, TestContext.Current.CancellationToken);
         await previous.DisposeAsync();
-        await using var current = await repository.BeginAsync(context);
+        await using var current = await repository.BeginAsync(context, TestContext.Current.CancellationToken);
 
         // Act
         await previous.DisposeAsync();
 
         // Assert
-        _ = await Assert.ThrowsAsync<InvalidOperationException>(async () => await repository.BeginAsync(context));
+        _ = await Assert.ThrowsAsync<InvalidOperationException>(async () => await repository.BeginAsync(context, TestContext.Current.CancellationToken));
         await repository.StageAsync("current");
-        await current.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+        await current.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
     }
 
     sealed class FailFirstBeginClient : IKvClient

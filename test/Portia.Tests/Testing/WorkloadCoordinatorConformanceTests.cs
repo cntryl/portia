@@ -14,7 +14,7 @@ public sealed class WorkloadCoordinatorConformanceTests
 
         // Act
         var exception =
-            await Record.ExceptionAsync(async () => await WorkloadCoordinatorConformance.VerifyAsync(probe));
+            await Record.ExceptionAsync(async () => await WorkloadCoordinatorConformance.VerifyAsync(probe, TestContext.Current.CancellationToken));
 
         // Assert
         Assert.Null(exception);
@@ -29,7 +29,7 @@ public sealed class WorkloadCoordinatorConformanceTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            WorkloadCoordinatorConformance.VerifyAsync(probe).AsTask());
+            WorkloadCoordinatorConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);
@@ -45,7 +45,7 @@ public sealed class WorkloadCoordinatorConformanceTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            WorkloadCoordinatorConformance.VerifyAsync(probe).AsTask());
+            WorkloadCoordinatorConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);
@@ -61,7 +61,7 @@ public sealed class WorkloadCoordinatorConformanceTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            WorkloadCoordinatorConformance.VerifyAsync(probe).AsTask());
+            WorkloadCoordinatorConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);
@@ -78,7 +78,7 @@ public sealed class WorkloadCoordinatorConformanceTests
         // Act
         var exception = await Record.ExceptionAsync(() =>
             WorkloadCoordinatorConformance.VerifyAsync(
-                probe).AsTask());
+                probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);
@@ -95,7 +95,7 @@ public sealed class WorkloadCoordinatorConformanceTests
         // Act
         var exception = await Record.ExceptionAsync(() =>
             WorkloadCoordinatorConformance.VerifyAsync(
-                probe).AsTask());
+                probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);
@@ -111,7 +111,7 @@ public sealed class WorkloadCoordinatorConformanceTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            WorkloadCoordinatorConformance.VerifyAsync(probe).AsTask());
+            WorkloadCoordinatorConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);
@@ -123,13 +123,13 @@ public sealed class WorkloadCoordinatorConformanceTests
     public async Task ShouldBoundCleanupGivenProbeIgnoringCancellation()
     {
         // Arrange
-        var verification = WorkloadCoordinatorConformance.VerifyAsync(new IgnoringCancellationProbe()).AsTask();
+        var verification = WorkloadCoordinatorConformance.VerifyAsync(new IgnoringCancellationProbe(), TestContext.Current.CancellationToken).AsTask();
         // The probe still enforces its 500 ms convergence limit. This independent hang watchdog
         // needs scheduler headroom on loaded runners; its timeout must never count as conformance.
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            verification.WaitAsync(TimeSpan.FromSeconds(10)));
+            verification.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);
@@ -145,7 +145,7 @@ public sealed class WorkloadCoordinatorConformanceTests
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            WorkloadCoordinatorConformance.VerifyAsync(probe).AsTask());
+            WorkloadCoordinatorConformance.VerifyAsync(probe, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ConformanceViolationException>(exception);

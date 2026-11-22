@@ -38,7 +38,7 @@ public sealed class FleetLifecycleTests
         // Wait until the first partition has installed its callback before requesting a stop.
         Exception? error;
         var stopping = Task.CompletedTask;
-        await ready.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        await ready.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
 
         // Act
         try
@@ -47,15 +47,15 @@ public sealed class FleetLifecycleTests
                 stopping = lifetime.CancelAsync();
             else
                 Volatile.Write(ref snapshot, []);
-            error = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3)));
+            error = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
         }
         finally
         {
             release.Set();
-            await finished.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            await finished.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
             await stopping;
             await lifetime.CancelAsync();
-            _ = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3)));
+            _ = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
         }
 
         // Assert
@@ -97,14 +97,14 @@ public sealed class FleetLifecycleTests
 
             await release.Task;
         }, options, lifetime.Token);
-        await ready.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        await ready.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
         Exception? error;
 
         // Act
         try
         {
             Volatile.Write(ref snapshot, [retained]);
-            error = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3)));
+            error = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
         }
         finally
         {
@@ -164,7 +164,7 @@ public sealed class FleetLifecycleTests
                 started.TrySetResult();
             return partition == stuck ? releaseSibling.Task : completion.Task;
         }, options, lifetime.Token);
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(3));
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
         var openingDelay = await clock.WaitForDelayAsync(lifetime.Token);
         Exception? failure = null;
         Task? nextReconciliation = null;
@@ -184,14 +184,14 @@ public sealed class FleetLifecycleTests
             clock.Advance(interval);
             if (stuckSibling)
             {
-                await WaitForDelayAsync(timeout).WaitAsync(TimeSpan.FromSeconds(3));
+                await WaitForDelayAsync(timeout).WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
                 clock.Advance(timeout);
-                failure = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3)));
+                failure = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
             }
             else
             {
                 nextReconciliation = WaitForDelayAsync(interval);
-                await Task.WhenAny(run, nextReconciliation).WaitAsync(TimeSpan.FromSeconds(3));
+                await Task.WhenAny(run, nextReconciliation).WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
                 if (run.IsCompleted)
                     failure = await Record.ExceptionAsync(() => run);
             }
@@ -200,7 +200,7 @@ public sealed class FleetLifecycleTests
         {
             releaseSibling.TrySetResult();
             await lifetime.CancelAsync();
-            _ = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3)));
+            _ = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
             if (nextReconciliation is not null)
                 _ = await Record.ExceptionAsync(() => nextReconciliation);
         }
@@ -275,16 +275,16 @@ public sealed class FleetLifecycleTests
             else
                 Volatile.Write(ref snapshot, []);
             clock.Advance(interval);
-            await firstCancelled.Task.WaitAsync(TimeSpan.FromSeconds(3));
-            _ = await Record.ExceptionAsync(() => secondCancelled.Task.WaitAsync(TimeSpan.FromSeconds(3)));
+            await firstCancelled.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+            _ = await Record.ExceptionAsync(() => secondCancelled.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
             bothCancelled = tokens[b].IsCancellationRequested && tokens[c].IsCancellationRequested;
             if (terminal && bothCancelled)
-                failure = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3)));
+                failure = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
         }
         finally
         {
             await lifetime.CancelAsync();
-            _ = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3)));
+            _ = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
             foreach (var registration in registrations)
                 registration.Dispose();
         }

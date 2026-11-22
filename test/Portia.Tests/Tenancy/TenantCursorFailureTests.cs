@@ -29,7 +29,7 @@ public sealed class TenantCursorFailureTests
         });
 
         // Act
-        await using var cursor = await directory.OpenCursorAsync();
+        await using var cursor = await directory.OpenCursorAsync(TestContext.Current.CancellationToken);
 
         // Assert
         if (removal)
@@ -66,7 +66,7 @@ public sealed class TenantCursorFailureTests
         });
 
         // Act
-        await using var cursor = await directory.OpenCursorAsync();
+        await using var cursor = await directory.OpenCursorAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(Added("acme"), await ReadOneAsync(cursor));
@@ -92,10 +92,10 @@ public sealed class TenantCursorFailureTests
         var notifier = new CleanupNotifier(true);
         var directory = new EventSourcedTenantDirectory<Started, Stopped>(events, Pattern, GetTenant,
             notifier: notifier);
-        await using var cursor = await directory.OpenCursorAsync();
+        await using var cursor = await directory.OpenCursorAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var first = cursor.ReadAsync().GetAsyncEnumerator();
+        var first = cursor.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await first.MoveNextAsync());
@@ -118,7 +118,7 @@ public sealed class TenantCursorFailureTests
             notifier: new CleanupNotifier(false));
 
         // Act
-        await using var cursor = await directory.OpenCursorAsync();
+        await using var cursor = await directory.OpenCursorAsync(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(Added("acme"), await ReadOneAsync(cursor));
@@ -138,15 +138,15 @@ public sealed class TenantCursorFailureTests
         var notifier = new GatedCleanupNotifier();
         var directory = new EventSourcedTenantDirectory<Started, Stopped>(events, Pattern, GetTenant,
             notifier: notifier);
-        await using var cursor = await directory.OpenCursorAsync();
+        await using var cursor = await directory.OpenCursorAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var first = cursor.ReadAsync().GetAsyncEnumerator();
+        var first = cursor.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await first.MoveNextAsync());
         var cleanup = first.DisposeAsync().AsTask();
-        await notifier.DisposalStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await notifier.DisposalStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         try
         {
             _ = await Assert.ThrowsAsync<InvalidOperationException>(() => ReadOneAsync(cursor));

@@ -62,7 +62,7 @@ public sealed class NotificationExecutionTests
         {
             _ = await new FitzRequestScheduler(wire, serializer).ScheduleAsync(
                 new BrokerExecutionContextTests.Command(2),
-                new RequestScheduleSpec("0 0 * * *"), routeValues, RequestActor.CreateSystem("scheduler"), parent);
+                new RequestScheduleSpec("0 0 * * *"), routeValues, RequestActor.CreateSystem("scheduler"), parent, ct: TestContext.Current.CancellationToken);
             var stored = Encoding.UTF8.GetString(wire.Body.Span);
             Assert.DoesNotContain("actor_token", stored, StringComparison.Ordinal);
             Assert.DoesNotContain("credential", stored, StringComparison.Ordinal);
@@ -73,7 +73,7 @@ public sealed class NotificationExecutionTests
         else
         {
             await new FitzNoticeRequestSender(wire, serializer).PublishAsync(new BrokerExecutionContextTests.Command(2),
-                routeValues, "credential", parent);
+                routeValues, "credential", parent, ct: TestContext.Current.CancellationToken);
             consumer = new FitzNoticeRequestConsumer(wire, serializer, "notice://context/work/*",
                 ConsumerJson.Catalog());
         }
@@ -83,7 +83,7 @@ public sealed class NotificationExecutionTests
         await using var provider = BrokerExecutionContextTests.Services(handler).BuildServiceProvider();
         await new RequestNotificationRunner(consumer,
                 new DependencyInjectionRequestDeliveryScopeFactory(provider.GetRequiredService<IServiceScopeFactory>()))
-            .RunAsync();
+            .RunAsync(TestContext.Current.CancellationToken);
         Assert.Equal(2, handler.Contexts.Count);
         Assert.NotEqual(handler.Contexts[0].ExecutionId, handler.Contexts[1].ExecutionId);
         Assert.All(handler.Contexts, context =>
@@ -122,7 +122,7 @@ public sealed class NotificationExecutionTests
         _ = await Assert.ThrowsAsync<ArgumentException>(() =>
             new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer())
                 .ScheduleAsync(new BrokerExecutionContextTests.Command(2), new RequestScheduleSpec("0 0 * * *"),
-                    new RequestRouteValues(Resource: "actual"), user).AsTask());
+                    new RequestRouteValues(Resource: "actual"), user, TestContext.Current.CancellationToken).AsTask());
 
         Assert.True(wire.Body.IsEmpty);
     }
@@ -137,13 +137,13 @@ public sealed class NotificationExecutionTests
             new BrokerExecutionContextTests.Command(2),
             new RequestScheduleSpec("0 0 * * *"),
             new RequestRouteValues(Resource: "actual"),
-            RequestActor.CreateSystem("scheduler"));
+            RequestActor.CreateSystem("scheduler"), TestContext.Current.CancellationToken);
         var consumer = new FitzScheduledRequestConsumer(
             wire, serializer, "schedule://context/work/*/execute", ConsumerJson.Catalog(),
             new AllowScheduledRequestActorValidator());
 
         // Act
-        await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var enumerator = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
         // Assert
         Assert.True(await enumerator.MoveNextAsync());
@@ -169,7 +169,7 @@ public sealed class NotificationExecutionTests
             ConsumerJson.Catalog(), new AllowScheduledRequestActorValidator());
 
         // Act
-        await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var enumerator = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
 
         // The entry is dropped rather than dispatched, and dropping it does not end the
@@ -191,7 +191,7 @@ public sealed class NotificationExecutionTests
             ConsumerJson.Catalog(), new AllowScheduledRequestActorValidator());
 
         // Act
-        await using var enumerator = consumer.ReadAsync().GetAsyncEnumerator();
+        await using var enumerator = consumer.ReadAsync(TestContext.Current.CancellationToken).GetAsyncEnumerator(TestContext.Current.CancellationToken);
 
 
         // A legacy entry is never dispatched, and one of them no longer stops every other
@@ -214,7 +214,7 @@ public sealed class NotificationExecutionTests
             new BrokerExecutionContextTests.Command(2),
             new RequestScheduleSpec("0 0 * * *", requested),
             new RequestRouteValues(Resource: "actual"),
-            RequestActor.CreateSystem("scheduler"));
+            RequestActor.CreateSystem("scheduler"), TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(expected, wire.Mode);
@@ -233,7 +233,7 @@ public sealed class NotificationExecutionTests
                 new BrokerExecutionContextTests.Command(2),
                 new RequestScheduleSpec("0 0 * * *", (RequestScheduleDeliveryMode)42),
                 new RequestRouteValues(Resource: "actual"),
-                RequestActor.CreateSystem("scheduler")).AsTask());
+                RequestActor.CreateSystem("scheduler"), TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsType<ArgumentOutOfRangeException>(error);
@@ -252,7 +252,7 @@ public sealed class NotificationExecutionTests
                 new BrokerExecutionContextTests.Command(2),
                 new RequestScheduleSpec("0 0 * * *"),
                 new RequestRouteValues(Resource: "actual"),
-                RequestActor.CreateSystem("scheduler")).AsTask());
+                RequestActor.CreateSystem("scheduler"), TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         var invalid = Assert.IsType<InvalidOperationException>(error);
@@ -269,10 +269,10 @@ public sealed class NotificationExecutionTests
             new BrokerExecutionContextTests.Command(2),
             new RequestScheduleSpec("0 0 * * *"),
             new RequestRouteValues(Resource: "actual"),
-            RequestActor.CreateSystem("scheduler"));
+            RequestActor.CreateSystem("scheduler"), TestContext.Current.CancellationToken);
 
         // Act
-        await scheduler.CancelAsync(id);
+        await scheduler.CancelAsync(id, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(id, Assert.Single(wire.Cancellations));
@@ -289,7 +289,7 @@ public sealed class NotificationExecutionTests
 
         // Act
         var error = await Record.ExceptionAsync(() =>
-            new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer()).CancelAsync(scheduleId!).AsTask());
+            new FitzRequestScheduler(wire, ConsumerJson.CreateSerializer()).CancelAsync(scheduleId!, TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         _ = Assert.IsAssignableFrom<ArgumentException>(error);

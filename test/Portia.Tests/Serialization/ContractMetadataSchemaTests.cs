@@ -20,10 +20,10 @@ public sealed class ContractMetadataSchemaTests
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/metadata");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var text = await app.GetTestClient().GetStringAsync("/openapi/v1.json");
+        var text = await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
         var document = OpenApiDocument.Parse(text).Document!;
         var schema =
             document.Paths["/metadata"].Operations![HttpMethod.Get].Responses!["200"].Content!["application/json"]
@@ -56,10 +56,10 @@ public sealed class ContractMetadataSchemaTests
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
         _ = app.MapPortiaPost<ContractMetadataInputRequest, ContractMetadataModel>("/direction");
-        await app.StartAsync();
+        await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
-        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json")).Document!;
+        var document = OpenApiDocument.Parse(await app.GetTestClient().GetStringAsync("/openapi/v1.json", TestContext.Current.CancellationToken)).Document!;
 
         // Assert
         var operation = document.Paths["/direction"].Operations![HttpMethod.Post];

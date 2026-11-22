@@ -159,12 +159,15 @@ feature band.
 dotnet restore Portia.slnx
 dotnet format Portia.slnx --verify-no-changes --no-restore
 dotnet build Portia.slnx --configuration Release --no-restore
-dotnet test Portia.slnx --configuration Release --no-build --filter "Category!=BrokerIntegration&Category!=StorageIntegration&Category!=CassieIntegration&Category!=DurabilityIntegration"
+dotnet test --solution Portia.slnx --configuration Release --no-build \
+  --filter-not-trait "Category=BrokerIntegration" --filter-not-trait "Category=StorageIntegration" \
+  --filter-not-trait "Category=CassieIntegration" --filter-not-trait "Category=DurabilityIntegration"
 docker compose up --detach --wait fitz
-dotnet test Portia.slnx --configuration Release --no-build --filter "Category=BrokerIntegration"
+dotnet test --project test/Portia.Tests/Portia.Tests.csproj --configuration Release --no-build --filter-trait "Category=BrokerIntegration"
+dotnet test --project test/Portia.ConsumerTests/Portia.ConsumerTests.csproj --configuration Release --no-build --filter-trait "Category=BrokerIntegration"
 docker compose up --detach sqrzl
 curl --fail --silent --show-error --retry 30 --retry-delay 1 --retry-connrefused --max-time 2 --output /dev/null http://127.0.0.1:9000/healthz
-PORTIA_S3_TEST_ENDPOINT=http://127.0.0.1:9000 dotnet test Portia.slnx --configuration Release --no-build --filter "Category=StorageIntegration"
+PORTIA_S3_TEST_ENDPOINT=http://127.0.0.1:9000 dotnet test --project test/Portia.Tests/Portia.Tests.csproj --configuration Release --no-build --filter-trait "Category=StorageIntegration"
 docker compose down --volumes
 ```
 

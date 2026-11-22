@@ -210,14 +210,14 @@ public sealed partial class ProcessorOutcomeTests
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
-            await worker.StartAsync(default);
+            await worker.StartAsync(TestContext.Current.CancellationToken);
             if (transient)
             {
-                Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+                Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
                 Assert.Equal(ProjectionCheckpoint.Start, state.Checkpoint);
                 state.Error = null;
                 clock.Advance(TimeSpan.FromSeconds(1));
-                Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync());
+                Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
                 Assert.Equal("3", state.Checkpoint.Cursor.ToString());
                 Assert.Equal([1, 2, 1, 2, 3], state.Seen);
                 Assert.Equal(2, state.Loads);
@@ -225,7 +225,7 @@ public sealed partial class ProcessorOutcomeTests
             else
             {
                 var terminal = await Assert.ThrowsAsync<WorkloadFailureException>(() =>
-                    worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(3)));
+                    worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
                 Assert.Equal(1, terminal.Attempts);
                 var failure = Assert.IsType<ProcessorFailureException>(terminal.InnerException);
                 Assert.Same(state.Error, failure.Error);
@@ -236,7 +236,7 @@ public sealed partial class ProcessorOutcomeTests
         finally
         {
             if (transient)
-                await worker.StopAsync(default);
+                await worker.StopAsync(TestContext.Current.CancellationToken);
             worker.Dispose();
         }
     }
@@ -292,7 +292,7 @@ public sealed partial class ProcessorOutcomeTests
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         try
         {
-            await worker.StartAsync(default);
+            await worker.StartAsync(TestContext.Current.CancellationToken);
             if (transient)
             {
                 // The single-process coordinator owns a one-second reconcile timer beside the workload's
@@ -316,7 +316,7 @@ public sealed partial class ProcessorOutcomeTests
 
             var terminal =
                 await Assert.ThrowsAsync<WorkloadFailureException>(() =>
-                    worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(30)));
+                    worker.ExecuteTask!.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken));
             Assert.Equal(transient ? 2 : 1, terminal.Attempts);
             var failure = Assert.IsType<ProcessorFailureException>(terminal.InnerException);
             Assert.Same(original, failure.InnerException);
@@ -337,7 +337,7 @@ public sealed partial class ProcessorOutcomeTests
 
         // Act
         _ = await new ProjectorRunner(await SeedAsync()).RunAsync(new GroupedProjection(state),
-            ProjectionCheckpoint.Start, new ProjectionRunOptions { MaxBatchSize = 2, RebuildId = "candidate" });
+            ProjectionCheckpoint.Start, new ProjectionRunOptions { MaxBatchSize = 2, RebuildId = "candidate" }, TestContext.Current.CancellationToken);
 
         // Assert
         Assert.Equal(3, state.Contexts.Count);

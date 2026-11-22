@@ -56,16 +56,17 @@ public sealed class AccountFeatureTests
     public async Task ShouldConfirmIdenticalOpenGivenAccountWithLaterDeposits()
     {
         // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
         await using var services = CreateServices(new RecordingAccountLifecycle(), available: true);
         var scenario = RequestScenario.For(services).GivenActor(AccountActor(AccountId));
         var request = new OpenAccount(Tenant, AccountId, 500);
         var payload = new AccountCreated(AccountId);
-        var opened = await scenario.When(request);
-        await scenario.When(new DepositFunds(Tenant, AccountId, 125)).ExpectSuccess();
+        var opened = await scenario.When(request, cancellationToken);
+        await scenario.When(new DepositFunds(Tenant, AccountId, 125), cancellationToken).ExpectSuccess();
 
         // Act
-        var repeated = await scenario.When(request);
-        var different = await scenario.When(request with { InitialBalanceCents = 625 });
+        var repeated = await scenario.When(request, cancellationToken);
+        var different = await scenario.When(request with { InitialBalanceCents = 625 }, cancellationToken);
 
         // Assert
         Assert.Equal(PortiaCreateOutcomeKind.Created, opened.Value.Kind);
@@ -79,12 +80,13 @@ public sealed class AccountFeatureTests
     public async Task ShouldRunPipelineStagesInOrderGivenOpenAccountWhenDepositing()
     {
         // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
         var trace = new RecordingAccountLifecycle();
         await using var services = CreateServices(trace, available: true);
         var actor = AccountActor(AccountId);
 
         await RequestScenario.For(services).GivenActor(actor)
-            .When(new OpenAccount(Tenant, AccountId, 500))
+            .When(new OpenAccount(Tenant, AccountId, 500), cancellationToken)
             .ExpectAuthorized()
             .ExpectGuardPassed<AccountTenantGuard>()
             .ExpectGuardPassed<AccountOperationsGuard>()
@@ -95,7 +97,7 @@ public sealed class AccountFeatureTests
 
         // Act
         var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(services).GivenActor(actor)
-            .When(new DepositFunds(Tenant, AccountId, 125))
+            .When(new DepositFunds(Tenant, AccountId, 125), cancellationToken)
             .ExpectAuthorized()
             .ExpectGuardPassed<AccountTenantGuard>()
             .ExpectGuardPassed<AccountOperationsGuard>()
@@ -113,13 +115,14 @@ public sealed class AccountFeatureTests
     public async Task ShouldShortCircuitHandlerGivenPausedOperationsWhenDepositing()
     {
         // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
         var trace = new RecordingAccountLifecycle();
         await using var services = CreateServices(trace, available: false);
 
         // Act
         var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(services)
             .GivenActor(AccountActor(AccountId))
-            .When(new DepositFunds(Tenant, AccountId, 125))
+            .When(new DepositFunds(Tenant, AccountId, 125), cancellationToken)
             .ExpectAuthorized()
             .ExpectGuardPassed<AccountTenantGuard>()
             .ExpectGuardFailed<AccountOperationsGuard>(RequestErrorKind.Conflict)
@@ -136,13 +139,14 @@ public sealed class AccountFeatureTests
     public async Task ShouldShortCircuitBeforeBehaviorGivenActorWhoDoesNotOwnAccount()
     {
         // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
         var trace = new RecordingAccountLifecycle();
         await using var services = CreateServices(trace, available: true);
 
         // Act
         var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(services)
             .GivenActor(AccountActor(Uuid.CreateVersion4()))
-            .When(new DepositFunds(Tenant, AccountId, 125))
+            .When(new DepositFunds(Tenant, AccountId, 125), cancellationToken)
             .ExpectDenied(RequestErrorKind.Forbidden)
             .ExpectNotHandled());
 
@@ -159,13 +163,14 @@ public sealed class AccountFeatureTests
     public async Task ShouldDenyRequestGivenActorTenantDifferentFromRequestTenant()
     {
         // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
         var trace = new RecordingAccountLifecycle();
         await using var services = CreateServices(trace, available: true);
 
         // Act
         var exception = await Record.ExceptionAsync(async () => await RequestScenario.For(services)
             .GivenActor(AccountActor(Tenant.Value, AccountId))
-            .When(new DepositFunds(new TenantId("tenant-b"), AccountId, 125))
+            .When(new DepositFunds(new TenantId("tenant-b"), AccountId, 125), cancellationToken)
             .ExpectDenied(RequestErrorKind.Forbidden)
             .ExpectNotHandled());
 
@@ -264,14 +269,15 @@ public sealed class AccountFeatureTests
     public async Task ShouldProjectReadModelGivenOpeningAndDepositEvents()
     {
         // Arrange
+        var cancellationToken = TestContext.Current.CancellationToken;
         var scenario = new ProjectorScenario(Tenant).Given(
             DomainEventSeed.Attach(new AccountOpened(500), AccountId, 1),
             DomainEventSeed.Attach(new FundsDeposited(125), AccountId, 2));
         var repository = new InMemoryAccountRepository(scenario.Store);
 
         // Act
-        await scenario.RunAsync(new AccountProjector(repository), AccountRepository.ProjectorName, EventStreamPattern.ForTenant("accounts"));
-        var projected = await repository.GetAsync(Tenant, AccountId, default);
+        await scenario.RunAsync(new AccountProjector(repository), AccountRepository.ProjectorName, EventStreamPattern.ForTenant("accounts"), cancellationToken);
+        var projected = await repository.GetAsync(Tenant, AccountId, cancellationToken);
 
         // Assert
         Assert.Equal(new AccountReadModel(AccountId, 625), projected);

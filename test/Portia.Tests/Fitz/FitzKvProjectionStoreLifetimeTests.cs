@@ -25,8 +25,8 @@ public sealed class FitzKvProjectionStoreLifetimeTests
 
         // Act
         await using (var batch =
-                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start)))
-            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+                     await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken))
+            await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
 
         // Assert
         var stray = await Assert.ThrowsAsync<InvalidOperationException>(() => store.AddAsync("total", 12));
@@ -61,17 +61,17 @@ public sealed class FitzKvProjectionStoreLifetimeTests
         // Arrange
         var store = new StrayWriteRepository(new FakeKvClient(), "kv://portia/state/orders");
         await using var batch =
-            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
-        await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")));
+            await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken);
+        await batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken);
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("2"))).AsTask());
+            batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("2")), TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         var error = Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("already finished", error.Message, StringComparison.Ordinal);
-        Assert.Equal("1", (await store.LoadCheckpointAsync(Identity)).Cursor.ToString());
+        Assert.Equal("1", (await store.LoadCheckpointAsync(Identity, TestContext.Current.CancellationToken)).Cursor.ToString());
     }
 
     /// <summary>Verifies a disposed batch refuses to commit.</summary>
@@ -80,17 +80,17 @@ public sealed class FitzKvProjectionStoreLifetimeTests
     {
         // Arrange
         var store = new StrayWriteRepository(new FakeKvClient(), "kv://portia/state/orders");
-        var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start));
+        var batch = await store.BeginAsync(new ProjectionBatchContext(Identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken);
         await batch.DisposeAsync();
 
         // Act
         var exception = await Record.ExceptionAsync(() =>
-            batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1"))).AsTask());
+            batch.CommitAsync(new ProjectionCheckpoint(new EventCursor("1")), TestContext.Current.CancellationToken).AsTask());
 
         // Assert
         var error = Assert.IsType<InvalidOperationException>(exception);
         Assert.Contains("already finished", error.Message, StringComparison.Ordinal);
-        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadCheckpointAsync(Identity));
+        Assert.Equal(ProjectionCheckpoint.Start, await store.LoadCheckpointAsync(Identity, TestContext.Current.CancellationToken));
     }
 
     sealed class StrayWriteRepository(IKvClient client, string route)
