@@ -107,10 +107,11 @@ secrets from the host's secret store. `TwilioTenant.ToString()` redacts them.
 
 A recipient who opted out (Twilio error 21610) is a `Rejected` outcome with `SendRejectionReason.OptedOut`.
 
-`UseStatusCallbacks` takes the public HTTPS address that Twilio reaches the mapped endpoint at. The endpoint
-verifies `X-Twilio-Signature` against the tenant's auth token and that public address, and checks the account SID.
-A callback that fails verification gets 403 and records nothing. The endpoint allows anonymous requests because the
-signature is its authentication. Without `UseStatusCallbacks` the sender requests no callbacks.
+`UseStatusCallbacks` takes the HTTPS address that Twilio reaches in production. For local emulator or test-host
+delivery, it also accepts HTTP only on `localhost`, `127.0.0.1` or `::1`; other hosts still require HTTPS. The endpoint
+verifies `X-Twilio-Signature` against the tenant's auth token and the configured address in both cases, and checks
+the account SID. A callback that fails verification gets 403 and records nothing. The endpoint allows anonymous
+requests because the signature is its authentication. Without `UseStatusCallbacks` the sender requests no callbacks.
 
 ## Testing
 
