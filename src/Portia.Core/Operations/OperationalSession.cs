@@ -326,7 +326,7 @@ sealed class OperationalSession(
     }
 
     internal async ValueTask RecordFailureAsync(Exception exception, ProjectionCheckpoint? committed,
-        CancellationToken ct)
+        CancellationToken ct, bool outcomeUnknown = false)
     {
         if (_failureRecorded)
             return;
@@ -349,13 +349,15 @@ sealed class OperationalSession(
             var attempt = prior with
             {
                 CompletedAt = now,
-                Outcome = committed is null
-                    ? OperationalAttemptOutcomes.Failed
+                Outcome = outcomeUnknown
+                    ? OperationalAttemptOutcomes.Indeterminate
+                    : committed is null
+                        ? OperationalAttemptOutcomes.Failed
                     : OperationalAttemptOutcomes.CommittedCleanupFailed,
                 Trace = _attempt is null ? [] : TraceSnapshot(),
                 Coverage = _attempt is null ? prior.Coverage : Coverage(prior),
                 FailureStage = diagnostic?.Stage.ToString() ?? "Pass",
-                FailureKind = diagnostic?.Error?.Kind.ToString() ?? exception.GetType().Name,
+                FailureKind = outcomeUnknown ? "commit_outcome_unknown" : diagnostic?.Error?.Kind.ToString() ?? exception.GetType().Name,
                 IsTransient = transient,
                 NextCheckpoint = committed?.Cursor.Value ?? prior.NextCheckpoint
             };

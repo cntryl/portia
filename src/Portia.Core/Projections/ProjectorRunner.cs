@@ -126,6 +126,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         var stage = ProcessorFailureStage.Beginning;
         var confirmed = checkpoint;
         var committed = false;
+        var outcomeUnknown = false;
         IProjectionBatch? batch = null;
         Exception? failure = null;
         try
@@ -163,6 +164,9 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
                                  UninitializedResult.Is(ex)
                                      ? UninitializedResult.ReturnedBy("projector", projector.ApplicationType ?? projector.GetType(), ex)
                                      : ex);
+            outcomeUnknown = stage == ProcessorFailureStage.Committing &&
+                             diagnostic.InnerException is not ProjectionConcurrencyException &&
+                             diagnostic.InnerException is not OperationalCheckpointConflictException;
             failure = diagnostic;
         }
 
@@ -190,7 +194,8 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         if (failure is not null)
         {
             if (session is { } operations && !(failure is OperationCanceledException && ct.IsCancellationRequested))
-                await operations.RecordFailureAsync(failure, committed ? confirmed : null, ct).ConfigureAwait(false);
+                await operations.RecordFailureAsync(failure, committed ? confirmed : null, ct, outcomeUnknown)
+                    .ConfigureAwait(false);
             ExceptionDispatchInfo.Capture(failure).Throw();
         }
 
