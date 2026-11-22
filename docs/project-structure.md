@@ -70,8 +70,8 @@ An entity is an aggregate-owned child with its own stable identity and lifecycle
 class (a record class is also allowed) and let the aggregate's declared state establish ownership:
 exactly one concrete root in the same feature stores it in an instance field or auto-property,
 directly or through a collection or array. The root remains the command entry point and enforces
-rules spanning its children. Place
-entities in `Core/Features/{Feature}/Aggregates/Entities/`; keep aggregate roots in `Aggregates/`.
+rules spanning its children. Place entities in `Core/Features/{Feature}/Aggregates/Entities/`;
+keep aggregate roots in `Aggregates/`.
 Orphan entities, entities stored by multiple roots, and roots placed in `Entities/` are structural
 errors. Identity representation belongs to the application; an entity need not expose a uniform
 `Id` member.
@@ -195,7 +195,7 @@ retain their behavior regardless of this opt-in.
 | PORTIA201 | A filename differs from its type's name, including `OfT` for generics. | Rename the file, retaining the type's name. |
 | PORTIA202 | A namespace differs from RootNamespace plus folders. | Change the document namespace and update references across the solution. |
 | PORTIA203 | Common/Core files fall outside the closed feature folders. | Diagnostic explains the allowed folders. |
-| PORTIA204 | A known component role is in the wrong folder, or a port is not an interface. It also rejects authored aggregates, request/event contracts, and recognized Portia business components declared in Api or Worker, and verifies one same-feature root owns each entity under `Aggregates/Entities/`. | Diagnostic identifies the folder's responsibility or missing/ambiguous entity owner. |
+| PORTIA204 | A known component role is in the wrong folder, or a port is not an interface. It also rejects authored aggregates, request/event contracts, and recognized Portia business components declared in Api or Worker; `Aggregates/Entities/` holds plain child classes, each owned by one same-feature aggregate root. | Diagnostic identifies the folder's responsibility or missing/ambiguous entity owner. |
 | PORTIA205 | One handler implements contracts for multiple requests. | Separate the operations deliberately. |
 | PORTIA206 | Common references another application project, or Core references one other than Common or a `*.Abstractions` project; either references a known infrastructure adapter; Cassie connection setup occurs outside Api/Worker; Api and Worker reference each other. | Move composition to a root; Core's Cassie repository API is allowed. |
 | PORTIA207 | Core component registration occurs outside its feature registration file. | Diagnostic names the destination file. |

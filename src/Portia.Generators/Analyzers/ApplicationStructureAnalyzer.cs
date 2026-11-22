@@ -193,6 +193,8 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             {
                 var responsibility = entityFile && ApplicationProject.DerivesFrom(symbol, "Aggregate")
                     ? "aggregate roots belong directly under Aggregates, outside Entities"
+                    : entityFile && !IsPlainEntityType(symbol)
+                        ? "entities are child classes; requests, events, and Portia business components belong in their own roles"
                     : entityFile && aggregateOwnership.EntityOwnerCount(path[1], symbol, context.CancellationToken) > 1
                         ? "child entities must have exactly one aggregate root that stores them; this entity has multiple owners"
                         : entityFile
@@ -288,7 +290,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             "Projectors" => projector && !handler && !reactor,
             "Authorization" => authorizer && !handler && !reactor && !projector,
             "Aggregates" => aggregate || plain && aggregateOwnership.Contains(feature, symbol, cancellationToken),
-            "Entities" => symbol.TypeKind == TypeKind.Class && !aggregate
+            "Entities" => IsPlainEntityType(symbol)
                            && aggregateOwnership.EntityOwnerCount(feature, symbol, cancellationToken) == 1,
             "Ports" => symbol.TypeKind == TypeKind.Interface && plain,
             "Models" => plain && IsDataOnly(symbol),
@@ -307,6 +309,14 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             _ => false
         };
     }
+
+    static bool IsPlainEntityType(INamedTypeSymbol symbol) => symbol.TypeKind == TypeKind.Class
+                                                               && !ApplicationProject.IsRequest(symbol)
+                                                               && !ApplicationProject.DerivesFrom(symbol, "DomainEvent")
+                                                               && !ApplicationProject.DerivesFrom(symbol, "Aggregate")
+                                                               && !ApplicationProject.IsReactor(symbol)
+                                                               && !ApplicationProject.IsProjector(symbol)
+                                                               && !PortiaComponentRoles.IsComponent(symbol);
 
     static bool IsPortiaJsonContext(INamedTypeSymbol symbol) => symbol.GetAttributes().Any(attribute =>
         attribute.AttributeClass is { } marker && SymbolNames.Is(marker, "Cntryl.Portia.PortiaJsonContextAttribute"));
@@ -452,6 +462,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             var features = new Dictionary<string, HashSet<INamedTypeSymbol>>(StringComparer.Ordinal);
             var entityTypes = new Dictionary<string, HashSet<INamedTypeSymbol>>(StringComparer.Ordinal);
             var ownership = new Dictionary<string, Dictionary<INamedTypeSymbol, int>>(StringComparer.Ordinal);
+            var countedRoots = new Dictionary<string, HashSet<INamedTypeSymbol>>(StringComparer.Ordinal);
             foreach (var tree in compilation.SyntaxTrees)
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -465,7 +476,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                     if (entityModel.GetDeclaredSymbol(declaration, cancellationToken) is { TypeKind: TypeKind.Class } entity)
                     {
                         if (!entityTypes.TryGetValue(path[1], out var entities))
-                            entityTypes.Add(path[1], entities = []);
+                            entityTypes.Add(path[1], entities = NewSymbolSet());
                         _ = entities.Add(entity.OriginalDefinition);
                     }
             }
@@ -491,14 +502,21 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                     if (!features.TryGetValue(path[1], out var types))
                         features.Add(path[1], types = [with(SymbolEqualityComparer.Default)]);
                     if (!ownership.TryGetValue(path[1], out var featureOwners))
-                        ownership.Add(path[1], featureOwners = []);
-                    if (entityTypes.TryGetValue(path[1], out var featureEntities))
-                        foreach (var entity in featureEntities)
+                        ownership.Add(path[1], featureOwners = NewOwnerMap());
+                    if (!aggregate.IsAbstract && entityTypes.TryGetValue(path[1], out var featureEntities))
+                    {
+                        if (!countedRoots.TryGetValue(path[1], out var roots))
+                            countedRoots.Add(path[1], roots = NewSymbolSet());
+                        if (roots.Add(aggregate.OriginalDefinition))
                         {
-                            if (!StoresEntity(aggregate, entity))
-                                continue;
-                            featureOwners[entity] = featureOwners.TryGetValue(entity, out var owners) ? owners + 1 : 1;
+                            foreach (var entity in featureEntities)
+                            {
+                                if (!StoresEntity(aggregate, entity))
+                                    continue;
+                                featureOwners[entity] = featureOwners.TryGetValue(entity, out var owners) ? owners + 1 : 1;
+                            }
                         }
+                    }
                     foreach (var node in declaration.DescendantNodes().OfType<SimpleNameSyntax>())
                     {
                         cancellationToken.ThrowIfCancellationRequested();
@@ -520,18 +538,21 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
 
         static bool StoresEntity(INamedTypeSymbol aggregate, INamedTypeSymbol entity)
         {
-            foreach (var member in aggregate.GetMembers())
+            for (var current = aggregate; current is not null; current = current.BaseType)
             {
-                if (member.IsStatic)
-                    continue;
-                var storedType = member switch
+                foreach (var member in current.GetMembers())
                 {
-                    IFieldSymbol field => field.Type,
-                    IPropertySymbol property when IsAutoProperty(property) => property.Type,
-                    _ => null
-                };
-                if (storedType is not null && ContainsType(storedType, entity))
-                    return true;
+                    if (member.IsStatic)
+                        continue;
+                    var storedType = member switch
+                    {
+                        IFieldSymbol field => field.Type,
+                        IPropertySymbol property when IsAutoProperty(property) => property.Type,
+                        _ => null
+                    };
+                    if (storedType is not null && ContainsType(storedType, entity))
+                        return true;
+                }
             }
             return false;
         }
@@ -552,6 +573,18 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                 INamedTypeSymbol generic => generic.TypeArguments.Any(argument => ContainsType(argument, target)),
                 _ => false
             };
+        }
+
+        static HashSet<INamedTypeSymbol> NewSymbolSet()
+        {
+            var symbols = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            return symbols;
+        }
+
+        static Dictionary<INamedTypeSymbol, int> NewOwnerMap()
+        {
+            var owners = new Dictionary<INamedTypeSymbol, int>(SymbolEqualityComparer.Default);
+            return owners;
         }
     }
 
