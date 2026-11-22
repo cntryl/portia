@@ -79,6 +79,33 @@ public sealed class ReactorRunnerTests
         Assert.Equal(winner, await store.LoadAsync(identity, TestContext.Current.CancellationToken));
     }
 
+    /// <summary>An unsupported checkpoint store is rejected before reactor effects run.</summary>
+    [Fact]
+    public async Task ShouldSkipReactorInvocationGivenUnsupportedCheckpointStore()
+    {
+        // Arrange
+        var runner = new ReactorRunner(await StoreValuesAsync(1));
+        var reactor = new RecordingBatchReactor(new UnconditionalCheckpointStore());
+
+        // Act
+        var failure = await Record.ExceptionAsync(() => runner.RunAsync(reactor, ProjectionCheckpoint.Start,
+            ct: TestContext.Current.CancellationToken).AsTask());
+
+        // Assert
+        Assert.Empty(reactor.BatchSizes);
+        var error = Assert.IsType<InvalidOperationException>(failure);
+        Assert.Contains(nameof(IConditionalProjectionCheckpointStore), error.Message, StringComparison.Ordinal);
+    }
+
+    sealed class UnconditionalCheckpointStore : IProjectionCheckpointStore
+    {
+        public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
+            => ValueTask.FromResult(ProjectionCheckpoint.Start);
+
+        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+            => ValueTask.CompletedTask;
+    }
+
     /// <summary>The legacy integer overload preserves its public parameter name on validation.</summary>
     [Theory]
     [InlineData(0)]
