@@ -120,7 +120,7 @@ public sealed class ProcessorStatusHostingTests
         }
     }
 
-    sealed class StatusHostingStore : IProjectionStore, IProjectionCheckpointStore
+    sealed class StatusHostingStore : IProjectionStore, IProjectionCheckpointStore, IConditionalProjectionCheckpointStore
     {
         readonly ConcurrentDictionary<CheckpointIdentity, ProjectionCheckpoint> _checkpoints = new();
 
@@ -134,6 +134,16 @@ public sealed class ProcessorStatusHostingTests
         public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
             CancellationToken ct = default)
         {
+            _checkpoints[identity] = checkpoint;
+            return ValueTask.CompletedTask;
+        }
+
+        ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
+            ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (_checkpoints.GetValueOrDefault(identity) != expected)
+                throw new ProjectionConcurrencyException("stale checkpoint");
             _checkpoints[identity] = checkpoint;
             return ValueTask.CompletedTask;
         }

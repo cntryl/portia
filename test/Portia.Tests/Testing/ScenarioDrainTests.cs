@@ -28,7 +28,7 @@ public sealed class ScenarioDrainTests
             await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
             Assert.Equal(expected, seen);
             await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
-            Assert.Equal(expected.Concat(expected), seen);
+            Assert.Equal(expected, seen);
         }
         else
         {
@@ -107,7 +107,7 @@ public sealed class ScenarioDrainTests
                 scenario.RunAsync(reactor, cancellation.Token));
             Assert.Equal(ids.Take(4096), seen);
             await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
-            Assert.Equal(ids, seen.Skip(4096));
+            Assert.Equal(ids, seen);
         }
         else
         {
@@ -123,7 +123,7 @@ public sealed class ScenarioDrainTests
     }
 
     sealed class CancelAfterPassCheckpointStore(IProjectionCheckpointStore inner, CancellationTokenSource cancellation)
-        : IProjectionCheckpointStore
+        : IProjectionCheckpointStore, IConditionalProjectionCheckpointStore
     {
         public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
             => inner.LoadAsync(identity, ct);
@@ -132,6 +132,16 @@ public sealed class ScenarioDrainTests
             CancellationToken ct = default)
         {
             await inner.SaveAsync(identity, checkpoint, ct);
+            if (checkpoint.Cursor.ToString() == "4096")
+                cancellation.Cancel();
+        }
+
+        async ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
+            ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+        {
+            if (inner is not IConditionalProjectionCheckpointStore conditional)
+                throw new InvalidOperationException("The wrapped checkpoint store must support conditional saves.");
+            await conditional.SaveAsync(identity, expected, checkpoint, ct);
             if (checkpoint.Cursor.ToString() == "4096")
                 cancellation.Cancel();
         }

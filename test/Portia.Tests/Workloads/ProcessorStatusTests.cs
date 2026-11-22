@@ -678,7 +678,7 @@ public sealed class ProcessorStatusTests
         return actor;
     }
 
-    sealed class StatusCheckpointStore : IProjectionStore, IProjectionCheckpointStore
+    sealed class StatusCheckpointStore : IProjectionStore, IProjectionCheckpointStore, IConditionalProjectionCheckpointStore
     {
         readonly Dictionary<CheckpointIdentity, ProjectionCheckpoint> _checkpoints = [];
         internal List<CheckpointIdentity> Reads { get; } = [];
@@ -711,6 +711,13 @@ public sealed class ProcessorStatusTests
             CancellationToken ct = default)
         {
             Writes++;
+            throw new InvalidOperationException("Status inspection must not change progress.");
+        }
+
+        ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
+            ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
             throw new InvalidOperationException("Status inspection must not change progress.");
         }
     }

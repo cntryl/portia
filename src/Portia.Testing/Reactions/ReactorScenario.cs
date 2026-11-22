@@ -126,10 +126,14 @@ public sealed class ReactorScenario
             reactor.BindWorkload(_history.Workload(reactor.Name), null);
         var store = await _history.ToStoreAsync(reactor.Pattern, ct).ConfigureAwait(false);
         var runner = new ReactorRunner(store);
+        var identity = new CheckpointIdentity(reactor.Name, reactor.Pattern);
         var checkpoint = ProjectionCheckpoint.Start;
         while (true)
         {
             ct.ThrowIfCancellationRequested();
+            // Reload authoritative progress before every pass. A committed pass may have
+            // observed cancellation before the caller received its result.
+            checkpoint = await reactor.Checkpoints.LoadAsync(identity, ct).ConfigureAwait(false);
             var pass = await runner.ExecutePassAsync(null, reactor, checkpoint, ProjectionRunOptions.Default, ct)
                 .ConfigureAwait(false);
             checkpoint = pass.Checkpoint;
