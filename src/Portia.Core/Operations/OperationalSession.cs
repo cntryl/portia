@@ -95,8 +95,6 @@ sealed class OperationalSession(
                             kind == ProcessorKinds.Projector && checkpoint is { } native &&
                             a.ExpectedCheckpoint != native.Cursor.Value
                                 ? OperationalAttemptOutcomes.Indeterminate
-                                : a.Coverage.Contains("commit requested", StringComparison.Ordinal)
-                                    ? OperationalAttemptOutcomes.Indeterminate
                                 : OperationalAttemptOutcomes.Interrupted,
                             CompletedAt = now,
                             Coverage = a.Coverage + "; process interrupted before confirmation"
@@ -279,7 +277,7 @@ sealed class OperationalSession(
                 "local awaited generated dispatch; opaque dependencies and detached work unknown",
                 topology.Describe());
             return state with { Attempts = [.. state.Attempts, attempt] };
-        }, ct).ConfigureAwait(false);
+        }, ct, "attempt-start").ConfigureAwait(false);
         _attempt = id;
         return id;
     }
@@ -307,14 +305,6 @@ sealed class OperationalSession(
             }
 
             var replacement = Succeed(state, id, next.Cursor.Value) with { Revision = checked(state.Revision + 1) };
-            await ChangeAsync(current => current with
-            {
-                Attempts = current.Attempts.Select(attempt => attempt.Id == id
-                    ? attempt with { Coverage = attempt.Coverage + "; commit requested" }
-                    : attempt).ToArray()
-            }, ct, "reactor-completion").ConfigureAwait(false);
-            state = _state;
-            replacement = Succeed(state, id, next.Cursor.Value) with { Revision = checked(state.Revision + 1) };
             if (!await checkpoints.CommitAsync(replacement, state.Revision, _owner, id, expected.Cursor.Value,
                     next.Cursor.Value, ct).ConfigureAwait(false))
                 return false;
