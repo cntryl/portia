@@ -81,14 +81,17 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
             }
 
         var artifact = Environment.GetEnvironmentVariable("PORTIA_OPERATIONAL_BASELINE_ARTIFACT")
-                       ?? Path.Combine("docs", "operational-journal-baseline.json");
+                       ?? Path.Combine("BenchmarkDotNet.Artifacts", "results", "operational-journal-baseline.json");
+        var endpoint = new Uri(Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT") ?? "ws://127.0.0.1:4090/ws");
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(artifact))!);
         await File.WriteAllTextAsync(artifact, JsonSerializer.Serialize(new
         {
             generated_utc = DateTimeOffset.UtcNow,
             commit = Environment.GetEnvironmentVariable("PORTIA_BASELINE_COMMIT") ?? "unknown",
-            sdk = Environment.Version.ToString(),
-            endpoint = Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT") ?? "ws://127.0.0.1:4090/ws",
+            runtime = Environment.Version.ToString(),
+            sdk = Environment.GetEnvironmentVariable("PORTIA_BASELINE_SDK"),
+            endpoint = new UriBuilder(endpoint.Scheme, endpoint.Host, endpoint.Port).Uri.GetLeftPart(UriPartial.Authority),
+            broker_image = Environment.GetEnvironmentVariable("PORTIA_BASELINE_BROKER_IMAGE"),
             os = Environment.OSVersion.ToString(),
             processor_count = Environment.ProcessorCount,
             rows
@@ -176,6 +179,7 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
 
     int OperationsPerInvocation(string operation) => operation switch
     {
+        "retry" => 2,
         "status" => Workloads + 1,
         "recovery" => Workloads * 2,
         _ => 1

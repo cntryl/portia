@@ -17,19 +17,22 @@ FITZ_TEST_ENDPOINT=ws://127.0.0.1:40929/ws \
 
 When BenchmarkDotNet cannot recognize the installed SDK runtime, the same matrix can be run
 through the direct harness. It emits 50 raw timed samples per row, validates each fenced write by
-readback outside the timed section, and persists p50/p95/p99, operations/second, and exact
-source-generated Fitz serialization bytes in `docs/operational-journal-baseline.json`:
+readback outside the timed section, and persists p50/p95/p99, operations per second, and exact
+source-generated Fitz serialization bytes under `BenchmarkDotNet.Artifacts/results/`:
 
 ```sh
 PORTIA_OPERATIONAL_BASELINE_DIRECT=1 \
 FITZ_TEST_ENDPOINT=ws://127.0.0.1:40929/ws \
-  dotnet run --configuration Release --project bench/Portia.Benchmarks --no-restore --no-build
+PORTIA_BASELINE_COMMIT="$(git rev-parse HEAD)" \
+PORTIA_BASELINE_SDK="$(dotnet --version)" \
+  dotnet run --configuration Release --project bench/Portia.Benchmarks
 ```
 
 The JSON artifact contains every raw sample and the exact commit, SDK, endpoint, hardware, and
-operation-count assumptions. `read` and `retry` intentionally measure one selected target even
-when `Workloads=8`; `status` measures one index read plus one document read per workload, and
-`recovery` measures one read and one fenced write per workload. The serialized byte count uses
+operation-count assumptions. `read` and `retry` each measure one selected target even when
+`Workloads=8`. A retry performs one read and one fenced write. Status reads an index and each
+workload document, and recovery performs one read and one fenced write per workload. These counts
+describe logical journal operations. The serialized byte count uses
 Fitz's source-generated `FitzJsonContext`, not a generic serializer. Do not compare runs unless
 these inputs, provider durability, and benchmark job are identical.
 
