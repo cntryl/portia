@@ -29,7 +29,7 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
 
     static readonly DiagnosticDescriptor Hydration = new("PORTIA212", "Query or reactor hydrates an aggregate",
         "'{0}' calls '{1}'; queries read through repositories and reactors send commands from committed facts. Keep aggregate hydration in command handling.",
-        "PortiaStructure", DiagnosticSeverity.Warning, true);
+        "PortiaStructure", DiagnosticSeverity.Warning, true, customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
@@ -45,12 +45,15 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
             if (ApplicationProject.From(start.Options.AnalyzerConfigOptionsProvider) is not { IsTest: false } project)
                 return;
             var registrations = new ConcurrentBag<(Location Location, string Feature)>();
+            var invocations = new ConcurrentBag<(IMethodSymbol Caller, IMethodSymbol Target, Location Location, bool Hydrates)>();
             start.RegisterCompilationEndAction(end =>
             {
                 AnalyzeDependencies(end, project);
                 ReportRegistrations(end, registrations);
+                if (project.Role == "Core")
+                    AnalyzeQueryHydration(end, invocations);
             });
-            start.RegisterOperationAction(operation => AnalyzeInvocation(operation, project, registrations),
+            start.RegisterOperationAction(operation => AnalyzeInvocation(operation, project, registrations, invocations),
                 OperationKind.Invocation);
             if (project.Role is "Common" or "Core")
             {
@@ -64,7 +67,7 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
 
     static void AnalyzeDependencies(CompilationAnalysisContext context, ApplicationProject project)
     {
-        if (project.Role is not ("Common" or "Core"))
+        if (project.Role is not ("Common" or "Core" or "Api" or "Worker"))
             return;
         var references = context.Compilation.ReferencedAssemblyNames;
         var assemblyName = context.Compilation.AssemblyName ?? project.Name;
@@ -73,11 +76,13 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
             ? assemblyName.Substring(0, assemblyName.Length - suffix.Length)
             : project.ApplicationName;
         var cassieApi = references.Any(reference => reference.Name is "Portia.Cassie" or "Cntryl.Portia.Cassie");
+        var siblingRole = project.Role == "Api" ? "Worker" : project.Role == "Worker" ? "Api" : null;
         foreach (var reference in references)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
             var name = reference.Name;
-            var applicationDependency = name.StartsWith(applicationName + ".", StringComparison.Ordinal)
+            var applicationDependency = project.Role is "Common" or "Core"
+                                        && name.StartsWith(applicationName + ".", StringComparison.Ordinal)
                                         && !(project.Role == "Core" && (name == applicationName + ".Common"
                                                                         || name.EndsWith(".Abstractions",
                                                                             StringComparison.Ordinal)));
@@ -86,23 +91,29 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
                 project.Role == "Common" && frameworkName.StartsWith("Portia.", StringComparison.Ordinal)
                                          && frameworkName is not ("Portia.Abstractions" or "Portia.Storage.Abstractions"
                                              or "Portia.Communications.Abstractions");
-            var infrastructure = frameworkName is "Portia.Fitz" or "Portia.AspNetCore" or "Portia.Mcp.AspNetCore"
+            var infrastructure = project.Role is "Common" or "Core"
+                                 && (frameworkName is "Portia.Fitz" or "Portia.AspNetCore" or "Portia.Mcp.AspNetCore"
                                      or "Portia.Admin.Mcp.AspNetCore" or "Portia.Storage.Aws" or "Portia.Storage.Azure"
                                      or "Portia.Storage.Gcp"
                                      or "Portia.Communications.Aws" or "Portia.Communications.Azure"
                                      or "Portia.Communications.Twilio"
                                  || name is "Cntryl.Fitz.Core" or "Cntryl.Fitz.Extensions"
-                                 || name == "Cntryl.Cassie" && !(project.Role == "Core" && cassieApi);
-            if (applicationDependency || commonBehavior || infrastructure)
+                                 || name == "Cntryl.Cassie" && !(project.Role == "Core" && cassieApi));
+            var siblingHost = siblingRole is not null && name == applicationName + "." + siblingRole;
+            if (applicationDependency || commonBehavior || infrastructure || siblingHost)
                 context.ReportDiagnostic(Diagnostic.Create(Dependency, Location.None, project.Name, name));
         }
     }
 
     static void AnalyzeInvocation(OperationAnalysisContext context, ApplicationProject project,
-        ConcurrentBag<(Location Location, string Feature)> registrations)
+        ConcurrentBag<(Location Location, string Feature)> registrations,
+        ConcurrentBag<(IMethodSymbol Caller, IMethodSymbol Target, Location Location, bool Hydrates)> invocations)
     {
         var invocation = (IInvocationOperation)context.Operation;
         var method = invocation.TargetMethod.ReducedFrom ?? invocation.TargetMethod;
+        if (project.Role == "Core" && context.ContainingSymbol is IMethodSymbol caller)
+            invocations.Add((caller.OriginalDefinition, method.OriginalDefinition, invocation.Syntax.GetLocation(),
+                Hydrates(method)));
         if (project.Role == "Core" && IsComponentRegistration(method))
         {
             var path = project.RelativePath(invocation.Syntax.SyntaxTree);
@@ -128,6 +139,51 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
         if (query || ApplicationProject.IsReactor(component))
             context.ReportDiagnostic(Diagnostic.Create(Hydration, invocation.Syntax.GetLocation(), component.Name,
                 method.Name));
+    }
+
+    static void AnalyzeQueryHydration(CompilationAnalysisContext context,
+        ConcurrentBag<(IMethodSymbol Caller, IMethodSymbol Target, Location Location, bool Hydrates)> invocations)
+    {
+        var edges = invocations.ToArray();
+        var byCaller = edges.GroupBy(edge => (ISymbol)edge.Caller, SymbolEqualityComparer.Default)
+            .ToDictionary(group => group.Key, group => group.ToArray(), SymbolEqualityComparer.Default);
+        foreach (var type in context.Compilation.GetSymbolsWithName(_ => true, SymbolFilter.Type)
+                     .OfType<INamedTypeSymbol>())
+        {
+            if (type.DeclaringSyntaxReferences.Length == 0)
+                continue;
+            var queryHandler = ApplicationProject.Requests(type).Any(request =>
+                ApplicationProject.IsContractIn(request.TypeArguments[0], "Queries"));
+            if (!queryHandler)
+                continue;
+            foreach (var request in ApplicationProject.Requests(type).Where(request =>
+                         ApplicationProject.IsContractIn(request.TypeArguments[0], "Queries")))
+                foreach (var member in request.GetMembers("HandleAsync").OfType<IMethodSymbol>())
+                {
+                    if (type.FindImplementationForInterfaceMember(member) is not IMethodSymbol handler
+                        || !byCaller.TryGetValue(handler.OriginalDefinition, out var roots))
+                        continue;
+                    foreach (var root in roots)
+                    {
+                        if (root.Hydrates)
+                            continue; // The operation pass already reported this direct call.
+                        var visited = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+                        if (ReachesHydration(root.Target, byCaller, visited))
+                            context.ReportDiagnostic(Diagnostic.Create(Hydration, root.Location, type.Name,
+                                root.Target.Name));
+                    }
+                }
+        }
+    }
+
+    static bool ReachesHydration(IMethodSymbol method,
+        Dictionary<ISymbol, (IMethodSymbol Caller, IMethodSymbol Target, Location Location, bool Hydrates)[]> byCaller,
+        HashSet<ISymbol> visited)
+    {
+        method = method.OriginalDefinition;
+        if (!visited.Add(method) || !byCaller.TryGetValue(method, out var outgoing))
+            return false;
+        return outgoing.Any(edge => edge.Hydrates || ReachesHydration(edge.Target, byCaller, visited));
     }
 
     static void ReportRegistrations(CompilationAnalysisContext context,
