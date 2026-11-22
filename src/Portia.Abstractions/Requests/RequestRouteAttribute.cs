@@ -4,7 +4,8 @@ namespace Cntryl.Portia;
 ///     Declares the realm, area, resource, and operation a request routes through when sent out of
 ///     process, independent of the transport (Fitz, a message broker, or anything else) that ends
 ///     up carrying it. Any segment may be <c>"*"</c>, meaning it is not known until the request is
-///     sent and must be supplied via <see cref="RequestRouteValues" />.
+///     sent and must be supplied via <see cref="RequestRouteValues" />. Concrete segments use the
+///     transport-neutral alphabet of ASCII letters, digits, <c>.</c>, <c>_</c>, <c>-</c>, and <c>~</c>.
 /// </summary>
 /// <param name="realm">The realm, or <c>"*"</c> if supplied per call.</param>
 /// <param name="area">The area, or <c>"*"</c> if supplied per call.</param>

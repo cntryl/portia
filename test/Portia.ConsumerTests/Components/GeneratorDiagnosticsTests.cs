@@ -567,6 +567,27 @@ public sealed class GeneratorDiagnosticsTests
         Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA020");
     }
 
+    [Fact]
+    public void ShouldReportPortia024GivenNonAsciiLetterInRequestRoute()
+    {
+        // Arrange
+        const string source = """
+                              using Cntryl.Portia;
+                              [RequestRoute("*", "ar\u0435a", "orders", "create")]
+                              [Discriminator("orders.create")]
+                              public sealed record CreateOrder : IRequest, IQueuable;
+                              """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new PortiaServiceRegistrationGenerator());
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA024");
+        var message = diagnostic.GetMessage(CultureInfo.InvariantCulture);
+        Assert.Contains("ar\u0435a", message, StringComparison.Ordinal);
+        Assert.Contains("ASCII", message, StringComparison.Ordinal);
+    }
+
     [Theory]
     [InlineData("PORTIA020",
         "[RequestRoute(\"*\", \"orders\", \"order\", \"create\")]\npublic sealed record CreateOrder : IRequest, IQueuable;")]
