@@ -245,6 +245,6 @@ static class RequestTransportDiscovery
 
     static bool IsValidRouteSegment(string? segment) => !string.IsNullOrWhiteSpace(segment)
                                                         && (segment == "*" || segment.All(character =>
-                                                            char.IsLetterOrDigit(character) ||
-                                                            character is '.' or '_' or '-' or '~'));
+                                                            character is >= 'a' and <= 'z' or >= 'A' and <= 'Z'
+                                                                or >= '0' and <= '9' or '.' or '_' or '-' or '~'));
 }

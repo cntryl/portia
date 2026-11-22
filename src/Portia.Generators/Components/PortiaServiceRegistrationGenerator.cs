@@ -19,7 +19,7 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         DiagnosticSeverity.Error, true);
 
     static readonly DiagnosticDescriptor InvalidRoute = new("PORTIA024", "Invalid request route segment",
-        "Transported request '{0}' declares invalid route segment '{1}'; use '*' or letters, digits, '.', '_', '-', and '~'",
+        "Transported request '{0}' declares invalid route segment '{1}'; use '*' or ASCII letters, digits, '.', '_', '-', and '~'",
         "Portia", DiagnosticSeverity.Error, true);
 
     static readonly DiagnosticDescriptor InvalidTransportId = new("PORTIA029", "Invalid request transport ID",
