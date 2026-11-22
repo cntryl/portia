@@ -57,7 +57,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
     : IDisposable
 {
     static readonly string[] CombinedAnalyzerDiagnostics =
-        ["PORTIA200", "PORTIA209", "PORTIA211", "PORTIA102", "PORTIA107"];
+        ["PORTIA200", "PORTIA209", "PORTIA211", "PORTIA102", "PORTIA107", "PORTIA108"];
 
     int _executed;
     bool _completed;
@@ -203,6 +203,14 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
                                                  namespace Bench.Core.Features.Work.Models;
                                                  public record Extra; public record Behavior { public int Compute() => 1; }
                                                  public sealed class ServiceAggregate(Uuid id, IServiceProvider services) : Aggregate(id, new EventStreamAddress("r", "a", id.ToString()));
+                                                 public sealed record ReplayEvent : DomainEvent;
+                                                 public sealed class ReplayAggregate : Aggregate
+                                                 {
+                                                     public ReplayAggregate(Uuid id) : base(id, new EventStreamAddress("r", "replay", id.ToString()))
+                                                     {
+                                                         On<ReplayEvent>(_ => throw new InvalidOperationException());
+                                                     }
+                                                 }
                                                  public sealed class StubHandler : IRequestHandler<StubRequest> { public ValueTask<Result> HandleAsync(IRequestContext<StubRequest> context, CancellationToken ct) => throw new NotImplementedException(); }
                                                  public static class Observation { public static void Run(IServiceProvider services) { Cntryl.Portia.Testing.RequestScenario.For(services).When(new StubRequest()); } }
                                                  """, CompilerHost.ParseOptions,
@@ -244,6 +252,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
                 nameof(ApplicationBoundaryAnalyzer) => "PORTIA211",
                 nameof(ComponentPracticeAnalyzer) => "PORTIA102",
                 nameof(ScenarioObservationAnalyzer) => "PORTIA107",
+                nameof(AggregateOnHandlerAnalyzer) => "PORTIA108",
                 _ => "PORTIA200"
             };
             if (!diagnostics.Any(item => item.Id == expected))

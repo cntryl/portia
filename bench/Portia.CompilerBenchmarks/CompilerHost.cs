@@ -32,7 +32,7 @@ static class CompilerHost
     public static readonly Type[] Analyzers =
     [
         typeof(ApplicationStructureAnalyzer), typeof(ApplicationBoundaryAnalyzer), typeof(ApplicationContractAnalyzer),
-        typeof(ComponentPracticeAnalyzer), typeof(ScenarioObservationAnalyzer)
+        typeof(ComponentPracticeAnalyzer), typeof(ScenarioObservationAnalyzer), typeof(AggregateOnHandlerAnalyzer)
     ];
 
     public static readonly Type[] CodeFixes =

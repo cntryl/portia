@@ -267,6 +267,10 @@ public sealed class Account : Aggregate
 }
 ```
 
+An `On<TEvent>` handler applies recorded facts during aggregate replay. Use event data to update state deterministically.
+The aggregate method called by the command evaluates business rules and decides whether to raise the event.
+`PORTIA108` warns about explicit throws and `Result`-returning calls in registered handler bodies.
+
 A rejection is one expression: `RequestError.Validation`, `NotFound`, `Conflict`, `Forbidden`, and
 `Unauthorized` build an error of that kind, and a `RequestError` converts implicitly to `Result` and
 `Result<T>`. A value converts implicitly to `Result<T>`, so a query handler returns the value itself

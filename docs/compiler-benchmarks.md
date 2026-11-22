@@ -78,6 +78,7 @@ action equivalence keys to scenarios; counting types alone misses paths inside a
 | `ApplicationContractAnalyzer` | Common contracts, behavior inside contracts, schema versioning, model/value/event forms |
 | `ComponentPracticeAnalyzer` | Component dependencies, dispatch/publication patterns, catch/return paths, unrelated methods |
 | `ScenarioObservationAnalyzer` | Retained/awaited and discarded scenario results, expression bodies, misleading `Expect` method names |
+| `AggregateOnHandlerAnalyzer` | An explicit throw inside a registered aggregate replay handler |
 
 Application convention cases must set `PortiaProjectStructure`, project name/directory,
 root namespace, and `IsTestProject` correctly. Include Common, Core, Api, Worker, test,

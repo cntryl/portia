@@ -21,6 +21,7 @@ public sealed class AzureMailSenderTests
         {
             Html = "<p>Html</p>",
             ReplyTo = "reply@example.com",
+            Attachments = [new MailAttachment("receipt.pdf", "application/pdf", [1, 2, 3])],
         };
 
         // Act
@@ -37,6 +38,10 @@ public sealed class AzureMailSenderTests
         Assert.Equal("Subject", sent.Content.Subject);
         Assert.Equal("Text", sent.Content.PlainText);
         Assert.Equal("<p>Html</p>", sent.Content.Html);
+        var attachment = Assert.Single(sent.Attachments);
+        Assert.Equal("receipt.pdf", attachment.Name);
+        Assert.Equal("application/pdf", attachment.ContentType);
+        Assert.Equal(new byte[] { 1, 2, 3 }, attachment.Content.ToArray());
     }
 
     /// <summary>A definitive refusal is a rejection, not an exception.</summary>

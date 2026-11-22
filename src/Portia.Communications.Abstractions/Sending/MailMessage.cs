@@ -1,13 +1,19 @@
 namespace Cntryl.Portia.Communications;
 
 /// <summary>
-///     An outbound email: recipients, a subject and a plain-text body, with optional HTML and reply-to.
+///     An outbound email: recipients, a subject and a plain-text body, with optional HTML, reply-to and attachments.
 ///     <see cref="ToString" /> and validation failures never include recipients or content.
 /// </summary>
 public sealed class MailMessage
 {
     /// <summary>The most recipients one message accepts.</summary>
     public const int MaximumRecipients = 50;
+
+    /// <summary>The most attachments one message accepts.</summary>
+    public const int MaximumAttachments = 8;
+
+    /// <summary>The combined attachment content limit, before provider encoding.</summary>
+    public const int MaximumAttachmentBytes = MailAttachment.MaximumContentBytes;
 
     /// <summary>Creates an email.</summary>
     /// <param name="to">The recipient addresses, 1 to <see cref="MaximumRecipients" />.</param>
@@ -60,6 +66,28 @@ public sealed class MailMessage
             ? value
             : throw new ArgumentException("The reply-to value is not a valid address.", nameof(value));
     }
+
+    /// <summary>Gets the optional attachments, as an immutable snapshot.</summary>
+    /// <exception cref="ArgumentNullException">The collection is null.</exception>
+    /// <exception cref="ArgumentException">The collection exceeds the count or aggregate content limit, or contains null entries.</exception>
+    public IReadOnlyList<MailAttachment> Attachments
+    {
+        get;
+        init
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            var attachments = value.Take(MaximumAttachments + 1).ToArray();
+            if (attachments.Length > MaximumAttachments)
+                throw new ArgumentException($"A message accepts at most {MaximumAttachments} attachments.", nameof(value));
+            if (attachments.Any(static attachment => attachment is null))
+                throw new ArgumentException("An attachment cannot be null.", nameof(value));
+            var totalBytes = attachments.Sum(static attachment => (long)attachment.Content.Length);
+            if (totalBytes > MaximumAttachmentBytes)
+                throw new ArgumentException($"Combined attachment content must not exceed {MaximumAttachmentBytes} bytes.",
+                    nameof(value));
+            field = Array.AsReadOnly(attachments);
+        }
+    } = Array.Empty<MailAttachment>();
 
     /// <inheritdoc />
     public override string ToString() => $"MailMessage {{ Recipients = {To.Count}, Content = [redacted] }}";

@@ -32,6 +32,11 @@ It throws when the message certainly did not reach the provider:
 Recipients and content never appear in exceptions, `ToString()` output or outcomes. Provider error text is not
 repeated because it can name recipients.
 
+`MailMessage.Attachments` accepts up to eight immutable `MailAttachment` snapshots, with at most 5 MiB of combined
+unencoded content. Each attachment has a single filename, a concrete MIME type and nonempty bytes. Azure Communication
+Services and SES receive native attachment parts. The limit applies before provider encoding. Messages with
+attachments follow the same send outcome and tracking rules described above.
+
 ## Tracking a send
 
 Reactors run at least once, so the aggregate that owns the send decides whether to call the sender. A send
@@ -107,10 +112,11 @@ secrets from the host's secret store. `TwilioTenant.ToString()` redacts them.
 
 A recipient who opted out (Twilio error 21610) is a `Rejected` outcome with `SendRejectionReason.OptedOut`.
 
-`UseStatusCallbacks` takes the public HTTPS address that Twilio reaches the mapped endpoint at. The endpoint
-verifies `X-Twilio-Signature` against the tenant's auth token and that public address, and checks the account SID.
-A callback that fails verification gets 403 and records nothing. The endpoint allows anonymous requests because the
-signature is its authentication. Without `UseStatusCallbacks` the sender requests no callbacks.
+`UseStatusCallbacks` takes the HTTPS address that Twilio reaches in production. For local emulator or test-host
+delivery, it also accepts HTTP on `localhost`, `127.0.0.1` or `::1`. All other hosts require HTTPS. The endpoint
+verifies `X-Twilio-Signature` against the tenant's auth token and the configured address in both cases, and checks
+the account SID. A callback that fails verification gets 403 and records nothing. The endpoint allows anonymous
+requests because the signature is its authentication. Without `UseStatusCallbacks` the sender requests no callbacks.
 
 ## Testing
 

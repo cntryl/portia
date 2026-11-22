@@ -45,6 +45,27 @@ public sealed class TwilioStatusCallbackTests
         Assert.Equal(expected, delivery.Kind);
     }
 
+    /// <summary>A signed callback preserves the configured loopback HTTP authority through sender and endpoint.</summary>
+    [Fact]
+    public async Task ShouldVerifyLoopbackHttpCallbackGivenMatchingSignedAddress()
+    {
+        // Arrange
+        var publicAddress = new Uri("http://[::1]:5080/twilio/status");
+        var receiver = new RecordingReceiver();
+        await using var app = await StartAsync(receiver, publicAddress);
+        using var client = app.GetTestClient();
+        var path = await CallbackPathAsync(publicAddress);
+        var form = Form("delivered");
+        using var request = Request(path, form, Sign(publicAddress.GetLeftPart(UriPartial.Authority) + path, form, AuthToken));
+
+        // Act
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(DeliveryEventKind.Delivered, Assert.Single(receiver.Events).Kind);
+    }
+
     /// <summary>A callback with a wrong, missing or foreign-account signature is refused and records nothing.</summary>
     [Theory]
     [InlineData("wrong-token", AccountSid, true)]
@@ -144,21 +165,22 @@ public sealed class TwilioStatusCallbackTests
     }
 
     // Sends through the real sender so the callback path is exactly the one Twilio is given.
-    static async Task<string> CallbackPathAsync()
+    static async Task<string> CallbackPathAsync(Uri? publicAddress = null)
     {
+        publicAddress ??= PublicAddress;
         var handler = new CaptureHandler();
-        var sender = new TwilioSmsSender(new HttpClient(handler), new Resolver(), PublicAddress);
+        var sender = new TwilioSmsSender(new HttpClient(handler), new Resolver(), publicAddress);
         _ = await sender.SendAsync(Tenant, new SendId("order-1.shipped"), new SmsMessage("+15005550006", "Hi"));
         return new Uri(handler.StatusCallback!).AbsolutePath;
     }
 
-    static async Task<WebApplication> StartAsync(RecordingReceiver receiver)
+    static async Task<WebApplication> StartAsync(RecordingReceiver receiver, Uri? publicAddress = null)
     {
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
         _ = builder.Services.AddSingleton<ITwilioTenantResolver, Resolver>();
         _ = builder.Services.AddSingleton<IDeliveryEventReceiver>(receiver);
-        _ = builder.Services.AddTwilioSms(options => options.UseStatusCallbacks(PublicAddress));
+        _ = builder.Services.AddTwilioSms(options => options.UseStatusCallbacks(publicAddress ?? PublicAddress));
         var app = builder.Build();
         _ = app.MapTwilioStatusCallbacks("/twilio/status");
         await app.StartAsync();
