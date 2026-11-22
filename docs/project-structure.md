@@ -41,6 +41,7 @@ Common/Features/{Feature}/
 
 Core/Features/{Feature}/
     Aggregates/
+        Entities/
     Handlers/
     Reactors/
     Projectors/
@@ -61,7 +62,7 @@ ordinary top-level `Program.cs` composition root.
 
 | Core folder | Responsibility |
 | --- | --- |
-| Aggregates | Aggregate roots and their directly owned rule or state collaborators. Keep local invariants visible and prefer clean composition as an aggregate grows beyond roughly 400 lines. |
+| Aggregates | Aggregate roots and their directly owned rule or state collaborators. Keep local invariants visible and begin a refactor by naming each invariant and its owner. Extract an entity when it has its own identity and lifecycle and shares an atomic rule with its root. |
 | Handlers | One handler per command or query; keep unrelated types elsewhere. |
 | Reactors | Map committed facts to commands and send them. Do not hydrate aggregates or re-verify the source fact. |
 | Projectors | Write read models through repositories. |
@@ -71,6 +72,19 @@ ordinary top-level `Program.cs` composition root.
 | Values | Feature-owned values that are part of Core behavior. |
 
 Composition is the way to keep a large aggregate reviewable. Aggregate collaborators must be directly referenced by an aggregate in the feature. Models have data-only shapes, values have immutable value shapes, and repository implementations satisfy a persistence contract or an interface declared in the feature. Concept budgets and helper-chain quality remain review responsibilities.
+
+Use `Aggregates/Entities/` for child entities with stable identity and their own lifecycle. Each
+entity class in that folder must be stored by exactly one concrete aggregate root in the same
+feature, through an instance field or auto-property; arrays and generic collections are supported.
+The root remains the command entry point and enforces invariants spanning its children. A child
+method can propose facts from its local rules, the root decides whether those facts fit its wider
+invariants and emits them, and replay handlers apply the facts to rebuild child state. Aggregate
+roots stay directly in `Aggregates/`.
+
+Api and Worker projects are composition boundaries. They can contain routes, transport contracts,
+serializers, provider adapters, and startup wiring, but authored aggregates, request/event contracts,
+and recognized Portia business components belong in Common or Core, including when nested inside a
+composition type.
 
 Static rules helpers and error factories belong inside the type that owns their business rule:
 use private methods or nested types in the aggregate for aggregate invariants, or in the handler
@@ -166,11 +180,11 @@ retain their behavior regardless of this opt-in.
 | PORTIA201 | A filename differs from its type's name, including `OfT` for generics. | Rename the file, retaining the type's name. |
 | PORTIA202 | A namespace differs from RootNamespace plus folders. | Change the document namespace and update references across the solution. |
 | PORTIA203 | Common/Core files fall outside the closed feature folders. | Diagnostic explains the allowed folders. |
-| PORTIA204 | A known component role is in the wrong folder, or a port is not an interface. | Diagnostic identifies the folder's responsibility. |
+| PORTIA204 | A known component role is in the wrong folder, a port is not an interface, a child entity lacks exactly one same-feature aggregate owner, a root is under `Entities/`, or a host declares business components. | Diagnostic identifies the required application boundary. |
 | PORTIA205 | One handler implements contracts for multiple requests. | Separate the operations deliberately. |
 | PORTIA206 | Common references another application project, or Core references one other than Common or a `*.Abstractions` project; either references a known infrastructure adapter; Cassie connection setup occurs outside Api/Worker. | Move composition to a root; Core's Cassie repository API is allowed. |
 | PORTIA207 | Core component registration occurs outside its feature registration file. | Diagnostic names the destination file. |
-| PORTIA208 | An aggregate file exceeds 400 lines. | Compose smaller rule/state objects; choose the boundary deliberately. |
+| PORTIA208 | An aggregate file exceeds 400 lines. | Start with its invariants and their owners; extract a child with its own identity and lifecycle when it shares an atomic rule with the root. |
 | PORTIA209 | Common declares executable members, except construction of sealed record values in Values. | Move other behavior into Core. |
 | PORTIA210 | A request/event lacks a valid feature discriminator or explicit positive version. | Make an omitted default version explicit; never guess or change a wire identity. |
 | PORTIA211 | A command handler's implementation consists solely of throwing `NotImplementedException`. | Implement the operation or remove its surface. |
