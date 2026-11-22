@@ -27,6 +27,48 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
     [Params(1, 8)]
     public int Workloads { get; set; }
 
+    /// <summary>Runs the real-Fitz matrix without BenchmarkDotNet's runtime validation.</summary>
+    public static async Task RunDirectAsync()
+    {
+        Console.WriteLine("history,workloads,operation,samples,p50_ms,p95_ms,p99_ms");
+        foreach (var history in new[] { 4, 128 })
+            foreach (var workloads in new[] { 1, 8 })
+            {
+                await using var benchmark = new OperationalJournalBaselineBenchmarks
+                {
+                    History = history,
+                    Workloads = workloads
+                };
+                await benchmark.SetupAsync();
+                foreach (var (name, operation) in new (string, Func<Task>)[]
+                         {
+                         ("read", () => benchmark.ReadRetainedDocument().AsTask()),
+                         ("retry", () => benchmark.FencedRetryTransition().AsTask()),
+                         ("status", () => benchmark.SharedOutageStatusLoad().AsTask()),
+                         ("recovery", benchmark.SharedOutageRecovery)
+                         })
+                {
+                    for (var i = 0; i < 3; i++)
+                        await operation();
+                    var samples = new double[20];
+                    for (var i = 0; i < samples.Length; i++)
+                    {
+                        var started = Stopwatch.GetTimestamp();
+                        await operation();
+                        samples[i] = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                    }
+
+                    Array.Sort(samples);
+                    Console.WriteLine($"{history},{workloads},{name},{samples.Length},"
+                                      + $"{Percentile(samples, .50):F3},{Percentile(samples, .95):F3},"
+                                      + $"{Percentile(samples, .99):F3}");
+                }
+            }
+
+        static double Percentile(double[] sorted, double percentile)
+            => sorted[(int)Math.Clamp(Math.Ceiling(percentile * sorted.Length) - 1, 0, sorted.Length - 1)];
+    }
+
     /// <summary>Connects to Fitz and creates isolated baseline documents.</summary>
     [GlobalSetup]
     public async Task SetupAsync()
