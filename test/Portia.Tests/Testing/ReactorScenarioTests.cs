@@ -331,4 +331,34 @@ public sealed class ReactorScenarioTests
         // Assert
         Assert.Equal(eventId, reactor.LastEventId);
     }
+
+    /// <summary>Scenario replay uses private progress and leaves a caller-owned checkpoint untouched.</summary>
+    [Fact]
+    public async Task ShouldLeaveCallerCheckpointUntouchedGivenAdvancedProgress()
+    {
+        // Arrange
+        var checkpoints = new InMemoryProjectionCheckpointStore();
+        var reactor = new ScenarioCheckpointReactor(checkpoints);
+        var identity = new CheckpointIdentity(reactor.Name, reactor.Pattern);
+        var advanced = new ProjectionCheckpoint(new EventCursor("caller-progress"));
+        await checkpoints.SaveAsync(identity, advanced, TestContext.Current.CancellationToken);
+        var scenario = new ReactorScenario().Given(new UserCreated(Uuid.CreateVersion4()));
+
+        // Act
+        await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(advanced, await checkpoints.LoadAsync(identity, TestContext.Current.CancellationToken));
+    }
+}
+
+sealed class ScenarioCheckpointReactor(IProjectionCheckpointStore checkpoints)
+    : Reactor(checkpoints, EventStreamPattern.ForPattern("test", "users"))
+{
+    protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
+        CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        return ValueTask.FromResult(Result.Success);
+    }
 }

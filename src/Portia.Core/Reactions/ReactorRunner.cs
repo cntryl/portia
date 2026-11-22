@@ -40,7 +40,7 @@ public sealed class ReactorRunner(
     /// <summary>Processes a bounded pass using the supplied batch and pass limits.</summary>
     public async ValueTask<ProjectionCheckpoint> RunPassAsync(Reactor reactor, ProjectionCheckpoint checkpoint,
         ProjectionRunOptions options, CancellationToken ct = default)
-        => (await ExecutePassAsync(null, reactor, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
+        => (await ExecutePassAsync(null, reactor, checkpoint, options, ct: ct).ConfigureAwait(false)).Checkpoint;
 
     // The journaled forms of a pass. Hosting supplies the workload's operational session here, so whether
     // a pass is journaled is decided by its caller's arguments and never by state set on the runner.
@@ -49,15 +49,16 @@ public sealed class ReactorRunner(
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBatchSize);
         return (await ExecutePassAsync(session, reactor, checkpoint,
-            ProjectionRunOptions.Default with { MaxBatchSize = maxBatchSize }, ct).ConfigureAwait(false)).Checkpoint;
+            ProjectionRunOptions.Default with { MaxBatchSize = maxBatchSize }, ct: ct).ConfigureAwait(false)).Checkpoint;
     }
 
     internal async ValueTask<ProjectionCheckpoint> RunPassAsync(OperationalSession session, Reactor reactor,
         ProjectionCheckpoint checkpoint, ProjectionRunOptions options, CancellationToken ct = default)
-        => (await ExecutePassAsync(session, reactor, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
+        => (await ExecutePassAsync(session, reactor, checkpoint, options, ct: ct).ConfigureAwait(false)).Checkpoint;
 
     internal async ValueTask<ProjectionPassResult> ExecutePassAsync(OperationalSession? session, Reactor reactor,
-        ProjectionCheckpoint checkpoint, ProjectionRunOptions options, CancellationToken ct = default)
+        ProjectionCheckpoint checkpoint, ProjectionRunOptions options,
+        IProjectionCheckpointStore? checkpointStore = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(reactor);
         if (reactor.Pattern.IsTenantTemplate)
@@ -78,6 +79,7 @@ public sealed class ReactorRunner(
 
         var startingCheckpoint = checkpoint;
         var identity = new CheckpointIdentity(reactor.Name, reactor.Pattern);
+        var checkpoints = checkpointStore ?? reactor.Checkpoints;
         var batchSize = reactor.IsBatch ? options.MaxBatchSize : 1;
         var contexts = new List<IReactorContext>(Math.Min(batchSize, options.MaxEventsPerPass));
         var processed = 0;
@@ -140,7 +142,7 @@ public sealed class ReactorRunner(
             var stage = ProcessorFailureStage.Handling;
             try
             {
-                var journal = reactor.Checkpoints as IOperationalReactionCheckpointStore;
+                var journal = checkpoints as IOperationalReactionCheckpointStore;
                 if (session is not null && journal is null)
                     throw new InvalidOperationException(
                         "Operations requires the registered operational reactor checkpoint store.");
@@ -163,11 +165,11 @@ public sealed class ReactorRunner(
                 var next = new ProjectionCheckpoint(contexts[^1].Source.NextCursor);
                 if (session is { } operational)
                     await operational.CommitReactionAsync(journal!, checkpoint, next, ct).ConfigureAwait(false);
-                else if (reactor.Checkpoints is IConditionalProjectionCheckpointStore conditional)
+                else if (checkpoints is IConditionalProjectionCheckpointStore conditional)
                     await conditional.SaveAsync(identity, checkpoint, next, ct).ConfigureAwait(false);
                 else
                     throw new InvalidOperationException(
-                        $"Reactor checkpoint store '{reactor.Checkpoints.GetType().FullName}' must implement " +
+                        $"Reactor checkpoint store '{checkpoints.GetType().FullName}' must implement " +
                         $"{nameof(IConditionalProjectionCheckpointStore)} for conditional compare-and-advance saves.");
                 contexts.Clear();
                 return next;

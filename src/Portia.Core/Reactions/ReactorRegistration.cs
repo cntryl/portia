@@ -79,7 +79,7 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
         var checkpoint = await ProcessorCheckpoints.LoadAsync(reactor.Checkpoints,
             new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
         return await services.GetRequiredService<ReactorRunner>().ExecutePassAsync(
-                services.GetService<OperationalExecution>()?.Session, reactor, checkpoint, options, ct)
+                services.GetService<OperationalExecution>()?.Session, reactor, checkpoint, options, ct: ct)
             .ConfigureAwait(false);
     }
 
