@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally><RestorePackagesWithLockFile>false</RestorePackagesWithLockFile><PortiaProjectStructure>true</PortiaProjectStructure></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../Common/Shop.Common.csproj" /><ProjectReference Include="../Core/Shop.Core.csproj" />
+    <PackageReference Include="Cntryl.Portia.Analyzers" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <ProjectReference Include="../../../src/Portia.Generators/Portia.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" Condition="'$(PortiaSmokePackageVersion)' == ''" />
+  </ItemGroup>
+</Project>
