@@ -12,12 +12,14 @@ namespace Cntryl.Portia;
 [MemoryDiagnoser]
 public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
 {
+    static readonly JsonSerializerOptions ArtifactJsonOptions = new() { WriteIndented = true };
     readonly string _endpoint = Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT")
                                 ?? "ws://127.0.0.1:4090/ws";
     FitzClient _client = null!;
     FitzOperationalStore _journal = null!;
     OperationalTarget[] _targets = [];
     string _route = null!;
+    int _serializedStateBytes;
 
     /// <summary>Number of retained attempt receipts in each workload document.</summary>
     [Params(4, 128)]
@@ -30,7 +32,7 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
     /// <summary>Runs the real-Fitz matrix without BenchmarkDotNet's runtime validation.</summary>
     public static async Task RunDirectAsync()
     {
-        Console.WriteLine("history,workloads,operation,samples,p50_ms,p95_ms,p99_ms");
+        var rows = new List<object>();
         foreach (var history in new[] { 4, 128 })
             foreach (var workloads in new[] { 1, 8 })
             {
@@ -48,22 +50,50 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
                          ("recovery", benchmark.SharedOutageRecovery)
                          })
                 {
-                    for (var i = 0; i < 3; i++)
+                    for (var i = 0; i < 10; i++)
                         await operation();
-                    var samples = new double[20];
+                    var samples = new double[50];
                     for (var i = 0; i < samples.Length; i++)
                     {
                         var started = Stopwatch.GetTimestamp();
                         await operation();
                         samples[i] = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
+                        await benchmark.ValidateReadbackAsync(name);
                     }
 
-                    Array.Sort(samples);
-                    Console.WriteLine($"{history},{workloads},{name},{samples.Length},"
-                                      + $"{Percentile(samples, .50):F3},{Percentile(samples, .95):F3},"
-                                      + $"{Percentile(samples, .99):F3}");
+                    var sorted = samples.OrderBy(value => value).ToArray();
+                    var operations = benchmark.OperationsPerInvocation(name);
+                    rows.Add(new
+                    {
+                        history,
+                        workloads,
+                        operation = name,
+                        samples,
+                        samples_count = samples.Length,
+                        p50_ms = Percentile(sorted, .50),
+                        p95_ms = Percentile(sorted, .95),
+                        p99_ms = Percentile(sorted, .99),
+                        operations_per_invocation = operations,
+                        operations_per_second = operations / (Percentile(sorted, .50) / 1000),
+                        serialized_state_bytes = benchmark._serializedStateBytes
+                    });
                 }
             }
+
+        var artifact = Environment.GetEnvironmentVariable("PORTIA_OPERATIONAL_BASELINE_ARTIFACT")
+                       ?? Path.Combine("docs", "operational-journal-baseline.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(artifact))!);
+        await File.WriteAllTextAsync(artifact, JsonSerializer.Serialize(new
+        {
+            generated_utc = DateTimeOffset.UtcNow,
+            commit = Environment.GetEnvironmentVariable("PORTIA_BASELINE_COMMIT") ?? "unknown",
+            sdk = Environment.Version.ToString(),
+            endpoint = Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT") ?? "ws://127.0.0.1:4090/ws",
+            os = Environment.OSVersion.ToString(),
+            processor_count = Environment.ProcessorCount,
+            rows
+        }, ArtifactJsonOptions));
+        Console.WriteLine($"artifact={Path.GetFullPath(artifact)}");
 
         static double Percentile(double[] sorted, double percentile)
             => sorted[(int)Math.Clamp(Math.Ceiling(percentile * sorted.Length) - 1, 0, sorted.Length - 1)];
@@ -81,7 +111,12 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
             .Select(i => new OperationalTarget($"baseline-{i}", "stream://baseline/source/*", OperationalScope.Global))
             .ToArray();
         foreach (var target in _targets)
-            await _journal.CompareExchangeAsync(CreateState(target), 0, Guid.Empty);
+        {
+            var created = await _journal.CompareExchangeAsync(CreateState(target), 0, Guid.Empty);
+            if (!created)
+                throw new InvalidOperationException("Failed to seed an isolated operational baseline document.");
+        }
+        _serializedStateBytes = await ReadSerializedStateBytesAsync(_targets[0]);
     }
 
     /// <summary>Reads one retained journal document, representing a normal status/pass read.</summary>
@@ -95,7 +130,8 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
     {
         var state = (await _journal.ReadAsync(_targets[0]))!;
         var replacement = state with { Revision = checked(state.Revision + 1), ConsecutiveFailures = state.ConsecutiveFailures + 1 };
-        _ = await _journal.CompareExchangeAsync(replacement, state.Revision, state.OwnerSession);
+        if (!await _journal.CompareExchangeAsync(replacement, state.Revision, state.OwnerSession))
+            throw new InvalidOperationException("Baseline retry transition lost its fenced compare-and-exchange.");
     }
 
     /// <summary>Loads all workload status documents after a shared outage.</summary>
@@ -108,11 +144,48 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
     public async Task SharedOutageRecovery()
     {
         var states = await Task.WhenAll(_targets.Select(target => _journal.ReadAsync(target).AsTask()));
-        await Task.WhenAll(states.Select(state =>
+        var committed = await Task.WhenAll(states.Select(state =>
         {
             var next = state! with { Revision = checked(state.Revision + 1), ConsecutiveFailures = 0, Block = null };
             return _journal.CompareExchangeAsync(next, state!.Revision, state.OwnerSession).AsTask();
         }));
+        if (committed.Any(value => !value))
+            throw new InvalidOperationException("Baseline recovery lost a fenced compare-and-exchange.");
+    }
+
+    async Task ValidateReadbackAsync(string operation)
+    {
+        if (operation is "read" or "retry")
+        {
+            if (await _journal.ReadAsync(_targets[0]) is null)
+                throw new InvalidOperationException("Baseline readback found no operational document.");
+        }
+        else if (operation == "status")
+        {
+            if ((await _journal.ListAsync(OperationalScope.Global)).Count != Workloads)
+                throw new InvalidOperationException("Baseline status readback returned the wrong workload count.");
+        }
+        else
+        {
+            var states = await Task.WhenAll(_targets.Select(target => _journal.ReadAsync(target).AsTask()));
+            if (states.Any(state => state is null))
+                throw new InvalidOperationException("Baseline recovery readback found no operational document.");
+        }
+        _serializedStateBytes = await ReadSerializedStateBytesAsync(_targets[0]);
+    }
+
+    int OperationsPerInvocation(string operation) => operation switch
+    {
+        "status" => Workloads + 1,
+        "recovery" => Workloads * 2,
+        _ => 1
+    };
+
+    async Task<int> ReadSerializedStateBytesAsync(OperationalTarget target)
+    {
+        var state = await _journal.ReadAsync(target)
+                    ?? throw new InvalidOperationException("Baseline document disappeared during measurement.");
+        return JsonSerializer.SerializeToUtf8Bytes(state, FitzJsonContext.Default.OperationalProcessorState).Length;
     }
 
     /// <summary>Releases the real Fitz client.</summary>
@@ -134,8 +207,6 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
             index == History - 1));
         var state = new OperationalProcessorState(target, ProcessorKinds.Reactor, owner, 1,
             $"cursor-{History - 1}", settings, attempts.ToArray(), null, [], [], [], 0, DateTimeOffset.UnixEpoch);
-        // Keep the byte-size calculation in the harness output and make the serialized shape explicit.
-        _ = JsonSerializer.SerializeToUtf8Bytes(state);
         return state;
     }
 }

@@ -15,5 +15,6 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Portia.Tests"/>
+    <InternalsVisibleTo Include="Portia.Benchmarks"/>
   </ItemGroup>
 </Project>

@@ -16,7 +16,9 @@ FITZ_TEST_ENDPOINT=ws://127.0.0.1:40929/ws \
 ```
 
 When BenchmarkDotNet cannot recognize the installed SDK runtime, the same matrix can be run
-through the direct harness. It emits 20 raw timed samples per row and p50/p95/p99 in milliseconds:
+through the direct harness. It emits 50 raw timed samples per row, validates each fenced write by
+readback outside the timed section, and persists p50/p95/p99, operations/second, and exact
+source-generated Fitz serialization bytes in `docs/operational-journal-baseline.json`:
 
 ```sh
 PORTIA_OPERATIONAL_BASELINE_DIRECT=1 \
@@ -24,13 +26,12 @@ FITZ_TEST_ENDPOINT=ws://127.0.0.1:40929/ws \
   dotnet run --configuration Release --project bench/Portia.Benchmarks --no-restore --no-build
 ```
 
-The JSON artifact is written under `BenchmarkDotNet.Artifacts/results/`. BenchmarkDotNet reports
-mean and percentile statistics when the percentile columns are enabled by the selected exporter;
-retain that file with the run's exact commit, SDK, endpoint, hardware, broker version, durability
-configuration, and command. The harness deliberately reports no synthesized throughput or byte
-count: serialized state bytes can be obtained from the captured journal document, while operation
-counts are one read or one fenced transition per benchmark invocation and `Workloads` transitions
-for recovery. Do not compare runs unless these inputs and the benchmark job are identical.
+The JSON artifact contains every raw sample and the exact commit, SDK, endpoint, hardware, and
+operation-count assumptions. `read` and `retry` intentionally measure one selected target even
+when `Workloads=8`; `status` measures one index read plus one document read per workload, and
+`recovery` measures one read and one fenced write per workload. The serialized byte count uses
+Fitz's source-generated `FitzJsonContext`, not a generic serializer. Do not compare runs unless
+these inputs, provider durability, and benchmark job are identical.
 
 This is a baseline, not an optimization claim. It does not measure application handler CPU,
 network loss, broker failover, or a full worker process restart. A future comparison must preserve
@@ -41,7 +42,7 @@ and checkpoint assertions before declaring a regression margin.
 
 The direct mode was run against `ws://127.0.0.1:40929/ws` on the local Apple Silicon host, using
 the checked-out .NET 11 SDK and the broker's configured synchronous durability. The following is
-the captured stdout summary; each row has 20 samples and the direct runner computes nearest-rank
+the captured artifact summary; each row has 50 samples and the direct runner computes nearest-rank
 percentiles. Values are milliseconds per benchmark invocation.
 
 | History | Workloads | Operation | p50 | p95 | p99 |
