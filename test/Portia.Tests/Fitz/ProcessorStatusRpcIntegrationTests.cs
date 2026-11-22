@@ -41,67 +41,74 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
         await reader.StartAsync(TestContext.Current.CancellationToken);
         await worker.StartAsync(TestContext.Current.CancellationToken);
 
+        var pending = new Dictionary<string, Result<ProcessorStatus>>(StringComparer.Ordinal);
+        var completed = new Dictionary<string, ProcessorStatus>(StringComparer.Ordinal);
+        var names = new[] { StatusControl.ProjectorName, StatusControl.ReactorName };
+        var ct = TestContext.Current.CancellationToken;
+        Result<ProcessorStatus> denied;
+        Result<ProcessorStatus> outsideScope;
+        Result<ProcessorStatus> member;
+
         // Act
         try
         {
             await Task.WhenAll(control.ProjectorEntered.Task, control.ReactorEntered.Task)
-                .WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
-            foreach (var name in new[] { StatusControl.ProjectorName, StatusControl.ReactorName })
-            {
-                var pending = await GetStatusWhenReadyAsync(client, name, "global", TestContext.Current.CancellationToken);
-                Assert.True(pending.IsSuccess);
-                Assert.Equal(name, pending.Value.Processor);
-                Assert.True(pending.Value.Owner?.HasOwner);
-                Assert.Equal("processing", pending.Value.Execution?.Phase);
-                Assert.Equal(EventCursor.Start, pending.Value.Progress!.Position);
-                Assert.Equal(1UL, pending.Value.Progress!.PendingEvents);
-                Assert.False(pending.Value.Progress!.IsCaughtUp);
-            }
+                .WaitAsync(TimeSpan.FromSeconds(15), ct);
+            foreach (var name in names)
+                pending.Add(name, await GetStatusWhenReadyAsync(client, name, "global", ct));
 
-            var denied = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, ct: TestContext.Current.CancellationToken);
-            Assert.False(denied.IsSuccess);
-            Assert.Equal(RequestErrorKind.Unauthorized, denied.Error.Kind);
-            var outsideScope = await GetStatusWhenReadyAsync(client, StatusControl.ReactorName, "tenant-a", TestContext.Current.CancellationToken);
-            Assert.Equal(!operationalPolicy, outsideScope.IsSuccess);
-            if (operationalPolicy)
-            {
-                Assert.False(outsideScope.IsSuccess);
-                Assert.Equal(RequestErrorKind.Forbidden, outsideScope.Error.Kind);
-            }
-
-            var member = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, "member", TestContext.Current.CancellationToken);
-            Assert.False(member.IsSuccess);
-            Assert.Equal(RequestErrorKind.Forbidden, member.Error.Kind);
-            control.Release.TrySetResult();
-            foreach (var name in new[] { StatusControl.ProjectorName, StatusControl.ReactorName })
-            {
-                var complete = await WaitForCaughtUpAsync(client, name);
-                Assert.NotEqual(EventCursor.Start, complete.Progress!.Position);
-                Assert.Equal(0UL, complete.Progress!.PendingEvents);
-                Assert.Equal(name == StatusControl.ProjectorName ? "projector" : "reactor", complete.Kind);
-            }
+            denied = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, ct: ct);
+            outsideScope = await GetStatusWhenReadyAsync(client, StatusControl.ReactorName, "tenant-a", ct);
+            member = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, "member", ct);
+            _ = control.Release.TrySetResult();
+            foreach (var name in names)
+                completed.Add(name, await WaitForCaughtUpAsync(client, name));
         }
         finally
         {
-            control.Release.TrySetResult();
-            await worker.StopAsync(TestContext.Current.CancellationToken);
+            _ = control.Release.TrySetResult();
+            await worker.StopAsync(ct);
             worker.Dispose();
         }
 
-        var afterStop = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, "global",
-            TestContext.Current.CancellationToken);
-        var deniedAfterStop = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, "member",
-            TestContext.Current.CancellationToken);
+        var afterStop = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, "global", ct);
+        var deniedAfterStop = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, "member", ct);
+        await reader.StopAsync(ct);
 
         // Assert
         Assert.DoesNotContain(readerHost.GetServices<IHostedService>(), service => service is PortiaWorkloadService);
+        foreach (var name in names)
+        {
+            var status = pending[name];
+            Assert.True(status.IsSuccess);
+            Assert.Equal(name, status.Value.Processor);
+            Assert.True(status.Value.Owner?.HasOwner);
+            Assert.Equal("processing", status.Value.Execution?.Phase);
+            var progress = Assert.IsType<EventStreamProgress>(status.Value.Progress);
+            Assert.Equal(EventCursor.Start, progress.Position);
+            Assert.Equal(1UL, progress.PendingEvents);
+            Assert.False(progress.IsCaughtUp);
+
+            var complete = completed[name];
+            var finalProgress = Assert.IsType<EventStreamProgress>(complete.Progress);
+            Assert.NotEqual(EventCursor.Start, finalProgress.Position);
+            Assert.Equal(0UL, finalProgress.PendingEvents);
+            Assert.Equal(name == StatusControl.ProjectorName ? "projector" : "reactor", complete.Kind);
+        }
+
+        Assert.False(denied.IsSuccess);
+        Assert.Equal(RequestErrorKind.Unauthorized, denied.Error.Kind);
+        Assert.Equal(!operationalPolicy, outsideScope.IsSuccess);
+        if (operationalPolicy)
+            Assert.Equal(RequestErrorKind.Forbidden, outsideScope.Error.Kind);
+        Assert.False(member.IsSuccess);
+        Assert.Equal(RequestErrorKind.Forbidden, member.Error.Kind);
         Assert.True(afterStop.IsSuccess);
         Assert.NotEqual(EventCursor.Start, afterStop.Value.Progress!.Position);
         Assert.False(afterStop.Value.Owner?.HasOwner);
         Assert.Equal("owner_unavailable", afterStop.Value.Execution?.Phase);
         Assert.False(deniedAfterStop.IsSuccess);
         Assert.Equal(RequestErrorKind.Forbidden, deniedAfterStop.Error.Kind);
-        await reader.StopAsync(TestContext.Current.CancellationToken);
 
         ServiceProvider BuildHost(bool reader)
         {
