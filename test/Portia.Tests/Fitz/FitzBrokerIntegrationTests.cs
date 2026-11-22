@@ -135,6 +135,49 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     public async Task ShouldSatisfyProjectionStoreConformanceGivenRealFitzKv() =>
         await ProjectionStoreConformance.VerifyAsync(new FitzKvProjectionProbe(_broker), TestContext.Current.CancellationToken);
 
+    /// <summary>Two real Fitz checkpoint owners cannot commit the same expected cursor.</summary>
+    [Fact]
+    public async Task ShouldRejectStaleReactorCheckpointWriterGivenRealFitzKv()
+    {
+        // Arrange
+        await using var firstClient = await _broker.CreateClientAsync();
+        await using var secondClient = await _broker.CreateClientAsync();
+        var route = "kv://portia-integration/reactor-fence/" + Uuid.CreateVersion4();
+        var identity = new CheckpointIdentity("reactor-fence",
+            EventStreamPattern.ForPattern("portia-integration", "reactor-fence"));
+        var first = new FitzKvCheckpointStore(firstClient.Kv, route);
+        var second = new FitzKvCheckpointStore(secondClient.Kv, route);
+        var expected = ProjectionCheckpoint.Start;
+        var winner = new ProjectionCheckpoint(new EventCursor("winner"));
+        var stale = new ProjectionCheckpoint(new EventCursor("stale"));
+
+        // Act
+        var outcomes = await Task.WhenAll(
+            CaptureAsync(() => ((IConditionalProjectionCheckpointStore)first)
+                .SaveAsync(identity, expected, winner, TestContext.Current.CancellationToken).AsTask()),
+            CaptureAsync(() => ((IConditionalProjectionCheckpointStore)second)
+                .SaveAsync(identity, expected, stale, TestContext.Current.CancellationToken).AsTask()));
+
+        // Assert
+        Assert.Single(outcomes, exception => exception is null);
+        Assert.Single(outcomes, exception => exception is ProjectionConcurrencyException);
+        var actual = await first.LoadAsync(identity, TestContext.Current.CancellationToken);
+        Assert.Equal(winner, actual);
+    }
+
+    static async Task<Exception?> CaptureAsync(Func<Task> action)
+    {
+        try
+        {
+            await action();
+            return null;
+        }
+        catch (Exception exception)
+        {
+            return exception;
+        }
+    }
+
     /// <summary>
     ///     A malformed checkpoint discovered after BEGIN must release Fitz's route ownership so another
     ///     client can repair it, after which the original store can immediately begin and commit again.
