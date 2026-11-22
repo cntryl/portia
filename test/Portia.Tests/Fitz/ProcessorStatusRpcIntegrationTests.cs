@@ -100,7 +100,7 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
         Assert.Equal(RequestErrorKind.Unauthorized, denied.Error.Kind);
         Assert.Equal(!operationalPolicy, outsideScope.IsSuccess);
         if (operationalPolicy)
-            Assert.Equal(RequestErrorKind.Forbidden, outsideScope.Error.Kind);
+            Assert.Equal(RequestErrorKind.Forbidden, Assert.IsType<RequestError>(outsideScope.Error).Kind);
         Assert.False(member.IsSuccess);
         Assert.Equal(RequestErrorKind.Forbidden, member.Error.Kind);
         Assert.True(afterStop.IsSuccess);
