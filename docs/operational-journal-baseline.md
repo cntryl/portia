@@ -1,0 +1,58 @@
+# Operational journal baseline
+
+This is a measurement harness for issue #309. It exercises the real `FitzOperationalStore` against
+an isolated Fitz route, retaining the provider's synchronous transaction durability. It measures
+single-document reads, fenced retry transitions, status loads, and concurrent recovery transitions
+for independent workloads. `History` is the number of retained attempt receipts (4 or 128) and
+`Workloads` is the independent workload count (1 or 8).
+
+Run from the repository root with Fitz available:
+
+```sh
+FITZ_TEST_ENDPOINT=ws://127.0.0.1:40929/ws \
+  dotnet run --configuration Release --project bench/Portia.Benchmarks -- \
+  --filter '*OperationalJournalBaselineBenchmarks*' \
+  --exporters json markdown
+```
+
+When BenchmarkDotNet cannot recognize the installed SDK runtime, the same matrix can be run
+through the direct harness. It emits 50 raw timed samples per row, validates each fenced write by
+readback outside the timed section, and persists p50/p95/p99, operations per second, and exact
+source-generated Fitz serialization bytes under `BenchmarkDotNet.Artifacts/results/`:
+
+```sh
+PORTIA_OPERATIONAL_BASELINE_DIRECT=1 \
+FITZ_TEST_ENDPOINT=ws://127.0.0.1:40929/ws \
+PORTIA_BASELINE_COMMIT="$(git rev-parse HEAD)" \
+PORTIA_BASELINE_SDK="$(dotnet --version)" \
+  dotnet run --configuration Release --project bench/Portia.Benchmarks
+```
+
+The JSON artifact contains every raw sample and the exact commit, SDK, endpoint, hardware, and
+operation-count assumptions. `read` and `retry` each measure one selected target even when
+`Workloads=8`. A retry performs one read and one fenced write. Status reads an index and each
+workload document, and recovery performs one read and one fenced write per workload. These counts
+describe logical journal operations. The serialized byte count uses
+Fitz's source-generated `FitzJsonContext`, not a generic serializer. Do not compare runs unless
+these inputs, provider durability, and benchmark job are identical.
+
+This is a baseline, not an optimization claim. It does not measure application handler CPU,
+network loss, broker failover, or a full worker process restart. A future comparison must preserve
+the same route isolation, provider durability, history/workload matrix, and exact repair-source
+and checkpoint assertions before declaring a regression margin.
+
+## Direct run recorded 2026-11-22
+
+The direct mode was run against `ws://127.0.0.1:40929/ws` on the local Apple Silicon host, using
+the checked-out .NET 11 SDK and the broker's configured synchronous durability. The following is
+the captured artifact summary; each row has 50 samples and the direct runner computes nearest-rank
+percentiles. Values are milliseconds per benchmark invocation.
+
+The complete raw samples, p50/p95/p99, operations/second, serialized byte count, and run
+metadata are retained in [`operational-journal-baseline.json`](operational-journal-baseline.json).
+
+These are directional local observations, not a cross-revision regression claim. The run's raw
+artifact is the durable evidence for this checkout; repeat the direct command after any change and
+retain the JSON with the exact commit and broker configuration. The matrix is intentionally
+single-target for read/retry and all-workload for status/recovery; it does not isolate broker-side
+contention from client scheduling.
