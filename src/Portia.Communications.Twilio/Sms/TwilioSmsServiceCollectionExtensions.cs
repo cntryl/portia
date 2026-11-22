@@ -18,11 +18,11 @@ public sealed class TwilioSmsBuilder
 
     /// <summary>
     ///     Requests status callbacks at the public HTTPS address where the host maps
-    ///     <c>MapTwilioStatusCallbacks</c>, such as <c>https://api.example.com/twilio/status</c>.
+    ///     <c>MapTwilioStatusCallbacks</c>, or at an HTTP loopback address for local development.
     /// </summary>
     /// <param name="publicAddress">The address Twilio reaches the endpoint at.</param>
     /// <returns>This builder.</returns>
-    /// <exception cref="ArgumentException">The address is not an absolute HTTPS address without a query.</exception>
+    /// <exception cref="ArgumentException">The address is not absolute HTTPS or loopback HTTP, or has a query, fragment or credentials.</exception>
     public TwilioSmsBuilder UseStatusCallbacks(Uri publicAddress)
     {
         ArgumentNullException.ThrowIfNull(publicAddress);

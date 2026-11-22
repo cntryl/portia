@@ -220,6 +220,57 @@ public sealed class TwilioSmsSenderTests
         _ = Assert.IsType<TwilioSmsSender>(sender);
     }
 
+    /// <summary>Loopback callback URLs are accepted while cleartext external callbacks are refused.</summary>
+    [Theory]
+    [InlineData("http://localhost:5080/twilio/status")]
+    [InlineData("http://127.0.0.1:5080/twilio/status")]
+    [InlineData("http://[::1]:5080/twilio/status")]
+    public void ShouldAcceptLoopbackCallbackAddressGivenLocalHttpUri(string address)
+    {
+        // Arrange
+        var builder = new TwilioSmsBuilder();
+
+        // Act
+        var exception = Record.Exception(() => builder.UseStatusCallbacks(new Uri(address)));
+
+        // Assert
+        Assert.Null(exception);
+    }
+
+    /// <summary>Non-loopback HTTP callback URLs are rejected even when their DNS name resolves locally.</summary>
+    [Theory]
+    [InlineData("http://example.test/twilio/status")]
+    [InlineData("http://127.0.0.2/twilio/status")]
+    [InlineData("http://[::2]/twilio/status")]
+    public void ShouldRejectNonLoopbackHttpCallbackAddressGivenExternalHost(string address)
+    {
+        // Arrange
+        var builder = new TwilioSmsBuilder();
+
+        // Act
+        var exception = Record.Exception(() => builder.UseStatusCallbacks(new Uri(address)));
+
+        // Assert
+        Assert.IsType<ArgumentException>(exception);
+    }
+
+    /// <summary>Query, fragment and credentials stay invalid for callback addresses.</summary>
+    [Theory]
+    [InlineData("http://localhost:5080/twilio/status?mode=local")]
+    [InlineData("https://api.example.com/twilio/status#fragment")]
+    [InlineData("https://user@api.example.com/twilio/status")]
+    public void ShouldRejectRestrictedCallbackAddressGivenQueryFragmentOrCredentials(string address)
+    {
+        // Arrange
+        var builder = new TwilioSmsBuilder();
+
+        // Act
+        var exception = Record.Exception(() => builder.UseStatusCallbacks(new Uri(address)));
+
+        // Assert
+        Assert.IsType<ArgumentException>(exception);
+    }
+
     static TwilioTenant Account() => new("ACtestaccount", "SKkey", Secret, "MGservice");
 
     static TwilioSmsSender CreateSender(StubHandler handler, Uri? callbacks) =>

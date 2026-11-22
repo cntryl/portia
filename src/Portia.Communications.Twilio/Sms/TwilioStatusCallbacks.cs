@@ -33,11 +33,15 @@ static class TwilioStatusCallbacks
     {
         if (address is null)
             return null;
-        if (!address.IsAbsoluteUri || address.Scheme != Uri.UriSchemeHttps
+        var host = address.Host.Trim('[', ']');
+        var loopbackHost = host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+                           || host is "127.0.0.1" or "::1";
+        var loopbackHttp = address.Scheme == Uri.UriSchemeHttp && loopbackHost;
+        if (!address.IsAbsoluteUri || address.Scheme != Uri.UriSchemeHttps && !loopbackHttp
                                    || address.Query.Length != 0 || address.Fragment.Length != 0 ||
                                    address.UserInfo.Length != 0)
             throw new ArgumentException(
-                "The status-callback address must be an absolute HTTPS address without a query, fragment or credentials.",
+                "The status-callback address must be absolute HTTPS or HTTP on localhost, 127.0.0.1 or ::1, without a query, fragment or credentials.",
                 nameof(address));
         return address.AbsoluteUri.TrimEnd('/');
     }
