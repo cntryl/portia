@@ -166,7 +166,9 @@ public sealed class ReactorRunner(
                 else if (reactor.Checkpoints is IConditionalProjectionCheckpointStore conditional)
                     await conditional.SaveAsync(identity, checkpoint, next, ct).ConfigureAwait(false);
                 else
-                    await reactor.Checkpoints.SaveAsync(identity, next, ct).ConfigureAwait(false);
+                    throw new InvalidOperationException(
+                        $"Reactor checkpoint store '{reactor.Checkpoints.GetType().FullName}' must implement " +
+                        $"{nameof(IConditionalProjectionCheckpointStore)} for conditional compare-and-advance saves.");
                 contexts.Clear();
                 return next;
             }

@@ -449,6 +449,12 @@ never waits on another's. It is an explicit selection rather than a default: a r
 fell back to an in-memory checkpoint would reissue its entire backlog of external effects after
 every restart.
 
+Custom reactor checkpoint stores must implement the public
+`IConditionalProjectionCheckpointStore` contract. Each pass supplies both the checkpoint it loaded
+and the checkpoint it reached; the store must compare opaque cursor equality and atomically reject
+stale writers with `ProjectionConcurrencyException`. Reactor hosting rejects an
+unconditional-only store rather than silently allowing an older owner to overwrite newer progress.
+
 Fitz KV commits default to `KvDurability.Buffered`; stream appends remain synchronous. Projection
 data and checkpoint advance atomically, but a crash can rewind recent KV progress and trigger
 replay. Reactor effects must tolerate replay regardless of persistence mode. Select synchronous

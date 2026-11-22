@@ -56,6 +56,29 @@ public sealed class ReactorRunnerTests
         Assert.Equal(checkpoint, nextCheckpoint);
     }
 
+    /// <summary>Rejects an older pass after a newer owner has advanced the checkpoint.</summary>
+    [Fact]
+    public async Task ShouldRejectStaleCheckpointWriterGivenConcurrentPasses()
+    {
+        // Arrange
+        var store = new InMemoryProjectionCheckpointStore();
+        var identity = new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("test"));
+        var expected = ProjectionCheckpoint.Start;
+        var winner = new ProjectionCheckpoint(new EventCursor("2"));
+        var stale = new ProjectionCheckpoint(new EventCursor("1"));
+
+        // Act
+        await ((IConditionalProjectionCheckpointStore)store).SaveAsync(identity, expected, winner,
+            TestContext.Current.CancellationToken);
+        var exception = await Record.ExceptionAsync(() =>
+            ((IConditionalProjectionCheckpointStore)store).SaveAsync(identity, expected, stale,
+                TestContext.Current.CancellationToken).AsTask());
+
+        // Assert
+        Assert.IsType<ProjectionConcurrencyException>(exception);
+        Assert.Equal(winner, await store.LoadAsync(identity, TestContext.Current.CancellationToken));
+    }
+
     /// <summary>The legacy integer overload preserves its public parameter name on validation.</summary>
     [Theory]
     [InlineData(0)]
@@ -283,7 +306,7 @@ public sealed class ReactorRunnerTests
         return store;
     }
 
-    sealed class RecordingCheckpointStore : IProjectionCheckpointStore
+    sealed class RecordingCheckpointStore : IProjectionCheckpointStore, IConditionalProjectionCheckpointStore
     {
         ProjectionCheckpoint _checkpoint;
 
@@ -296,6 +319,17 @@ public sealed class ReactorRunnerTests
             CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
+            _checkpoint = checkpoint;
+            SavedCursors.Add(checkpoint.Cursor.ToString());
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint expected,
+            ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (_checkpoint != expected)
+                throw new ProjectionConcurrencyException("stale checkpoint");
             _checkpoint = checkpoint;
             SavedCursors.Add(checkpoint.Cursor.ToString());
             return ValueTask.CompletedTask;

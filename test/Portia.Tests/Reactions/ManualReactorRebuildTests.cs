@@ -84,7 +84,7 @@ public sealed class ManualReactorRebuildTests
         }
     }
 
-    sealed class RecordingCheckpoints : IProjectionCheckpointStore
+    sealed class RecordingCheckpoints : IProjectionCheckpointStore, IConditionalProjectionCheckpointStore
     {
         internal int Writes { get; private set; }
 
@@ -94,6 +94,16 @@ public sealed class ManualReactorRebuildTests
         public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
             CancellationToken ct = default)
         {
+            Writes++;
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint expected,
+            ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (expected != ProjectionCheckpoint.Start)
+                throw new ProjectionConcurrencyException("stale checkpoint");
             Writes++;
             return ValueTask.CompletedTask;
         }

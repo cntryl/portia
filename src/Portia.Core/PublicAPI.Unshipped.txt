@@ -97,3 +97,5 @@ static Cntryl.Portia.ProcessorOwnerStatus.operator !=(Cntryl.Portia.ProcessorOwn
 static Cntryl.Portia.ProcessorOwnerStatus.operator ==(Cntryl.Portia.ProcessorOwnerStatus? left, Cntryl.Portia.ProcessorOwnerStatus? right) -> bool
 static Cntryl.Portia.ProcessorRepairStatus.operator !=(Cntryl.Portia.ProcessorRepairStatus? left, Cntryl.Portia.ProcessorRepairStatus? right) -> bool
 static Cntryl.Portia.ProcessorRepairStatus.operator ==(Cntryl.Portia.ProcessorRepairStatus? left, Cntryl.Portia.ProcessorRepairStatus? right) -> bool
+Cntryl.Portia.IConditionalProjectionCheckpointStore
+Cntryl.Portia.IConditionalProjectionCheckpointStore.SaveAsync(Cntryl.Portia.CheckpointIdentity! identity, Cntryl.Portia.ProjectionCheckpoint expected, Cntryl.Portia.ProjectionCheckpoint checkpoint, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
