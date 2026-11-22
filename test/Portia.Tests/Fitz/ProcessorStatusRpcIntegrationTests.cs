@@ -51,6 +51,8 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
                 var pending = await GetStatusWhenReadyAsync(client, name, "global", TestContext.Current.CancellationToken);
                 Assert.True(pending.IsSuccess);
                 Assert.Equal(name, pending.Value.Processor);
+                Assert.True(pending.Value.Owner?.HasOwner);
+                Assert.Equal("processing", pending.Value.Execution?.Phase);
                 Assert.Equal(EventCursor.Start, pending.Value.Progress!.Position);
                 Assert.Equal(1UL, pending.Value.Progress!.PendingEvents);
                 Assert.False(pending.Value.Progress!.IsCaughtUp);

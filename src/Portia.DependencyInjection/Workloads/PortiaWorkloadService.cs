@@ -20,7 +20,8 @@ sealed class PortiaWorkloadService(
     IOperationalStore? operationalStore = null,
     OperationalOptions? operationalOptions = null,
     IApplicationTopology? topology = null,
-    IProcessorStatusRpcRegistrar? statusRpc = null) : BackgroundService, IHostedLifecycleService
+    IProcessorStatusRpcRegistrar? statusRpc = null,
+    ProcessorRuntimeStatusRegistry? processorRuntime = null) : BackgroundService, IHostedLifecycleService
 {
     static readonly Action<ILogger, string, string, int, string, TimeSpan, string, Exception?> LogFailureDecision =
         LoggerMessage.Define<string, string, int, string, TimeSpan, string>(LogLevel.Error, new EventId(2001),
@@ -237,6 +238,7 @@ sealed class PortiaWorkloadService(
     async Task RunAsync(WorkloadRegistration registration, WorkloadIdentity identity, CancellationToken ct)
     {
         var telemetryScope = identity.Tenant is null ? "global" : "tenant";
+        var observation = processorRuntime?.Start(identity, registration.FailureAttemptLimit, _clock, ct);
         PortiaTelemetry.RecordWorkload(registration.Name, telemetryScope, true, _logger);
         var consecutiveFailures = 0;
         OperationalSession? operationalSession = null;
@@ -266,6 +268,7 @@ sealed class PortiaWorkloadService(
                 AsyncServiceScope? scope = null;
                 try
                 {
+                    observation?.Set("loading", "checkpoint", next: "load_progress");
                     scope = scopes.CreateAsyncScope();
                     var provider = scope.Value.ServiceProvider;
                     provider.GetRequiredService<WorkloadContext>().Initialize(identity, registration.Name);
@@ -320,8 +323,11 @@ sealed class PortiaWorkloadService(
                         }
                     }
                     if (!skipPass)
+                    {
+                        observation?.Set("processing", "pass", next: "continue_processing");
                         pass = await registration.Descriptor.RunPass(provider, processing, ct)
                             .ConfigureAwait(false);
+                    }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
@@ -354,6 +360,11 @@ sealed class PortiaWorkloadService(
 
                 if (skipPass && passFailure is null && scopeCleanupFailure is null)
                 {
+                    if (operationalSession!.RetryAt is { } retryAt)
+                        observation?.Set("retry_wait", next: "retry_processing", retryAt: retryAt,
+                            failures: operationalSession.State.ConsecutiveFailures);
+                    else
+                        observation?.Set("blocked", next: "wait_for_repair");
                     try
                     {
                         await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false);
@@ -412,6 +423,20 @@ sealed class PortiaWorkloadService(
                         terminalFailure = new WorkloadFailureException(identity, consecutiveFailures, passFailure);
                     }
 
+                    var reason = passFailure is ProcessorFailureException { Error: { } observedError }
+                        ? observedError.Kind.ToString()
+                        : passFailure is ProcessorFailureException { InnerException: { } innerFailure }
+                            ? innerFailure.GetType().Name : passFailure.GetType().Name;
+                    var stage = passFailure is ProcessorFailureException processorFailure
+                        ? processorFailure.Stage.ToString() : "Pass";
+                    if (terminalFailure is null)
+                        observation?.Set("retry_wait", stage, reason, "retry_processing",
+                            _clock.GetUtcNow() + GetFailureDelay(registration, consecutiveFailures), consecutiveFailures);
+                    else
+                        observation?.Set("blocked", stage, reason,
+                            operationalSession is null ? "inspect_and_restart_worker" : "preview_and_approve_repair",
+                            failures: consecutiveFailures);
+
                     if (_logger is not null)
                     {
                         LogFailureDecision(_logger, registration.Name,
@@ -453,6 +478,7 @@ sealed class PortiaWorkloadService(
                     continue;
                 }
 
+                observation?.Set("idle", next: "wait_for_source");
                 if (subscription is null)
                 {
                     try
@@ -544,6 +570,8 @@ sealed class PortiaWorkloadService(
                 }
                 finally
                 {
+                    if (observation is not null)
+                        processorRuntime!.End(identity, observation);
                     PortiaTelemetry.RecordWorkload(registration.Name, telemetryScope, false, _logger);
                 }
             }
@@ -551,6 +579,7 @@ sealed class PortiaWorkloadService(
 
         void ObserveJournalWait(OperationalJournalWait? wait)
         {
+            observation?.SetJournalWait(wait);
             if (_logger is not null)
             {
                 if (wait is not null && journalWait is null)

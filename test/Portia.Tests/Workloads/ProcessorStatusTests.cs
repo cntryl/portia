@@ -519,6 +519,44 @@ public sealed class ProcessorStatusTests
         Assert.Equal(0, store.Writes);
     }
 
+    /// <summary>Reports live retry timing and the reason for a required journal wait.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ShouldReportLiveRetryEvidenceGivenWorkerWaiting(bool journal)
+    {
+        // Arrange
+        var store = new StatusCheckpointStore();
+        var clock = new ManualTestClock();
+        var services = Services(store);
+        _ = services.AddSingleton<TimeProvider>(clock);
+        _ = services.AddPortia().AddProjector<GlobalStatusProjector>("projection", WorkloadScope.Global);
+        await using var provider = services.BuildServiceProvider();
+        var runtime = provider.GetRequiredService<ProcessorRuntimeStatusRegistry>();
+        var worker = runtime.Start(new WorkloadIdentity("projection"), 6, clock, TestContext.Current.CancellationToken);
+        var now = clock.GetUtcNow();
+        var next = now.AddSeconds(5);
+        worker.Set("retry_wait", "Handling", "Timeout", "retry_processing", next, 2);
+        if (journal)
+            worker.SetJournalWait(new OperationalJournalWait("attempt-start", nameof(IOException), now, next, 2));
+
+        // Act
+        var result = await SendAsync(provider, new GetProcessorStatus("projection"));
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.True(result.Value.Owner?.HasOwner);
+        var execution = Assert.IsType<ProcessorExecutionStatus>(result.Value.Execution);
+        Assert.Equal(journal ? "waiting_for_journal" : "retry_wait", execution.Phase);
+        Assert.Equal(journal ? nameof(IOException) : "Timeout", execution.Reason);
+        Assert.Equal(journal ? "retry_journal" : "retry_processing", execution.NextAction);
+        Assert.Equal(next, execution.RetryAt);
+        Assert.Equal(now, execution.Since);
+        Assert.Equal(2, execution.Failures);
+        Assert.Equal(6, execution.AttemptLimit);
+        Assert.Equal(0, store.Writes);
+    }
+
     /// <summary>Preserves caller cancellation while reading operational failure evidence.</summary>
     [Fact]
     public async Task ShouldPropagateCancellationGivenCallerCancelledDuringJournalObservation()

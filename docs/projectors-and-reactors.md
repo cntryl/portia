@@ -199,11 +199,12 @@ var status = provider.GetRequiredService<IProcessorStatusClient>();
 var result = await status.GetAsync("AccountBalanceProjector", tenant, actorToken, ct);
 ```
 
-Status calls use ordinary Fitz transport semantics. A completed response can precede worker scope
-cleanup; a call that arrives meanwhile waits for the worker's capacity within its own deadline. Fitz
-rejects with `RpcException` carrying `FitzErrorCodes.RpcBackpressure`, error class `5`, and effect `0`
-(not applied) only when its bounded wait queue is already full. Status polling can retry that
-response within its cancellation deadline. Authentication and authorization failures remain ordinary request results.
+For status during worker outages, enable `fitz.AddProcessorStatusReader()` on a separately hosted
+operator service. Register the same workloads, checkpoint repositories, and Fitz application or
+fleet on that service. The reader runs without `AddWorkers()`. The client first tries the owning
+worker for live evidence. If the owner route is unavailable, backpressured, or does not answer
+within two seconds, the client tries the independent reader within the caller's deadline.
+Authentication and authorization failures remain ordinary request results.
 
 Pass `null` for the tenant of a global component. Client and worker use the same Fitz application
 or fleet configuration. Requests pass through the ordinary RPC identity and authorization pipeline.
@@ -216,15 +217,20 @@ application already registers an `IOperationalAuthorizer`, that policy must also
 These checks apply to both RPC and local request-bus calls. Durable operations do not have to be
 enabled to inspect progress.
 
-`result.Value.Progress` reports the authoritative committed checkpoint, observed source position,
-pending source-record count, caught-up status, and observation time. Projectors load progress from
-their native repository; reactors load their checkpoint store. Inspection does not refresh the
-tenant directory, run handlers, or advance progress. `Failure` adds available retry or blocked-failure
-evidence when operations is
-enabled and that evidence still applies to the committed checkpoint.
-If the source probe fails, the response preserves that checkpoint, leaves source measurements
-unknown, and reports the failure classification in `SourceError`. Caller cancellation still propagates.
-An unavailable operational journal similarly leaves `Failure` unknown and reports `FailureError`.
+`Progress` reports the authoritative committed checkpoint, observed source position, pending
+records, caught-up status, and observation time. Projectors load progress from their native
+repository and reactors load their checkpoint store. If checkpoint loading fails, `Progress` is
+null and `CheckpointError` explains why. `SourceError` reports a failed source probe while retaining
+the committed checkpoint. `FailureError` reports an unavailable journal. Caller cancellation still
+propagates.
+
+`Execution` reports the current observed phase, reason, and next action. During retry backoff it
+includes the eligible time and failure count. Processing observed for at least 30 seconds is
+reported as `long_running`. With operations enabled, `Attempt` and `Repair` explain durable
+evidence, including uncertain commit outcomes and an approved resume when required. A journaled
+attempt is historical evidence. `Owner` reports local execution or an independent Fitz lease
+observation, with a null value for `HasOwner` when ownership cannot be observed. Confirmed status
+never advances checkpoints, invokes handlers, or changes repair approval.
 
 Counts describe unread source records, including events without a matching handler. Cursors remain
 opaque. An event-store provider can implement `IDomainEventProgressReader` to measure progress;

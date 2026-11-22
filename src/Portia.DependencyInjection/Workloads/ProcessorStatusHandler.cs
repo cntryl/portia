@@ -92,7 +92,8 @@ sealed class ProcessorStatusHandler(
             : null;
         var failureAttempt = blockedAttempt ?? (state?.ConsecutiveFailures > 0 &&
             (progress is null || state.Checkpoint == progress.Position.Value)
-                ? state.Attempts.LastOrDefault(item => item.Outcome == OperationalAttemptOutcomes.Failed)
+                ? state.Attempts.LastOrDefault(item => item.Outcome is
+                    OperationalAttemptOutcomes.Failed or OperationalAttemptOutcomes.Indeterminate)
                 : null);
         var failure = failureAttempt is null ? null : new ProcessorStatusFailure(failureAttempt.FailureStage,
             failureAttempt.FailureKind, failureAttempt.IsTransient, state!.ConsecutiveFailures,
@@ -146,12 +147,9 @@ sealed class ProcessorStatusHandler(
                 null, failure.ConsecutiveFailures, attemptLimit);
         if (live is not null && live.Phase != "idle")
         {
-            var since = attempt is { Outcome: OperationalAttemptOutcomes.Running } && live.Phase == "processing"
-                ? attempt.StartedAt : live.Since;
             return live with
             {
-                Since = since,
-                Phase = live.Phase == "processing" && now - since >= TimeSpan.FromSeconds(30)
+                Phase = live.Phase == "processing" && now - live.Since >= TimeSpan.FromSeconds(30)
                     ? "long_running" : live.Phase
             };
         }
