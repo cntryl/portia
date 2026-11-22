@@ -14,9 +14,14 @@ static class FitzProcessorStatusRoutes
             JsonSerializer.Serialize(new[] { workload.Name, workload.Tenant?.Value },
                 FitzJsonContext.Default.StringArray)).ToString());
 
+    internal static RequestRouteValues ReaderValues(string application) =>
+        new("portia-processors", Uuid.CreateVersion5(NamespaceId, application).ToString(), "reader");
+
+    internal static string ReaderRoute(string application) => Route(ReaderValues(application));
+
     internal static string Route(string application, WorkloadIdentity workload)
-    {
-        var values = Values(application, workload);
-        return $"rpc://{values.Realm}/{values.Area}/{values.Resource}/status";
-    }
+        => Route(Values(application, workload));
+
+    static string Route(RequestRouteValues values)
+        => $"rpc://{values.Realm}/{values.Area}/{values.Resource}/status";
 }

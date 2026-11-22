@@ -6,12 +6,12 @@ using Microsoft.Extensions.Hosting;
 
 namespace Cntryl.Portia;
 
-/// <summary>Exercises the public one-call client against endpoints hosted only by owned workloads.</summary>
+/// <summary>Exercises owned workload status and its independent reader against Fitz.</summary>
 [Collection(FitzBrokerCollectionDefinition.Name)]
 [Trait("Category", "BrokerIntegration")]
 public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
 {
-    /// <summary>Projectors and reactors report native progress through RPC, then disappear when ownership stops.</summary>
+    /// <summary>Projectors and reactors report native progress after their worker releases ownership.</summary>
     /// <param name="operationalPolicy">Whether the application adds an optional operational scope policy.</param>
     [Theory]
     [InlineData(false)]
@@ -27,82 +27,160 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
         var source = new ValueChanged(1);
         source.AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregate, 1, DateTimeOffset.UtcNow));
         await events.AppendAsync(new EventStreamAddress("status-source", "events", aggregate.ToString()), 0, [source], TestContext.Current.CancellationToken);
-        var services = new ServiceCollection();
-        _ = services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(
-            new Dictionary<string, string?> { ["PORTIA_SYSTEM_ADMIN_ROLE"] = "platform-operators" }).Build());
-        _ = services.AddSingleton<IEventStore>(events);
-        _ = services.AddSingleton(control);
-        _ = services.AddSingleton<StatusStore>();
-        _ = services.AddSingleton<IRequestActorValidator, StatusActorValidator>();
-        if (operationalPolicy)
-            _ = services.AddSingleton<IOperationalAuthorizer, TestOperationalAuthorizer>();
-        _ = services.AddPortia().UseSingleProcessWorkloads()
-            .UseFitzClient(connection, fitz => fitz.DisableRequestWorkers().UseProcessorStatusRpc(application))
-            .AddProjector<StatusProjector>(StatusControl.ProjectorName, WorkloadScope.Global,
-                options => options.PollInterval = TimeSpan.FromMilliseconds(10))
-            .AddReactor<StatusReactor>(StatusControl.ReactorName, WorkloadScope.Global,
-                options => options.PollInterval = TimeSpan.FromMilliseconds(10))
-            .AddWorkers();
-        await using var provider = services.BuildServiceProvider();
+        var store = new StatusStore();
+        var fleet = new FleetRunOptions { MembershipSelector = $"lease://{application}/portia-members/*" };
+        await using var provider = BuildHost(reader: false);
+        await using var readerHost = BuildHost(reader: true);
         var callerServices = new ServiceCollection();
         _ = callerServices.AddPortia().UseFitzClient(connection,
             fitz => fitz.DisableRequestWorkers().UseProcessorStatusRpc(application));
-
-        // Act
         await using var caller = callerServices.BuildServiceProvider();
-
-        // Assert
-        Assert.DoesNotContain(caller.GetServices<IHostedService>(), service => service is PortiaWorkloadService);
         var client = caller.GetRequiredService<IProcessorStatusClient>();
         var worker = provider.GetServices<IHostedService>().OfType<PortiaWorkloadService>().Single();
+        var reader = readerHost.GetServices<IHostedService>().OfType<FitzProcessorStatusReader>().Single();
+        await reader.StartAsync(TestContext.Current.CancellationToken);
         await worker.StartAsync(TestContext.Current.CancellationToken);
+
+        var pending = new Dictionary<string, Result<ProcessorStatus>>(StringComparer.Ordinal);
+        var completed = new Dictionary<string, ProcessorStatus>(StringComparer.Ordinal);
+        var names = new[] { StatusControl.ProjectorName, StatusControl.ReactorName };
+        var ct = TestContext.Current.CancellationToken;
+        Result<ProcessorStatus> denied;
+        Result<ProcessorStatus> outsideScope;
+        Result<ProcessorStatus> member;
+
+        // Act
         try
         {
             await Task.WhenAll(control.ProjectorEntered.Task, control.ReactorEntered.Task)
-                .WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
-            foreach (var name in new[] { StatusControl.ProjectorName, StatusControl.ReactorName })
-            {
-                var pending = await GetStatusWhenReadyAsync(client, name, "global", TestContext.Current.CancellationToken);
-                Assert.True(pending.IsSuccess);
-                Assert.Equal(name, pending.Value.Processor);
-                Assert.Equal(EventCursor.Start, pending.Value.Progress.Position);
-                Assert.Equal(1UL, pending.Value.Progress.PendingEvents);
-                Assert.False(pending.Value.Progress.IsCaughtUp);
-            }
+                .WaitAsync(TimeSpan.FromSeconds(15), ct);
+            foreach (var name in names)
+                pending.Add(name, await GetStatusWhenReadyAsync(client, name, "global", ct));
 
-            var denied = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, ct: TestContext.Current.CancellationToken);
-            Assert.False(denied.IsSuccess);
-            Assert.Equal(RequestErrorKind.Unauthorized, denied.Error.Kind);
-            var outsideScope = await GetStatusWhenReadyAsync(client, StatusControl.ReactorName, "tenant-a", TestContext.Current.CancellationToken);
-            Assert.Equal(!operationalPolicy, outsideScope.IsSuccess);
-            if (operationalPolicy)
-            {
-                Assert.False(outsideScope.IsSuccess);
-                Assert.Equal(RequestErrorKind.Forbidden, outsideScope.Error.Kind);
-            }
-
-            var member = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, "member", TestContext.Current.CancellationToken);
-            Assert.False(member.IsSuccess);
-            Assert.Equal(RequestErrorKind.Forbidden, member.Error.Kind);
-            control.Release.TrySetResult();
-            foreach (var name in new[] { StatusControl.ProjectorName, StatusControl.ReactorName })
-            {
-                var complete = await WaitForCaughtUpAsync(client, name);
-                Assert.NotEqual(EventCursor.Start, complete.Progress.Position);
-                Assert.Equal(0UL, complete.Progress.PendingEvents);
-                Assert.Equal(name == StatusControl.ProjectorName ? "projector" : "reactor", complete.Kind);
-            }
+            denied = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, ct: ct);
+            outsideScope = await GetStatusWhenReadyAsync(client, StatusControl.ReactorName, "tenant-a", ct);
+            member = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, "member", ct);
+            _ = control.Release.TrySetResult();
+            foreach (var name in names)
+                completed.Add(name, await WaitForCaughtUpAsync(client, name));
         }
         finally
         {
-            control.Release.TrySetResult();
-            await worker.StopAsync(TestContext.Current.CancellationToken);
+            _ = control.Release.TrySetResult();
+            await worker.StopAsync(ct);
             worker.Dispose();
         }
 
-        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-        await Assert.ThrowsAnyAsync<Exception>(async () =>
-            await client.GetAsync(StatusControl.ProjectorName, actorToken: "global", ct: deadline.Token));
+        var afterStop = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, "global", ct);
+        var deniedAfterStop = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, "member", ct);
+        await reader.StopAsync(ct);
+
+        // Assert
+        Assert.DoesNotContain(readerHost.GetServices<IHostedService>(), service => service is PortiaWorkloadService);
+        foreach (var name in names)
+        {
+            var status = pending[name];
+            Assert.True(status.IsSuccess);
+            Assert.Equal(name, status.Value.Processor);
+            Assert.True(status.Value.Owner?.HasOwner);
+            Assert.Equal("processing", status.Value.Execution?.Phase);
+            var progress = Assert.IsType<EventStreamProgress>(status.Value.Progress);
+            Assert.Equal(EventCursor.Start, progress.Position);
+            Assert.Equal(1UL, progress.PendingEvents);
+            Assert.False(progress.IsCaughtUp);
+
+            var complete = completed[name];
+            var finalProgress = Assert.IsType<EventStreamProgress>(complete.Progress);
+            Assert.NotEqual(EventCursor.Start, finalProgress.Position);
+            Assert.Equal(0UL, finalProgress.PendingEvents);
+            Assert.Equal(name == StatusControl.ProjectorName ? "projector" : "reactor", complete.Kind);
+        }
+
+        Assert.False(denied.IsSuccess);
+        Assert.Equal(RequestErrorKind.Unauthorized, denied.Error.Kind);
+        Assert.Equal(!operationalPolicy, outsideScope.IsSuccess);
+        if (operationalPolicy)
+            Assert.Equal(RequestErrorKind.Forbidden, Assert.IsType<RequestError>(outsideScope.Error).Kind);
+        Assert.False(member.IsSuccess);
+        Assert.Equal(RequestErrorKind.Forbidden, member.Error.Kind);
+        Assert.True(afterStop.IsSuccess);
+        Assert.NotEqual(EventCursor.Start, afterStop.Value.Progress!.Position);
+        Assert.False(afterStop.Value.Owner?.HasOwner);
+        Assert.Equal("owner_unavailable", afterStop.Value.Execution?.Phase);
+        Assert.False(deniedAfterStop.IsSuccess);
+        Assert.Equal(RequestErrorKind.Forbidden, deniedAfterStop.Error.Kind);
+
+        ServiceProvider BuildHost(bool reader)
+        {
+            var services = new ServiceCollection();
+            _ = services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(
+                new Dictionary<string, string?> { ["PORTIA_SYSTEM_ADMIN_ROLE"] = "platform-operators" }).Build());
+            _ = services.AddSingleton<IEventStore>(events);
+            _ = services.AddSingleton(control);
+            _ = services.AddSingleton(store);
+            _ = services.AddSingleton<IRequestActorValidator, StatusActorValidator>();
+            if (operationalPolicy)
+                _ = services.AddSingleton<IOperationalAuthorizer, TestOperationalAuthorizer>();
+            var applicationBuilder = services.AddPortia()
+                .UseFitzClient(connection, fitz =>
+                {
+                    _ = fitz.DisableRequestWorkers().UseFleet(fleet).UseProcessorStatusRpc(application);
+                    if (reader)
+                        _ = fitz.AddProcessorStatusReader();
+                })
+                .AddProjector<StatusProjector>(StatusControl.ProjectorName, WorkloadScope.Global,
+                    options => options.PollInterval = TimeSpan.FromMilliseconds(10))
+                .AddReactor<StatusReactor>(StatusControl.ReactorName, WorkloadScope.Global,
+                    options => options.PollInterval = TimeSpan.FromMilliseconds(10));
+            if (!reader)
+                _ = applicationBuilder.AddWorkers();
+            return services.BuildServiceProvider();
+        }
+    }
+
+    /// <summary>Preserves partial status when an owned endpoint times out probing source progress.</summary>
+    [Fact]
+    public async Task ShouldReturnOwnedPartialStatusGivenSourceProbeTimeout()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = await broker.CreateClientAsync();
+        var application = "status-" + Uuid.CreateVersion4();
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?> { ["PORTIA_SYSTEM_ADMIN_ROLE"] = "platform-operators" }).Build());
+        _ = services.AddSingleton<StatusStore>();
+        _ = services.AddSingleton<StatusControl>();
+        _ = services.AddSingleton<IRequestActorValidator, StatusActorValidator>();
+        _ = services.AddSingleton<IDomainEventProgressReader, WaitingStatusProbe>();
+        _ = services.AddPortia()
+            .UseFitzClient(connection, fitz => fitz.DisableRequestWorkers().UseProcessorStatusRpc(application))
+            .AddProjector<StatusProjector>(StatusControl.ProjectorName, WorkloadScope.Global);
+        await using var provider = services.BuildServiceProvider();
+        await using var endpoint = await provider.GetRequiredService<IProcessorStatusRpcRegistrar>()
+            .RegisterAsync(new WorkloadIdentity(StatusControl.ProjectorName), ct);
+        var client = provider.GetRequiredService<IProcessorStatusClient>();
+        Result<ProcessorStatus> status = default;
+
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
+            status = await client.GetAsync(StatusControl.ProjectorName, actorToken: "global", ct: ct));
+
+        // Assert
+        Assert.Null(error);
+        Assert.True(status.IsSuccess);
+        Assert.Equal("Timeout", status.Value.SourceError);
+        Assert.NotNull(status.Value.Progress);
+    }
+
+    sealed class WaitingStatusProbe : IDomainEventProgressReader
+    {
+        public async ValueTask<EventStreamProgress> GetProgressAsync(EventStreamPattern pattern,
+            EventCursor position, CancellationToken ct = default)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            throw new InvalidOperationException("The status probe should reach its timeout.");
+        }
     }
 
     static async Task<ProcessorStatus> WaitForCaughtUpAsync(IProcessorStatusClient client, string processor)
@@ -112,7 +190,7 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
         {
             var response = await GetStatusWhenReadyAsync(client, processor, "global", deadline.Token);
             Assert.True(response.IsSuccess);
-            if (response.Value.Progress.IsCaughtUp == true)
+            if (response.Value.Progress!.IsCaughtUp == true)
                 return response.Value;
             await Task.Delay(10, deadline.Token);
         }

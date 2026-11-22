@@ -557,7 +557,7 @@ Cntryl.Portia.ProcessorStatus.Pattern.get -> string!
 Cntryl.Portia.ProcessorStatus.Pattern.init -> void
 Cntryl.Portia.ProcessorStatus.Processor.get -> string!
 Cntryl.Portia.ProcessorStatus.Processor.init -> void
-Cntryl.Portia.ProcessorStatus.Progress.get -> Cntryl.Portia.EventStreamProgress!
+Cntryl.Portia.ProcessorStatus.Progress.get -> Cntryl.Portia.EventStreamProgress?
 Cntryl.Portia.ProcessorStatus.Progress.init -> void
 Cntryl.Portia.ProcessorStatus.RebuildId.get -> string?
 Cntryl.Portia.ProcessorStatus.RebuildId.init -> void
@@ -597,10 +597,10 @@ static Cntryl.Portia.ProcessorStatusFailure.operator !=(Cntryl.Portia.ProcessorS
 static Cntryl.Portia.ProcessorStatusFailure.operator ==(Cntryl.Portia.ProcessorStatusFailure? left, Cntryl.Portia.ProcessorStatusFailure? right) -> bool
 Cntryl.Portia.ProcessorStatus.SourceError.get -> string?
 Cntryl.Portia.ProcessorStatus.SourceError.init -> void
-Cntryl.Portia.ProcessorStatus.Deconstruct(out string! Processor, out string! Kind, out string? Tenant, out string! Pattern, out string? RebuildId, out Cntryl.Portia.EventStreamProgress! Progress, out Cntryl.Portia.ProcessorStatusFailure? Failure, out string? SourceError, out string? FailureError) -> void
+Cntryl.Portia.ProcessorStatus.Deconstruct(out string! Processor, out string! Kind, out string? Tenant, out string! Pattern, out string? RebuildId, out Cntryl.Portia.EventStreamProgress? Progress, out Cntryl.Portia.ProcessorStatusFailure? Failure, out string? SourceError, out string? FailureError) -> void
 Cntryl.Portia.ProcessorStatus.FailureError.get -> string?
 Cntryl.Portia.ProcessorStatus.FailureError.init -> void
-Cntryl.Portia.ProcessorStatus.ProcessorStatus(string! Processor, string! Kind, string? Tenant, string! Pattern, string? RebuildId, Cntryl.Portia.EventStreamProgress! Progress, Cntryl.Portia.ProcessorStatusFailure? Failure, string? SourceError = null, string? FailureError = null) -> void
+Cntryl.Portia.ProcessorStatus.ProcessorStatus(string! Processor, string! Kind, string? Tenant, string! Pattern, string? RebuildId, Cntryl.Portia.EventStreamProgress? Progress, Cntryl.Portia.ProcessorStatusFailure? Failure, string? SourceError = null, string? FailureError = null) -> void
 Cntryl.Portia.OperationalAttemptOutcomes
 const Cntryl.Portia.OperationalAttemptOutcomes.Running = "running" -> string!
 const Cntryl.Portia.OperationalAttemptOutcomes.Failed = "failed" -> string!
