@@ -249,13 +249,18 @@ sealed class PortiaWorkloadService(
             {
                 var failed = false;
                 WorkloadFailureException? terminalFailure = null;
+                Exception? passFailure = null;
+                Exception? scopeCleanupFailure = null;
+                var pass = default(ProjectionPassResult);
+                var processing = registration.Processing;
+                EventStreamPattern? passPattern = null;
+                var scope = scopes.CreateAsyncScope();
+                var provider = scope.ServiceProvider;
                 try
                 {
-                    await using var scope = scopes.CreateAsyncScope();
-                    var provider = scope.ServiceProvider;
                     provider.GetRequiredService<WorkloadContext>().Initialize(identity, registration.Name);
                     registration.Descriptor.Bind(provider, identity, registration.Name);
-                    var passPattern = registration.Descriptor.Pattern(provider);
+                    passPattern = registration.Descriptor.Pattern(provider);
                     if (boundPattern is not null && passPattern != boundPattern)
                         throw new InvalidOperationException(
                             $"Workload '{identity.Name}' ({registration.Scope}) changed its event-stream pattern from area '{boundPattern.Area ?? "*"}' to area '{passPattern.Area ?? "*"}' across dependency-injection scopes.");
@@ -275,7 +280,6 @@ sealed class PortiaWorkloadService(
                         }
                     }
 
-                    var processing = registration.Processing;
                     if (operationalStore is not null)
                     {
                         if (operationalSession is null)
@@ -305,52 +309,99 @@ sealed class PortiaWorkloadService(
                         consecutiveFailures = operationalSession.State.ConsecutiveFailures;
                     }
 
-                    var pass = await registration.Descriptor.RunPass(provider, processing, ct)
+                    pass = await registration.Descriptor.RunPass(provider, processing, ct)
                         .ConfigureAwait(false);
-                    if (operationalSession is not null)
-                        await operationalSession.PassSucceededAsync(ct).ConfigureAwait(false);
-                    consecutiveFailures = 0;
-                    if (pass.ContinueImmediately)
-                    {
-                        continue;
-                    }
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
-                    break;
+                    passFailure = new OperationCanceledException(ct);
                 }
                 catch (Exception ex)
                 {
+                    passFailure = ex;
+                }
+                finally
+                {
+                    try
+                    {
+                        await scope.DisposeAsync().ConfigureAwait(false);
+                    }
+                    catch (Exception ex)
+                    {
+                        scopeCleanupFailure = ex;
+                    }
+                }
+
+                if (passFailure is OperationCanceledException && ct.IsCancellationRequested)
+                {
+                    if (scopeCleanupFailure is not null)
+                        PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Cleanup,
+                            scopeCleanupFailure, _logger);
+                    break;
+                }
+
+                if (passFailure is null && scopeCleanupFailure is null)
+                {
+                    try
+                    {
+                        if (operationalSession is not null)
+                            await operationalSession.PassSucceededAsync(ct).ConfigureAwait(false);
+                        consecutiveFailures = 0;
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+                    {
+                        passFailure = ex;
+                    }
+                }
+
+                if (passFailure is null && scopeCleanupFailure is not null)
+                {
+                    var cleanup = new ProcessorFailureException(
+                        new CheckpointIdentity(identity.Name, passPattern!, processing.RebuildId), pass.Checkpoint,
+                        ProcessorFailureStage.Disposing, innerException: scopeCleanupFailure);
+                    passFailure = cleanup;
+                }
+
+                if (passFailure is not null)
+                {
                     failed = true;
+                    if (scopeCleanupFailure is not null && !ReferenceEquals(passFailure, scopeCleanupFailure))
+                        ProcessorFailureException.RecordCleanup(passFailure, scopeCleanupFailure);
                     if (operationalSession is not null)
                     {
-                        await operationalSession.RecordFailureAsync(ex, null, ct).ConfigureAwait(false);
+                        await operationalSession.RecordFailureAsync(passFailure,
+                            scopeCleanupFailure is not null && passFailure is ProcessorFailureException cleanupDiagnostic
+                                ? cleanupDiagnostic.Checkpoint
+                                : null, ct).ConfigureAwait(false);
                         consecutiveFailures = operationalSession.State.ConsecutiveFailures;
                     }
                     else
                         consecutiveFailures++;
 
-                    PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Workload, ex,
+                    PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Workload, passFailure,
                         _logger);
-                    if (IsTerminal(ex, consecutiveFailures, registration, operationalSession))
+                    if (IsTerminal(passFailure, consecutiveFailures, registration, operationalSession))
                     {
-                        terminalFailure = new WorkloadFailureException(identity, consecutiveFailures, ex);
+                        terminalFailure = new WorkloadFailureException(identity, consecutiveFailures, passFailure);
                     }
 
                     if (_logger is not null)
                     {
                         LogFailureDecision(_logger, registration.Name,
-                            ex is ProcessorFailureException diagnostic ? diagnostic.Stage.ToString() : "Pass",
+                            passFailure is ProcessorFailureException diagnostic ? diagnostic.Stage.ToString() : "Pass",
                             consecutiveFailures, terminalFailure is null ? "retry" : "stop",
                             terminalFailure is null
                                 ? GetFailureDelay(registration, consecutiveFailures)
                                 : TimeSpan.Zero,
-                            ex is ProcessorFailureException { Error: { } error }
+                            passFailure is ProcessorFailureException { Error: { } error }
                                 ? error.Kind.ToString()
-                                : ex.GetType().Name,
+                                : passFailure.GetType().Name,
                             null);
                     }
                 }
+
+                if (passFailure is null && pass.ContinueImmediately)
+                    continue;
 
                 if (terminalFailure is not null)
                 {
