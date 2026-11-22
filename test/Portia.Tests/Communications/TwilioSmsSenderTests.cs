@@ -271,6 +271,20 @@ public sealed class TwilioSmsSenderTests
         Assert.IsType<ArgumentException>(exception);
     }
 
+    /// <summary>Relative callback addresses fail with the public argument contract.</summary>
+    [Fact]
+    public void ShouldRejectRelativeCallbackAddressGivenUriBuilder()
+    {
+        // Arrange
+        var builder = new TwilioSmsBuilder();
+
+        // Act
+        var exception = Record.Exception(() => builder.UseStatusCallbacks(new Uri("/twilio/status", UriKind.Relative)));
+
+        // Assert
+        Assert.IsType<ArgumentException>(exception);
+    }
+
     static TwilioTenant Account() => new("ACtestaccount", "SKkey", Secret, "MGservice");
 
     static TwilioSmsSender CreateSender(StubHandler handler, Uri? callbacks) =>
