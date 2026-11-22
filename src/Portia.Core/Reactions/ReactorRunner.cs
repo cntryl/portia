@@ -40,7 +40,7 @@ public sealed class ReactorRunner(
     /// <summary>Processes a bounded pass using the supplied batch and pass limits.</summary>
     public async ValueTask<ProjectionCheckpoint> RunPassAsync(Reactor reactor, ProjectionCheckpoint checkpoint,
         ProjectionRunOptions options, CancellationToken ct = default)
-        => (await ExecutePassAsync(null, reactor, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
+        => (await ExecutePassAsync(null, reactor, checkpoint, options, ct: ct).ConfigureAwait(false)).Checkpoint;
 
     // The journaled forms of a pass. Hosting supplies the workload's operational session here, so whether
     // a pass is journaled is decided by its caller's arguments and never by state set on the runner.
@@ -49,15 +49,16 @@ public sealed class ReactorRunner(
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxBatchSize);
         return (await ExecutePassAsync(session, reactor, checkpoint,
-            ProjectionRunOptions.Default with { MaxBatchSize = maxBatchSize }, ct).ConfigureAwait(false)).Checkpoint;
+            ProjectionRunOptions.Default with { MaxBatchSize = maxBatchSize }, ct: ct).ConfigureAwait(false)).Checkpoint;
     }
 
     internal async ValueTask<ProjectionCheckpoint> RunPassAsync(OperationalSession session, Reactor reactor,
         ProjectionCheckpoint checkpoint, ProjectionRunOptions options, CancellationToken ct = default)
-        => (await ExecutePassAsync(session, reactor, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
+        => (await ExecutePassAsync(session, reactor, checkpoint, options, ct: ct).ConfigureAwait(false)).Checkpoint;
 
     internal async ValueTask<ProjectionPassResult> ExecutePassAsync(OperationalSession? session, Reactor reactor,
-        ProjectionCheckpoint checkpoint, ProjectionRunOptions options, CancellationToken ct = default)
+        ProjectionCheckpoint checkpoint, ProjectionRunOptions options,
+        IProjectionCheckpointStore? checkpointStore = null, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(reactor);
         if (reactor.Pattern.IsTenantTemplate)
@@ -70,6 +71,17 @@ public sealed class ReactorRunner(
         options.Validate();
         if (options.RebuildId is not null)
             throw new ArgumentException("Reactors do not support projection rebuild generations.", nameof(options));
+
+        var checkpoints = checkpointStore ?? reactor.Checkpoints;
+        var journal = checkpoints as IOperationalReactionCheckpointStore;
+        var conditional = checkpoints as IConditionalProjectionCheckpointStore;
+        if (session is not null && journal is null)
+            throw new InvalidOperationException("Operations requires the registered operational reactor checkpoint store.");
+        if (session is null && conditional is null)
+            throw new InvalidOperationException(
+                $"Reactor checkpoint store '{checkpoints.GetType().FullName}' must implement " +
+                $"{nameof(IConditionalProjectionCheckpointStore)} for conditional compare-and-advance saves.");
+
         var actor = PrincipalSnapshot.Copy(_principals.GetPrincipal(reactor));
         if (!RequestActor.IsSystem(actor))
         {
@@ -140,10 +152,6 @@ public sealed class ReactorRunner(
             var stage = ProcessorFailureStage.Handling;
             try
             {
-                var journal = reactor.Checkpoints as IOperationalReactionCheckpointStore;
-                if (session is not null && journal is null)
-                    throw new InvalidOperationException(
-                        "Operations requires the registered operational reactor checkpoint store.");
                 if (session is { } operations)
                     _ = await operations.BeginAsync(contexts.Select(c => c.Source).ToArray(), checkpoint, ct)
                         .ConfigureAwait(false);
@@ -163,10 +171,8 @@ public sealed class ReactorRunner(
                 var next = new ProjectionCheckpoint(contexts[^1].Source.NextCursor);
                 if (session is { } operational)
                     await operational.CommitReactionAsync(journal!, checkpoint, next, ct).ConfigureAwait(false);
-                else if (reactor.Checkpoints is IConditionalProjectionCheckpointStore conditional)
-                    await conditional.SaveAsync(identity, checkpoint, next, ct).ConfigureAwait(false);
                 else
-                    await reactor.Checkpoints.SaveAsync(identity, next, ct).ConfigureAwait(false);
+                    await conditional!.SaveAsync(identity, checkpoint, next, ct).ConfigureAwait(false);
                 contexts.Clear();
                 return next;
             }

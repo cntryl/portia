@@ -66,8 +66,9 @@ public sealed class ScenarioDrainTests
             var reactor = new DrainReactor(checkpoints, seen, failure);
             var diagnostic = await Assert.ThrowsAsync<ProcessorFailureException>(() => scenario.RunAsync(reactor, TestContext.Current.CancellationToken));
             Assert.Same(failure, diagnostic.InnerException);
-            var checkpoint = await checkpoints.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern), TestContext.Current.CancellationToken);
-            Assert.Equal("4096", checkpoint.Cursor.ToString());
+            Assert.Equal(ProjectionCheckpoint.Start,
+                await checkpoints.LoadAsync(new CheckpointIdentity(reactor.Name, reactor.Pattern),
+                    TestContext.Current.CancellationToken));
         }
         else
         {
@@ -103,11 +104,12 @@ public sealed class ScenarioDrainTests
             var scenario = new ReactorScenario().Given(events);
             var store = new CancelAfterPassCheckpointStore(new InMemoryProjectionCheckpointStore(), cancellation);
             var reactor = new DrainReactor(store, seen);
+            cancellation.Cancel();
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
                 scenario.RunAsync(reactor, cancellation.Token));
-            Assert.Equal(ids.Take(4096), seen);
+            Assert.Empty(seen);
             await scenario.RunAsync(reactor, TestContext.Current.CancellationToken);
-            Assert.Equal(ids, seen.Skip(4096));
+            Assert.Equal(ids, seen);
         }
         else
         {
@@ -123,7 +125,7 @@ public sealed class ScenarioDrainTests
     }
 
     sealed class CancelAfterPassCheckpointStore(IProjectionCheckpointStore inner, CancellationTokenSource cancellation)
-        : IProjectionCheckpointStore
+        : IProjectionCheckpointStore, IConditionalProjectionCheckpointStore
     {
         public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
             => inner.LoadAsync(identity, ct);
@@ -132,6 +134,16 @@ public sealed class ScenarioDrainTests
             CancellationToken ct = default)
         {
             await inner.SaveAsync(identity, checkpoint, ct);
+            if (checkpoint.Cursor.ToString() == "4096")
+                cancellation.Cancel();
+        }
+
+        async ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
+            ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+        {
+            if (inner is not IConditionalProjectionCheckpointStore conditional)
+                throw new InvalidOperationException("The wrapped checkpoint store must support conditional saves.");
+            await conditional.SaveAsync(identity, expected, checkpoint, ct);
             if (checkpoint.Cursor.ToString() == "4096")
                 cancellation.Cancel();
         }

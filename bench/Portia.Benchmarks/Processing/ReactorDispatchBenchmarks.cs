@@ -69,13 +69,29 @@ public class ReactorDispatchBenchmarks
         }
     }
 
-    sealed class BenchmarkCheckpointStore : IProjectionCheckpointStore
+    sealed class BenchmarkCheckpointStore : IProjectionCheckpointStore, IConditionalProjectionCheckpointStore
     {
+        ProjectionCheckpoint _checkpoint;
+
         public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity,
-            CancellationToken ct = default) => ValueTask.FromResult(ProjectionCheckpoint.Start);
+            CancellationToken ct = default) => ValueTask.FromResult(_checkpoint);
 
         public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-            CancellationToken ct = default) => ValueTask.CompletedTask;
+            CancellationToken ct = default)
+        {
+            _checkpoint = checkpoint;
+            return ValueTask.CompletedTask;
+        }
+
+        ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
+            ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (_checkpoint != expected)
+                throw new ProjectionConcurrencyException("stale checkpoint");
+            _checkpoint = checkpoint;
+            return ValueTask.CompletedTask;
+        }
     }
 
     sealed class SingleBenchmarkReactor(IProjectionCheckpointStore checkpoints)

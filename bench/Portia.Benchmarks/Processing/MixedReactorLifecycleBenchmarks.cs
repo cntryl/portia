@@ -152,8 +152,10 @@ sealed class MixedReactorApplication
     }
 }
 
-sealed class MixedReactionStore(bool asyncCheckpoint, bool awaitedEffect) : IProjectionCheckpointStore
+sealed class MixedReactionStore(bool asyncCheckpoint, bool awaitedEffect) : IProjectionCheckpointStore,
+    IConditionalProjectionCheckpointStore
 {
+    readonly object _checkpointGate = new();
     internal bool RecordControls { get; set; }
     internal bool FailCheckpoint { get; set; }
     internal List<int> Order { get; } = [];
@@ -197,6 +199,23 @@ sealed class MixedReactionStore(bool asyncCheckpoint, bool awaitedEffect) : IPro
             throw new MixedCommitException();
         Checkpoint = checkpoint;
         Commits++;
+    }
+
+    async ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
+        ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+    {
+        if (asyncCheckpoint)
+            await Task.Yield();
+        ct.ThrowIfCancellationRequested();
+        lock (_checkpointGate)
+        {
+            if (Checkpoint != expected)
+                throw new ProjectionConcurrencyException("stale checkpoint");
+            if (FailCheckpoint)
+                throw new MixedCommitException();
+            Checkpoint = checkpoint;
+            Commits++;
+        }
     }
 }
 

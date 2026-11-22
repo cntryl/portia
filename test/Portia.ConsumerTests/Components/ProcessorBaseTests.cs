@@ -171,7 +171,7 @@ public sealed class ProcessorBaseTests
         }
     }
 
-    sealed class ReactionRepository : IProjectionCheckpointStore
+    sealed class ReactionRepository : IProjectionCheckpointStore, IConditionalProjectionCheckpointStore
     {
         public ProjectionCheckpoint Checkpoint;
         public bool FailSave;
@@ -180,6 +180,15 @@ public sealed class ProcessorBaseTests
 
         public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default) =>
             ValueTask.FromResult(Checkpoint);
+
+        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint expected,
+            ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+        {
+            if (Checkpoint != expected)
+                throw new ProjectionConcurrencyException("The reaction checkpoint changed.");
+
+            return SaveAsync(identity, checkpoint, ct);
+        }
 
         public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
             CancellationToken ct = default)

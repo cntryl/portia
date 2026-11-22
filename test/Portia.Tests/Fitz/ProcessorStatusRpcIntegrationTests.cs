@@ -256,7 +256,7 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
         }
     }
 
-    sealed class StatusStore : IProjectionStore, IProjectionCheckpointStore
+    sealed class StatusStore : IProjectionStore, IProjectionCheckpointStore, IConditionalProjectionCheckpointStore
     {
         readonly ConcurrentDictionary<CheckpointIdentity, ProjectionCheckpoint> _checkpoints = new();
 
@@ -270,6 +270,16 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
         public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
             CancellationToken ct = default)
         {
+            _checkpoints[identity] = checkpoint;
+            return ValueTask.CompletedTask;
+        }
+
+        ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
+            ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (_checkpoints.GetValueOrDefault(identity) != expected)
+                throw new ProjectionConcurrencyException("stale checkpoint");
             _checkpoints[identity] = checkpoint;
             return ValueTask.CompletedTask;
         }

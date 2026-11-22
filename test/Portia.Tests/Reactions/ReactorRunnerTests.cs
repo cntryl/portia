@@ -56,6 +56,56 @@ public sealed class ReactorRunnerTests
         Assert.Equal(checkpoint, nextCheckpoint);
     }
 
+    /// <summary>Rejects an older pass after a newer owner has advanced the checkpoint.</summary>
+    [Fact]
+    public async Task ShouldRejectStaleCheckpointWriterGivenConcurrentPasses()
+    {
+        // Arrange
+        var store = new InMemoryProjectionCheckpointStore();
+        var identity = new CheckpointIdentity("reactor", EventStreamPattern.ForPattern("test"));
+        var expected = ProjectionCheckpoint.Start;
+        var winner = new ProjectionCheckpoint(new EventCursor("2"));
+        var stale = new ProjectionCheckpoint(new EventCursor("1"));
+
+        // Act
+        await ((IConditionalProjectionCheckpointStore)store).SaveAsync(identity, expected, winner,
+            TestContext.Current.CancellationToken);
+        var exception = await Record.ExceptionAsync(() =>
+            ((IConditionalProjectionCheckpointStore)store).SaveAsync(identity, expected, stale,
+                TestContext.Current.CancellationToken).AsTask());
+
+        // Assert
+        Assert.IsType<ProjectionConcurrencyException>(exception);
+        Assert.Equal(winner, await store.LoadAsync(identity, TestContext.Current.CancellationToken));
+    }
+
+    /// <summary>An unsupported checkpoint store is rejected before reactor effects run.</summary>
+    [Fact]
+    public async Task ShouldSkipReactorInvocationGivenUnsupportedCheckpointStore()
+    {
+        // Arrange
+        var runner = new ReactorRunner(await StoreValuesAsync(1));
+        var reactor = new RecordingBatchReactor(new UnconditionalCheckpointStore());
+
+        // Act
+        var failure = await Record.ExceptionAsync(() => runner.RunAsync(reactor, ProjectionCheckpoint.Start,
+            ct: TestContext.Current.CancellationToken).AsTask());
+
+        // Assert
+        Assert.Empty(reactor.BatchSizes);
+        var error = Assert.IsType<InvalidOperationException>(failure);
+        Assert.Contains(nameof(IConditionalProjectionCheckpointStore), error.Message, StringComparison.Ordinal);
+    }
+
+    sealed class UnconditionalCheckpointStore : IProjectionCheckpointStore
+    {
+        public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
+            => ValueTask.FromResult(ProjectionCheckpoint.Start);
+
+        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+            => ValueTask.CompletedTask;
+    }
+
     /// <summary>The legacy integer overload preserves its public parameter name on validation.</summary>
     [Theory]
     [InlineData(0)]
@@ -283,7 +333,7 @@ public sealed class ReactorRunnerTests
         return store;
     }
 
-    sealed class RecordingCheckpointStore : IProjectionCheckpointStore
+    sealed class RecordingCheckpointStore : IProjectionCheckpointStore, IConditionalProjectionCheckpointStore
     {
         ProjectionCheckpoint _checkpoint;
 
@@ -296,6 +346,17 @@ public sealed class ReactorRunnerTests
             CancellationToken ct = default)
         {
             ct.ThrowIfCancellationRequested();
+            _checkpoint = checkpoint;
+            SavedCursors.Add(checkpoint.Cursor.ToString());
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint expected,
+            ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (_checkpoint != expected)
+                throw new ProjectionConcurrencyException("stale checkpoint");
             _checkpoint = checkpoint;
             SavedCursors.Add(checkpoint.Cursor.ToString());
             return ValueTask.CompletedTask;

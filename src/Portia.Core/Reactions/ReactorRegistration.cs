@@ -49,8 +49,14 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
     // A reactor's checkpoint store serves every reactor, so there is no per-component binding to check.
     void IWorkloadDescriptor.Validate(IServiceProvider services, string componentName)
     {
+        var checkpoints = _resolve(services).Checkpoints;
+        if (checkpoints is not IConditionalProjectionCheckpointStore
+            && services.GetService<IOperationalStore>() is null)
+            throw new InvalidOperationException(
+                $"Reactor '{componentName}' requires a checkpoint store implementing " +
+                $"{nameof(IConditionalProjectionCheckpointStore)} for conditional compare-and-advance saves.");
         if (services.GetService<IOperationalStore>() is not null
-            && !ReferenceEquals(_resolve(services).Checkpoints,
+            && !ReferenceEquals(checkpoints,
                 services.GetService<IOperationalReactionCheckpointStore>()))
             throw new InvalidOperationException(
                 "Operational reactors must use the registered operational checkpoint store.");
@@ -73,7 +79,7 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
         var checkpoint = await ProcessorCheckpoints.LoadAsync(reactor.Checkpoints,
             new CheckpointIdentity(reactor.Name, reactor.Pattern), ct).ConfigureAwait(false);
         return await services.GetRequiredService<ReactorRunner>().ExecutePassAsync(
-                services.GetService<OperationalExecution>()?.Session, reactor, checkpoint, options, ct)
+                services.GetService<OperationalExecution>()?.Session, reactor, checkpoint, options, ct: ct)
             .ConfigureAwait(false);
     }
 
