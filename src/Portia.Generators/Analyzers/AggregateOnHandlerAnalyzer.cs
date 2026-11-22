@@ -86,7 +86,7 @@ public sealed class AggregateOnHandlerAnalyzer : DiagnosticAnalyzer
                  && handler.DeclaringSyntaxReferences[0].GetSyntax(context.CancellationToken) is
                      MethodDeclarationSyntax)
         {
-            registeredHandlers.TryAdd(handler, 0);
+            registeredHandlers.TryAdd(handler.OriginalDefinition, 0);
             return;
         }
         else
@@ -106,13 +106,20 @@ public sealed class AggregateOnHandlerAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol? genericResultType, ConcurrentDictionary<IMethodSymbol, Location> findings)
     {
         var syntax = (MethodDeclarationSyntax)context.Node;
+        if (syntax.ReturnType is not PredefinedTypeSyntax
+            { Keyword.RawKind: (int)SyntaxKind.VoidKeyword }
+            || syntax.ParameterList.Parameters.Count != 1
+            || syntax.ParameterList.Parameters[0].Modifiers.Any(static modifier =>
+                modifier.IsKind(SyntaxKind.RefKeyword) || modifier.IsKind(SyntaxKind.OutKeyword)
+                || modifier.IsKind(SyntaxKind.InKeyword)))
+            return;
         if (context.SemanticModel.GetDeclaredSymbol(syntax, context.CancellationToken) is not IMethodSymbol method
             || syntax.Body is null && syntax.ExpressionBody is null)
             return;
         var handlerBody = (SyntaxNode?)syntax.Body ?? syntax.ExpressionBody!.Expression;
         if (FindDecision(handlerBody, context.SemanticModel, resultType, genericResultType,
                 context.CancellationToken) is { } decision)
-            findings.TryAdd(method, decision.GetLocation());
+            findings.TryAdd(method.OriginalDefinition, decision.GetLocation());
     }
 
     static SyntaxNode? FindDecision(SyntaxNode body, SemanticModel semanticModel, INamedTypeSymbol? resultType,

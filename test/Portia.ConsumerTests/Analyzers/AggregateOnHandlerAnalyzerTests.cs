@@ -102,6 +102,56 @@ public sealed class AggregateOnHandlerAnalyzerTests
         Assert.Single(diagnostics, static item => item.Id == "PORTIA108");
     }
 
+    /// <summary>A broader event parameter remains a valid contravariant method-group handler.</summary>
+    [Fact]
+    public void ShouldWarnAboutContravariantMethodGroupGivenRegisteredHandler()
+    {
+        // Arrange
+        const string source = Prefix + """
+            public sealed class Order : Aggregate
+            {
+                public Order(Uuid id) : base(id, new EventStreamAddress("shop", "orders", id.ToString()))
+                {
+                    On<Changed>(Apply);
+                }
+                public int Value { get; private set; }
+                void Apply(DomainEvent e) { _ = Result.Failure(RequestError.Validation("invalid")); }
+            }
+            """;
+
+        // Act
+        var diagnostics = Analyze(source);
+
+        // Assert
+        Assert.Single(diagnostics, static item => item.Id == "PORTIA108");
+    }
+
+    /// <summary>A constructed generic handler method group is matched to its declaration.</summary>
+    [Fact]
+    public void ShouldWarnAboutConstructedGenericMethodGroupGivenRegisteredHandler()
+    {
+        // Arrange
+        const string source = Prefix + """
+            public sealed class Order : Aggregate
+            {
+                public Order(Uuid id) : base(id, new EventStreamAddress("shop", "orders", id.ToString()))
+                {
+                    On<Changed>(Apply);
+                }
+                void Apply<TEvent>(TEvent e) where TEvent : DomainEvent
+                {
+                    _ = Result<int>.Failure(RequestError.Validation("invalid"));
+                }
+            }
+            """;
+
+        // Act
+        var diagnostics = Analyze(source);
+
+        // Assert
+        Assert.Single(diagnostics, static item => item.Id == "PORTIA108");
+    }
+
     /// <summary>A generic Result-returning invocation in a registered handler is also reported.</summary>
     [Fact]
     public void ShouldWarnAboutGenericResultCallGivenRegisteredInlineHandler()
