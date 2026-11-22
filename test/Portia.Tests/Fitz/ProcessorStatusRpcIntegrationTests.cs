@@ -138,6 +138,51 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
         }
     }
 
+    /// <summary>Preserves partial status when an owned endpoint times out probing source progress.</summary>
+    [Fact]
+    public async Task ShouldReturnOwnedPartialStatusGivenSourceProbeTimeout()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        await using var connection = await broker.CreateClientAsync();
+        var application = "status-" + Uuid.CreateVersion4();
+        var services = new ServiceCollection();
+        _ = services.AddSingleton<IConfiguration>(new ConfigurationBuilder().AddInMemoryCollection(
+            new Dictionary<string, string?> { ["PORTIA_SYSTEM_ADMIN_ROLE"] = "platform-operators" }).Build());
+        _ = services.AddSingleton<StatusStore>();
+        _ = services.AddSingleton<StatusControl>();
+        _ = services.AddSingleton<IRequestActorValidator, StatusActorValidator>();
+        _ = services.AddSingleton<IDomainEventProgressReader, WaitingStatusProbe>();
+        _ = services.AddPortia()
+            .UseFitzClient(connection, fitz => fitz.DisableRequestWorkers().UseProcessorStatusRpc(application))
+            .AddProjector<StatusProjector>(StatusControl.ProjectorName, WorkloadScope.Global);
+        await using var provider = services.BuildServiceProvider();
+        await using var endpoint = await provider.GetRequiredService<IProcessorStatusRpcRegistrar>()
+            .RegisterAsync(new WorkloadIdentity(StatusControl.ProjectorName), ct);
+        var client = provider.GetRequiredService<IProcessorStatusClient>();
+        Result<ProcessorStatus> status = default;
+
+        // Act
+        var error = await Record.ExceptionAsync(async () =>
+            status = await client.GetAsync(StatusControl.ProjectorName, actorToken: "global", ct: ct));
+
+        // Assert
+        Assert.Null(error);
+        Assert.True(status.IsSuccess);
+        Assert.Equal("Timeout", status.Value.SourceError);
+        Assert.NotNull(status.Value.Progress);
+    }
+
+    sealed class WaitingStatusProbe : IDomainEventProgressReader
+    {
+        public async ValueTask<EventStreamProgress> GetProgressAsync(EventStreamPattern pattern,
+            EventCursor position, CancellationToken ct = default)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            throw new InvalidOperationException("The status probe should reach its timeout.");
+        }
+    }
+
     static async Task<ProcessorStatus> WaitForCaughtUpAsync(IProcessorStatusClient client, string processor)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));

@@ -9,7 +9,8 @@ sealed class FitzProcessorStatusClient(IRemoteRequestSender sender, Func<string>
         var workload = new WorkloadIdentity(processor, tenant);
         var request = new GetProcessorStatus(processor, tenant?.Value);
         var statusNamespace = application();
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2), clock ?? TimeProvider.System);
+        using var timeout = new CancellationTokenSource(ProcessorStatusTimeouts.OwnerResponse,
+            clock ?? TimeProvider.System);
         using var ownerDeadline = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
         try
         {

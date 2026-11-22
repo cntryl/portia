@@ -202,8 +202,9 @@ var result = await status.GetAsync("AccountBalanceProjector", tenant, actorToken
 For status during worker outages, enable `fitz.AddProcessorStatusReader()` on a separately hosted
 operator service. Register the same workloads, checkpoint repositories, and Fitz application or
 fleet on that service. The reader runs without `AddWorkers()`. The client first tries the owning
-worker for live evidence. If the owner route is unavailable, backpressured, or does not answer
-within two seconds, the client tries the independent reader within the caller's deadline.
+worker for live evidence. The owner response budget covers the four two-second probes and allows
+another second to return partial evidence. If the owner route is unavailable, backpressured, or
+exceeds that budget, the client tries the independent reader within the caller's deadline.
 Authentication and authorization failures remain ordinary request results.
 
 Pass `null` for the tenant of a global component. Client and worker use the same Fitz application

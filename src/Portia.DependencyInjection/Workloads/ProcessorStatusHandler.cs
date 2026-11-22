@@ -178,7 +178,7 @@ sealed class ProcessorStatusHandler(
 
     async ValueTask<Observation<T>> ObserveAsync<T>(Func<CancellationToken, ValueTask<T>> read, CancellationToken ct)
     {
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2), _clock);
+        using var timeout = new CancellationTokenSource(ProcessorStatusTimeouts.Probe, _clock);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
         try
         {
