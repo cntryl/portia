@@ -67,6 +67,9 @@ public sealed class ProcessorFailureException : Exception
     /// <summary>Gets the operation that failed.</summary>
     public ProcessorFailureStage Stage { get; }
 
+    // A provider call was issued without a response that establishes whether it committed.
+    internal bool CommitOutcomeUnknown { get; set; }
+
     /// <summary>Gets the first source record of the failed batch, when available.</summary>
     public DomainEventRecord? FirstSource { get; }
 

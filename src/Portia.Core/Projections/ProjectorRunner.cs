@@ -165,6 +165,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
                                      : ex);
             outcomeUnknown = stage == ProcessorFailureStage.Committing &&
                              diagnostic.InnerException is not ProjectionConcurrencyException;
+            diagnostic.CommitOutcomeUnknown = outcomeUnknown;
             outcome = outcomeUnknown ? "commit_unknown" : "fault";
             failure = diagnostic;
         }

@@ -182,6 +182,7 @@ public sealed class ReactorRunner(
                                   contexts[0].Source, contexts[^1].Source, UninitializedResult.Is(exception)
                                       ? UninitializedResult.ReturnedBy("reactor", reactor.ComponentType, exception)
                                       : exception);
+                failure.CommitOutcomeUnknown = outcomeUnknown;
                 if (session is { } operations)
                     await operations.RecordFailureAsync(failure, null, ct, outcomeUnknown).ConfigureAwait(false);
                 throw failure;
