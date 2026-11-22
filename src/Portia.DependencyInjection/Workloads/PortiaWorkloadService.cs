@@ -298,10 +298,6 @@ sealed class PortiaWorkloadService(
                                     registration.MaximumFailureDelay.Ticks), null, ct).ConfigureAwait(false);
                             operationalSession = session;
                         }
-                    }
-
-                    if (operationalStore is not null)
-                    {
                         operationalSession!.BeginPass();
                         var checkpoint = await registration.Descriptor.LoadCheckpoint(provider, processing, ct)
                             .ConfigureAwait(false);
@@ -377,30 +373,26 @@ sealed class PortiaWorkloadService(
                     }
                 }
 
+                ProjectionCheckpoint? confirmedCleanupCheckpoint = null;
                 if (passFailure is null && scopeCleanupFailure is not null)
                 {
-                    var cleanup = new ProcessorFailureException(
+                    if (!skipPass && startingCheckpoint is { } start && pass.Checkpoint != start)
+                        confirmedCleanupCheckpoint = pass.Checkpoint;
+                    passFailure = new ProcessorFailureException(
                         new CheckpointIdentity(identity.Name, passPattern!, processing.RebuildId),
-                        startingCheckpoint is { } start && pass.Checkpoint != start ? pass.Checkpoint : null,
+                        confirmedCleanupCheckpoint,
                         ProcessorFailureStage.Disposing, innerException: scopeCleanupFailure);
-                    passFailure = cleanup;
                 }
 
                 if (passFailure is not null)
                 {
                     failed = true;
-                    if (scopeCleanupFailure is not null && !ReferenceEquals(passFailure, scopeCleanupFailure))
+                    if (scopeCleanupFailure is not null && !ReferenceEquals(passFailure.InnerException, scopeCleanupFailure))
                         ProcessorFailureException.RecordCleanup(passFailure, scopeCleanupFailure);
                     if (operationalSession is not null)
                     {
-                        var committed = passFailure is ProcessorFailureException cleanupDiagnostic
-                                         && cleanupDiagnostic.Checkpoint is not null
-                                         && startingCheckpoint is { } start
-                                         && cleanupDiagnostic.Checkpoint != start
-                            ? cleanupDiagnostic.Checkpoint
-                            : null;
                         await operationalSession.RecordFailureAsync(passFailure,
-                            scopeCleanupFailure is not null ? committed : null, ct).ConfigureAwait(false);
+                            confirmedCleanupCheckpoint, ct).ConfigureAwait(false);
                         consecutiveFailures = operationalSession.State.ConsecutiveFailures;
                     }
                     else
