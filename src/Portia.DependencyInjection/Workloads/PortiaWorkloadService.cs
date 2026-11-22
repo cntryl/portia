@@ -254,10 +254,13 @@ sealed class PortiaWorkloadService(
                 var pass = default(ProjectionPassResult);
                 var processing = registration.Processing;
                 EventStreamPattern? passPattern = null;
-                var scope = scopes.CreateAsyncScope();
-                var provider = scope.ServiceProvider;
+                ProjectionCheckpoint? startingCheckpoint = null;
+                var skipPass = false;
+                AsyncServiceScope? scope = null;
                 try
                 {
+                    scope = scopes.CreateAsyncScope();
+                    var provider = scope.Value.ServiceProvider;
                     provider.GetRequiredService<WorkloadContext>().Initialize(identity, registration.Name);
                     registration.Descriptor.Bind(provider, identity, registration.Name);
                     passPattern = registration.Descriptor.Pattern(provider);
@@ -284,33 +287,38 @@ sealed class PortiaWorkloadService(
                     {
                         if (operationalSession is null)
                         {
-                            operationalSession = new OperationalSession(operationalStore, operationalOptions!,
+                            var session = new OperationalSession(operationalStore, operationalOptions!,
                                 topology!, _clock);
                             var target = new OperationalTarget(registration.Name, passPattern.ToString(),
                                 new OperationalScope(identity.Tenant?.Value), processing.RebuildId);
-                            await operationalSession.AcquireAsync(target,
+                            await session.AcquireAsync(target,
                                 registration.Descriptor.Kind,
                                 new OperationalProcessingSettings(processing.MaxBatchSize, processing.MaxEventsPerPass,
                                     registration.FailureAttemptLimit, registration.PollInterval.Ticks,
                                     registration.MaximumFailureDelay.Ticks), null, ct).ConfigureAwait(false);
+                            operationalSession = session;
                         }
-
-                        operationalSession.BeginPass();
-                        var checkpoint = await registration.Descriptor.LoadCheckpoint(provider, processing, ct)
-                            .ConfigureAwait(false);
-                        if (!await operationalSession.PrepareAsync(checkpoint, ct).ConfigureAwait(false))
-                        {
-                            await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false);
-                            continue;
-                        }
-
-                        provider.GetRequiredService<OperationalExecution>().Session = operationalSession;
-                        processing = operationalSession.BoundOptions(processing);
-                        consecutiveFailures = operationalSession.State.ConsecutiveFailures;
                     }
 
-                    pass = await registration.Descriptor.RunPass(provider, processing, ct)
-                        .ConfigureAwait(false);
+                    if (operationalStore is not null)
+                    {
+                        operationalSession!.BeginPass();
+                        var checkpoint = await registration.Descriptor.LoadCheckpoint(provider, processing, ct)
+                            .ConfigureAwait(false);
+                        startingCheckpoint = checkpoint;
+                        if (!await operationalSession.PrepareAsync(checkpoint, ct).ConfigureAwait(false))
+                            skipPass = true;
+
+                        if (!skipPass)
+                        {
+                            provider.GetRequiredService<OperationalExecution>().Session = operationalSession;
+                            processing = operationalSession.BoundOptions(processing);
+                            consecutiveFailures = operationalSession.State.ConsecutiveFailures;
+                        }
+                    }
+                    if (!skipPass)
+                        pass = await registration.Descriptor.RunPass(provider, processing, ct)
+                            .ConfigureAwait(false);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
@@ -324,7 +332,8 @@ sealed class PortiaWorkloadService(
                 {
                     try
                     {
-                        await scope.DisposeAsync().ConfigureAwait(false);
+                        if (scope is { } owned)
+                            await owned.DisposeAsync().ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
@@ -338,6 +347,20 @@ sealed class PortiaWorkloadService(
                         PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Cleanup,
                             scopeCleanupFailure, _logger);
                     break;
+                }
+
+                if (skipPass && passFailure is null && scopeCleanupFailure is null)
+                {
+                    try
+                    {
+                        await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    continue;
                 }
 
                 if (passFailure is null && scopeCleanupFailure is null)
@@ -357,7 +380,8 @@ sealed class PortiaWorkloadService(
                 if (passFailure is null && scopeCleanupFailure is not null)
                 {
                     var cleanup = new ProcessorFailureException(
-                        new CheckpointIdentity(identity.Name, passPattern!, processing.RebuildId), pass.Checkpoint,
+                        new CheckpointIdentity(identity.Name, passPattern!, processing.RebuildId),
+                        startingCheckpoint is { } start && pass.Checkpoint != start ? pass.Checkpoint : null,
                         ProcessorFailureStage.Disposing, innerException: scopeCleanupFailure);
                     passFailure = cleanup;
                 }
@@ -369,10 +393,14 @@ sealed class PortiaWorkloadService(
                         ProcessorFailureException.RecordCleanup(passFailure, scopeCleanupFailure);
                     if (operationalSession is not null)
                     {
+                        var committed = passFailure is ProcessorFailureException cleanupDiagnostic
+                                         && cleanupDiagnostic.Checkpoint is not null
+                                         && startingCheckpoint is { } start
+                                         && cleanupDiagnostic.Checkpoint != start
+                            ? cleanupDiagnostic.Checkpoint
+                            : null;
                         await operationalSession.RecordFailureAsync(passFailure,
-                            scopeCleanupFailure is not null && passFailure is ProcessorFailureException cleanupDiagnostic
-                                ? cleanupDiagnostic.Checkpoint
-                                : null, ct).ConfigureAwait(false);
+                            scopeCleanupFailure is not null ? committed : null, ct).ConfigureAwait(false);
                         consecutiveFailures = operationalSession.State.ConsecutiveFailures;
                     }
                     else
