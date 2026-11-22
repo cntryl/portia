@@ -18,15 +18,15 @@
  PORTIA201 | PortiaStructure | Warning  | Application filenames identify their type, using OfT for generics
  PORTIA202 | PortiaStructure | Warning  | Application namespaces follow folders
  PORTIA203 | PortiaStructure | Warning  | Common and Core use closed feature roles with supported shared Core folders, feature Events, and nested role areas
- PORTIA204 | PortiaStructure | Warning  | Components and support types belong in their feature role folders; execution guards, action and operation catalogs, aggregate roots and directly owned collaborators, and immutable record values follow their application roles
+ PORTIA204 | PortiaStructure | Warning  | Components belong in their feature role folders; Api/Worker contain composition, and each entity in Aggregates/Entities has exactly one same-feature aggregate owner
  PORTIA205 | PortiaStructure | Warning  | Each request handler handles one command or query
- PORTIA206 | PortiaStructure | Warning  | Common and Core respect application and infrastructure dependency boundaries
+ PORTIA206 | PortiaStructure | Warning  | Application projects respect application and infrastructure dependency boundaries; Api and Worker do not reference each other
  PORTIA207 | PortiaStructure | Warning  | Core component registrations belong in one feature registration file
- PORTIA208 | PortiaStructure | Warning  | Aggregate files over 400 lines should use composition to stay reviewable
+ PORTIA208 | PortiaStructure | Warning  | Aggregate files over 400 lines start review with invariants and their owners, then consider composition or child entities
  PORTIA209 | PortiaStructure | Warning  | Common contracts do not declare executable behavior
  PORTIA210 | PortiaStructure | Warning  | Contracts use feature.name snake_case discriminators with explicit positive versions
  PORTIA211 | PortiaStructure | Warning  | Command handlers must not be NotImplementedException stubs
- PORTIA212 | PortiaStructure | Warning  | Queries and reactors must not hydrate aggregates
+ PORTIA212 | PortiaStructure | Warning  | Queries and reactors must not reach aggregate hydration through statically bound calls in the same compilation
  PORTIA213 | PortiaStructure | Warning  | Application projects use Common, Core, Api, or Worker roles
 
 ## Release 0.8.0

@@ -56,6 +56,9 @@ public sealed class ApplicationBoundaryAnalyzerTests
     [InlineData("Shop.Core", "Portia.Communications.Azure", true)]
     [InlineData("Shop.Core", "Portia.Communications.Twilio", true)]
     [InlineData("Shop.Api", "Cntryl.Portia.Cassie", false)]
+    [InlineData("Shop.Api", "Shop.Worker", true)]
+    [InlineData("Shop.Worker", "Shop.Api", true)]
+    [InlineData("Shop.Worker", "Shop.Common", false)]
     public void ShouldEnforceBoundaryGivenProjectReference(string project, string dependency, bool forbidden)
     {
         // Arrange
@@ -68,6 +71,24 @@ public sealed class ApplicationBoundaryAnalyzerTests
         // Assert
         Assert.Equal(forbidden ? 1 : 0, diagnostics.Length);
         Assert.All(diagnostics, item => Assert.Equal("PORTIA206", item.Id));
+    }
+
+    [Theory]
+    [InlineData("Shop.Api", "Shop.Worker", "Shop.Api")]
+    [InlineData("Shop.Worker", "Shop.Api", "Shop.Worker")]
+    [InlineData("Shop.Api", "Example.Shop.Worker", "Example.Shop.Api")]
+    public void ShouldRejectSiblingHostReferenceGivenApplicationPrefix(string project, string dependency,
+        string assemblyName)
+    {
+        // Arrange
+        var reference = GeneratorCompilation.ReferenceNamed(dependency, "public class Dependency;");
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze(project, new ApplicationBoundaryAnalyzer(),
+            [("Values/Dependency.cs", "public class Consumer;")], references: [reference], assemblyName: assemblyName);
+
+        // Assert
+        _ = Assert.Single(diagnostics, item => item.Id == "PORTIA206");
     }
 
     [Theory]
@@ -226,6 +247,99 @@ public sealed class ApplicationBoundaryAnalyzerTests
 
         // Assert
         _ = Assert.Single(diagnostics, item => item.Id == "PORTIA212");
+    }
+
+    [Fact]
+    public void ShouldReportIndirectHydrationGivenQueryCallsSameCompilationRepository()
+    {
+        // Arrange
+        const string request = "namespace Shop.Common.Features.Orders.Queries; public record FindOrder : Cntryl.Portia.IRequest;";
+        const string source = """
+                            using Cntryl.Portia;
+                            using System.Threading;
+                            using System.Threading.Tasks;
+                            using Shop.Common.Features.Orders.Queries;
+                            public class FindOrderHandler(OrderRepository repository) : IRequestHandler<FindOrder>
+                            {
+                                public ValueTask<Result> HandleAsync(IRequestContext<FindOrder> context, CancellationToken ct)
+                                    => repository.FindAsync(ct);
+                            }
+                            public class OrderRepository(IAggregateReader reader)
+                            {
+                                public async ValueTask<Result> FindAsync(CancellationToken ct)
+                                {
+                                    await reader.HydrateAsync<Aggregate>(null, ct);
+                                    return Result.Success;
+                                }
+                            }
+                            """;
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationBoundaryAnalyzer(),
+            [("Features/Orders/Handlers/FindOrderHandler.cs", source)],
+            references: [GeneratorCompilation.ReferenceNamed("Shop.Common", request)]);
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA212");
+        Assert.StartsWith("repository.FindAsync", source.Substring(diagnostic.Location.SourceSpan.Start),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShouldAllowUnresolvedInterfaceRepositoryGivenQuery()
+    {
+        // Arrange
+        var request = GeneratorCompilation.ReferenceNamed("Shop.Common",
+            "namespace Shop.Common.Features.Orders.Queries; public record FindOrder : Cntryl.Portia.IRequest;");
+        const string source = """
+                            using Cntryl.Portia;
+                            using System.Threading;
+                            using System.Threading.Tasks;
+                            using Shop.Common.Features.Orders.Queries;
+                            public interface IOrderRepository { ValueTask<Result> FindAsync(CancellationToken ct); }
+                            public class FindOrderHandler(IOrderRepository repository) : IRequestHandler<FindOrder>
+                            {
+                                public ValueTask<Result> HandleAsync(IRequestContext<FindOrder> context, CancellationToken ct)
+                                    => repository.FindAsync(ct);
+                            }
+                            """;
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationBoundaryAnalyzer(),
+            [("Features/Orders/Handlers/FindOrderHandler.cs", source)], references: [request]);
+
+        // Assert
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA212");
+    }
+
+    [Fact]
+    public void ShouldAllowProjectionReadGivenSameCompilationRepository()
+    {
+        // Arrange
+        var request = GeneratorCompilation.ReferenceNamed("Shop.Common",
+            "namespace Shop.Common.Features.Orders.Queries; public record FindOrder : Cntryl.Portia.IRequest;");
+        const string source = """
+                            using Cntryl.Portia;
+                            using System.Threading;
+                            using System.Threading.Tasks;
+                            using Shop.Common.Features.Orders.Queries;
+                            public class FindOrderHandler(OrderRepository repository) : IRequestHandler<FindOrder>
+                            {
+                                public ValueTask<Result> HandleAsync(IRequestContext<FindOrder> context, CancellationToken ct)
+                                    => repository.FindAsync(ct);
+                            }
+                            public class OrderRepository
+                            {
+                                public ValueTask<Result> FindAsync(CancellationToken ct) => ValueTask.FromResult(Result.Success);
+                            }
+                            """;
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationBoundaryAnalyzer(),
+            [("Features/Orders/Handlers/FindOrderHandler.cs", source)], references: [request]);
+
+        // Assert
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA212");
     }
 
     [Theory]

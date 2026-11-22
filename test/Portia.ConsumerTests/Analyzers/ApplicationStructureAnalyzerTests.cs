@@ -3,6 +3,151 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ApplicationStructureAnalyzerTests
 {
     [Fact]
+    public void ShouldAcceptSingleAggregateOwnerGivenEntityStoredThroughGenericCollection()
+    {
+        // Arrange
+        const string root = """
+                            using System.Collections.Generic;
+                            using OrderLines = Shop.Core.Features.Orders.Aggregates.Entities.OrderLine;
+                            using Cntryl.Portia;
+                            namespace Shop.Core.Features.Orders.Aggregates;
+                            public sealed class Order(Uuid id) : Aggregate(id, new EventStreamAddress("shop", "orders", id.ToString()))
+                            {
+                                private List<OrderLines[]> Lines { get; } = new();
+                            }
+                            """;
+        const string entity = "namespace Shop.Core.Features.Orders.Aggregates.Entities; public sealed class OrderLine;";
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+        [
+            ("Features/Orders/Aggregates/Order.cs", root),
+            ("Features/Orders/Aggregates/Entities/OrderLine.cs", entity)
+        ]);
+
+        // Assert
+        Assert.DoesNotContain(diagnostics, item => item.Id is "PORTIA204" or "PORTIA203");
+    }
+
+    [Fact]
+    public void ShouldCountPartialAggregateOnceGivenEntityStorageInOnePart()
+    {
+        // Arrange
+        const string root = "using Cntryl.Portia; using Shop.Core.Features.Orders.Aggregates.Entities; namespace Shop.Core.Features.Orders.Aggregates; public sealed partial class Order(Uuid id) : Aggregate(id, new EventStreamAddress(\"shop\", \"orders\", id.ToString())) { private OrderLine _line = new(); }";
+        const string otherPart = "namespace Shop.Core.Features.Orders.Aggregates; public sealed partial class Order { private int _version; }";
+        const string entity = "namespace Shop.Core.Features.Orders.Aggregates.Entities; public sealed class OrderLine;";
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+        [
+            ("Features/Orders/Aggregates/Order.cs", root),
+            ("Features/Orders/Aggregates/Order.Persistence.cs", otherPart),
+            ("Features/Orders/Aggregates/Entities/OrderLine.cs", entity)
+        ]);
+
+        // Assert
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA204");
+    }
+
+    [Fact]
+    public void ShouldRequireConcreteAggregateOwnerGivenEntityStoredByAbstractRoot()
+    {
+        // Arrange
+        const string root = "using Cntryl.Portia; using Shop.Core.Features.Orders.Aggregates.Entities; namespace Shop.Core.Features.Orders.Aggregates; public abstract class OrderBase(Uuid id) : Aggregate(id, new EventStreamAddress(\"shop\", \"orders\", id.ToString())) { protected OrderLine Line { get; } = new(); }";
+        const string entity = "namespace Shop.Core.Features.Orders.Aggregates.Entities; public sealed class OrderLine;";
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+        [
+            ("Features/Orders/Aggregates/OrderBase.cs", root),
+            ("Features/Orders/Aggregates/Entities/OrderLine.cs", entity)
+        ]);
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
+        Assert.Contains("orphan", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ShouldCountInheritedEntityStorageGivenConcreteAggregateRoot()
+    {
+        // Arrange
+        const string root = "using Cntryl.Portia; using Shop.Core.Features.Orders.Aggregates.Entities; namespace Shop.Core.Features.Orders.Aggregates; public abstract class OrderBase(Uuid id) : Aggregate(id, new EventStreamAddress(\"shop\", \"orders\", id.ToString())) { protected OrderLine Line { get; } = new(); } public sealed class Order(Uuid id) : OrderBase(id);";
+        const string entity = "namespace Shop.Core.Features.Orders.Aggregates.Entities; public sealed class OrderLine;";
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+        [
+            ("Features/Orders/Aggregates/OrderBase.cs", root),
+            ("Features/Orders/Aggregates/Entities/OrderLine.cs", entity)
+        ]);
+
+        // Assert
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA204");
+    }
+
+    [Fact]
+    public void ShouldRejectEventContractGivenAggregateEntityFolder()
+    {
+        // Arrange
+        const string root = "using Cntryl.Portia; using Shop.Core.Features.Orders.Aggregates.Entities; namespace Shop.Core.Features.Orders.Aggregates; public sealed class Order(Uuid id) : Aggregate(id, new EventStreamAddress(\"shop\", \"orders\", id.ToString())) { private OrderLineChanged _event = new(); }";
+        const string eventType = "namespace Shop.Core.Features.Orders.Aggregates.Entities; public sealed record OrderLineChanged : Cntryl.Portia.DomainEvent;";
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+        [
+            ("Features/Orders/Aggregates/Order.cs", root),
+            ("Features/Orders/Aggregates/Entities/OrderLineChanged.cs", eventType)
+        ]);
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
+        Assert.Contains("events", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData(false, "orphan")]
+    [InlineData(true, "multiple owners")]
+    public void ShouldRejectInvalidEntityOwnershipGivenAggregateFeature(bool twoOwners, string reason)
+    {
+        // Arrange
+        const string entity = "namespace Shop.Core.Features.Orders.Aggregates.Entities; public sealed class OrderLine;";
+        var roots = new List<(string Path, string Source)>();
+        if (twoOwners)
+        {
+            roots.Add(("Features/Orders/Aggregates/Order.cs", "using Cntryl.Portia; using Shop.Core.Features.Orders.Aggregates.Entities; namespace Shop.Core.Features.Orders.Aggregates; public sealed class Order(Uuid id) : Aggregate(id, new EventStreamAddress(\"shop\", \"orders\", id.ToString())) { private OrderLine _line = new(); }"));
+            roots.Add(("Features/Orders/Aggregates/OtherOrder.cs", "using Cntryl.Portia; using Shop.Core.Features.Orders.Aggregates.Entities; namespace Shop.Core.Features.Orders.Aggregates; public sealed class OtherOrder(Uuid id) : Aggregate(id, new EventStreamAddress(\"shop\", \"orders\", id.ToString())) { private OrderLine _line = new(); }"));
+        }
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            roots.Append(("Features/Orders/Aggregates/Entities/OrderLine.cs", entity)).ToArray());
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
+        Assert.Contains(reason, diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ShouldRejectAggregateRootGivenEntitiesFolder()
+    {
+        // Arrange
+        const string source = "using Cntryl.Portia; namespace Shop.Core.Features.Orders.Aggregates.Entities; public sealed class Order(Uuid id) : Aggregate(id, new EventStreamAddress(\"shop\", \"orders\", id.ToString()));";
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Aggregates/Entities/Order.cs", source)]);
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
+        Assert.Contains("root", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ShouldRejectRootHelperGivenJsonMarkerWithoutContextContract()
     {
         // Arrange
@@ -14,6 +159,22 @@ public sealed class ApplicationStructureAnalyzerTests
 
         // Assert
         Assert.Contains(diagnostics, item => item.Id == "PORTIA203");
+    }
+
+    [Fact]
+    public void ShouldRejectAuthoredNestedAggregateGivenApiCompositionAndAcceptCompositionType()
+    {
+        // Arrange
+        const string source = "using Cntryl.Portia; namespace Shop.Api; public sealed class Program { public sealed class Order(Uuid id) : Aggregate(id, new EventStreamAddress(\"shop\", \"orders\", id.ToString())); } public sealed class Routes;";
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Api", new ApplicationStructureAnalyzer(),
+            [("Program.cs", source)]);
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
+        Assert.Contains("Core", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
+            StringComparison.Ordinal);
     }
 
     [Fact]

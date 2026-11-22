@@ -33,7 +33,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         DiagnosticSeverity.Warning, true);
 
     static readonly DiagnosticDescriptor AggregateSize = new("PORTIA208", "Aggregate file exceeds the review budget",
-        "Aggregate file '{0}' exceeds 400 lines; compose smaller rule or state objects to keep the aggregate reviewable",
+        "Aggregate file '{0}' exceeds 400 lines; start with invariants and their owners, then compose or extract a child with its own identity and lifecycle when it shares an atomic rule with the root",
         "PortiaStructure", DiagnosticSeverity.Warning, true);
 
     static readonly DiagnosticDescriptor ProjectRole = new("PORTIA213", "Unsupported application project role",
@@ -82,6 +82,18 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         var declarations = root.DescendantNodes()
             .Where(node => node is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax)
             .Where(node => node.Parent is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax).ToArray();
+        if (!project.IsTest && project.Role is "Api" or "Worker")
+        {
+            foreach (var declaration in root.DescendantNodes().Where(node => node is BaseTypeDeclarationSyntax))
+            {
+                if (context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is not INamedTypeSymbol type
+                    || !(ApplicationProject.IsRequest(type) || ApplicationProject.DerivesFrom(type, "DomainEvent")
+                         || ApplicationProject.DerivesFrom(type, "Aggregate") || PortiaComponentRoles.IsComponent(type)))
+                    continue;
+                context.ReportDiagnostic(Diagnostic.Create(FolderRole, Identifier(declaration).GetLocation(), type.Name,
+                    project.Role, "hosts compose application features; authored aggregates, contracts, and Portia business components belong in Common or Core"));
+            }
+        }
         if (declarations.Length == 0)
             return;
         var typeDeclarations = new List<SyntaxNode>(declarations.Length);
@@ -111,7 +123,10 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
 
         var folders = project.Role == "Common" ? CommonFolders : CoreFolders;
         var featureProject = !project.IsTest && project.Role is "Common" or "Core";
-        var featureFile = path.Length >= 4 && path[0] == "Features" && Array.IndexOf(folders, path[2]) >= 0;
+        var entityFile = project.Role == "Core" && path.Length == 5 && path[0] == "Features"
+                         && path[2] == "Aggregates" && path[3] == "Entities";
+        var featureFile = path.Length >= 4 && path[0] == "Features"
+                          && (Array.IndexOf(folders, path[2]) >= 0 || entityFile);
         var registrationFile = project.Role == "Core" && path.Length == 3 && path[0] == "Features"
                                && path[2] == path[1] + "PortiaExtensions.cs";
         var featureRegistrationFile = project.Role == "Core" && path.Length == 2 && path[0] == "Features"
@@ -173,13 +188,22 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             }
 
             if (featureProject && featureFile
-                               && !BelongsIn(symbol, path[2], project, path[1], aggregateOwnership,
+                               && !BelongsIn(symbol, entityFile ? "Entities" : path[2], project, path[1], aggregateOwnership,
                                    context.CancellationToken))
             {
+                var responsibility = entityFile && ApplicationProject.DerivesFrom(symbol, "Aggregate")
+                    ? "aggregate roots belong directly under Aggregates, outside Entities"
+                    : entityFile && !IsPlainEntityType(symbol)
+                        ? "entities are child classes; requests, events, and Portia business components belong in their own roles"
+                    : entityFile && aggregateOwnership.EntityOwnerCount(path[1], symbol, context.CancellationToken) > 1
+                        ? "child entities must have exactly one aggregate root that stores them; this entity has multiple owners"
+                        : entityFile
+                            ? "child entities must have exactly one concrete aggregate root in the same feature that stores them; orphan entities need an owner"
+                            : project.Role == "Common" && path[2] == "Values" && symbol.TypeKind == TypeKind.Enum
+                                ? "enums are data models; place this enum in the feature's Models folder"
+                                : FolderResponsibility(path[2]);
                 context.ReportDiagnostic(Diagnostic.Create(FolderRole, identifier.GetLocation(), symbol.Name,
-                    path[2], project.Role == "Common" && path[2] == "Values" && symbol.TypeKind == TypeKind.Enum
-                        ? "enums are data models; place this enum in the feature's Models folder"
-                        : FolderResponsibility(path[2])));
+                    entityFile ? path[3] : path[2], responsibility));
             }
 
             if (featureProject && registrationFile && (!symbol.IsStatic || symbol.Name != path[1] + "PortiaExtensions"))
@@ -266,6 +290,8 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             "Projectors" => projector && !handler && !reactor,
             "Authorization" => authorizer && !handler && !reactor && !projector,
             "Aggregates" => aggregate || plain && aggregateOwnership.Contains(feature, symbol, cancellationToken),
+            "Entities" => IsPlainEntityType(symbol)
+                           && aggregateOwnership.EntityOwnerCount(feature, symbol, cancellationToken) == 1,
             "Ports" => symbol.TypeKind == TypeKind.Interface && plain,
             "Models" => plain && IsDataOnly(symbol),
             "Repositories" => plain &&
@@ -283,6 +309,14 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             _ => false
         };
     }
+
+    static bool IsPlainEntityType(INamedTypeSymbol symbol) => symbol.TypeKind == TypeKind.Class
+                                                               && !ApplicationProject.IsRequest(symbol)
+                                                               && !ApplicationProject.DerivesFrom(symbol, "DomainEvent")
+                                                               && !ApplicationProject.DerivesFrom(symbol, "Aggregate")
+                                                               && !ApplicationProject.IsReactor(symbol)
+                                                               && !ApplicationProject.IsProjector(symbol)
+                                                               && !PortiaComponentRoles.IsComponent(symbol);
 
     static bool IsPortiaJsonContext(INamedTypeSymbol symbol) => symbol.GetAttributes().Any(attribute =>
         attribute.AttributeClass is { } marker && SymbolNames.Is(marker, "Cntryl.Portia.PortiaJsonContextAttribute"));
@@ -404,13 +438,55 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             }
         }
 
+        public int EntityOwnerCount(string feature, INamedTypeSymbol entity, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            while (!Monitor.TryEnter(_gate, 50))
+                cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                _byFeature ??= Build(cancellationToken);
+                return _entityOwners!.TryGetValue(feature, out var owners)
+                       && owners.TryGetValue(entity.OriginalDefinition, out var count) ? count : 0;
+            }
+            finally
+            {
+                Monitor.Exit(_gate);
+            }
+        }
+
+        ImmutableDictionary<string, ImmutableDictionary<INamedTypeSymbol, int>>? _entityOwners;
+
         ImmutableDictionary<string, ImmutableHashSet<INamedTypeSymbol>> Build(CancellationToken cancellationToken)
         {
             var features = new Dictionary<string, HashSet<INamedTypeSymbol>>(StringComparer.Ordinal);
+            var entityTypes = new Dictionary<string, HashSet<INamedTypeSymbol>>(StringComparer.Ordinal);
+            var ownership = new Dictionary<string, Dictionary<INamedTypeSymbol, int>>(StringComparer.Ordinal);
+            var countedRoots = new Dictionary<string, HashSet<INamedTypeSymbol>>(StringComparer.Ordinal);
             foreach (var tree in compilation.SyntaxTrees)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var path = project.RelativePath(tree);
+                if (path.Length != 5 || path[0] != "Features" || path[2] != "Aggregates" || path[3] != "Entities")
+                    continue;
+#pragma warning disable RS1030 // Entity identity is compared semantically across source trees.
+                var entityModel = compilation.GetSemanticModel(tree);
+#pragma warning restore RS1030
+                foreach (var declaration in tree.GetRoot(cancellationToken).DescendantNodes().OfType<TypeDeclarationSyntax>())
+                    if (entityModel.GetDeclaredSymbol(declaration, cancellationToken) is { TypeKind: TypeKind.Class } entity)
+                    {
+                        if (!entityTypes.TryGetValue(path[1], out var entities))
+                            entityTypes.Add(path[1], entities = NewSymbolSet());
+                        _ = entities.Add(entity.OriginalDefinition);
+                    }
+            }
+            foreach (var tree in compilation.SyntaxTrees)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var path = project.RelativePath(tree);
+                if (path.Length == 5 && path[0] == "Features" && path[2] == "Aggregates"
+                    && path[3] == "Entities")
+                    continue;
                 if (path.Length != 4 || path[0] != "Features" || path[2] != "Aggregates")
                     continue;
 #pragma warning disable RS1030 // Ownership requires binding aggregate references in other source trees.
@@ -425,6 +501,22 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                         continue;
                     if (!features.TryGetValue(path[1], out var types))
                         features.Add(path[1], types = [with(SymbolEqualityComparer.Default)]);
+                    if (!ownership.TryGetValue(path[1], out var featureOwners))
+                        ownership.Add(path[1], featureOwners = NewOwnerMap());
+                    if (!aggregate.IsAbstract && entityTypes.TryGetValue(path[1], out var featureEntities))
+                    {
+                        if (!countedRoots.TryGetValue(path[1], out var roots))
+                            countedRoots.Add(path[1], roots = NewSymbolSet());
+                        if (roots.Add(aggregate.OriginalDefinition))
+                        {
+                            foreach (var entity in featureEntities)
+                            {
+                                if (!StoresEntity(aggregate, entity))
+                                    continue;
+                                featureOwners[entity] = featureOwners.TryGetValue(entity, out var owners) ? owners + 1 : 1;
+                            }
+                        }
+                    }
                     foreach (var node in declaration.DescendantNodes().OfType<SimpleNameSyntax>())
                     {
                         cancellationToken.ThrowIfCancellationRequested();
@@ -437,9 +529,62 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                 }
             }
 
+            _entityOwners = ownership.ToImmutableDictionary(pair => pair.Key,
+                pair => pair.Value.ToImmutableDictionary(SymbolEqualityComparer.Default), StringComparer.Ordinal);
             return features.ToImmutableDictionary(pair => pair.Key,
                 pair => pair.Value.ToImmutableHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default),
                 StringComparer.Ordinal);
+        }
+
+        static bool StoresEntity(INamedTypeSymbol aggregate, INamedTypeSymbol entity)
+        {
+            for (var current = aggregate; current is not null; current = current.BaseType)
+            {
+                foreach (var member in current.GetMembers())
+                {
+                    if (member.IsStatic)
+                        continue;
+                    var storedType = member switch
+                    {
+                        IFieldSymbol field => field.Type,
+                        IPropertySymbol property when IsAutoProperty(property) => property.Type,
+                        _ => null
+                    };
+                    if (storedType is not null && ContainsType(storedType, entity))
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        static bool IsAutoProperty(IPropertySymbol property) => !property.IsStatic && !property.IsIndexer
+            && property.DeclaringSyntaxReferences.Select(reference => reference.GetSyntax())
+                .OfType<PropertyDeclarationSyntax>().Any(declaration => declaration.AccessorList is { } accessors
+                    && accessors.Accessors.Count > 0 && accessors.Accessors.All(accessor => accessor.Body is null
+                        && accessor.ExpressionBody is null));
+
+        static bool ContainsType(ITypeSymbol candidate, INamedTypeSymbol target)
+        {
+            if (candidate is INamedTypeSymbol named && SymbolEqualityComparer.Default.Equals(named.OriginalDefinition, target))
+                return true;
+            return candidate switch
+            {
+                IArrayTypeSymbol array => ContainsType(array.ElementType, target),
+                INamedTypeSymbol generic => generic.TypeArguments.Any(argument => ContainsType(argument, target)),
+                _ => false
+            };
+        }
+
+        static HashSet<INamedTypeSymbol> NewSymbolSet()
+        {
+            var symbols = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+            return symbols;
+        }
+
+        static Dictionary<INamedTypeSymbol, int> NewOwnerMap()
+        {
+            var owners = new Dictionary<INamedTypeSymbol, int>(SymbolEqualityComparer.Default);
+            return owners;
         }
     }
 
@@ -453,6 +598,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         "Projectors" => "only projectors belong here",
         "Authorization" => "only request authorizers belong here",
         "Aggregates" => "aggregate roots and their directly owned rule or state collaborators belong here",
+        "Entities" => "each child entity must have exactly one aggregate root in its feature that stores it; aggregate roots belong directly under Aggregates",
         "Ports" => "a port is an application interface to a production dependency",
         "Models" => "data-only models belong here",
         "Values" => "immutable record values belong here",
