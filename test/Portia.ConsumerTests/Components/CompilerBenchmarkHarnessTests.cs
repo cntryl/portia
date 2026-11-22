@@ -132,7 +132,7 @@ public sealed class CompilerBenchmarkHarnessTests
 
         // Assert
         Assert.Null(exception);
-        Assert.Equal(16, components.Length);
+        Assert.Equal(17, components.Length);
     }
 
     [Theory]
