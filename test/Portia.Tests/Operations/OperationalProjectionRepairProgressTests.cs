@@ -56,6 +56,45 @@ public sealed partial class OperationalProjectionTests
         Assert.Equal("indeterminate", (await api.VerifyRepairAsync(administrator, Target, first.Id, TestContext.Current.CancellationToken)).Status);
     }
 
+    /// <summary>A repair whose last commit response is lost must remain indeterminate.</summary>
+    [Fact]
+    public async Task ShouldPreserveRepairUncertaintyGivenLostAcknowledgementAtAttemptLimit()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        var journal = new MemoryOperationalStore();
+        var native = new NativeStore();
+        var runner = new ProjectorRunner(await OperationalExecutionTests.EventsAsync());
+        var topology = new EmptyApplicationTopology();
+        var options = new OperationalOptions();
+        var session = new OperationalSession(journal, options, topology, TimeProvider.System);
+        await session.AcquireAsync(Target, "projector", Settings with { FailureAttemptLimit = 1 },
+            ProjectionCheckpoint.Start, ct);
+        var initial = await Record.ExceptionAsync(() =>
+            runner.RunAsync(session, new PermanentlyFailingProjector(native), ProjectionCheckpoint.Start, ct: ct)
+                .AsTask());
+        Assert.IsType<ProcessorFailureException>(initial);
+        var api = new PortiaOperations(TestOperationalAuthorizer.Configuration(), journal, options, topology,
+            new TestOperationalAuthorizer(), null);
+        var administrator = TestOperationalAuthorizer.AdministratorActor(true);
+        var plan = await QueueRepairAsync(api, administrator);
+        Assert.True(await session.PrepareAsync(ProjectionCheckpoint.Start, ct));
+        native.AfterCommit = () => throw new IOException("commit acknowledgement lost");
+
+        // Act
+        var result = await Record.ExceptionAsync(() =>
+            runner.RunAsync(session, new ProbeProjector(native), ProjectionCheckpoint.Start,
+                session.BoundOptions(ProjectionRunOptions.Default), ct).AsTask());
+        _ = await session.PrepareAsync(native.Checkpoint, ct);
+        var repair = await api.VerifyRepairAsync(administrator, Target, plan.Id, ct);
+
+        // Assert
+        Assert.IsType<ProcessorFailureException>(result);
+        Assert.Equal("2", native.Checkpoint.Cursor.Value);
+        Assert.Equal(2, native.Changes);
+        Assert.Equal(OperationalRepairStatuses.Indeterminate, repair.Status);
+    }
+
     static async ValueTask<RepairPlan> QueueRepairAsync(PortiaOperations api,
         System.Security.Claims.ClaimsPrincipal administrator)
     {

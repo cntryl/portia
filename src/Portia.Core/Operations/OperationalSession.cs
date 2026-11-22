@@ -376,8 +376,9 @@ sealed class OperationalSession(
             };
             return terminal
                 ? CompleteRepair(next,
-                    committed is null ? OperationalRepairStatuses.Failed : OperationalRepairStatuses.Committed, id,
-                    committed?.Cursor.Value)
+                    outcomeUnknown ? OperationalRepairStatuses.Indeterminate :
+                    committed is null ? OperationalRepairStatuses.Failed : OperationalRepairStatuses.Committed,
+                    id, committed?.Cursor.Value)
                 : next;
         }, ct, "failure-recording").ConfigureAwait(false);
         _attempt = null;
