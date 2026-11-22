@@ -18,8 +18,82 @@ env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  ci:
+  checks:
+    name: Formatting, dependencies, and runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Verify Runtime Async is enabled
+        shell: bash
+        run: |
+          features="$(dotnet msbuild src/Portia.Core/Portia.Core.csproj -nologo -getProperty:Features)"
+          if [[ "$features" != *runtime-async=on* ]]; then
+            echo "Portia's net11.0 build must enable Runtime Async." >&2
+            exit 1
+          fi
+
+      - name: Restore packages
+        run: dotnet restore Portia.slnx
+
+      - name: Verify stable external dependencies
+        run: dotnet run --project eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj --configuration Release -- verify-stable-dependencies --root .
+
+      - name: Check formatting
+        run: dotnet format Portia.slnx --verify-no-changes --no-restore --verbosity diagnostic
+
+  build_and_test:
     name: Build and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore packages
+        run: dotnet restore Portia.slnx
+
+      - name: Build solution
+        run: dotnet build Portia.slnx --configuration Release --no-restore
+
+      - name: Verify compiler benchmark fixtures
+        run: dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll verify --size minimal
+
+      - name: Capture and verify Accounts compiler inputs
+        shell: bash
+        run: |
+          dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll capture-accounts \
+            --root . --output artifacts/compiler/accounts-ci
+          PORTIA_COMPILER_ACCOUNTS="$PWD/artifacts/compiler/accounts-ci" \
+            dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll verify --corpus accounts
+
+      - name: Verify editor benchmark policies
+        run: node --test bench/Portia.CompilerBenchmarks/vscode/state.test.cjs
+
+      - name: Test solution
+        run: >-
+          dotnet test --solution Portia.slnx
+          --configuration Release
+          --no-build
+          --filter-not-trait "Category=BrokerIntegration"
+          --filter-not-trait "Category=StorageIntegration"
+          --filter-not-trait "Category=CassieIntegration"
+          --filter-not-trait "Category=DurabilityIntegration"
+
+  integration:
+    name: Integration
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -87,50 +161,11 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Verify Runtime Async is enabled
-        shell: bash
-        run: |
-          features="$(dotnet msbuild src/Portia.Core/Portia.Core.csproj -nologo -getProperty:Features)"
-          if [[ "$features" != *runtime-async=on* ]]; then
-            echo "Portia's net11.0 build must enable Runtime Async." >&2
-            exit 1
-          fi
-
       - name: Restore packages
         run: dotnet restore Portia.slnx
 
-      - name: Verify stable external dependencies
-        run: dotnet run --project eng/Portia.RepositoryTools/Portia.RepositoryTools.csproj --configuration Release -- verify-stable-dependencies --root .
-
-      - name: Check formatting
-        run: dotnet format Portia.slnx --verify-no-changes --no-restore --verbosity diagnostic
-
       - name: Build solution
         run: dotnet build Portia.slnx --configuration Release --no-restore
-
-      - name: Verify compiler benchmark fixtures
-        run: dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll verify --size minimal
-
-      - name: Capture and verify Accounts compiler inputs
-        shell: bash
-        run: |
-          dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll capture-accounts \
-            --root . --output artifacts/compiler/accounts-ci
-          PORTIA_COMPILER_ACCOUNTS="$PWD/artifacts/compiler/accounts-ci" \
-            dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll verify --corpus accounts
-
-      - name: Verify editor benchmark policies
-        run: node --test bench/Portia.CompilerBenchmarks/vscode/state.test.cjs
-
-      - name: Test solution
-        run: >-
-          dotnet test --solution Portia.slnx
-          --configuration Release
-          --no-build
-          --filter-not-trait "Category=BrokerIntegration"
-          --filter-not-trait "Category=StorageIntegration"
-          --filter-not-trait "Category=CassieIntegration"
-          --filter-not-trait "Category=DurabilityIntegration"
 
       # Service containers start without a health check, so wait for each endpoint before testing.
       - name: Wait for integration services
@@ -168,6 +203,25 @@ jobs:
           --configuration Release
           --no-build
           --filter-trait "Category=CassieIntegration"
+
+  packed_consumers:
+    name: Packed consumer smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore packages
+        run: dotnet restore Portia.slnx
+
+      - name: Build solution
+        run: dotnet build Portia.slnx --configuration Release --no-restore
 
       - name: Pack release packages for HTTP qualification
         run: dotnet pack Portia.slnx --configuration Release --no-build --output artifacts/packages
