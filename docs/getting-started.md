@@ -267,10 +267,9 @@ public sealed class Account : Aggregate
 }
 ```
 
-An `On<TEvent>` handler applies already-recorded facts while an aggregate replays its stream. Keep it deterministic:
-copy event data into state, and make business validation and expected failure decisions in the command before it raises
-the event. The analyzer warns about direct throws and calls that return `Result` from registered `On<TEvent>` handlers;
-it does not attempt to prove arbitrary helper methods pure.
+An `On<TEvent>` handler applies recorded facts during aggregate replay. Use event data to update state deterministically.
+The aggregate method called by the command evaluates business rules and decides whether to raise the event.
+`PORTIA108` warns about explicit throws and `Result`-returning calls in registered handler bodies.
 
 A rejection is one expression: `RequestError.Validation`, `NotFound`, `Conflict`, `Forbidden`, and
 `Unauthorized` build an error of that kind, and a `RequestError` converts implicitly to `Result` and
