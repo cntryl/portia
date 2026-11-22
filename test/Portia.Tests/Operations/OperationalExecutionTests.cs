@@ -236,8 +236,8 @@ public sealed partial class OperationalExecutionTests
         // Assert
         Assert.Empty(effects.Executions);
         Assert.False(pending.IsCompleted);
-        Assert.Equal("journal-transition", observed?.Transition);
-        Assert.Equal("dependency", observed?.Reason);
+        Assert.Equal("attempt-start", observed?.Transition);
+        Assert.Equal(nameof(IOException), observed?.Reason);
         Assert.NotNull(observed?.NextRetryAt);
         journal.Unavailable = false;
         clock.Advance(delay);
