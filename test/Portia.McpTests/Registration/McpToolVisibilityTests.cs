@@ -283,8 +283,10 @@ public sealed class McpToolVisibilityTests
         app.Use((context, next) =>
         {
             var name = context.Request.Headers["X-Actor"].ToString();
+
             if (name.Length > 0)
                 context.User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, name)], "test"));
+
             return next(context);
         });
         _ = app.MapPortiaMcp().AllowAnonymous();
@@ -297,8 +299,10 @@ public sealed class McpToolVisibilityTests
         public async Task<McpClient> ClientAsync(string? actor)
         {
             var http = app.GetTestClient();
+
             if (actor is not null)
                 http.DefaultRequestHeaders.Add("X-Actor", actor);
+
             var transport = new HttpClientTransport(new HttpClientTransportOptions
             {
                 Endpoint = new Uri("http://localhost/mcp")
@@ -312,8 +316,11 @@ public sealed class McpToolVisibilityTests
 
     public sealed class ByActorPolicy : IMcpVisibilityPolicy
     {
-        public ValueTask<bool> IsVisibleAsync(ClaimsPrincipal actor, McpEntryDescriptor entry,
-            CancellationToken cancellationToken) =>
+        public ValueTask<bool> IsVisibleAsync(
+            ClaimsPrincipal actor,
+            McpEntryDescriptor entry,
+            CancellationToken cancellationToken
+        ) =>
             ValueTask.FromResult(entry.Name != ReadTool || actor.Identity?.Name == "owner");
     }
 
@@ -327,8 +334,11 @@ public sealed class McpToolVisibilityTests
     {
         public List<McpEntryDescriptor> Entries { get; } = [];
 
-        public ValueTask<bool> IsVisibleAsync(ClaimsPrincipal actor, McpEntryDescriptor entry,
-            CancellationToken cancellationToken)
+        public ValueTask<bool> IsVisibleAsync(
+            ClaimsPrincipal actor,
+            McpEntryDescriptor entry,
+            CancellationToken cancellationToken
+        )
         {
             lock (Entries)
                 Entries.Add(entry);
@@ -338,8 +348,11 @@ public sealed class McpToolVisibilityTests
 
     public sealed class ThrowingPolicy : IMcpVisibilityPolicy
     {
-        public ValueTask<bool> IsVisibleAsync(ClaimsPrincipal actor, McpEntryDescriptor entry,
-            CancellationToken cancellationToken) => throw new InvalidOperationException("Policy failure.");
+        public ValueTask<bool> IsVisibleAsync(
+            ClaimsPrincipal actor,
+            McpEntryDescriptor entry,
+            CancellationToken cancellationToken
+        ) => throw new InvalidOperationException("Policy failure.");
     }
 
     public sealed class BlockingPolicy : IMcpVisibilityPolicy
@@ -347,10 +360,14 @@ public sealed class McpToolVisibilityTests
         public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Canceled { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public async ValueTask<bool> IsVisibleAsync(ClaimsPrincipal actor, McpEntryDescriptor entry,
-            CancellationToken cancellationToken)
+        public async ValueTask<bool> IsVisibleAsync(
+            ClaimsPrincipal actor,
+            McpEntryDescriptor entry,
+            CancellationToken cancellationToken
+        )
         {
             Started.TrySetResult();
+
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
@@ -361,14 +378,18 @@ public sealed class McpToolVisibilityTests
                 throw;
             }
 
+
             return true;
         }
     }
 
     public sealed class NameStartsWithAllowedPolicy : IMcpVisibilityPolicy
     {
-        public ValueTask<bool> IsVisibleAsync(ClaimsPrincipal actor, McpEntryDescriptor entry,
-            CancellationToken cancellationToken) =>
+        public ValueTask<bool> IsVisibleAsync(
+            ClaimsPrincipal actor,
+            McpEntryDescriptor entry,
+            CancellationToken cancellationToken
+        ) =>
             ValueTask.FromResult(entry.Name.Contains("allowed", StringComparison.Ordinal));
     }
 }

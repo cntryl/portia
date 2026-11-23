@@ -4,6 +4,16 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.14.11
+
+### Fixed
+
+- `PORTIA213` accepts `Mcp`, `Host`, and `Shared` application project roles.
+- Project roles can be configured with `portia_project_role` in `.editorconfig` or
+  `PortiaProjectRole` in MSBuild.
+- Explicit shared-library roles keep file, namespace, and dependency checks without forcing
+  a Common/Core/Api/Worker name.
+
 ## Unreleased
 
 ### Added

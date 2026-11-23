@@ -1,8 +1,8 @@
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
-using System.Text;
 using Cntryl.Portia;
 using Cntryl.Portia.Testing;
 
@@ -54,9 +54,12 @@ using (var scope = app.Services.CreateScope())
 {
     var registration = scope.ServiceProvider.GetRequiredService<ProjectorRegistration>();
     var projector = registration.Resolve(scope.ServiceProvider);
+
     if (registration.ProjectorType != typeof(SmokeProjector) || projector.Name != "SmokeProjector")
         throw new InvalidOperationException("Native projector registration lost its application type or name.");
+
     await scenario.RunAsync(projector);
+
     if (scope.ServiceProvider.GetRequiredService<SmokeProjector>().Events != "OC")
         throw new InvalidOperationException("Native typed dispatch lost event order.");
 }
@@ -90,9 +93,11 @@ _ = app.MapPortiaPost<SmokeUpload, int>("/smoke-upload", endpoint => endpoint
 // Referenced internal contexts are composed through public factory metadata, with reflection disabled.
 if (JsonSerializer.IsReflectionEnabledByDefault)
     throw new InvalidOperationException("JSON reflection must be disabled in the NativeAOT consumer.");
+
 var jsonOptions = app.Services.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
 var firstType = jsonOptions.GetTypeInfo<App_A.FirstPayload>();
 var secondType = jsonOptions.GetTypeInfo<App.SecondPayload>();
+
 if (JsonSerializer.Serialize(new App_A.FirstPayload("contracts"), firstType) != "{\"value\":\"contracts\"}"
     || JsonSerializer.Deserialize("{\"value\":42}", secondType)?.Value != 42)
     throw new InvalidOperationException("Referenced JSON context composition failed.");
@@ -120,6 +125,7 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
         using var createBody = new StringContent(repeated ? """{"repeated":true}""" : """{"repeated":false}""",
             Encoding.UTF8, "application/json");
         using var create = await client.PostAsync("/native/resources", createBody);
+
         if (create.StatusCode != expected || create.Headers.Location?.OriginalString != "/native/resources/1" ||
             (await create.Content.ReadAsStringAsync()).Length != 0)
             throw new InvalidOperationException($"Unexpected bodyless create response: {(int)create.StatusCode}.");
@@ -127,47 +133,61 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
 
     using var replaceBody = new StringContent("{}", Encoding.UTF8, "application/json");
     using var replace = await client.PutAsync("/native/resources/1", replaceBody);
+
     if (replace.StatusCode != HttpStatusCode.NoContent || replace.Headers.Location?.OriginalString != "/native/resources/1" ||
         (await replace.Content.ReadAsStringAsync()).Length != 0)
         throw new InvalidOperationException($"Unexpected bodyless replace response: {(int)replace.StatusCode}.");
 
     using var quote = await client.GetAsync("/smoke-quotes/1.0000000000000000000000000001");
+
     if (quote.StatusCode != HttpStatusCode.OK ||
         await quote.Content.ReadAsStringAsync() != "\"1.0000000000000000000000000001\"")
         throw new InvalidOperationException("Native decimal string lost precision.");
+
     using var rounded = await client.GetAsync("/smoke-quotes/1.00000000000000000000000000001");
+
     if (rounded.StatusCode != HttpStatusCode.BadRequest)
         throw new InvalidOperationException("Native decimal string accepted a rounded value.");
 
     using var missingSchedule = new StringContent("""{"plan":"scheduled"}""", Encoding.UTF8, "application/json");
     using var scheduleFailure = await client.PostAsync("/smoke-schedule", missingSchedule);
+
     if (scheduleFailure.StatusCode != HttpStatusCode.BadRequest)
         throw new InvalidOperationException("Native conditional validation accepted a missing value.");
+
     using var manual = new StringContent("""{"plan":"manual"}""", Encoding.UTF8, "application/json");
     using var scheduleSuccess = await client.PostAsync("/smoke-schedule", manual);
+
     if (scheduleSuccess.StatusCode != HttpStatusCode.OK)
         throw new InvalidOperationException("Native conditional validation rejected an inactive condition.");
 
     using var renameBody = new StringContent("""{"mode":"rename","name":"Native"}""", Encoding.UTF8, "application/json");
     using var rename = await client.PutAsync("/smoke-assets/1", renameBody);
+
     if (rename.StatusCode != HttpStatusCode.NoContent)
         throw new InvalidOperationException("Native typed PUT case did not bind and dispatch.");
+
     using var unknownBody = new StringContent("""{"mode":"unknown"}""", Encoding.UTF8, "application/json");
     using var unknown = await client.PutAsync("/smoke-assets/1", unknownBody);
+
     if (unknown.StatusCode != HttpStatusCode.BadRequest)
         throw new InvalidOperationException("Native typed PUT accepted an unknown selector.");
 
     using var bindingBody = new StringContent("{\"wire_a\":11,\"wire_b\":22}", Encoding.UTF8, "application/json");
     using var bindingResponse = await client.PostAsync("/smoke-binding", bindingBody);
     var bindingResult = await bindingResponse.Content.ReadAsStringAsync();
+
     if (bindingResponse.StatusCode != HttpStatusCode.OK || bindingResult != "\"11,22\"")
         throw new InvalidOperationException($"Renamed native JSON members lost constructor identity: {bindingResult}");
 
     using var invalid = await client.GetAsync("/smoke?name=%20%20");
+
     if (invalid.StatusCode != HttpStatusCode.BadRequest)
         throw new InvalidOperationException("Native compiled Required validation accepted whitespace.");
+
     var response = await client.GetStringAsync("/smoke?name=native-aot");
     using var payload = JsonDocument.Parse(response);
+
     if (payload.RootElement.GetProperty("display_name").GetString() != "native-aot" ||
         payload.RootElement.GetProperty("aliases")[0].GetString() != "native-aot" ||
         payload.RootElement.GetProperty("groups").GetProperty("primary")[0].GetString() != "native-aot" ||
@@ -181,73 +201,97 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     // change, so the native run proves the document still names the mapping, not just that the
     // document is served.
     var document = await client.GetStringAsync("/openapi/v1.json");
+
     if (!document.Contains("\"operationId\": \"smokeRequest\"", StringComparison.Ordinal))
         throw new InvalidOperationException($"Portia endpoint missing from OpenAPI document: {document}");
+
     using var openApi = JsonDocument.Parse(document);
     var bindingProperties = openApi.RootElement.GetProperty("paths").GetProperty("/smoke-binding").GetProperty("post")
         .GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("schema")
         .GetProperty("properties");
+
     if (!bindingProperties.TryGetProperty("wire_a", out _) || !bindingProperties.TryGetProperty("wire_b", out _))
         throw new InvalidOperationException($"Native OpenAPI lost the resolved JSON member names: {document}");
+
     var inputExample = openApi.RootElement.GetProperty("paths").GetProperty("/smoke-binding").GetProperty("post")
         .GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("examples")
         .GetProperty("binding").GetProperty("value");
+
     if (inputExample.GetProperty("wire_a").GetInt32() != 11 || inputExample.GetProperty("wire_b").GetInt32() != 22)
         throw new InvalidOperationException("Native typed input examples lost resolver-renamed members.");
+
     var components = openApi.RootElement.GetProperty("components").GetProperty("schemas");
     var externalSchema = ResolveSchema(openApi.RootElement.GetProperty("paths").GetProperty("/external-contract").GetProperty("get")
         .GetProperty("responses").GetProperty("200").GetProperty("content").GetProperty("application/json").GetProperty("schema"), components);
+
     if (externalSchema.GetProperty("description").GetString() != "Referenced payload." ||
         externalSchema.GetProperty("title").GetString() != "Referenced payload title" ||
         externalSchema.GetProperty("examples")[0].GetProperty("value").GetString() != "example" ||
         externalSchema.GetProperty("properties").GetProperty("value").GetProperty("description").GetString() != "Referenced value.")
         throw new InvalidOperationException("Native OpenAPI lost descriptions exported by a referenced context factory.");
+
     var schema = openApi.RootElement.GetProperty("paths").GetProperty("/smoke").GetProperty("get")
         .GetProperty("responses").GetProperty("200").GetProperty("content").GetProperty("application/json")
         .GetProperty("schema");
     var schemaId = schema.GetProperty("$ref").GetString()!.Split('/')[^1];
     var properties = components.GetProperty(schemaId).GetProperty("properties");
+
     if (components.GetProperty(schemaId).GetProperty("description").GetString() != "Native payload." ||
         properties.GetProperty("display_name").GetProperty("description").GetString() != "Display name." ||
         bindingProperties.GetProperty("wire_a").GetProperty("description").GetString() != "First value.")
         throw new InvalidOperationException("Native descriptions lost CLR member identity.");
+
     if (!properties.TryGetProperty("display_name", out _) || properties.TryGetProperty("displayName", out _))
         throw new InvalidOperationException($"Portia schema does not match its JSON contract: {document}");
+
     var aliases = properties.GetProperty("aliases");
     var aliasItemType = aliases.GetProperty("items").GetProperty("type");
     var stringItems = aliasItemType.ValueKind == JsonValueKind.Array
         ? aliasItemType.EnumerateArray().Any(type => type.GetString() == "string")
         : aliasItemType.GetString() == "string";
+
     if (!aliases.GetProperty("type").EnumerateArray().Any(type => type.GetString() == "array") || !stringItems)
         throw new InvalidOperationException($"Converted collection schema is not a typed array: {document}");
+
     var groups = ResolveSchema(properties.GetProperty("groups"), components);
     var groupValues = ResolveSchema(groups.GetProperty("additionalProperties"), components);
+
     if (!HasSchemaType(groups, "object") || groups.TryGetProperty("items", out _) ||
         !HasSchemaType(groupValues, "array") || !HasSchemaType(ResolveSchema(groupValues.GetProperty("items"), components), "string"))
         throw new InvalidOperationException($"Converted dictionary values are not typed arrays: {document}");
+
     foreach (var name in new[] { "count", "empty_count" })
     {
         var count = ResolveSchema(properties.GetProperty(name), components);
+
         if (!HasSchemaType(count, "integer") || !HasSchemaType(count, "null") || count.TryGetProperty("items", out _))
             throw new InvalidOperationException($"Nullable converted value schema does not reuse its underlying type mapping: {document}");
     }
+
     var variants = ResolveSchema(properties.GetProperty("variant"), components).GetProperty("anyOf");
     var namesVariant = variants.EnumerateArray().Select(variant => ResolveSchema(variant, components)).Single(variant =>
         variant.TryGetProperty("properties", out var members) && members.TryGetProperty("names", out _));
     var variantNames = ResolveSchema(namesVariant.GetProperty("properties").GetProperty("names"), components);
+
     if (!HasSchemaType(variantNames, "array") || HasSchemaType(variantNames, "null") ||
         !HasSchemaType(ResolveSchema(variantNames.GetProperty("items"), components), "string"))
         throw new InvalidOperationException($"Polymorphic converted property is not a typed array: {document}");
+
     var recursiveId = properties.GetProperty("next_node").GetProperty("properties").GetProperty("next_node").GetProperty("$ref").GetString()!.Split('/')[^1];
+
     if (!components.GetProperty(recursiveId).GetProperty("properties").TryGetProperty("display_name", out _))
         throw new InvalidOperationException($"Recursive Portia schema does not resolve: {document}");
+
     var createResponses = openApi.RootElement.GetProperty("paths").GetProperty("/native/resources")
         .GetProperty("post").GetProperty("responses");
+
     if (createResponses.EnumerateObject().Count(response => response.Name.StartsWith('2')) != 2)
         throw new InvalidOperationException("Bodyless create must document exactly two success responses.");
+
     foreach (var status in new[] { "200", "201" })
     {
         var createResponse = createResponses.GetProperty(status);
+
         if (createResponse.TryGetProperty("content", out _) ||
             !createResponse.GetProperty("headers").TryGetProperty("Location", out _))
             throw new InvalidOperationException($"Unexpected bodyless create OpenAPI response: {createResponse}.");
@@ -258,6 +302,7 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
         .GetProperty("application/octet-stream").GetProperty("schema");
     var uploadResponseSchema = uploadOperation.GetProperty("responses").GetProperty("200").GetProperty("content")
         .GetProperty("application/octet-stream").GetProperty("schema");
+
     if (uploadRequestSchema.GetProperty("type").GetString() != "string" ||
         uploadRequestSchema.GetProperty("format").GetString() != "binary" ||
         uploadResponseSchema.GetProperty("type").GetString() != "string" ||
@@ -268,10 +313,12 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     content.Headers.ContentType = new("application/octet-stream");
     using var upload = await client.PostAsync("/smoke-upload", content);
     var uploadResponse = await upload.Content.ReadAsStringAsync();
+
     if (!upload.IsSuccessStatusCode || uploadResponse != "4")
         throw new InvalidOperationException($"Unexpected custom-body response: {(int)upload.StatusCode} {uploadResponse}");
 
     var guardProbe = app.Services.GetRequiredService<SmokeGuardProbe>();
+
     if (guardProbe.Calls != 2)
         throw new InvalidOperationException($"Expected the family-scoped request guard twice, but saw {guardProbe.Calls} calls.");
 
@@ -287,27 +334,35 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
         {
             Content = new ByteArrayContent([1])
         };
+
         crossOrigin.Content.Headers.ContentType = new("application/octet-stream");
         crossOrigin.Headers.Add("Sec-Fetch-Site", "cross-site");
         crossOrigin.Headers.Add("Origin", origin);
         using var rejection = await client.SendAsync(crossOrigin);
+
         if (rejection.StatusCode != expected)
             throw new InvalidOperationException(
                 $"Cross-origin upload from {origin} returned {(int)rejection.StatusCode}, expected {(int)expected}.");
     }
 }
+
 // This path also runs from freshly packed packages on Linux NativeAOT in CI.
 await using (var scope = app.Services.CreateAsyncScope())
 {
     var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
     IUnaryRequest unary = new SmokeRequest("unary");
     var unaryOutcome = await bus.SendAsync(unary, RequestActor.System);
+
     if (!unaryOutcome.IsSuccess)
         throw new InvalidOperationException("Native unary dispatch failed.");
+
     var retained = await bus.SendAsync(new SmokeRequest("retain-continuation"), RequestActor.System);
+
     if (!retained.IsSuccess)
         throw new InvalidOperationException("Retaining smoke behavior failed.");
+
     var rejected = false;
+
     try
     {
         _ = await bus.SendAsync(new SmokeRequest("invoke-retained-continuation"), RequestActor.System);
@@ -317,21 +372,27 @@ await using (var scope = app.Services.CreateAsyncScope())
     {
         rejected = true;
     }
+
     if (!rejected)
         throw new InvalidOperationException("An expired pipeline continuation adopted a later invocation.");
 }
+
 await app.StopAsync();
 
 static JsonElement ResolveSchema(JsonElement schema, JsonElement components)
 {
     var visited = new HashSet<string>(StringComparer.Ordinal);
+
     while (schema.TryGetProperty("$ref", out var reference))
     {
         var target = reference.GetString()!;
+
         if (!target.StartsWith("#/components/schemas/", StringComparison.Ordinal) || !visited.Add(target))
             throw new InvalidOperationException($"Unexpected schema reference: {target}");
+
         schema = components.GetProperty(target.Split('/')[^1]);
     }
+
     return schema;
 }
 
@@ -339,6 +400,7 @@ static bool HasSchemaType(JsonElement schema, string expected)
 {
     if (!schema.TryGetProperty("type", out var type))
         return false;
+
     return type.ValueKind == JsonValueKind.Array
         ? type.EnumerateArray().Any(value => value.GetString() == expected)
         : type.GetString() == expected;
@@ -364,14 +426,18 @@ sealed class SmokeContinuationProbe
 
 sealed class SmokeRequestBehavior(SmokeContinuationProbe probe) : IRequestPipelineBehavior<SmokeRequest, SmokePayload>
 {
-    public ValueTask<Result<SmokePayload>> HandleAsync(IRequestContext<SmokeRequest> context,
-        RequestPipelineNext<SmokePayload> continuation, CancellationToken ct)
+    public ValueTask<Result<SmokePayload>> HandleAsync(
+        IRequestContext<SmokeRequest> context,
+        RequestPipelineNext<SmokePayload> continuation,
+        CancellationToken ct
+    )
     {
         if (context.Request.Name == "retain-continuation")
         {
             probe.Retained = continuation;
             return ValueTask.FromResult(Result<SmokePayload>.Success(new SmokePayload(context.Request.Name)));
         }
+
         return context.Request.Name == "invoke-retained-continuation"
             ? probe.Retained!(ct)
             : continuation(ct);
@@ -481,7 +547,9 @@ sealed record SmokeResource(string Id);
 sealed class SmokeCreateHandler : IRequestHandler<SmokeCreate, PortiaCreateOutcome<SmokeResource>>
 {
     public ValueTask<Result<PortiaCreateOutcome<SmokeResource>>> HandleAsync(
-        IRequestContext<SmokeCreate> context, CancellationToken ct)
+        IRequestContext<SmokeCreate> context,
+        CancellationToken ct
+    )
     {
         var resource = new SmokeResource("1");
         var outcome = context.Request.Repeated
@@ -498,7 +566,9 @@ sealed record SmokeReplace(string Resource) : IRequest<PortiaCreateOutcome<Smoke
 sealed class SmokeReplaceHandler : IRequestHandler<SmokeReplace, PortiaCreateOutcome<SmokeResource>>
 {
     public ValueTask<Result<PortiaCreateOutcome<SmokeResource>>> HandleAsync(
-        IRequestContext<SmokeReplace> context, CancellationToken ct) =>
+        IRequestContext<SmokeReplace> context,
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult(Result<PortiaCreateOutcome<SmokeResource>>.Success(
             PortiaCreateOutcome<SmokeResource>.Replaced(new SmokeResource(context.Request.Resource))));
 }
