@@ -38,6 +38,7 @@ public static class AccountsApplication
 
         var projectionRoute = configuration["Accounts:ProjectionRoute"] ?? "kv://portia/accounts/read-model";
         var configured = configuration["Accounts:Tenant"];
+
         if (string.IsNullOrWhiteSpace(configured))
         {
             if (!environment.IsDevelopment())

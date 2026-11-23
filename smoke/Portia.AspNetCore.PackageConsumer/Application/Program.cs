@@ -21,6 +21,7 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
 {
     var response = await client.GetStringAsync("/smoke?name=package");
     using var payload = JsonDocument.Parse(response);
+
     if (payload.RootElement.GetProperty("display_name").GetString() != "package")
     {
         throw new InvalidOperationException($"Unexpected response: {response}");
@@ -30,6 +31,7 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     // correctly but never reaches the document is the shape of a regression this smoke run
     // exists to catch.
     var document = await client.GetStringAsync("/openapi/v1.json");
+
     if (!document.Contains("\"operationId\": \"smokeRequest\"", StringComparison.Ordinal))
     {
         throw new InvalidOperationException($"Portia endpoint missing from OpenAPI document: {document}");
@@ -43,6 +45,7 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     var schemaId = schema.GetProperty("$ref").GetString()!.Split('/')[^1];
     var properties = components.GetProperty(schemaId).GetProperty("properties");
     var operation = openApi.RootElement.GetProperty("paths").GetProperty("/smoke").GetProperty("get");
+
     if (operation.GetProperty("parameters")[0].GetProperty("description").GetString() != "Requested name." ||
         operation.GetProperty("responses").GetProperty("200").GetProperty("description").GetString() != "Smoke response." ||
         components.GetProperty(schemaId).GetProperty("description").GetString() != "Smoke payload." ||
@@ -57,6 +60,7 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
     }
 
     var recursiveId = properties.GetProperty("next_node").GetProperty("properties").GetProperty("next_node").GetProperty("$ref").GetString()!.Split('/')[^1];
+
     if (!components.GetProperty(recursiveId).GetProperty("properties").TryGetProperty("display_name", out _))
     {
         throw new InvalidOperationException($"Recursive Portia schema does not resolve: {document}");

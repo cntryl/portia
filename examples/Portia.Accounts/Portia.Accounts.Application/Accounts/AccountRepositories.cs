@@ -19,6 +19,7 @@ public sealed class AccountCommandRepository(IAggregateExecutor aggregates) : IA
             new Account(request.Tenant, request.AccountId), account =>
             {
                 var created = new AccountCreated(account.Id);
+
                 if (!account.IsNew)
                 {
                     Result<PortiaCreateOutcome<AccountCreated>> repeat = account.OpeningBalanceCents == request.InitialBalanceCents
