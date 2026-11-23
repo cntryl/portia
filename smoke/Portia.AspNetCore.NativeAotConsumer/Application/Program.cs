@@ -125,6 +125,7 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
         using var createBody = new StringContent(repeated ? """{"repeated":true}""" : """{"repeated":false}""",
             Encoding.UTF8, "application/json");
         using var create = await client.PostAsync("/native/resources", createBody);
+
         if (create.StatusCode != expected || create.Headers.Location?.OriginalString != "/native/resources/1" ||
             (await create.Content.ReadAsStringAsync()).Length != 0)
             throw new InvalidOperationException($"Unexpected bodyless create response: {(int)create.StatusCode}.");
@@ -228,6 +229,7 @@ using (var client = new HttpClient { BaseAddress = new Uri(app.Urls.Single()) })
         externalSchema.GetProperty("examples")[0].GetProperty("value").GetString() != "example" ||
         externalSchema.GetProperty("properties").GetProperty("value").GetProperty("description").GetString() != "Referenced value.")
         throw new InvalidOperationException("Native OpenAPI lost descriptions exported by a referenced context factory.");
+
     var schema = openApi.RootElement.GetProperty("paths").GetProperty("/smoke").GetProperty("get")
         .GetProperty("responses").GetProperty("200").GetProperty("content").GetProperty("application/json")
         .GetProperty("schema");
@@ -427,7 +429,8 @@ sealed class SmokeRequestBehavior(SmokeContinuationProbe probe) : IRequestPipeli
     public ValueTask<Result<SmokePayload>> HandleAsync(
         IRequestContext<SmokeRequest> context,
         RequestPipelineNext<SmokePayload> continuation,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         if (context.Request.Name == "retain-continuation")
         {
@@ -545,7 +548,8 @@ sealed class SmokeCreateHandler : IRequestHandler<SmokeCreate, PortiaCreateOutco
 {
     public ValueTask<Result<PortiaCreateOutcome<SmokeResource>>> HandleAsync(
         IRequestContext<SmokeCreate> context,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         var resource = new SmokeResource("1");
         var outcome = context.Request.Repeated
@@ -563,7 +567,8 @@ sealed class SmokeReplaceHandler : IRequestHandler<SmokeReplace, PortiaCreateOut
 {
     public ValueTask<Result<PortiaCreateOutcome<SmokeResource>>> HandleAsync(
         IRequestContext<SmokeReplace> context,
-        CancellationToken ct) =>
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult(Result<PortiaCreateOutcome<SmokeResource>>.Success(
             PortiaCreateOutcome<SmokeResource>.Replaced(new SmokeResource(context.Request.Resource))));
 }
