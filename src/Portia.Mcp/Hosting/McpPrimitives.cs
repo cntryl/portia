@@ -43,8 +43,11 @@ public interface IMcpVisibilityPolicy
         ValueTask.FromResult(false);
 
     /// <summary>Checks whether the identified entry is visible to the actor.</summary>
-    ValueTask<bool> IsVisibleAsync(ClaimsPrincipal actor, McpEntryDescriptor entry,
-        CancellationToken cancellationToken) => IsVisibleAsync(actor, cancellationToken);
+    ValueTask<bool> IsVisibleAsync(
+        ClaimsPrincipal actor,
+        McpEntryDescriptor entry,
+        CancellationToken cancellationToken
+    ) => IsVisibleAsync(actor, cancellationToken);
 }
 
 /// <summary>Limits work accepted at MCP ingress.</summary>
@@ -221,8 +224,14 @@ abstract class McpEntry(Type requestType, McpEntryOptions options)
 static class McpVisibility
 {
     /// <summary>Errors count as not visible; caller cancellation is rethrown.</summary>
-    internal static async ValueTask<bool> IsVisibleAsync(McpAccess access, Type? policyType,
-        McpEntryDescriptor descriptor, IServiceProvider services, ClaimsPrincipal actor, CancellationToken ct)
+    internal static async ValueTask<bool> IsVisibleAsync(
+        McpAccess access,
+        Type? policyType,
+        McpEntryDescriptor descriptor,
+        IServiceProvider services,
+        ClaimsPrincipal actor,
+        CancellationToken ct
+    )
     {
         try
         {

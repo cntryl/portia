@@ -19,6 +19,7 @@ static class McpPrimitiveHandlers
             .AddListToolsFilter(next => async (call, ct) => await FilterToolsAsync(call, next, ct).ConfigureAwait(false))
             .AddCallToolFilter(next => async (call, ct) => await GuardToolCallAsync(call, next, ct)
                 .ConfigureAwait(false)));
+
         if (services.Any(service => service.ServiceType == typeof(McpResourceEntry)))
         {
             _ = server.WithListResourcesHandler(ListResourcesAsync)
@@ -26,8 +27,11 @@ static class McpPrimitiveHandlers
                 .WithReadResourceHandler(ReadResourceAsync);
         }
 
+
         if (services.Any(service => service.ServiceType == typeof(McpPromptEntry)))
+        {
             _ = server.WithListPromptsHandler(ListPromptsAsync).WithGetPromptHandler(GetPromptAsync);
+        }
     }
 
     internal static void MarkTransportActivated(IServiceCollection services, string transport) =>
@@ -39,47 +43,66 @@ static class McpPrimitiveHandlers
             ?.ImplementationInstance as TransportActivation;
 
         if (activation is not null)
+        {
             throw new InvalidOperationException(
                 $"MCP resources and prompts must be declared before {activation.Transport}().");
+        }
     }
 
     sealed record TransportActivation(string Transport);
 
     static async ValueTask<ListToolsResult> FilterToolsAsync(
         ModelContextProtocol.Server.RequestContext<ListToolsRequestParams> call,
-        McpRequestHandler<ListToolsRequestParams, ListToolsResult> next, CancellationToken ct)
+        McpRequestHandler<ListToolsRequestParams, ListToolsResult> next,
+        CancellationToken ct
+    )
     {
         var result = await next(call, ct).ConfigureAwait(false);
         var services = Services(call);
         var registrations = services.GetServices<McpToolRegistration>().ToDictionary(
             registration => registration.Name, StringComparer.Ordinal);
+
         if (registrations.Values.All(registration => registration.Access == McpAccess.Public))
+        {
             return result;
+        }
+
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(services.GetRequiredService<McpLimits>().OperationDeadline);
         var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
         var visible = new List<Tool>(result.Tools.Count);
+
         foreach (var tool in result.Tools)
+        {
             if (!registrations.TryGetValue(tool.Name, out var registration)
                 || registration.Access == McpAccess.Public
                 || await registration.VisibleAsync(services, actor, deadline.Token).ConfigureAwait(false))
+            {
                 visible.Add(tool);
+            }
+        }
+
         result.Tools = visible;
         return result;
     }
 
     static async ValueTask<CallToolResult> GuardToolCallAsync(
         ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call,
-        McpRequestHandler<CallToolRequestParams, CallToolResult> next, CancellationToken ct)
+        McpRequestHandler<CallToolRequestParams, CallToolResult> next,
+        CancellationToken ct
+    )
     {
         var services = Services(call);
         var registration = services.GetServices<McpToolRegistration>()
             .FirstOrDefault(candidate => string.Equals(candidate.Name, call.Params?.Name, StringComparison.Ordinal));
+
         if (registration is null || registration.Access == McpAccess.Public)
             return await next(call, ct).ConfigureAwait(false);
+
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(services.GetRequiredService<McpLimits>().OperationDeadline);
         bool visible;
+
         try
         {
             var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
@@ -95,6 +118,7 @@ static class McpPrimitiveHandlers
         }
 
         // A hidden tool fails exactly as the SDK fails an unknown name, so a caller cannot tell them apart.
+
         return visible
             ? await next(call, ct).ConfigureAwait(false)
             : throw new McpProtocolException($"Unknown tool: '{call.Params!.Name}'", McpErrorCode.InvalidParams);
