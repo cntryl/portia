@@ -50,8 +50,11 @@ public sealed class AccountRequestBehavior(IAccountLifecycleObserver lifecycle)
     : IRequestPipelineBehavior<DepositFunds>
 {
     /// <inheritdoc />
-    public async ValueTask<Result> HandleAsync(IRequestContext<DepositFunds> context,
-        RequestPipelineNext continuation, CancellationToken ct)
+    public async ValueTask<Result> HandleAsync(
+        IRequestContext<DepositFunds> context,
+        RequestPipelineNext continuation,
+        CancellationToken ct
+    )
     {
         lifecycle.Record("behavior.enter");
         var result = await continuation(ct).ConfigureAwait(false);
