@@ -4,6 +4,18 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## Unreleased
+
+### Added
+
+- MCP tools support `Authenticated()`, `Public()` and `VisibleTo<TPolicy>()`. `tools/list` returns only the tools the caller may see, and `tools/call` on a hidden tool fails exactly like an unknown tool.
+- `IMcpVisibilityPolicy` gains `IsVisibleAsync(actor, McpEntryDescriptor, cancellationToken)`, which names the tool, resource or prompt being judged. Resources and prompts use it too.
+
+### Changed
+
+- The actor-only `IMcpVisibilityPolicy.IsVisibleAsync` now has a default implementation that hides the entry, so a policy can implement only the descriptor overload. Existing implementations keep working unchanged.
+- Tools with no visibility choice stay visible to every caller their endpoint admits, as before. Choose `Authenticated()` or `VisibleTo<TPolicy>()` to narrow a tool.
+
 ## 0.14.10
 
 ### Added
