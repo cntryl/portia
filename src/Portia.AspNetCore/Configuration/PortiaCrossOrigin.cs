@@ -15,11 +15,14 @@ static class PortiaCrossOrigin
     internal static bool IsAllowed(HttpContext context)
     {
         var request = context.Request;
+
         if (HttpMethods.IsGet(request.Method) || HttpMethods.IsHead(request.Method) ||
             HttpMethods.IsOptions(request.Method) || HttpMethods.IsTrace(request.Method))
             return true;
 
+
         var fetchSite = request.Headers["Sec-Fetch-Site"];
+
         if (fetchSite.Count > 0)
         {
             // The browser sets fetch metadata itself, so it decides whenever it is present.
@@ -29,11 +32,14 @@ static class PortiaCrossOrigin
         else
         {
             var origin = request.Headers.Origin;
+
             if (origin.Count == 0)
                 return true;
+
             if (origin.Count == 1 && MatchesOrigin(origin[0], request))
                 return true;
         }
+
 
         return context.Features.Get<PortiaCorsDecision>() is { OriginAllowed: true };
     }

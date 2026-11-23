@@ -147,6 +147,7 @@ public sealed class FitzKvCheckpointStoreTests
 
         // Assert
         Assert.Equal(identities.Length, client.Committed.Count);
+
         for (var index = 0; index < identities.Length; index++)
             Assert.Equal(((ulong)index + 1).ToString(CultureInfo.InvariantCulture),
                 (await store.LoadAsync(identities[index], TestContext.Current.CancellationToken)).Cursor.ToString());
@@ -309,6 +310,7 @@ public sealed class FitzKvCheckpointStoreTests
         // Arrange
         var failure = new KvException("backend down", "KV_BACKEND", domainCode: FitzErrorCodes.KvBackendError);
         var client = new FakeKvClient();
+
         if (atCommit)
         {
             client.CommitFailure = failure;
@@ -319,6 +321,7 @@ public sealed class FitzKvCheckpointStoreTests
         }
 
         // Act
+
         var store = new FitzKvCheckpointStore(client, "kv://portia/state/checkpoints");
 
         // Assert

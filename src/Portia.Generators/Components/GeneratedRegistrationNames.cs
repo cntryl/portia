@@ -26,6 +26,7 @@ static class GeneratedRegistrationNames
         do
         {
             qualifiedMore = false;
+
             foreach (var type in types.GroupBy(Candidate, StringComparer.Ordinal)
                          .Where(group => group.Count() > 1).SelectMany(group => group).ToArray())
             {
@@ -37,6 +38,7 @@ static class GeneratedRegistrationNames
         // candidate before assigning suffixes, including names already claimed by other types.
         var names = new Dictionary<string, string>();
         var reserved = new HashSet<string>(types.Select(Candidate), StringComparer.Ordinal);
+
         foreach (var group in types.GroupBy(Candidate, StringComparer.Ordinal))
         {
             foreach (var type in group)
@@ -49,11 +51,14 @@ static class GeneratedRegistrationNames
 
                 var baseName = group.Key + "_" + StableSuffix(type);
                 var name = baseName;
+
                 for (var suffix = 2; !reserved.Add(name); suffix++)
                     name = baseName + "_" + suffix;
+
                 names[type] = name;
             }
         }
+
 
         return names;
 

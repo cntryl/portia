@@ -108,10 +108,12 @@ public sealed class ReactorScenarioTests
     {
         // Arrange
         var scenario = new ReactorScenario().RespondByDefault<int>(Result<int>.Success(42));
+
         if (exact)
             _ = scenario.RespondTo<GetValue, int>(Result<int>.Success(5));
 
         // Act
+
         var result = await scenario.Requests.SendAsync(new GetValue(), RequestActor.System, ct: TestContext.Current.CancellationToken);
 
         // Assert
@@ -355,8 +357,11 @@ public sealed class ReactorScenarioTests
 sealed class ScenarioCheckpointReactor(IProjectionCheckpointStore checkpoints)
     : Reactor(checkpoints, EventStreamPattern.ForPattern("test", "users"))
 {
-    protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
-        CancellationToken ct)
+    protected override ValueTask<Result> ReactToEventAsync(
+        DomainEventRecord record,
+        IExecutionContext context,
+        CancellationToken ct
+    )
     {
         ct.ThrowIfCancellationRequested();
         return ValueTask.FromResult(Result.Success);

@@ -72,8 +72,11 @@ public sealed class AwsMailSenderTests
         SendRejectionReason.SenderNotAuthorized)]
     [InlineData(typeof(MessageRejectedException), "The message contains a virus.", SendRejectionReason.ContentRejected)]
     [InlineData(typeof(BadRequestException), "bad", SendRejectionReason.Other)]
-    public async Task ShouldReportRejectionGivenDefinitiveSesRefusal(Type exceptionType, string providerMessage,
-        SendRejectionReason expected)
+    public async Task ShouldReportRejectionGivenDefinitiveSesRefusal(
+        Type exceptionType,
+        string providerMessage,
+        SendRejectionReason expected
+    )
     {
         // Arrange
         var (sender, proxy) = CreateSender();

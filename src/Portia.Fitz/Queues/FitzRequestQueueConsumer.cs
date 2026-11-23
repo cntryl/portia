@@ -45,6 +45,7 @@ public sealed class FitzRequestQueueConsumer(
                 async token => await _queue.SubscribeAsync(_route, token).ConfigureAwait(false),
                 "The Fitz queue subscription ended without cancellation.", ct)
             .ConfigureAwait(false);
+
         while (true)
         {
             ct.ThrowIfCancellationRequested();
@@ -55,6 +56,7 @@ public sealed class FitzRequestQueueConsumer(
                     1, TimeSpan.Zero, ct)
                 .ConfigureAwait(false);
             var reservations = new List<FitzQueuedRequest>(items.Length);
+
             try
             {
                 foreach (var item in items)
@@ -71,6 +73,7 @@ public sealed class FitzRequestQueueConsumer(
                 foreach (var reservation in reservations)
                     await reservation.DisposeAsync().ConfigureAwait(false);
             }
+
 
             if (items.Length == 0)
             {
@@ -120,10 +123,16 @@ public sealed class FitzRequestQueueConsumer(
         Exception? _renewalError;
         int _dispositionStarted;
 
-        public FitzQueuedRequest(IQueueReservedItem item, IRequestDeserializer serializer,
-            RequestTransportCatalog catalog, ulong leaseSeconds,
+        public FitzQueuedRequest(
+            IQueueReservedItem item,
+            IRequestDeserializer serializer,
+            RequestTransportCatalog catalog,
+            ulong leaseSeconds,
             TimeSpan interval,
-            TimeProvider clock, ILogger? logger, CancellationToken ct)
+            TimeProvider clock,
+            ILogger? logger,
+            CancellationToken ct
+        )
         {
             _item = item;
             _logger = logger;
@@ -193,14 +202,19 @@ public sealed class FitzRequestQueueConsumer(
         async ValueTask RetryCoreAsync(TimeSpan delay, bool allowExpiryFallback, CancellationToken ct)
         {
             ArgumentOutOfRangeException.ThrowIfLessThan(delay, TimeSpan.Zero);
+
             if (delay.Ticks % TimeSpan.TicksPerSecond != 0)
                 throw new ArgumentException("Retry delay must be a whole number of seconds.", nameof(delay));
+
             await StopRenewalAsync().ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
+
             if (allowExpiryFallback && (Volatile.Read(ref _renewalError) is not null || _lost.IsCancellationRequested))
                 return;
+
             RequireOwned(ct);
             BeginDisposition();
+
             try
             {
                 await _item.NackAsync(delay, ct).ConfigureAwait(false);
@@ -238,8 +252,10 @@ public sealed class FitzRequestQueueConsumer(
         {
             var request = requestBase as IRequest
                           ?? throw new InvalidOperationException("Only no-result requests can be queued.");
+
             if (!catalog.Get(request.GetType()).Transports.Contains(RequestTransportId.Queue))
                 throw new InvalidRequestTransportException(request, RequestTransportId.Queue);
+
             return request;
         }
 
@@ -261,6 +277,7 @@ public sealed class FitzRequestQueueConsumer(
                 Volatile.Write(ref _renewalError, ex);
                 PortiaTelemetry.RecordRunnerFault(nameof(FitzRequestQueueConsumer), RunnerFaultStage.Renewal, ex,
                     logger);
+
                 try
                 {
                     await _lost.CancelAsync().ConfigureAwait(false);

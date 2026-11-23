@@ -14,13 +14,18 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 {
     static readonly ConditionalWeakTable<OpenApiDocument, DefaultErrorResponses> DefaultErrorResponsesByDocument = [];
 
-    public async Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context,
-        CancellationToken cancellationToken)
+    public async Task TransformAsync(
+        OpenApiOperation operation,
+        OpenApiOperationTransformerContext context,
+        CancellationToken cancellationToken
+    )
     {
         var metadata = context.Description.ActionDescriptor.EndpointMetadata?.OfType<PortiaOpenApiOperation>()
             .SingleOrDefault();
+
         if (metadata == null)
             return;
+
 
         cancellationToken.ThrowIfCancellationRequested();
         operation.Responses ??= [];
@@ -45,12 +50,15 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             .ToHashSet(StringComparer.Ordinal) ?? [];
         var replacesDefaultSuccess =
             customResult?.DeclaredStatusCodes.Any(status => status is >= 200 and < 400) == true;
+
         foreach (var status in operation.Responses.Keys.Where(status => !explicitStatuses.Contains(status)).ToArray())
             _ = operation.Responses.Remove(status);
+
         if (replacesDefaultSuccess)
         {
             if (!customStatuses.Contains("200"))
                 _ = operation.Responses.Remove("200");
+
             if (!customStatuses.Contains("204"))
                 _ = operation.Responses.Remove("204");
         }
@@ -69,11 +77,13 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         var endpointDescriptions = endpointMetadata.OfType<PortiaOpenApiDescriptions>().SingleOrDefault();
         var jsonOptions =
             context.ApplicationServices.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
+
         if (putBody is null && metadata.RequestType is { } operationRequest)
         {
             operation.Description ??= PortiaJsonDescriptions.Type(jsonOptions, operationRequest);
             operation.Deprecated |= PortiaJsonDescriptions.Metadata(jsonOptions, operationRequest)?.Deprecated == true;
         }
+
 
         string? MemberDescription(PortiaOpenApiParameter parameter, string wireName, Type? requestType) =>
             endpointDescriptions?.Members.GetValueOrDefault(parameter.ClrName) ?? parameter.Description ??
@@ -81,12 +91,15 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 
         var schemaType = httpOptions.OpenApiSchemaType;
         var schemaCollectionElementIsNullable = httpOptions.OpenApiSchemaCollectionElementIsNullable;
+
         foreach (var responseMetadata in explicitResponses)
         {
             var status = responseMetadata.StatusCode.ToString(CultureInfo.InvariantCulture);
+
             if (replacesDefaultSuccess && (status == "200" || status == "204") &&
                 !customStatuses.Contains(status))
                 continue;
+
             _ = operation.Responses.TryGetValue(status, out var existing);
             var response = new OpenApiResponse
             {
@@ -99,10 +112,12 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                     : null
             };
             var rootIsNullable = status is "200" or "201" && createdLocation?.PayloadIsNullable == true;
+
             if (responseMetadata.Type is { } responseType && responseType != typeof(void) &&
                 responseMetadata.ContentTypes.Count > 0)
             {
                 response.Content ??= new Dictionary<string, IOpenApiMediaType>(StringComparer.Ordinal);
+
                 foreach (var contentType in responseMetadata.ContentTypes.Distinct(StringComparer.OrdinalIgnoreCase))
                 {
                     _ = response.Content.TryGetValue(contentType, out var media);
@@ -121,8 +136,10 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 }
             }
 
+
             operation.Responses[status] = response;
         }
+
 
         if (createdLocation is not null)
             foreach (var status in new[] { "200", "201", "204" })
@@ -138,6 +155,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 
         var custom = endpointMetadata.OfType<PortiaCustomHttpContract>()
             .SingleOrDefault();
+
         foreach (var parameter in custom?.Parameters ?? [])
         {
             operation.Parameters.Add(new OpenApiParameter
@@ -158,6 +176,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                     input: true)
             });
         }
+
 
         var queryMembers = endpointMetadata.OfType<PortiaQueryMembers>()
             .SingleOrDefault()?.Names ?? [];
@@ -181,6 +200,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 PortiaJsonDescriptions.MemberMetadata(jsonOptions, metadata.RequestType, parameter.ClrName);
             var schema = PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!, schemaType,
                 parameter.IsNullable, schemaCollectionElementIsNullable, descriptions, contractMember, input: true);
+
             if (parameter.HasDefault && schema is OpenApiSchema concreteSchema)
             {
                 concreteSchema.Default = contractMember?.Rules.Any(rule =>
@@ -188,6 +208,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                     ? null
                     : PortiaOpenApiEnrichment.Scalar(parameter.DefaultValue, concreteSchema.Default, schema);
             }
+
 
             var headerName = HeaderName(parameter.ClrName);
             var wireName = headerName ?? parameter.WireName ??
@@ -213,6 +234,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             ? metadata.Parameters.Select((parameter, index) => (Parameter: parameter, Index: index))
                 .Where(member => IsBody(member.Parameter)).ToArray()
             : [];
+
         if (custom is not null && accepts?.RequestType is not null)
         {
             operation.RequestBody = new OpenApiRequestBody
@@ -230,6 +252,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             };
         }
 
+
         (OpenApiSchema Schema, Dictionary<string, IOpenApiSchema> Form, HashSet<string> FormRequired)
             BuildGeneratedBody(Type? requestType, (PortiaOpenApiParameter Parameter, int Index)[] fields)
         {
@@ -238,6 +261,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             var jsonRequired = new HashSet<string>();
             var jsonNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var formRequired = new HashSet<string>();
+
             foreach (var (parameter, index) in fields)
             {
                 var fallbackName = parameter.WireName ??
@@ -252,6 +276,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                     schemaType, parameter.IsNullable, schemaCollectionElementIsNullable, descriptions,
                     PortiaJsonDescriptions.MemberMetadata(jsonOptions, requestType, parameter.ClrName),
                     input: true);
+
                 if (member.Input)
                 {
                     jsonNames[parameter.ClrName] = member.Name;
@@ -260,19 +285,23 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 }
                 // Forms and queries use generated scalar parsing and their declared field names.
                 // JSON member converters and resolver renames apply only to the JSON body.
+
                 formProperties[fallbackName] = ReferenceEquals(member.Options, jsonOptions)
                     ? memberSchema
                     : PortiaOpenApiSchemaGenerator.Create(parameter.Type, jsonOptions, context.Document!, schemaType,
                         parameter.IsNullable, schemaCollectionElementIsNullable, descriptions);
                 formProperties[fallbackName] = PortiaOpenApiDescriptions.Annotate(formProperties[fallbackName],
                     MemberDescription(parameter, fallbackName, requestType));
+
                 if (member.Input && (parameter.Required || member.Required || PortiaJsonConstraints.RequiresPresence(
                         PortiaJsonDescriptions.MemberMetadata(jsonOptions, requestType, parameter.ClrName))))
                     _ = jsonRequired.Add(member.Name);
+
                 if (parameter.Required && parameter.Type != typeof(bool) || PortiaJsonConstraints.RequiresPresence(
                         PortiaJsonDescriptions.MemberMetadata(jsonOptions, requestType, parameter.ClrName)))
                     _ = formRequired.Add(fallbackName);
             }
+
 
             var schema = new OpenApiSchema
             {
@@ -288,6 +317,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 Properties = properties,
                 Required = jsonRequired.Count == 0 ? null : jsonRequired
             };
+
             if (requestType is { } conditionalType &&
                 PortiaJsonDescriptions.Metadata(jsonOptions, conditionalType) is { } contract)
             {
@@ -320,6 +350,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                     }
             }
 
+
             return (schema, formProperties, formRequired);
         }
 
@@ -328,6 +359,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             var document = context.Document!;
             var schemas = new List<IOpenApiSchema>();
             var discriminators = new Dictionary<string, OpenApiSchemaReference>(StringComparer.Ordinal);
+
             foreach (var (typed, index) in putBody.Cases.Select((typed, index) => (typed, index)))
             {
                 var fields = typed.Parameters.Select((parameter, i) => (Parameter: parameter, Index: i))
@@ -336,9 +368,11 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 (schema.Required ??= new HashSet<string>(StringComparer.Ordinal)).Add(putBody.Selector);
                 schema.Properties![putBody.Selector] = new OpenApiSchema
                 { Type = JsonSchemaType.String, Const = typed.Value };
+
                 if (typed.Permission is { } permission)
                     (schema.Extensions ??= new Dictionary<string, IOpenApiExtension>(StringComparer.Ordinal))
                         ["x-portia-permission"] = new JsonNodeExtension(System.Text.Json.Nodes.JsonValue.Create(permission)!);
+
                 var suffix = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
                     System.Text.Encoding.UTF8.GetBytes(metadata.OperationId)))[..16];
                 var id = "Portia_PutCase_" + suffix + "_" + index.ToString(CultureInfo.InvariantCulture);
@@ -347,6 +381,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 schemas.Add(reference);
                 discriminators.Add(typed.Value, reference);
             }
+
 
             operation.RequestBody = new OpenApiRequestBody
             {
@@ -374,6 +409,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
             var (schema, formProperties, formRequired) = BuildGeneratedBody(metadata.RequestType, body);
             Dictionary<string, IOpenApiMediaType> content = new()
             { ["application/json"] = new OpenApiMediaType { Schema = schema } };
+
             if (endpointMetadata.OfType<PortiaFormBindableBody>().Any() &&
                 PortiaHttpBinding.AcceptsFormBody(endpointMetadata, context.ApplicationServices))
             {
@@ -389,6 +425,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 content["application/x-www-form-urlencoded"] = new OpenApiMediaType { Schema = formSchema };
                 content["multipart/form-data"] = new OpenApiMediaType { Schema = formSchema };
             }
+
 
             operation.RequestBody = new OpenApiRequestBody
             {
@@ -454,6 +491,7 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
 
         var defaultErrorResponses = DefaultErrorResponsesByDocument.GetValue(context.Document!,
             static document => new DefaultErrorResponses(document));
+
         foreach (var status in new[] { "400", "401", "403", "404", "409", "413", "415", "500" })
         {
             if (explicitStatuses.Contains(status))
@@ -463,23 +501,29 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                 status == "401" ? defaultErrorResponses.Unauthorized : defaultErrorResponses.Problem);
         }
 
+
         await descriptions.ApplySecurityAsync(operation, metadata.RequestType, endpointMetadata,
             context.ApplicationServices,
             context.Document!, cancellationToken).ConfigureAwait(false);
+
         if (putBody is not null)
         {
             var common = SecurityKeys(operation);
+
             if (common.Count == 0 && putBody.Cases.Any(typed => typed.Permission is not null))
                 throw new InvalidOperationException("Typed PUT cases with application permissions require a common OpenAPI credential description.");
+
             foreach (var typed in putBody.Cases.Skip(1))
             {
                 var alternate = new OpenApiOperation();
                 await descriptions.ApplySecurityAsync(alternate, typed.RequestType, endpointMetadata,
                     context.ApplicationServices, context.Document!, cancellationToken).ConfigureAwait(false);
+
                 if (!common.SetEquals(SecurityKeys(alternate)))
                     throw new InvalidOperationException("Typed PUT cases must describe the same OpenAPI credentials.");
             }
         }
+
 
         static HashSet<string> SecurityKeys(OpenApiOperation candidate) =>
             (candidate.Security ?? []).Select(alternative => string.Concat(alternative.OrderBy(
@@ -517,8 +561,11 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
         public IOpenApiResponse Unauthorized =>
             GetReference(ref _unauthorizedName, UnauthorizedName, CreateUnauthorizedResponse);
 
-        OpenApiResponseReference GetReference(ref string? cachedName, string preferredName,
-            Func<OpenApiResponse> createResponse)
+        OpenApiResponseReference GetReference(
+            ref string? cachedName,
+            string preferredName,
+            Func<OpenApiResponse> createResponse
+        )
         {
             lock (_gate)
             {
@@ -528,8 +575,10 @@ sealed class PortiaOpenApiOperationTransformer : IOpenApiOperationTransformer
                     var responses = components.Responses ??=
                         new Dictionary<string, IOpenApiResponse>(StringComparer.Ordinal);
                     var name = preferredName;
+
                     for (var suffix = 2; responses.ContainsKey(name); suffix++)
                         name = $"{preferredName}_{suffix.ToString(CultureInfo.InvariantCulture)}";
+
                     responses.Add(name, createResponse());
                     cachedName = name;
                 }

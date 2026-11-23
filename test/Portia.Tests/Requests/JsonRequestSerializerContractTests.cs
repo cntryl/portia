@@ -309,26 +309,33 @@ public sealed class JsonRequestSerializerContractTests
         var serializer = TestJson.Serializer(typeof(UniversalAction));
         var valid = Envelope(serializer);
         var index = 0;
+
         foreach (var property in new[] { "version", "contract", "contract_version", "metadata", "payload" })
         {
             var missing = (JsonObject)valid.DeepClone();
             _ = missing.Remove(property);
             yield return [$"E3-delete-{property}", Bytes(missing).ToArray()];
+
             foreach (var replacement in new JsonNode?[] { null, "wrong", new JsonArray(), new JsonObject() })
             {
                 if (property == "payload" && replacement is JsonObject)
                     continue;
+
                 var retyped = (JsonObject)valid.DeepClone();
                 retyped[property] = replacement?.DeepClone();
                 yield return [$"E3-retype-{property}-{index++}", Bytes(retyped).ToArray()];
             }
         }
 
+
         var validBytes = Bytes(valid).ToArray();
+
         for (var length = 0; length < validBytes.Length; length += Math.Max(1, validBytes.Length / 12))
             yield return [$"E3-truncate-{length}", validBytes[..length]];
 
+
         var random = new Random(0x504f5254);
+
         for (var sample = 0; sample < 12; sample++)
         {
             var bytes = new byte[random.Next(1, 48)];

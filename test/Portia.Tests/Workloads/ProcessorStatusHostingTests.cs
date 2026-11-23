@@ -101,8 +101,11 @@ public sealed class ProcessorStatusHostingTests
     sealed class StatusHostingProjector(StatusHostingStore store, StatusHostingControl control)
         : Projector(store, EventStreamPattern.ForPattern("status-hosting", "source"))
     {
-        protected override ValueTask<Result> ProjectEventAsync(DomainEventRecord record,
-            IProjectorContext context, CancellationToken ct)
+        protected override ValueTask<Result> ProjectEventAsync(
+            DomainEventRecord record,
+            IProjectorContext context,
+            CancellationToken ct
+        )
         {
             control.Projected.TrySetResult();
             return ValueTask.FromResult(Result.Success);
@@ -112,8 +115,11 @@ public sealed class ProcessorStatusHostingTests
     sealed class StatusHostingReactor(StatusHostingStore store, StatusHostingControl control)
         : Reactor(store, EventStreamPattern.ForPattern("status-hosting", "source"))
     {
-        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record,
-            IExecutionContext context, CancellationToken ct)
+        protected override ValueTask<Result> ReactToEventAsync(
+            DomainEventRecord record,
+            IExecutionContext context,
+            CancellationToken ct
+        )
         {
             control.Reacted.TrySetResult();
             return ValueTask.FromResult(Result.Success);
@@ -124,26 +130,37 @@ public sealed class ProcessorStatusHostingTests
     {
         readonly ConcurrentDictionary<CheckpointIdentity, ProjectionCheckpoint> _checkpoints = new();
 
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-            CancellationToken ct = default)
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+            CheckpointIdentity identity,
+            CancellationToken ct = default
+        )
             => ValueTask.FromResult(_checkpoints.GetValueOrDefault(identity));
 
         public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
             => LoadCheckpointAsync(identity, ct);
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-            CancellationToken ct = default)
+        public ValueTask SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default
+        )
         {
             _checkpoints[identity] = checkpoint;
             return ValueTask.CompletedTask;
         }
 
-        ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
-            ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+        ValueTask IConditionalProjectionCheckpointStore.SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint expected,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct
+        )
         {
             ct.ThrowIfCancellationRequested();
+
             if (_checkpoints.GetValueOrDefault(identity) != expected)
                 throw new ProjectionConcurrencyException("stale checkpoint");
+
             _checkpoints[identity] = checkpoint;
             return ValueTask.CompletedTask;
         }
@@ -176,12 +193,16 @@ public sealed class ProcessorStatusHostingTests
         int _active;
         internal int Active => Volatile.Read(ref _active);
 
-        public async ValueTask<IAsyncDisposable> RegisterAsync(WorkloadIdentity workload,
-            CancellationToken ct = default)
+        public async ValueTask<IAsyncDisposable> RegisterAsync(
+            WorkloadIdentity workload,
+            CancellationToken ct = default
+        )
         {
             ct.ThrowIfCancellationRequested();
+
             if (Attempts.AddOrUpdate(workload.Name, 1, static (_, count) => count + 1) == 1)
                 throw new IOException("Status RPC unavailable.");
+
             await AllowRegistration.Task.WaitAsync(ct);
             _ = Interlocked.Increment(ref _active);
             (workload.Name == "projector" ? ProjectorRegistered : ReactorRegistered).TrySetResult();

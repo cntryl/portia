@@ -79,10 +79,12 @@ sealed class HttpLifecycleApplication : IDisposable
         _transport = transport;
         var builder = WebApplication.CreateSlimBuilder();
         builder.Logging.ClearProviders();
+
         if (transport == "inprocess")
             builder.WebHost.UseTestServer();
         else
             builder.WebHost.UseUrls("http://127.0.0.1:0");
+
         builder.Services.AddSingleton(_state);
         builder.Services.Configure<PortiaHttpOptions>(options => options.MaxJsonBodyBytes = MaximumBodyBytes);
         builder.Services.AddPortia().AddHttp().AddRequestHandler<HttpLifecycleHandler>()
@@ -93,9 +95,11 @@ sealed class HttpLifecycleApplication : IDisposable
             .Accepts<string>("text/plain").OnBind(async (context, ct) =>
             {
                 Interlocked.Increment(ref _state.Binders);
+
                 if (!context.Request.Body.CanSeek || context.Request.Body.Position != 0)
                     throw new InvalidOperationException(
                         "Custom binder did not receive a replayable body at the beginning.");
+
                 using var reader = new StreamReader(context.Request.Body, Encoding.UTF8, leaveOpen: true);
                 return new HttpCustomLifecycleRequest(await reader.ReadToEndAsync(ct), 7);
             })).DisableAntiforgery();
@@ -128,8 +132,10 @@ sealed class HttpLifecycleApplication : IDisposable
         response.EnsureSuccessStatusCode();
         var result = JsonSerializer.Deserialize(await response.Content.ReadAsByteArrayAsync(),
             HttpLifecycleJsonContext.Default.Int32);
+
         if (result != _expected)
             throw new InvalidOperationException("Generated endpoint did not consume the prepared body.");
+
         return result;
     }
 
@@ -148,21 +154,26 @@ sealed class HttpLifecycleApplication : IDisposable
             using var content = new PreparedBody(new byte[MaximumBodyBytes + 1], knownLength);
             content.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
             using var response = await _client.PostAsync("/custom", content);
+
             if (response.StatusCode != HttpStatusCode.RequestEntityTooLarge || _state.Handlers != before ||
                 _state.Binders != binders)
                 throw new InvalidOperationException("Oversized body reached a custom binder or handler.");
             // Pinned Kestrel counts chunk framing against MaxRequestBodySize. Keep that server
             // boundary visible rather than weakening Portia's cap to accept a larger wire body.
+
             var nearLimit = !knownLength && _transport == "loopback" ? MaximumBodyBytes - 1024 : MaximumBodyBytes;
             using var boundary = new PreparedBody(Encoding.UTF8.GetBytes(new string('a', nearLimit)), knownLength);
             boundary.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
             using var accepted = await _client.PostAsync("/custom", boundary);
+
             if (!accepted.IsSuccessStatusCode)
                 throw new InvalidOperationException(
                     $"At-limit custom body failed on {_transport}, knownLength={knownLength}: {(int)accepted.StatusCode}, {await accepted.Content.ReadAsStringAsync()}; binders={_state.Binders}.");
+
             if (JsonSerializer.Deserialize(await accepted.Content.ReadAsByteArrayAsync(),
                     HttpLifecycleJsonContext.Default.Int32) != nearLimit + 7)
                 throw new InvalidOperationException("An exactly-at-limit body lost replayed content.");
+
             if (!knownLength && _transport == "loopback")
             {
                 before = _state.Handlers;
@@ -171,6 +182,7 @@ sealed class HttpLifecycleApplication : IDisposable
                     new PreparedBody(Encoding.UTF8.GetBytes(new string('a', MaximumBodyBytes)), false);
                 framedBoundary.Headers.ContentType = new MediaTypeHeaderValue("text/plain");
                 using var framedRejection = await _client.PostAsync("/custom", framedBoundary);
+
                 if (framedRejection.StatusCode != HttpStatusCode.RequestEntityTooLarge || _state.Handlers != before ||
                     _state.Binders != binders)
                     throw new InvalidOperationException("Kestrel's chunk framing limit did not reject before binding.");
@@ -180,6 +192,7 @@ sealed class HttpLifecycleApplication : IDisposable
         var handlers = _state.Handlers;
         using var unsupported = new StringContent("payload", Encoding.UTF8, "application/xml");
         using var rejected = await _client.PostAsync("/json", unsupported);
+
         if (rejected.StatusCode != HttpStatusCode.UnsupportedMediaType || handlers != _state.Handlers)
             throw new InvalidOperationException("Unsupported media reached the handler.");
     }

@@ -193,6 +193,7 @@ public sealed class FakeObjectStorageTests
             await UploadAsync(store, tenant, Digest(payload), payload))));
 
         Assert.Equal(0, store.ActiveUploadCount);
+
         foreach (var payload in payloads)
         {
             Assert.True(await store.HeadAndVerifyAsync(tenant, Digest(payload), TestContext.Current.CancellationToken));
@@ -272,8 +273,10 @@ public sealed class FakeObjectStorageTests
 
         public void Resume() => _resume.TrySetResult();
 
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer,
-            CancellationToken cancellationToken = default)
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default
+        )
         {
             _readStarted.TrySetResult();
             await _resume.Task.WaitAsync(cancellationToken);

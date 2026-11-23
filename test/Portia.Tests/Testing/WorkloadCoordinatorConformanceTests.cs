@@ -183,26 +183,34 @@ public sealed class WorkloadCoordinatorConformanceTests
     {
         readonly object _owner = new();
 
-        public async Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-            Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default)
+        public async Task RunAsync(
+            Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
+            Func<WorkloadIdentity, CancellationToken, Task> run,
+            CancellationToken ct = default
+        )
         {
             var active = new Dictionary<WorkloadIdentity, (CancellationTokenSource Cancellation, Task Run)>();
+
             try
             {
                 while (true)
                 {
                     ct.ThrowIfCancellationRequested();
                     var current = workloads().ToHashSet();
+
                     foreach (var identity in active.Keys.Where(identity => !current.Contains(identity)).ToArray())
                         await ReleaseAsync(identity).ConfigureAwait(false);
+
                     foreach (var identity in current)
                     {
                         if (active.ContainsKey(identity) || (!duplicateOwners && !owners.TryAdd(identity, _owner)))
                             continue;
+
                         var cancellation = releaseBeforeStop
                             ? new CancellationTokenSource()
                             : CancellationTokenSource.CreateLinkedTokenSource(ct);
                         active.Add(identity, (cancellation, run(identity, cancellation.Token)));
+
                         if (releaseBeforeStop && released!.Task.IsCompleted)
                             reacquired!.TrySetResult();
                     }
@@ -216,10 +224,12 @@ public sealed class WorkloadCoordinatorConformanceTests
                     await ReleaseAsync(identity).ConfigureAwait(false);
             }
 
+
             async Task ReleaseAsync(WorkloadIdentity identity)
             {
                 var owned = active[identity];
                 active.Remove(identity);
+
                 if (releaseBeforeStop && !duplicateOwners)
                 {
                     _ = owners.TryRemove(new KeyValuePair<WorkloadIdentity, object>(identity, _owner));
@@ -229,7 +239,9 @@ public sealed class WorkloadCoordinatorConformanceTests
                     await reacquired!.Task.ConfigureAwait(false);
                 }
 
+
                 await owned.Cancellation.CancelAsync().ConfigureAwait(false);
+
                 try
                 {
                     await owned.Run.ConfigureAwait(false);
@@ -241,6 +253,7 @@ public sealed class WorkloadCoordinatorConformanceTests
                 {
                     if (!duplicateOwners && !releaseBeforeStop)
                         _ = owners.TryRemove(new KeyValuePair<WorkloadIdentity, object>(identity, _owner));
+
                     owned.Cancellation.Dispose();
                 }
             }
@@ -338,12 +351,16 @@ public sealed class WorkloadCoordinatorConformanceTests
 
     sealed class FirstOwnerCoordinator : IWorkloadCoordinator
     {
-        public async Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-            Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default)
+        public async Task RunAsync(
+            Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
+            Func<WorkloadIdentity, CancellationToken, Task> run,
+            CancellationToken ct = default
+        )
         {
             var identity = Assert.Single(workloads());
             using var ownership = CancellationTokenSource.CreateLinkedTokenSource(ct);
             var owned = run(identity, ownership.Token);
+
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
@@ -358,15 +375,21 @@ public sealed class WorkloadCoordinatorConformanceTests
 
     sealed class InertCoordinator : IWorkloadCoordinator
     {
-        public Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-            Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default) =>
+        public Task RunAsync(
+            Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
+            Func<WorkloadIdentity, CancellationToken, Task> run,
+            CancellationToken ct = default
+        ) =>
             Task.Delay(Timeout.InfiniteTimeSpan, ct);
     }
 
     sealed class DropsRetainedCoordinator : IWorkloadCoordinator
     {
-        public async Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-            Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default)
+        public async Task RunAsync(
+            Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
+            Func<WorkloadIdentity, CancellationToken, Task> run,
+            CancellationToken ct = default
+        )
         {
             var identity = Assert.Single(workloads());
             using var ownership = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -379,27 +402,35 @@ public sealed class WorkloadCoordinatorConformanceTests
 
     sealed class ReacquiresRevokedCoordinator : IWorkloadCoordinator
     {
-        public async Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-            Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default)
+        public async Task RunAsync(
+            Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
+            Func<WorkloadIdentity, CancellationToken, Task> run,
+            CancellationToken ct = default
+        )
         {
             var first = Assert.Single(workloads());
             var owned = new List<(CancellationTokenSource Cancellation, Task Run)>();
+
             try
             {
                 Start(first);
                 WorkloadIdentity second;
+
                 while (true)
                 {
                     ct.ThrowIfCancellationRequested();
                     var current = workloads();
+
                     if (current.Count == 1 && !current.Contains(first))
                     {
                         second = Assert.Single(current);
                         break;
                     }
 
+
                     await Task.Delay(TimeSpan.FromMilliseconds(5), ct);
                 }
+
 
                 await StopAsync(owned[0]);
                 Start(second);
@@ -414,6 +445,7 @@ public sealed class WorkloadCoordinatorConformanceTests
                     await StopAsync(workload);
             }
 
+
             void Start(WorkloadIdentity identity)
             {
                 var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -424,7 +456,9 @@ public sealed class WorkloadCoordinatorConformanceTests
             {
                 if (workload.Cancellation.IsCancellationRequested)
                     return;
+
                 await workload.Cancellation.CancelAsync();
+
                 try
                 {
                     await workload.Run;
@@ -451,6 +485,7 @@ public sealed class WorkloadCoordinatorConformanceTests
         public async ValueTask DisposeAsync()
         {
             await _lifetime.CancelAsync();
+
             if (_callback is not null)
             {
                 try
@@ -462,12 +497,16 @@ public sealed class WorkloadCoordinatorConformanceTests
                 }
             }
 
+
             _completion.TrySetCanceled(_lifetime.Token);
             _lifetime.Dispose();
         }
 
-        public Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-            Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default)
+        public Task RunAsync(
+            Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
+            Func<WorkloadIdentity, CancellationToken, Task> run,
+            CancellationToken ct = default
+        )
         {
             _callback = run(Assert.Single(workloads()), _lifetime.Token);
             return _completion.Task;

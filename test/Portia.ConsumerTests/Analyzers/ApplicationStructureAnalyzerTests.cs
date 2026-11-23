@@ -115,6 +115,7 @@ public sealed class ApplicationStructureAnalyzerTests
         // Arrange
         const string entity = "namespace Shop.Core.Features.Orders.Aggregates.Entities; public sealed class OrderLine;";
         var roots = new List<(string Path, string Source)>();
+
         if (twoOwners)
         {
             roots.Add(("Features/Orders/Aggregates/Order.cs", "using Cntryl.Portia; using Shop.Core.Features.Orders.Aggregates.Entities; namespace Shop.Core.Features.Orders.Aggregates; public sealed class Order(Uuid id) : Aggregate(id, new EventStreamAddress(\"shop\", \"orders\", id.ToString())) { private OrderLine _line = new(); }"));
@@ -122,6 +123,7 @@ public sealed class ApplicationStructureAnalyzerTests
         }
 
         // Act
+
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
             roots.Append(("Features/Orders/Aggregates/Entities/OrderLine.cs", entity)).ToArray());
 
@@ -337,8 +339,12 @@ public sealed class ApplicationStructureAnalyzerTests
     [InlineData("Shop.Worker", "Jobs/Poll.cs", "namespace Shop.Worker; public class Poll;", "Shop.Worker.Jobs")]
     [InlineData("Shop.Core.Tests", "Features/Orders/Aggregates/OrderTests.cs", "public class OrderTests;",
         "Shop.Core.Tests.Features.Orders.Aggregates")]
-    public void ShouldReportExpectedNamespaceGivenFolderMismatch(string project, string path, string source,
-        string expected)
+    public void ShouldReportExpectedNamespaceGivenFolderMismatch(
+        string project,
+        string path,
+        string source,
+        string expected
+    )
     {
         // Arrange
         var analyzer = new ApplicationStructureAnalyzer();
@@ -842,6 +848,91 @@ public sealed class ApplicationStructureAnalyzerTests
 
         // Assert
         _ = Assert.Single(diagnostics, item => item.Id == "PORTIA213");
+    }
+
+    [Fact]
+    public void ShouldAcceptMcpHostGivenMcpRole()
+    {
+        // Arrange
+        const string source = "public static class McpComposition { }";
+
+        // Act
+        var diagnostics =
+            ApplicationAnalyzerCompilation.Analyze("Shop.Mcp", new ApplicationStructureAnalyzer(),
+                [("McpComposition.cs", source)]);
+
+        // Assert
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA213");
+    }
+
+    [Theory]
+    [InlineData("Api")]
+    [InlineData("Worker")]
+    [InlineData("Mcp")]
+    [InlineData("Common")]
+    [InlineData("Core")]
+    [InlineData("Host")]
+    [InlineData("Shared")]
+    public void ShouldAcceptExplicitPortiaProjectRoleGivenValidRole(string role)
+    {
+        // Arrange
+        const string source = "public static class Composition { }";
+
+        // Act
+        var diagnostics =
+            ApplicationAnalyzerCompilation.Analyze("Shop.Shared.Hosting", new ApplicationStructureAnalyzer(),
+                [("Composition.cs", source)], projectRole: role);
+
+        // Assert
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA213");
+    }
+
+    [Fact]
+    public void ShouldRejectUnknownExplicitPortiaProjectRoleGivenPersistenceRole()
+    {
+        // Arrange
+        const string source = "public static class Composition { }";
+
+        // Act
+        var diagnostics =
+            ApplicationAnalyzerCompilation.Analyze("Shop.Persistence", new ApplicationStructureAnalyzer(),
+                [("Composition.cs", source)], projectRole: "Persistence");
+
+        // Assert
+        _ = Assert.Single(diagnostics, item => item.Id == "PORTIA213");
+    }
+
+    [Theory]
+    [InlineData("Mcp")]
+    [InlineData("Host")]
+    [InlineData("Shared")]
+    public void ShouldAcceptEditorConfigProjectRoleGivenValidRole(string role)
+    {
+        // Arrange
+        const string source = "public static class Composition { }";
+
+        // Act
+        var diagnostics =
+            ApplicationAnalyzerCompilation.Analyze("Shop.Shared.Hosting", new ApplicationStructureAnalyzer(),
+                [("Composition.cs", source)], editorConfigProjectRole: role);
+
+        // Assert
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA213");
+    }
+
+    [Fact]
+    public void ShouldPreferMsBuildProjectRoleOverEditorConfigGivenConflict()
+    {
+        // Arrange
+        const string source = "public static class Composition { }";
+
+        // Act
+        var msBuildMcp =
+            ApplicationAnalyzerCompilation.Analyze("Shop.Shared.Hosting", new ApplicationStructureAnalyzer(),
+                [("Composition.cs", source)], projectRole: "Mcp", editorConfigProjectRole: "Persistence");
+
+        // Assert
+        Assert.DoesNotContain(msBuildMcp, item => item.Id == "PORTIA213");
     }
 
     [Theory]

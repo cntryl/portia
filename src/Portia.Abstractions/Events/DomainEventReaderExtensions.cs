@@ -6,7 +6,8 @@ public static class DomainEventReaderExtensions
     /// <summary>Reads a concrete stream from its beginning.</summary>
     public static IAsyncEnumerable<DomainEventRecord> ReadAsync(
         this IDomainEventReader reader,
-        EventStreamAddress stream)
+        EventStreamAddress stream
+    )
     {
         ArgumentNullException.ThrowIfNull(reader);
         return reader.ReadAsync(stream, 0, default);
@@ -16,7 +17,8 @@ public static class DomainEventReaderExtensions
     public static IAsyncEnumerable<DomainEventRecord> ReadAsync(
         this IDomainEventReader reader,
         EventStreamAddress stream,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         ArgumentNullException.ThrowIfNull(reader);
         return reader.ReadAsync(stream, 0, ct);
@@ -26,7 +28,8 @@ public static class DomainEventReaderExtensions
     public static IAsyncEnumerable<DomainEventRecord> ReadAsync(
         this IDomainEventReader reader,
         EventStreamAddress stream,
-        ulong fromOffset)
+        ulong fromOffset
+    )
     {
         ArgumentNullException.ThrowIfNull(reader);
         return reader.ReadAsync(stream, fromOffset, default);
@@ -35,7 +38,8 @@ public static class DomainEventReaderExtensions
     /// <summary>Reads a stream pattern from its beginning.</summary>
     public static IAsyncEnumerable<DomainEventRecord> ReadAsync(
         this IDomainEventReader reader,
-        EventStreamPattern pattern)
+        EventStreamPattern pattern
+    )
         =>
             reader.ReadAsync(pattern, default);
 
@@ -43,7 +47,8 @@ public static class DomainEventReaderExtensions
     public static IAsyncEnumerable<DomainEventRecord> ReadAsync(
         this IDomainEventReader reader,
         EventStreamPattern pattern,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         ArgumentNullException.ThrowIfNull(reader);
         return reader.ReadAsync(pattern, EventCursor.Start, ct);

@@ -18,14 +18,23 @@ public sealed class FitzNoticeRequestSender(
     readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
     /// <inheritdoc />
-    public ValueTask PublishAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
-        CancellationToken ct = default)
+    public ValueTask PublishAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, INotifiable
         => PublishAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <inheritdoc />
-    public async ValueTask PublishAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
-        RequestMetadata metadata, CancellationToken ct = default)
+    public async ValueTask PublishAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        RequestMetadata metadata,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, INotifiable
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -35,6 +44,7 @@ public sealed class FitzNoticeRequestSender(
         using var activity = PortiaTelemetry.StartSend(requestName, "notice", "fitz");
         var started = PortiaTelemetry.StartTimestamp();
         var outcome = "success";
+
         try
         {
             var route = FitzRouting.ResolveNoticeRoute(_catalog, request, routeValues);

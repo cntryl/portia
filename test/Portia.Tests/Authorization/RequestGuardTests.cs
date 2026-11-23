@@ -344,11 +344,14 @@ public sealed class RequestGuardTests
     static IRequestBus Bus(ServiceProvider provider) =>
         provider.GetRequiredService<IRequestBus>();
 
-    static ServiceProvider Provider(List<string> calls, IEnumerable<RequestHandlerRegistration> handlers,
+    static ServiceProvider Provider(
+        List<string> calls,
+        IEnumerable<RequestHandlerRegistration> handlers,
         IEnumerable<RequestAuthorizerRegistration>? authorizers = null,
         IEnumerable<RequestPipelineBehaviorRegistration>? behaviors = null,
         IEnumerable<RequestGuardRegistration>? guards = null,
-        Action<IServiceCollection>? configure = null)
+        Action<IServiceCollection>? configure = null
+    )
     {
         RecordingCommandGuard.Context = null;
         CommandHandler.Context = null;
@@ -379,14 +382,20 @@ public sealed class RequestGuardTests
         _ = services.AddScoped<RecordingAuthorizer>();
         _ = services.AddSingleton<GuardException>();
         _ = services.AddSingleton<CancellationProbe>();
+
         foreach (var handler in handlers)
             _ = services.AddSingleton(handler);
+
         foreach (var authorizer in authorizers ?? [])
             _ = services.AddSingleton(authorizer);
+
         foreach (var behavior in behaviors ?? [])
             _ = services.AddSingleton(behavior);
+
+
         foreach (var guard in guards ?? [])
             _ = services.AddSingleton(guard);
+
         configure?.Invoke(services);
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true });
     }
@@ -444,8 +453,10 @@ public sealed class RequestGuardTests
 
     internal sealed class StreamHandler(List<string> calls) : IStreamRequestHandler<GuardedStream, int>
     {
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<GuardedStream> context,
-            [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<int> HandleAsync(
+            IRequestContext<GuardedStream> context,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             calls.Add("stream-handler");
             yield return 4;
@@ -523,12 +534,17 @@ public sealed class RequestGuardTests
     internal sealed class RecordingStreamBehavior(List<string> calls)
         : IStreamRequestPipelineBehavior<GuardedStream, int>
     {
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<GuardedStream> context,
-            StreamRequestPipelineNext<int> next, [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<int> HandleAsync(
+            IRequestContext<GuardedStream> context,
+            StreamRequestPipelineNext<int> next,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             calls.Add("stream-behavior-before");
+
             await foreach (var item in next(ct).WithCancellation(ct))
                 yield return item;
+
             calls.Add("stream-behavior-after");
         }
     }
@@ -574,8 +590,11 @@ public sealed class RequestGuardTests
 
     internal sealed class WrappingBehavior(List<string> calls) : IRequestPipelineBehavior<GuardedCommand>
     {
-        public async ValueTask<Result> HandleAsync(IRequestContext<GuardedCommand> context,
-            RequestPipelineNext continuation, CancellationToken ct)
+        public async ValueTask<Result> HandleAsync(
+            IRequestContext<GuardedCommand> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        )
         {
             calls.Add("behavior-before");
             var result = await continuation(ct);
@@ -586,8 +605,11 @@ public sealed class RequestGuardTests
 
     internal sealed class ShortCircuitBehavior(List<string> calls) : IRequestPipelineBehavior<GuardedCommand>
     {
-        public ValueTask<Result> HandleAsync(IRequestContext<GuardedCommand> context,
-            RequestPipelineNext continuation, CancellationToken ct)
+        public ValueTask<Result> HandleAsync(
+            IRequestContext<GuardedCommand> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        )
         {
             calls.Add("behavior-short-circuit");
             return ValueTask.FromResult(Result.Failure(GuardFailure));

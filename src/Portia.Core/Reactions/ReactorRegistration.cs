@@ -10,8 +10,13 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
     readonly Type? _eventType;
     readonly Action<IServiceCollection>? _registerHandler;
 
-    ReactorRegistration(Type reactorType, Func<IServiceProvider, Reactor> resolve,
-        EventStreamPattern? source = null, Type? eventType = null, Action<IServiceCollection>? registerHandler = null)
+    ReactorRegistration(
+        Type reactorType,
+        Func<IServiceProvider, Reactor> resolve,
+        EventStreamPattern? source = null,
+        Type? eventType = null,
+        Action<IServiceCollection>? registerHandler = null
+    )
     {
         ReactorType = reactorType;
         _resolve = resolve;
@@ -50,11 +55,13 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
     void IWorkloadDescriptor.Validate(IServiceProvider services, string componentName)
     {
         var checkpoints = _resolve(services).Checkpoints;
+
         if (checkpoints is not IConditionalProjectionCheckpointStore
             && services.GetService<IOperationalStore>() is null)
             throw new InvalidOperationException(
                 $"Reactor '{componentName}' requires a checkpoint store implementing " +
                 $"{nameof(IConditionalProjectionCheckpointStore)} for conditional compare-and-advance saves.");
+
         if (services.GetService<IOperationalStore>() is not null
             && !ReferenceEquals(checkpoints,
                 services.GetService<IOperationalReactionCheckpointStore>()))
@@ -62,16 +69,22 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
                 "Operational reactors must use the registered operational checkpoint store.");
     }
 
-    ValueTask<ProjectionCheckpoint> IWorkloadDescriptor.LoadCheckpoint(IServiceProvider services,
-        ProjectionRunOptions options, CancellationToken ct)
+    ValueTask<ProjectionCheckpoint> IWorkloadDescriptor.LoadCheckpoint(
+        IServiceProvider services,
+        ProjectionRunOptions options,
+        CancellationToken ct
+    )
     {
         var component = _resolve(services);
         return ProcessorCheckpoints.LoadAsync(component.Checkpoints,
             new CheckpointIdentity(component.Name, component.Pattern), ct);
     }
 
-    async ValueTask<ProjectionPassResult> IWorkloadDescriptor.RunPass(IServiceProvider services,
-        ProjectionRunOptions options, CancellationToken ct)
+    async ValueTask<ProjectionPassResult> IWorkloadDescriptor.RunPass(
+        IServiceProvider services,
+        ProjectionRunOptions options,
+        CancellationToken ct
+    )
     {
         options.Validate();
         var reactor = _resolve(services);
@@ -121,8 +134,11 @@ public sealed class ReactorRegistration : IWorkloadDescriptor
 
         internal override Type ComponentType => typeof(THandler);
 
-        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
-            CancellationToken ct) => record.Event is TEvent trigger
+        protected override ValueTask<Result> ReactToEventAsync(
+            DomainEventRecord record,
+            IExecutionContext context,
+            CancellationToken ct
+        ) => record.Event is TEvent trigger
             ? ProcessingObservation.InvokeAsync(Subscription, handler, new ReactorContext<TEvent>(trigger, record, context), ct)
             : ValueTask.FromResult(Result.Success);
     }

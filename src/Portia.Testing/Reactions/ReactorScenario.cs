@@ -122,14 +122,17 @@ public sealed class ReactorScenario
     public async Task RunAsync(Reactor reactor, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(reactor);
+
         if (reactor.Pattern.IsTenantTemplate)
             reactor.BindWorkload(_history.Workload(reactor.Name), null);
+
         var store = await _history.ToStoreAsync(reactor.Pattern, ct).ConfigureAwait(false);
         var runner = new ReactorRunner(store);
         // Scenarios intentionally replay their complete history on every RunAsync call. Keep that
         // replay checkpoint private so a caller-owned store is neither reset nor advanced.
         var checkpoints = new InMemoryProjectionCheckpointStore();
         var checkpoint = ProjectionCheckpoint.Start;
+
         while (true)
         {
             ct.ThrowIfCancellationRequested();
@@ -137,6 +140,7 @@ public sealed class ReactorScenario
                     checkpoints, ct)
                 .ConfigureAwait(false);
             checkpoint = pass.Checkpoint;
+
             if (!pass.ContinueImmediately)
                 return;
         }

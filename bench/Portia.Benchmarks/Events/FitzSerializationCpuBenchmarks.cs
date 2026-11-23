@@ -30,6 +30,7 @@ public class FitzSerializationCpuBenchmarks
         _event = ev;
         _encoded = _serializer.Serialize(_event);
         var decoded = (FitzSerializationEvent)_serializer.Deserialize(_encoded);
+
         if (decoded.Metadata != _event.Metadata || JsonSerializer.SerializeToUtf8Bytes(decoded,
                 FitzSerializationJsonContext.Default.FitzSerializationEvent).Length != PayloadBytes)
             throw new InvalidOperationException("Fitz serializer CPU fixture did not round-trip.");

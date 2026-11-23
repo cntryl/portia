@@ -57,6 +57,7 @@ sealed class PortiaStartupValidationRegistry
         {
             foreach (var validation in _validations.OrderBy(item => item.Key, StringComparer.Ordinal))
                 validation.Value();
+
             _validated = true;
         }
     }

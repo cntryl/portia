@@ -20,8 +20,11 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false, 0, true)]
     [InlineData(false, 1, true)]
     [InlineData(false, 2, true)]
-    public async Task ShouldStopDispatchAndResumeAtCommittedProgressGivenFailedResult(bool projection, int mode,
-        bool transient)
+    public async Task ShouldStopDispatchAndResumeAtCommittedProgressGivenFailedResult(
+        bool projection,
+        int mode,
+        bool transient
+    )
     {
         // Arrange
         var source = await SeedAsync();
@@ -44,8 +47,10 @@ public sealed partial class ProcessorOutcomeTests
         Assert.Equal([1, 2], state.Seen);
         Assert.Equal(projection ? (mode == 0 ? 1 : 0) : 3, state.Value);
         Assert.DoesNotContain("private failure", failure.Message, StringComparison.Ordinal);
+
         if (projection)
             Assert.Equal(mode == 0 ? 2 : 1, state.Disposals);
+
 
         state.Error = null;
         await RunAsync(source, state, projection, mode);
@@ -208,9 +213,11 @@ public sealed partial class ProcessorOutcomeTests
 
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+
         try
         {
             await worker.StartAsync(TestContext.Current.CancellationToken);
+
             if (transient)
             {
                 Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
@@ -237,6 +244,7 @@ public sealed partial class ProcessorOutcomeTests
         {
             if (transient)
                 await worker.StopAsync(TestContext.Current.CancellationToken);
+
             worker.Dispose();
         }
     }
@@ -258,8 +266,11 @@ public sealed partial class ProcessorOutcomeTests
     [InlineData(false, true, 3)]
     [InlineData(true, false, 3)]
     [InlineData(false, false, 3)]
-    public async Task ShouldRespectClassificationAndRetainCauseGivenHostedException(bool projection, bool transient,
-        int kind)
+    public async Task ShouldRespectClassificationAndRetainCauseGivenHostedException(
+        bool projection,
+        bool transient,
+        int kind
+    )
     {
         // Arrange
         Exception original = kind switch
@@ -290,9 +301,11 @@ public sealed partial class ProcessorOutcomeTests
 
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+
         try
         {
             await worker.StartAsync(TestContext.Current.CancellationToken);
+
             if (transient)
             {
                 // The single-process coordinator owns a one-second reconcile timer beside the workload's
@@ -301,18 +314,22 @@ public sealed partial class ProcessorOutcomeTests
                 // so advance for each delay until the retry has run and the worker has ended.
                 using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
                 var ended = worker.ExecuteTask!;
+
                 while (!ended.IsCompleted)
                 {
                     var scheduled = clock.WaitForDelayAsync(deadline.Token);
+
                     if (await Task.WhenAny(ended, scheduled) == ended)
                     {
                         break;
                     }
 
+
                     Assert.Equal(TimeSpan.FromSeconds(1), await scheduled);
                     clock.Advance(TimeSpan.FromSeconds(1));
                 }
             }
+
 
             var terminal =
                 await Assert.ThrowsAsync<WorkloadFailureException>(() =>
@@ -380,6 +397,7 @@ public sealed partial class ProcessorOutcomeTests
         Assert.False(failure.IsTransient);
         Assert.Equal(ProcessorFailureStage.Handling, failure.Stage);
         Assert.Equal(ProjectionCheckpoint.Start, state.Checkpoint);
+
         if (projection)
             Assert.Equal([transactionCleanup, cleanup],
                 Assert.IsType<AggregateException>(failure.CleanupException).InnerExceptions);
@@ -411,6 +429,7 @@ public sealed partial class ProcessorOutcomeTests
     static async Task RunAsync(IDomainEventReader source, State state, bool projection, int mode)
     {
         state.Projection = projection;
+
         if (projection)
         {
             Projector component = mode switch
@@ -452,11 +471,17 @@ public sealed partial class ProcessorOutcomeTests
 
     sealed class CleanupReader(IDomainEventReader source, Exception cleanup) : IDomainEventReader
     {
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
-            CancellationToken ct) => throw new NotSupportedException();
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset,
+            CancellationToken ct
+        ) => throw new NotSupportedException();
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            CancellationToken ct) =>
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            CancellationToken ct
+        ) =>
             new Records(source.ReadAsync(pattern, cursor, ct), cleanup);
 
         sealed class Records(IAsyncEnumerable<DomainEventRecord> source, Exception cleanup)
@@ -483,11 +508,17 @@ public sealed partial class ProcessorOutcomeTests
 
     sealed class FailedReader(Exception error) : IDomainEventReader
     {
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
-            CancellationToken ct) => throw new NotSupportedException();
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset,
+            CancellationToken ct
+        ) => throw new NotSupportedException();
 
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             await Task.FromException(error);
             yield break;

@@ -20,8 +20,11 @@ public sealed class TenantIdJsonConverter : JsonConverter<TenantId>
         writer.WriteStringValue(value.Value);
 
     /// <inheritdoc />
-    public override TenantId ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert,
-        JsonSerializerOptions options) => Read(ref reader, typeToConvert, options);
+    public override TenantId ReadAsPropertyName(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options
+    ) => Read(ref reader, typeToConvert, options);
 
     /// <inheritdoc />
     public override void WriteAsPropertyName(Utf8JsonWriter writer, TenantId value, JsonSerializerOptions options) =>

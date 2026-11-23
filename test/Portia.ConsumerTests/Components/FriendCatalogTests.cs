@@ -13,8 +13,11 @@ public sealed class FriendCatalogTests
     [InlineData(true, false, false)]
     [InlineData(true, true, false)]
     [InlineData(true, true, true)]
-    public void ShouldResolveLocalGeneratedCatalogGivenFriendAssembly(bool friend, bool sharedNamespace,
-        bool referencesSharedEvent)
+    public void ShouldResolveLocalGeneratedCatalogGivenFriendAssembly(
+        bool friend,
+        bool sharedNamespace,
+        bool referencesSharedEvent
+    )
     {
         // Arrange
         var identity = Guid.NewGuid().ToString("N");
@@ -203,8 +206,11 @@ public sealed class FriendCatalogTests
     static void Register(Assembly assembly, string composition, DomainEventTypeCatalog catalog) =>
         assembly.GetType(composition)!.GetMethod("Catalog")!.Invoke(null, [catalog]);
 
-    static (Assembly Assembly, byte[] Image) Compile(string assemblyName, string source,
-        MetadataReference[] additionalReferences)
+    static (Assembly Assembly, byte[] Image) Compile(
+        string assemblyName,
+        string source,
+        MetadataReference[] additionalReferences
+    )
     {
         var options = new CSharpParseOptions(LanguageVersion.Preview).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);

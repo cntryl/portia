@@ -6,11 +6,19 @@ namespace Cntryl.Portia;
 
 interface IRequestInvocation<TOut>
 {
-    ValueTask<Result<TOut>> InvokeAsync(IServiceProvider services, IRequest<TOut> request,
-        IRequestContext context, CancellationToken ct);
+    ValueTask<Result<TOut>> InvokeAsync(
+        IServiceProvider services,
+        IRequest<TOut> request,
+        IRequestContext context,
+        CancellationToken ct
+    );
 
-    ValueTask<Result<TOut>> InvokeUnsharedAsync(IServiceProvider services, IRequest<TOut> request,
-        RequestDispatchContext context, CancellationToken ct);
+    ValueTask<Result<TOut>> InvokeUnsharedAsync(
+        IServiceProvider services,
+        IRequest<TOut> request,
+        RequestDispatchContext context,
+        CancellationToken ct
+    );
 }
 
 /// <summary>Invokes one generated result handler registration from the current scope.</summary>
@@ -27,13 +35,21 @@ THandler, TOut>(
     where TRequest : IRequest<TOut>
     where THandler : class, IRequestHandler<TRequest, TOut>
 {
-    ValueTask<Result<TOut>> IRequestInvocation<TOut>.InvokeAsync(IServiceProvider services, IRequest<TOut> request,
-        IRequestContext context, CancellationToken ct)
+    ValueTask<Result<TOut>> IRequestInvocation<TOut>.InvokeAsync(
+        IServiceProvider services,
+        IRequest<TOut> request,
+        IRequestContext context,
+        CancellationToken ct
+    )
         => services.GetRequiredService<THandler>()
             .HandleAsync((IRequestContext<TRequest>)context, ct);
 
-    ValueTask<Result<TOut>> IRequestInvocation<TOut>.InvokeUnsharedAsync(IServiceProvider services,
-        IRequest<TOut> request, RequestDispatchContext context, CancellationToken ct)
+    ValueTask<Result<TOut>> IRequestInvocation<TOut>.InvokeUnsharedAsync(
+        IServiceProvider services,
+        IRequest<TOut> request,
+        RequestDispatchContext context,
+        CancellationToken ct
+    )
         => services.GetRequiredService<THandler>()
             .HandleAsync(new RequestContext<TRequest>((TRequest)request, context), ct);
 
@@ -58,8 +74,12 @@ TAuthorizer>(
 {
     internal override void Register(IServiceCollection services) => services.TryAddScoped<TAuthorizer>();
 
-    internal override ValueTask<Result> AuthorizeAsync(IServiceProvider services, IRequestBase request,
-        IRequestContext context, CancellationToken ct)
+    internal override ValueTask<Result> AuthorizeAsync(
+        IServiceProvider services,
+        IRequestBase request,
+        IRequestContext context,
+        CancellationToken ct
+    )
         => services.GetRequiredService<TAuthorizer>()
             .AuthorizeAsync((IRequestContext<TRequest>)context, ct);
 }
@@ -74,8 +94,12 @@ TGuard>()
     where TRequest : IRequestBase
     where TGuard : class, IRequestGuard<TRequest>
 {
-    internal override ValueTask<Result> GuardAsync(IServiceProvider services, IRequestBase request,
-        IRequestContext context, CancellationToken ct)
+    internal override ValueTask<Result> GuardAsync(
+        IServiceProvider services,
+        IRequestBase request,
+        IRequestContext context,
+        CancellationToken ct
+    )
         => services.GetRequiredService<TGuard>()
             .GuardAsync((IRequestContext<TRequest>)context, ct);
 
@@ -84,8 +108,13 @@ TGuard>()
 
 interface IRequestBehaviorInvocation<TOut>
 {
-    ValueTask<Result<TOut>> InvokeAsync(IServiceProvider services, IRequest<TOut> request,
-        IRequestContext context, RequestPipelineNext<TOut> continuation, CancellationToken ct);
+    ValueTask<Result<TOut>> InvokeAsync(
+        IServiceProvider services,
+        IRequest<TOut> request,
+        IRequestContext context,
+        RequestPipelineNext<TOut> continuation,
+        CancellationToken ct
+    );
 }
 
 /// <summary>Invokes one generated no-result pipeline behavior registration.</summary>
@@ -96,8 +125,13 @@ TBehavior>(int order)
     where TRequest : IRequest
     where TBehavior : class, IRequestPipelineBehavior<TRequest>
 {
-    ValueTask<Result> IRequestBehaviorInvocation.InvokeAsync(IServiceProvider services, IRequest request,
-        IRequestContext context, RequestPipelineNext continuation, CancellationToken ct)
+    ValueTask<Result> IRequestBehaviorInvocation.InvokeAsync(
+        IServiceProvider services,
+        IRequest request,
+        IRequestContext context,
+        RequestPipelineNext continuation,
+        CancellationToken ct
+    )
         => services.GetRequiredService<TBehavior>()
             .HandleAsync((IRequestContext<TRequest>)context, continuation, ct);
 
@@ -112,9 +146,13 @@ TBehavior, TOut>(int order)
     where TRequest : IRequest<TOut>
     where TBehavior : class, IRequestPipelineBehavior<TRequest, TOut>
 {
-    ValueTask<Result<TOut>> IRequestBehaviorInvocation<TOut>.InvokeAsync(IServiceProvider services,
-        IRequest<TOut> request, IRequestContext context, RequestPipelineNext<TOut> continuation,
-        CancellationToken ct)
+    ValueTask<Result<TOut>> IRequestBehaviorInvocation<TOut>.InvokeAsync(
+        IServiceProvider services,
+        IRequest<TOut> request,
+        IRequestContext context,
+        RequestPipelineNext<TOut> continuation,
+        CancellationToken ct
+    )
         => services.GetRequiredService<TBehavior>()
             .HandleAsync((IRequestContext<TRequest>)context, continuation, ct);
 

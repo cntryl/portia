@@ -24,6 +24,7 @@ public sealed class RequestRpcConsumerTests
         var register = assembly.GetType("Scenario")!.GetMethod("Run")!
             .CreateDelegate<Func<FitzRpcRequestServer, Task<IAsyncDisposable>>>();
         var services = ConsumerHost.CreateServices();
+
         if (reverse)
         {
             _ = services.AddReporting();
@@ -34,6 +35,7 @@ public sealed class RequestRpcConsumerTests
             _ = services.AddAccounts();
             _ = services.AddReporting();
         }
+
 
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();

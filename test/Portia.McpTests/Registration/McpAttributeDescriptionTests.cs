@@ -166,8 +166,10 @@ public sealed class McpAttributeDescriptionTests
 
     public sealed class ReferenceToolHandler : IRequestHandler<ReferenceTool, ReferencePayload>
     {
-        public ValueTask<Result<ReferencePayload>> HandleAsync(IRequestContext<ReferenceTool> context,
-            CancellationToken ct) =>
+        public ValueTask<Result<ReferencePayload>> HandleAsync(
+            IRequestContext<ReferenceTool> context,
+            CancellationToken ct
+        ) =>
             ValueTask.FromResult(Result<ReferencePayload>.Success(new("#/data")));
     }
 
@@ -179,8 +181,10 @@ public sealed class McpAttributeDescriptionTests
 
     public sealed class DirectionalToolHandler : IRequestHandler<DirectionalTool, DirectionalTool>
     {
-        public ValueTask<Result<DirectionalTool>> HandleAsync(IRequestContext<DirectionalTool> context,
-            CancellationToken ct) =>
+        public ValueTask<Result<DirectionalTool>> HandleAsync(
+            IRequestContext<DirectionalTool> context,
+            CancellationToken ct
+        ) =>
             ValueTask.FromResult(Result<DirectionalTool>.Success(context.Request));
     }
 
@@ -195,8 +199,10 @@ public sealed class McpAttributeDescriptionTests
 
     public sealed class PopulatedToolHandler : IRequestHandler<PopulatedTool, PopulatedPayload>
     {
-        public ValueTask<Result<PopulatedPayload>> HandleAsync(IRequestContext<PopulatedTool> context,
-            CancellationToken ct) =>
+        public ValueTask<Result<PopulatedPayload>> HandleAsync(
+            IRequestContext<PopulatedTool> context,
+            CancellationToken ct
+        ) =>
             ValueTask.FromResult(Result<PopulatedPayload>.Success(context.Request.Payload));
     }
 
@@ -209,8 +215,10 @@ public sealed class McpAttributeDescriptionTests
 
     public sealed class ConditionalToolHandler : IRequestHandler<ConditionalTool, ConditionalReply>
     {
-        public ValueTask<Result<ConditionalReply>> HandleAsync(IRequestContext<ConditionalTool> context,
-            CancellationToken ct) =>
+        public ValueTask<Result<ConditionalReply>> HandleAsync(
+            IRequestContext<ConditionalTool> context,
+            CancellationToken ct
+        ) =>
             ValueTask.FromResult(Result<ConditionalReply>.Success(new(0)));
     }
 
@@ -253,8 +261,10 @@ public sealed class McpAttributeDescriptionTests
 
     public sealed class AnnotatedToolHandler : IRequestHandler<AnnotatedTool, AnnotatedPayload>
     {
-        public ValueTask<Result<AnnotatedPayload>> HandleAsync(IRequestContext<AnnotatedTool> context,
-            CancellationToken ct) =>
+        public ValueTask<Result<AnnotatedPayload>> HandleAsync(
+            IRequestContext<AnnotatedTool> context,
+            CancellationToken ct
+        ) =>
             ValueTask.FromResult(Result<AnnotatedPayload>.Success(new AnnotatedPayload(context.Request.UserName)));
     }
 }

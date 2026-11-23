@@ -41,6 +41,7 @@ public sealed class OpenApiJsonMemberMetadataTests
         Assert.True(schema.GetProperty("properties").TryGetProperty("custom", out _));
         Assert.DoesNotContain("value",
             schema.GetProperty("required").EnumerateArray().Select(value => value.GetString()));
+
         if (acceptsForm)
         {
             var formSchema = document.RootElement.GetProperty("paths").GetProperty("/binding").GetProperty("post")

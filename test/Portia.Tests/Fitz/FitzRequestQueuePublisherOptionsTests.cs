@@ -203,8 +203,13 @@ public sealed class FitzRequestQueuePublisherOptionsTests
         internal int Calls { get; private set; }
         internal RequestMetadata? Metadata { get; private set; }
 
-        public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
-            RequestMetadata metadata, CancellationToken ct = default) where TRequest : IRequest, IQueuable
+        public ValueTask EnqueueAsync<TRequest>(
+            TRequest request,
+            RequestRouteValues routeValues,
+            string? actorToken,
+            RequestMetadata metadata,
+            CancellationToken ct = default
+        ) where TRequest : IRequest, IQueuable
         {
             Calls++;
             Metadata = metadata;
@@ -222,19 +227,29 @@ public sealed class FitzRequestQueuePublisherOptionsTests
         internal ReadOnlyMemory<byte> Body { get; private set; }
         internal QueueEnqueueOptions? Options { get; private set; }
 
-        public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? delay = null,
-            CancellationToken ct = default)
+        public Task<ulong> EnqueueAsync(
+            string route,
+            ReadOnlyMemory<byte> body,
+            TimeSpan? delay = null,
+            CancellationToken ct = default
+        )
         {
             LegacyCalls++;
             return Accept(route, body, new QueueEnqueueOptions(delay));
         }
 
-        public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body, QueueEnqueueOptions options,
-            CancellationToken ct = default)
+        public Task<ulong> EnqueueAsync(
+            string route,
+            ReadOnlyMemory<byte> body,
+            QueueEnqueueOptions options,
+            CancellationToken ct = default
+        )
         {
             OptionCalls++;
+
             if (options.TimeToLive is not null && !SupportsLifetime)
                 return Task.FromException<ulong>(new NotSupportedException("Queue TTL capability was not negotiated."));
+
             return Accept(route, body, options);
         }
 
@@ -247,8 +262,13 @@ public sealed class FitzRequestQueuePublisherOptionsTests
             return Task.FromResult(1UL);
         }
 
-        public Task<IQueueReservedItem[]> ReserveAsync(string route, TimeSpan lease, int batchSize = 1,
-            TimeSpan? wait = null, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IQueueReservedItem[]> ReserveAsync(
+            string route,
+            TimeSpan lease,
+            int batchSize = 1,
+            TimeSpan? wait = null,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
         public Task<QueueSubscription> SubscribeAsync(string pattern, CancellationToken ct = default)
             => throw new NotSupportedException();

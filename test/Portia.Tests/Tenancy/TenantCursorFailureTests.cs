@@ -62,6 +62,7 @@ public sealed class TenantCursorFailureTests
         {
             if (ev is Stopped && failuresRemaining-- > 0)
                 throw new IOException("tenant extraction remains unavailable");
+
             return GetTenant(ev);
         });
 
@@ -147,6 +148,7 @@ public sealed class TenantCursorFailureTests
         Assert.True(await first.MoveNextAsync());
         var cleanup = first.DisposeAsync().AsTask();
         await notifier.DisposalStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
         try
         {
             _ = await Assert.ThrowsAsync<InvalidOperationException>(() => ReadOneAsync(cursor));
@@ -155,6 +157,7 @@ public sealed class TenantCursorFailureTests
         {
             notifier.AllowDisposal.TrySetResult();
         }
+
 
         _ = await Assert.ThrowsAsync<IOException>(() => cleanup);
         await AppendAsync(events, aggregate, 1, new Started("beta"));
@@ -193,8 +196,10 @@ public sealed class TenantCursorFailureTests
     {
         int _subscriptions;
 
-        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
-            CancellationToken ct = default)
+        public ValueTask<IDomainEventSubscription> SubscribeAsync(
+            EventStreamPattern pattern,
+            CancellationToken ct = default
+        )
             => ValueTask.FromResult<IDomainEventSubscription>(
                 new Subscription(failFirstDispose && _subscriptions++ == 0));
 
@@ -218,11 +223,14 @@ public sealed class TenantCursorFailureTests
 
         internal TaskCompletionSource AllowDisposal { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
-            CancellationToken ct = default)
+        public ValueTask<IDomainEventSubscription> SubscribeAsync(
+            EventStreamPattern pattern,
+            CancellationToken ct = default
+        )
         {
             if (_subscribed)
                 return _later.SubscribeAsync(pattern, ct);
+
             _subscribed = true;
             return ValueTask.FromResult<IDomainEventSubscription>(new Subscription(this));
         }

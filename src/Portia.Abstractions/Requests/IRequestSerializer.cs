@@ -11,6 +11,10 @@ public interface IRequestSerializer
     /// <param name="metadata">The validated logical request identity to propagate.</param>
     /// <param name="traceContext">The optional W3C trace fields to propagate.</param>
     /// <returns>The transport wire representation.</returns>
-    ReadOnlyMemory<byte> Serialize(IRequestBase request, string? actorToken, RequestMetadata metadata,
-        RequestTraceContext? traceContext);
+    ReadOnlyMemory<byte> Serialize(
+        IRequestBase request,
+        string? actorToken,
+        RequestMetadata metadata,
+        RequestTraceContext? traceContext
+    );
 }

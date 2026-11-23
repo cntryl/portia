@@ -18,6 +18,7 @@ public sealed class SdkCancellationProbeTests
         {
             await File.WriteAllTextAsync(Path.Combine(directory, "started"), "started", CancellationToken.None);
             published.TrySetResult();
+
             if (interruptPublication)
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
         }

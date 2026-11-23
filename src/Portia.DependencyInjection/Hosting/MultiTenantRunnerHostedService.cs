@@ -26,6 +26,7 @@ sealed class MultiTenantRunnerHostedService<TWorkload>(
     {
         if (validations is not null)
             await validations.WaitForEndpointValidationsAsync(stoppingToken).ConfigureAwait(false);
+
         await _runner.RunAsync(RunTenantAsync, static (_, _) => Task.CompletedTask, stoppingToken)
             .ConfigureAwait(false);
     }

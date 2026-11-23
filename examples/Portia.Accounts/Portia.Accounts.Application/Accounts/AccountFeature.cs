@@ -26,8 +26,11 @@ public static class AccountsApplication
     /// <param name="configuration">Application configuration.</param>
     /// <param name="environment">Host environment.</param>
     /// <returns>The configured Portia builder.</returns>
-    public static PortiaBuilder AddAccountsApplication(this IServiceCollection services,
-        IConfiguration configuration, IHostEnvironment environment)
+    public static PortiaBuilder AddAccountsApplication(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment environment
+    )
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
@@ -35,11 +38,15 @@ public static class AccountsApplication
 
         var projectionRoute = configuration["Accounts:ProjectionRoute"] ?? "kv://portia/accounts/read-model";
         var configured = configuration["Accounts:Tenant"];
+
         if (string.IsNullOrWhiteSpace(configured))
         {
             if (!environment.IsDevelopment())
+            {
                 throw new InvalidOperationException(
                     "Configuration value 'Accounts:Tenant' is required outside Development.");
+            }
+
             configured = "demo";
         }
 

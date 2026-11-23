@@ -6,8 +6,10 @@ sealed record ContractExampleRequest(int Id, ContractMetadataModel Payload, int 
 
 sealed class ContractExampleHandler : IRequestHandler<ContractExampleRequest, ContractMetadataModel>
 {
-    public ValueTask<Result<ContractMetadataModel>> HandleAsync(IRequestContext<ContractExampleRequest> context,
-        CancellationToken ct) =>
+    public ValueTask<Result<ContractMetadataModel>> HandleAsync(
+        IRequestContext<ContractExampleRequest> context,
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult(Result<ContractMetadataModel>.Success(context.Request.Payload));
 }
 

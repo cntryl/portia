@@ -16,8 +16,10 @@ static class SendCorrelation
     internal static bool TryDecodeTenant(string? text, out TenantId tenant)
     {
         tenant = default;
+
         if (string.IsNullOrEmpty(text) || !Base64Url.IsValid(text))
             return false;
+
         try
         {
             var value = new UTF8Encoding(false, true).GetString(Base64Url.DecodeFromChars(text));

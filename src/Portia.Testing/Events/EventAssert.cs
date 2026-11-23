@@ -20,6 +20,7 @@ public static class EventAssert
         ArgumentNullException.ThrowIfNull(actual);
         var difference = Difference(expected, actual, expected.GetType().Name,
             [with(PairComparer.Instance)]);
+
         if (difference is not null)
             throw new InvalidOperationException($"Event payload differs at {difference}.");
     }
@@ -34,13 +35,16 @@ public static class EventAssert
     {
         ArgumentNullException.ThrowIfNull(expected);
         ArgumentNullException.ThrowIfNull(actual);
+
         if (expected.Count != actual.Count)
             throw new InvalidOperationException(
                 $"Event count differs: expected {expected.Count}, actual {actual.Count}.");
+
         for (var index = 0; index < expected.Count; index++)
         {
             var difference = Difference(expected[index], actual[index], $"[{index}].{expected[index]?.GetType().Name}",
                 [with(PairComparer.Instance)]);
+
             if (difference is not null)
                 throw new InvalidOperationException($"Event payload differs at {difference}.");
         }
@@ -52,22 +56,28 @@ public static class EventAssert
     {
         if (ReferenceEquals(expected, actual))
             return null;
+
         if (expected is null || actual is null || expected.GetType() != actual.GetType())
             return path;
 
         var type = expected.GetType();
+
         if (!type.IsValueType && !visited.Add((expected, actual)))
             return null;
+
 
         if (expected is IEnumerable expectedItems && expected is not string)
         {
             var left = expectedItems.Cast<object?>().ToArray();
             var right = ((IEnumerable)actual).Cast<object?>().ToArray();
+
             if (left.Length != right.Length)
                 return $"{path}.Count";
+
             for (var index = 0; index < left.Length; index++)
             {
                 var difference = Difference(left[index], right[index], $"{path}[{index}]", visited);
+
                 if (difference is not null)
                     return difference;
             }
@@ -87,13 +97,16 @@ public static class EventAssert
             .ToArray();
         var fields = type.GetFields(BindingFlags.Instance | BindingFlags.Public)
             .OrderBy(field => field.Name, StringComparer.Ordinal).ToArray();
+
         if (properties.Length == 0 && fields.Length == 0)
             return Equals(expected, actual) ? null : path;
+
 
         foreach (var property in properties)
         {
             var difference = Difference(property.GetValue(expected), property.GetValue(actual),
                 $"{path}.{property.Name}", visited);
+
             if (difference is not null)
                 return difference;
         }
@@ -102,6 +115,7 @@ public static class EventAssert
         {
             var difference = Difference(field.GetValue(expected), field.GetValue(actual),
                 $"{path}.{field.Name}", visited);
+
             if (difference is not null)
                 return difference;
         }

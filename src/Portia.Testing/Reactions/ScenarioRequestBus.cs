@@ -36,8 +36,11 @@ sealed class ScenarioRequestBus : IRequestBus
 
     // A scripted denial is the only authorization outcome the scenario knows, so it is reported here
     // exactly as dispatch would report it; everything else the scenario cannot judge and leaves allowed.
-    public ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
-        CancellationToken ct = default)
+    public ValueTask<Result> AuthorizeAsync(
+        IRequestBase request,
+        RequestDispatchContext context,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(context);
@@ -56,8 +59,11 @@ sealed class ScenarioRequestBus : IRequestBus
     public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>
         new(actor, metadata: metadata);
 
-    public ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context,
-        CancellationToken ct = default)
+    public ValueTask<Result> DispatchAsync(
+        IRequest request,
+        RequestDispatchContext context,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(request);
         lock (_gate)
@@ -69,23 +75,31 @@ sealed class ScenarioRequestBus : IRequestBus
         }
     }
 
-    public ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context,
-        CancellationToken ct = default)
+    public ValueTask<Result<TOut>> DispatchAsync<TOut>(
+        IRequest<TOut> request,
+        RequestDispatchContext context,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(request);
         lock (_gate)
         {
             _sent.Add(request);
+
             if (_responses.TryGetValue(request.GetType(), out var response) ||
                 _defaultResponses.TryGetValue(typeof(TOut), out response))
                 return ValueTask.FromResult((Result<TOut>)response);
+
 
             throw Unscripted(request, nameof(ReactorScenario.RespondTo));
         }
     }
 
-    public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request,
-        RequestDispatchContext context, CancellationToken ct = default)
+    public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(
+        IStreamRequest<TOut> request,
+        RequestDispatchContext context,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(request);
         lock (_gate)

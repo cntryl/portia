@@ -20,8 +20,10 @@ public sealed class FitzKvTenantDirectorySnapshotStore(IKvClient client, string 
         => _durability = FitzKvCheckpoints.RequireDurability(durability);
 
     /// <inheritdoc />
-    public async ValueTask<TenantDirectorySnapshot?> LoadAsync(EventStreamPattern pattern,
-        CancellationToken ct = default)
+    public async ValueTask<TenantDirectorySnapshot?> LoadAsync(
+        EventStreamPattern pattern,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(pattern);
         await using var tx = await _client.BeginAsync(Route(pattern), KvMode.ReadOnly, ct)
@@ -31,12 +33,17 @@ public sealed class FitzKvTenantDirectorySnapshotStore(IKvClient client, string 
     }
 
     /// <inheritdoc />
-    public async ValueTask<bool> TrySaveAsync(EventStreamPattern pattern, EventCursor? expectedCursor,
-        TenantDirectorySnapshot snapshot, CancellationToken ct = default)
+    public async ValueTask<bool> TrySaveAsync(
+        EventStreamPattern pattern,
+        EventCursor? expectedCursor,
+        TenantDirectorySnapshot snapshot,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(pattern);
         ArgumentNullException.ThrowIfNull(snapshot);
         IKvTransaction tx;
+
         try
         {
             tx = await _client.BeginAsync(Route(pattern), KvMode.ReadWrite, ct)
@@ -49,17 +56,21 @@ public sealed class FitzKvTenantDirectorySnapshotStore(IKvClient client, string 
             return false;
         }
 
+
         await using (tx)
         {
             var committed = false;
+
             try
             {
                 var stored = await tx.GetAsync(Key, ct).ConfigureAwait(false);
                 var actual = stored is KvFound { Value: var storedBytes }
                     ? Decode(storedBytes.Span).Cursor
                     : (EventCursor?)null;
+
                 if (actual != expectedCursor)
                     return false;
+
                 var value = JsonSerializer.SerializeToUtf8Bytes(
                     new FitzTenantDirectorySnapshot(snapshot.Cursor.Value,
                         snapshot.ActiveTenants.Select(tenant => tenant.Value).ToArray()),

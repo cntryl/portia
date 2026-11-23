@@ -33,6 +33,7 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
     public static async Task RunDirectAsync()
     {
         var rows = new List<object>();
+
         foreach (var history in new[] { 4, 128 })
             foreach (var workloads in new[] { 1, 8 })
             {
@@ -42,6 +43,7 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
                     Workloads = workloads
                 };
                 await benchmark.SetupAsync();
+
                 foreach (var (name, operation) in new (string, Func<Task>)[]
                          {
                          ("read", () => benchmark.ReadRetainedDocument().AsTask()),
@@ -52,7 +54,9 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
                 {
                     for (var i = 0; i < 10; i++)
                         await operation();
+
                     var samples = new double[50];
+
                     for (var i = 0; i < samples.Length; i++)
                     {
                         var started = Stopwatch.GetTimestamp();
@@ -60,6 +64,7 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
                         samples[i] = Stopwatch.GetElapsedTime(started).TotalMilliseconds;
                         await benchmark.ValidateReadbackAsync(name);
                     }
+
 
                     var sorted = samples.OrderBy(value => value).ToArray();
                     var operations = benchmark.OperationsPerInvocation(name);
@@ -79,6 +84,7 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
                     });
                 }
             }
+
 
         var artifact = Environment.GetEnvironmentVariable("PORTIA_OPERATIONAL_BASELINE_ARTIFACT")
                        ?? Path.Combine("BenchmarkDotNet.Artifacts", "results", "operational-journal-baseline.json");
@@ -113,12 +119,15 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
         _targets = Enumerable.Range(0, Workloads)
             .Select(i => new OperationalTarget($"baseline-{i}", "stream://baseline/source/*", OperationalScope.Global))
             .ToArray();
+
         foreach (var target in _targets)
         {
             var created = await _journal.CompareExchangeAsync(CreateState(target), 0, Guid.Empty);
+
             if (!created)
                 throw new InvalidOperationException("Failed to seed an isolated operational baseline document.");
         }
+
         _serializedStateBytes = await ReadSerializedStateBytesAsync(_targets[0]);
     }
 
@@ -133,6 +142,7 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
     {
         var state = (await _journal.ReadAsync(_targets[0]))!;
         var replacement = state with { Revision = checked(state.Revision + 1), ConsecutiveFailures = state.ConsecutiveFailures + 1 };
+
         if (!await _journal.CompareExchangeAsync(replacement, state.Revision, state.OwnerSession))
             throw new InvalidOperationException("Baseline retry transition lost its fenced compare-and-exchange.");
     }
@@ -152,6 +162,7 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
             var next = state! with { Revision = checked(state.Revision + 1), ConsecutiveFailures = 0, Block = null };
             return _journal.CompareExchangeAsync(next, state!.Revision, state.OwnerSession).AsTask();
         }));
+
         if (committed.Any(value => !value))
             throw new InvalidOperationException("Baseline recovery lost a fenced compare-and-exchange.");
     }
@@ -171,9 +182,11 @@ public sealed class OperationalJournalBaselineBenchmarks : IAsyncDisposable
         else
         {
             var states = await Task.WhenAll(_targets.Select(target => _journal.ReadAsync(target).AsTask()));
+
             if (states.Any(state => state is null))
                 throw new InvalidOperationException("Baseline recovery readback found no operational document.");
         }
+
         _serializedStateBytes = await ReadSerializedStateBytesAsync(_targets[0]);
     }
 

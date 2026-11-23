@@ -465,8 +465,13 @@ public sealed class TelemetryV2ContractTests
     {
         public ReadOnlyMemory<byte> Payload { get; private set; }
 
-        public Task<string?> CreateAsync(string route, string cron, ScheduleDeliveryMode mode,
-            ReadOnlyMemory<byte> payload, CancellationToken ct = default)
+        public Task<string?> CreateAsync(
+            string route,
+            string cron,
+            ScheduleDeliveryMode mode,
+            ReadOnlyMemory<byte> payload,
+            CancellationToken ct = default
+        )
         {
             Payload = payload;
             return Task.FromResult<string?>("schedule-id");
@@ -480,8 +485,10 @@ public sealed class TelemetryV2ContractTests
         public Task<ScheduleListPage> ListAsync(string? continuation, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task<IReadOnlyList<ScheduleEntry>> ListBySelectorAsync(string selector,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ScheduleEntry>> ListBySelectorAsync(
+            string selector,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
         public Task<ScheduleSubscription> SubscribeAsync(string selector, CancellationToken ct = default) =>
             throw new NotSupportedException();
@@ -489,14 +496,18 @@ public sealed class TelemetryV2ContractTests
 
     sealed class UnrequestedCancellationValidator : IRequestActorValidator
     {
-        public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(string? token,
-            CancellationToken ct = default) => throw new OperationCanceledException("unexpected cancellation");
+        public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(
+            string? token,
+            CancellationToken ct = default
+        ) => throw new OperationCanceledException("unexpected cancellation");
     }
 
     sealed class CooperativeCancellationValidator : IRequestActorValidator
     {
-        public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(string? token,
-            CancellationToken ct = default)
+        public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(
+            string? token,
+            CancellationToken ct = default
+        )
         {
             ct.ThrowIfCancellationRequested();
             return ValueTask.FromResult(Result<ClaimsPrincipal>.Success(RequestActor.System));

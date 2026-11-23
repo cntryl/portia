@@ -516,8 +516,10 @@ public sealed class AggregateExecutorTests
         var aggregate = new TestAggregate(id);
         aggregate.ChangeValue(value);
         await new AggregateRepository(store).SaveAsync(aggregate, Context());
+
         if (store is RecordingEventStore recording)
             recording.Reset();
+
         return id;
     }
 
@@ -532,18 +534,30 @@ public sealed class AggregateExecutorTests
         public int Appends { get; private set; }
         public List<DomainEvent> Appended { get; } = [];
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
-            CancellationToken ct) => _inner.ReadAsync(stream, fromOffset, ct);
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset,
+            CancellationToken ct
+        ) => _inner.ReadAsync(stream, fromOffset, ct);
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            CancellationToken ct) => _inner.ReadAsync(pattern, cursor, ct);
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            CancellationToken ct
+        ) => _inner.ReadAsync(pattern, cursor, ct);
 
-        public ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,
-            IReadOnlyList<DomainEvent> events, CancellationToken ct = default)
+        public ValueTask AppendAsync(
+            EventStreamAddress stream,
+            ulong expectedStreamPosition,
+            IReadOnlyList<DomainEvent> events,
+            CancellationToken ct = default
+        )
         {
             Appends++;
+
             if (Conflict)
                 throw new EventStreamConcurrencyException("The stream moved on.");
+
             Appended.AddRange(events);
             return _inner.AppendAsync(stream, expectedStreamPosition, events, ct);
         }

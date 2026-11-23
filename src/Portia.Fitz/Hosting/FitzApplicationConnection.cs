@@ -14,6 +14,7 @@ sealed class FitzApplicationConnection(FitzClient client, bool owned, TimeSpan t
     public async ValueTask DisposeAsync()
     {
         await _gate.WaitAsync().ConfigureAwait(false);
+
         try
         {
             if (_disposed)
@@ -22,6 +23,7 @@ sealed class FitzApplicationConnection(FitzClient client, bool owned, TimeSpan t
             }
 
             _disposed = true;
+
             if (owned)
             {
                 await Client.DisposeAsync().ConfigureAwait(false);
@@ -36,13 +38,16 @@ sealed class FitzApplicationConnection(FitzClient client, bool owned, TimeSpan t
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+
             if (_connected)
             {
                 return;
             }
+
 
             if (owned)
             {

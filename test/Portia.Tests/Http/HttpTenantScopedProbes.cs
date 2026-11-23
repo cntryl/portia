@@ -55,15 +55,19 @@ sealed class HttpTenantScopedUpdateHandler : IRequestHandler<HttpTenantScopedUpd
 
 sealed class HttpTenantScopedComputedHandler : IRequestHandler<HttpTenantScopedComputed, string>
 {
-    public ValueTask<Result<string>> HandleAsync(IRequestContext<HttpTenantScopedComputed> context,
-        CancellationToken ct) =>
+    public ValueTask<Result<string>> HandleAsync(
+        IRequestContext<HttpTenantScopedComputed> context,
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult<Result<string>>($"{context.Request.Tenant}:{context.Request.Name}");
 }
 
 sealed class HttpTenantScopedListHandler : IStreamRequestHandler<HttpTenantScopedList, string>
 {
-    public async IAsyncEnumerable<string> HandleAsync(IRequestContext<HttpTenantScopedList> context,
-        [EnumeratorCancellation] CancellationToken ct)
+    public async IAsyncEnumerable<string> HandleAsync(
+        IRequestContext<HttpTenantScopedList> context,
+        [EnumeratorCancellation] CancellationToken ct
+    )
     {
         yield return context.Request.Tenant.ToString();
         await Task.Yield();

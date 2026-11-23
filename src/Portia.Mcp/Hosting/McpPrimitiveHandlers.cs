@@ -31,6 +31,7 @@ static class McpPrimitiveHandlers
     {
         var activation = services.FirstOrDefault(service => service.ServiceType == typeof(TransportActivation))
             ?.ImplementationInstance as TransportActivation;
+
         if (activation is not null)
             throw new InvalidOperationException(
                 $"MCP resources and prompts must be declared before {activation.Transport}().");
@@ -39,13 +40,16 @@ static class McpPrimitiveHandlers
     sealed record TransportActivation(string Transport);
 
     static async ValueTask<ListResourcesResult> ListResourcesAsync(
-        ModelContextProtocol.Server.RequestContext<ListResourcesRequestParams> call, CancellationToken ct)
+        ModelContextProtocol.Server.RequestContext<ListResourcesRequestParams> call,
+        CancellationToken ct
+    )
     {
         var services = Services(call);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(services.GetRequiredService<McpLimits>().OperationDeadline);
         var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
         var visible = new List<Resource>();
+
         foreach (var entry in services.GetRequiredService<McpPrimitiveCatalog>().FixedResourcesInOrder)
             if (await entry.VisibleAsync(services, actor, deadline.Token).ConfigureAwait(false))
                 visible.Add(new Resource
@@ -56,6 +60,7 @@ static class McpPrimitiveHandlers
                     Title = entry.Options.Title,
                     Description = entry.Options.Description
                 });
+
         return new ListResourcesResult
         {
             Resources = visible,
@@ -65,13 +70,16 @@ static class McpPrimitiveHandlers
     }
 
     static async ValueTask<ListResourceTemplatesResult> ListTemplatesAsync(
-        ModelContextProtocol.Server.RequestContext<ListResourceTemplatesRequestParams> call, CancellationToken ct)
+        ModelContextProtocol.Server.RequestContext<ListResourceTemplatesRequestParams> call,
+        CancellationToken ct
+    )
     {
         var services = Services(call);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(services.GetRequiredService<McpLimits>().OperationDeadline);
         var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
         var visible = new List<ResourceTemplate>();
+
         foreach (var entry in services.GetRequiredService<McpPrimitiveCatalog>().ResourceTemplates)
             if (await entry.VisibleAsync(services, actor, deadline.Token).ConfigureAwait(false))
                 visible.Add(new ResourceTemplate
@@ -82,6 +90,7 @@ static class McpPrimitiveHandlers
                     Title = entry.Options.Title,
                     Description = entry.Options.Description
                 });
+
         return new ListResourceTemplatesResult
         {
             ResourceTemplates = visible,
@@ -91,7 +100,9 @@ static class McpPrimitiveHandlers
     }
 
     static async ValueTask<ReadResourceResult> ReadResourceAsync(
-        ModelContextProtocol.Server.RequestContext<ReadResourceRequestParams> call, CancellationToken ct)
+        ModelContextProtocol.Server.RequestContext<ReadResourceRequestParams> call,
+        CancellationToken ct
+    )
     {
         var services = Services(call);
         var limits = services.GetRequiredService<McpLimits>();
@@ -101,6 +112,7 @@ static class McpPrimitiveHandlers
         var catalog = services.GetRequiredService<McpPrimitiveCatalog>();
         McpResourceEntry? entry = null;
         Dictionary<string, string>? values = null;
+
         if (validUri)
         {
             if (catalog.FixedResourcesByUri.TryGetValue(uri!, out var fixedEntry))
@@ -111,10 +123,12 @@ static class McpPrimitiveHandlers
             else
             {
                 var candidateSegments = uri!.Split('/');
+
                 foreach (var candidate in catalog.ResourceTemplates)
                 {
                     if (!candidate.MatchValidatedSegments(candidateSegments, out var matched))
                         continue;
+
                     entry = candidate;
                     values = matched;
                     break;
@@ -122,20 +136,25 @@ static class McpPrimitiveHandlers
             }
         }
 
+
         using var receive = PortiaTelemetry.StartProcess(entry?.Template ?? "unknown",
             new McpResourceInvocation(entry?.Template ?? "unknown"), PortiaTelemetry.CaptureTraceContext(),
             receivedTraceContext: false);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(limits.OperationDeadline);
+
         try
         {
             if (entry is null || values is null)
                 throw new McpRequestFailureException(
                     new RequestError(RequestErrorKind.Validation, "Resource unavailable."));
+
             var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
+
             if (!await entry.VisibleAsync(services, actor, deadline.Token).ConfigureAwait(false))
                 throw new McpRequestFailureException(
                     new RequestError(RequestErrorKind.Validation, "Resource unavailable."));
+
             var json = services.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
             var result = await entry.ReadAsync(values, uri!, services, actor, json, deadline.Token)
                 .ConfigureAwait(false);
@@ -147,9 +166,11 @@ static class McpPrimitiveHandlers
                                              + Encoding.UTF8.GetByteCount(blob.Uri) + 128,
                 _ => long.MaxValue
             });
+
             if (size > limits.MaxResultBytes)
                 throw new McpRequestFailureException(
                     new RequestError(RequestErrorKind.Validation, "Resource unavailable."));
+
             PortiaTelemetry.RecordOutcome(receive, true, null);
             return result;
         }
@@ -190,13 +211,16 @@ static class McpPrimitiveHandlers
     }
 
     static async ValueTask<ListPromptsResult> ListPromptsAsync(
-        ModelContextProtocol.Server.RequestContext<ListPromptsRequestParams> call, CancellationToken ct)
+        ModelContextProtocol.Server.RequestContext<ListPromptsRequestParams> call,
+        CancellationToken ct
+    )
     {
         var services = Services(call);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(services.GetRequiredService<McpLimits>().OperationDeadline);
         var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
         var visible = new List<Prompt>();
+
         foreach (var entry in services.GetRequiredService<McpPrimitiveCatalog>().Prompts)
             if (await entry.VisibleAsync(services, actor, deadline.Token).ConfigureAwait(false))
                 visible.Add(new Prompt
@@ -212,6 +236,7 @@ static class McpPrimitiveHandlers
                             Description = entry.PromptOptions.ArgumentDescriptions[argument.Key]
                         }).ToArray()
                 });
+
         return new ListPromptsResult
         {
             Prompts = visible,
@@ -221,7 +246,9 @@ static class McpPrimitiveHandlers
     }
 
     static async ValueTask<GetPromptResult> GetPromptAsync(
-        ModelContextProtocol.Server.RequestContext<GetPromptRequestParams> call, CancellationToken ct)
+        ModelContextProtocol.Server.RequestContext<GetPromptRequestParams> call,
+        CancellationToken ct
+    )
     {
         var services = Services(call);
         var limits = services.GetRequiredService<McpLimits>();
@@ -234,43 +261,56 @@ static class McpPrimitiveHandlers
             receivedTraceContext: false);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(limits.OperationDeadline);
+
         try
         {
             if (entry is null)
                 throw new McpRequestFailureException(
                     new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
+
             var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
+
             if (!await entry.VisibleAsync(services, actor, deadline.Token).ConfigureAwait(false))
                 throw new McpRequestFailureException(
                     new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
+
             var input = call.Params.Arguments ?? new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+
             if (input.Any(argument => !entry.PromptOptions.Arguments.ContainsKey(argument.Key)) ||
                 entry.PromptOptions.Arguments.Any(argument => argument.Value && !input.ContainsKey(argument.Key)))
                 throw new McpRequestFailureException(
                     new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
+
             var values = new Dictionary<string, string>(StringComparer.Ordinal);
             long bytes = 0;
+
             foreach (var argument in input)
             {
                 if (argument.Value.ValueKind != JsonValueKind.String)
                     throw new McpRequestFailureException(
                         new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
+
                 var value = argument.Value.GetString()!;
                 bytes += Encoding.UTF8.GetByteCount(argument.Key)
                          + Encoding.UTF8.GetByteCount(argument.Value.GetRawText()) + 4;
+
                 if (bytes > limits.MaxPromptArgumentBytes)
                     throw new McpRequestFailureException(
                         new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
+
                 values.Add(argument.Key, value);
             }
+
 
             var result = await entry.GetAsync(values, services, actor, deadline.Token).ConfigureAwait(false);
             var size = result.Messages.Sum(message => message.Content is TextContentBlock text
                 ? JsonEncodedText.Encode(text.Text).EncodedUtf8Bytes.Length + 128L
                 : long.MaxValue);
+
             if (size > limits.MaxResultBytes)
                 throw new McpRequestFailureException(
                     new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
+
             PortiaTelemetry.RecordOutcome(receive, true, null);
             return result;
         }
@@ -317,8 +357,11 @@ static class McpPrimitiveHandlers
     {
         if (call.User is not null)
             return call.User;
+
+
         if (PortiaMcpHttpMarker.IsCurrentRequest)
             return new ClaimsPrincipal(new ClaimsIdentity());
+
         var provider = Services(call).GetService<IMcpActorProvider>()
                        ?? throw new McpActorRequiredException("MCP ingress has no actor provider.");
         return await provider.GetActorAsync(ct).ConfigureAwait(false)

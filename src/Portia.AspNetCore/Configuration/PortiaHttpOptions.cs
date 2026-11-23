@@ -64,10 +64,12 @@ public sealed class PortiaHttpOptions
         var memberName = PortiaHttpMemberSelector.Name(member,
             "FromHeader requires a direct contract member, such as x => x.TenantId.");
         PortiaHttpHeaderName.Validate(name);
+
         if (HeaderBindings.Any(item => item.Contract == typeof(TContract) &&
                                        string.Equals(item.Member, memberName, StringComparison.Ordinal)))
             throw new InvalidOperationException(
                 $"FromHeader for '{typeof(TContract).Name}.{memberName}' is declared more than once.");
+
         HeaderBindings.Add(new PortiaHeaderBinding(typeof(TContract), memberName, name));
         return this;
     }

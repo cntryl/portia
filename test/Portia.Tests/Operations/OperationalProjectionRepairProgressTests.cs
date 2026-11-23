@@ -95,8 +95,10 @@ public sealed partial class OperationalProjectionTests
         Assert.Equal(OperationalRepairStatuses.Indeterminate, repair.Status);
     }
 
-    static async ValueTask<RepairPlan> QueueRepairAsync(PortiaOperations api,
-        System.Security.Claims.ClaimsPrincipal administrator)
+    static async ValueTask<RepairPlan> QueueRepairAsync(
+        PortiaOperations api,
+        System.Security.Claims.ClaimsPrincipal administrator
+    )
     {
         var plan = await api.PreviewRepairAsync(administrator, Target);
         _ = await api.ApproveRepairAsync(administrator, Target, plan.Id);
@@ -107,8 +109,11 @@ public sealed partial class OperationalProjectionTests
     sealed class PermanentlyFailingProjector(NativeStore store)
         : BatchProjector(store, Target.Identity.Pattern, Target.Processor)
     {
-        protected override ValueTask<Result> ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records,
-            IProjectorContext context, CancellationToken ct)
+        protected override ValueTask<Result> ProjectBatchAsync(
+            IReadOnlyList<DomainEventRecord> records,
+            IProjectorContext context,
+            CancellationToken ct
+        )
             => ValueTask.FromResult(Result.Failure(RequestError.Validation("required processing is incomplete")));
     }
 }

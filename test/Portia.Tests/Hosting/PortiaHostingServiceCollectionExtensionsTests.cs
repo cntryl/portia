@@ -288,17 +288,21 @@ public sealed class PortiaHostingServiceCollectionExtensionsTests
         _ = services.AddSingleton<IWorkerDefaultProbe, ApplicationProbe>();
         _ = services.AddHostedService<ProbeHostedService>();
         var portia = services.AddPortia();
+
         if (declaredAfterActivation)
             _ = portia.AddWorkers();
+
         _ = portia.ConfigureWorker("defaults", worker =>
         {
             worker.TryAddSingleton<IWorkerDefaultProbe, WorkerDefaultProbe>();
             _ = worker.AddHostedService<ProbeHostedService>();
         });
+
         if (!declaredAfterActivation)
             _ = portia.AddWorkers();
 
         // Act
+
         using var provider = services.BuildServiceProvider();
 
         // Assert
@@ -686,19 +690,29 @@ sealed class RecordingStartupScheduler : IRequestScheduler
     public List<string> Requests { get; } = [];
     public Exception? Failure { get; init; }
 
-    public ValueTask<string> EnsureAsync<TRequest>(TRequest request, RequestScheduleSpec spec,
-        RequestRouteValues routeValues, ClaimsPrincipal actor,
-        CancellationToken ct = default) where TRequest : IRequest, ISchedulable
+    public ValueTask<string> EnsureAsync<TRequest>(
+        TRequest request,
+        RequestScheduleSpec spec,
+        RequestRouteValues routeValues,
+        ClaimsPrincipal actor,
+        CancellationToken ct = default
+    ) where TRequest : IRequest, ISchedulable
     {
         if (Failure is not null)
             return ValueTask.FromException<string>(Failure);
+
         Requests.Add(routeValues.Realm!);
         return ValueTask.FromResult(routeValues.Realm!);
     }
 
-    public ValueTask<string> ScheduleAsync<TRequest>(TRequest request, RequestScheduleSpec spec,
-        RequestRouteValues routeValues, ClaimsPrincipal actor, RequestMetadata metadata,
-        CancellationToken ct = default) where TRequest : IRequest, ISchedulable =>
+    public ValueTask<string> ScheduleAsync<TRequest>(
+        TRequest request,
+        RequestScheduleSpec spec,
+        RequestRouteValues routeValues,
+        ClaimsPrincipal actor,
+        RequestMetadata metadata,
+        CancellationToken ct = default
+    ) where TRequest : IRequest, ISchedulable =>
         throw new NotSupportedException();
 
     public ValueTask CancelAsync(string scheduleId, CancellationToken ct = default) => ValueTask.CompletedTask;

@@ -55,6 +55,7 @@ public sealed class CompilerAccountsCaptureTests
             var manifest = new AccountsManifest(mutation == "format" ? "unsupported" : AccountsCapture.Format,
                 "revision", "sdk", [project], mutation == "unlisted" ? [] : new Dictionary<string, string> { [relative] = hash });
             File.WriteAllText(Path.Combine(Directory, "accounts.json"), JsonSerializer.Serialize(manifest));
+
             if (mutation == "modified-file")
                 File.WriteAllText(file, "changed input");
         }

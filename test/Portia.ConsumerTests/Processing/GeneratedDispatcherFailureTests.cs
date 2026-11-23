@@ -5,8 +5,11 @@ public sealed class GeneratedDispatcherFailureTests
     [Theory]
     [InlineData(false, "single", "1,2,3")]
     [InlineData(true, "batch", "1,2,3,4")]
-    public async Task ShouldStopNestedDispatcherGivenSingleOrBatchFailure(bool rejectBatch, string error,
-        string observed)
+    public async Task ShouldStopNestedDispatcherGivenSingleOrBatchFailure(
+        bool rejectBatch,
+        string error,
+        string observed
+    )
     {
         // Arrange
         var assembly = GeneratorCompilation.Compile("""

@@ -19,12 +19,15 @@ public sealed class ClaimTenantResolver(string claimType) : IActorTenantResolver
     {
         ArgumentNullException.ThrowIfNull(actor);
         TenantId? tenant = null;
+
         foreach (var claim in actor.FindAll(_claimType))
         {
             if (tenant is not null || !TenantId.TryParse(claim.Value, null, out var parsed))
                 return ValueTask.FromResult<TenantId?>(null);
+
             tenant = parsed;
         }
+
 
         return ValueTask.FromResult(tenant);
     }

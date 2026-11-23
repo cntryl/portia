@@ -6,7 +6,8 @@ sealed class TelemetrySequenceHandler : IStreamRequestHandler<TelemetrySequence,
 {
     public async IAsyncEnumerable<int> HandleAsync(
         IRequestContext<TelemetrySequence> context,
-        [EnumeratorCancellation] CancellationToken ct)
+        [EnumeratorCancellation] CancellationToken ct
+    )
     {
         yield return 1;
         yield return 2;

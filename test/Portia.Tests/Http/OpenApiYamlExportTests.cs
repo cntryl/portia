@@ -21,6 +21,7 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
         var previousDirectory = Environment.CurrentDirectory;
         var directory = Path.Combine(Path.GetTempPath(), $"portia-openapi-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
+
         try
         {
             Environment.CurrentDirectory = directory;
@@ -52,6 +53,7 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
         var directory = Path.Combine(Path.GetTempPath(), $"portia-openapi-{Guid.NewGuid():N}");
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "custom-openapi.yml");
+
         try
         {
             var app = CreateApp();
@@ -83,6 +85,7 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
         var group = app.MapGroup("/ops");
         _ = group.MapGet("/health", () => Results.Ok()).WithName("opsHealth");
         _ = app.MapPortiaOpenApi();
+
         try
         {
             // Act
@@ -144,6 +147,7 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "failed-openapi.yml");
         var generationFailure = new InvalidOperationException("OpenAPI generation failed.");
+
         try
         {
             var app = CreateApp(options => options.OpenApi.ConfigureDocument = _ => throw generationFailure);
@@ -174,6 +178,7 @@ public sealed class OpenApiYamlExportTests : IAsyncDisposable
         using var cancellation = new CancellationTokenSource();
         var app = CreateApp(options => options.OpenApi.ConfigureDocument = _ => cancellation.Cancel());
         _app = app;
+
         try
         {
             // Act

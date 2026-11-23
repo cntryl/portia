@@ -65,9 +65,11 @@ public sealed class McpToolOptions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(propertyName);
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
+
         if (!_propertyDescriptions.TryAdd(propertyName, new McpJsonPropertyDescription(description, jsonName)))
             throw new ArgumentException($"Request property '{propertyName}' has more than one description.",
                 nameof(propertyName));
+
         return this;
     }
 

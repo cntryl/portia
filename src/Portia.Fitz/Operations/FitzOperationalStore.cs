@@ -20,8 +20,10 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
     }
 
     /// <inheritdoc />
-    public async ValueTask<OperationalProcessorState?> ReadAsync(OperationalTarget target,
-        CancellationToken ct = default)
+    public async ValueTask<OperationalProcessorState?> ReadAsync(
+        OperationalTarget target,
+        CancellationToken ct = default
+    )
     {
         var identity = target.Identity;
         await using var tx = await _client.BeginAsync(FitzKvCheckpoints.WorkloadRoute(_route, identity),
@@ -30,8 +32,10 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
     }
 
     /// <inheritdoc />
-    public async ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(OperationalScope scope,
-        CancellationToken ct = default)
+    public async ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(
+        OperationalScope scope,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(scope);
         scope.Validate();
@@ -46,31 +50,41 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
         }
 
         var states = new List<OperationalProcessorState>();
+
         foreach (var target in targets.Where(t => t.Scope == scope))
         {
             if (await ReadAsync(target, ct).ConfigureAwait(false) is { } state)
                 states.Add(state);
         }
 
+
         return states;
     }
 
     /// <inheritdoc />
-    public async ValueTask<bool> CompareExchangeAsync(OperationalProcessorState replacement, long expectedRevision,
-        Guid expectedOwner, CancellationToken ct = default)
+    public async ValueTask<bool> CompareExchangeAsync(
+        OperationalProcessorState replacement,
+        long expectedRevision,
+        Guid expectedOwner,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(replacement);
         ValidateRevision(replacement, expectedRevision);
         var identity = replacement.Target.Identity;
         // A discoverable pointer is written first. A crash may leave a pointer to absent evidence,
         // which List ignores; it can never leave a running workload undiscoverable.
+
         if (expectedRevision == 0)
             await AddIndexAsync(replacement.Target, ct).ConfigureAwait(false);
+
         return await WriteAsync(identity, async tx =>
         {
             var actual = await ReadStateAsync(tx, replacement.Target, ct).ConfigureAwait(false);
+
             if (!Matches(actual, expectedRevision, expectedOwner))
                 return false;
+
             await PutStateAsync(tx, replacement, ct).ConfigureAwait(false);
             return true;
         }, ct).ConfigureAwait(false);
@@ -81,15 +95,24 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
         => FitzKvCheckpoints.LoadAsync(_client, FitzKvCheckpoints.WorkloadRoute(_route, identity), identity, ct);
 
     /// <summary>Rejects writes without the owning worker's fenced completion receipt.</summary>
-    public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-        CancellationToken ct = default)
+    public ValueTask SaveAsync(
+        CheckpointIdentity identity,
+        ProjectionCheckpoint checkpoint,
+        CancellationToken ct = default
+    )
         => ValueTask.FromException(new InvalidOperationException(
             "Operational reactor progress must commit through its owning worker and completion receipt."));
 
     /// <inheritdoc />
-    public async ValueTask<bool> CommitAsync(OperationalProcessorState replacement, long expectedRevision,
-        Guid ownerSession, Guid attemptId, string? expectedCheckpoint, string? nextCheckpoint,
-        CancellationToken ct = default)
+    public async ValueTask<bool> CommitAsync(
+        OperationalProcessorState replacement,
+        long expectedRevision,
+        Guid ownerSession,
+        Guid attemptId,
+        string? expectedCheckpoint,
+        string? nextCheckpoint,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(replacement);
         ValidateRevision(replacement, expectedRevision);
@@ -97,18 +120,23 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
         return await WriteAsync(identity, async tx =>
         {
             var actual = await ReadStateAsync(tx, replacement.Target, ct).ConfigureAwait(false);
+
             if (!Matches(actual, expectedRevision, ownerSession)
                 || actual!.Attempts.SingleOrDefault(a => a.Id == attemptId) is not
                 { Outcome: OperationalAttemptOutcomes.Running } attempt
                 || attempt.OwnerSession != ownerSession || attempt.ExpectedCheckpoint != expectedCheckpoint)
                 return false;
+
             var stored = await tx.GetAsync(FitzKvCheckpoints.Key(identity), ct).ConfigureAwait(false);
             var checkpoint = stored is KvFound { Value: var storedBytes }
                 ? FitzKvCheckpoints.Decode(storedBytes.Span).Value
                 : null;
+
             if (checkpoint != expectedCheckpoint)
                 throw new OperationalCheckpointConflictException();
+
             var receipt = replacement.Attempts.Single(a => a.Id == attemptId);
+
             if (replacement.OwnerSession != ownerSession || replacement.Checkpoint != nextCheckpoint
                                                          || receipt.Outcome != OperationalAttemptOutcomes.Committed ||
                                                          receipt.NextCheckpoint != nextCheckpoint
@@ -120,6 +148,7 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
                                                          || replacement.Settings != actual.Settings)
                 throw new ArgumentException("A reactor commit requires its matching completion receipt.",
                     nameof(replacement));
+
             await tx.PutAsync(FitzKvCheckpoints.Key(identity), FitzKvCheckpoints.Encode(
                     nextCheckpoint is null ? EventCursor.Start : new EventCursor(nextCheckpoint)), ct)
                 .ConfigureAwait(false);
@@ -144,16 +173,21 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
         "operations-v1\0" + Encoding.UTF8.GetString(FitzKvCheckpoints.Key(target.Identity).Span)
                           + "\0" + (target.Scope.Tenant is null ? "global" : "tenant:" + target.Scope.Tenant));
 
-    static async ValueTask<OperationalProcessorState?> ReadStateAsync(IKvTransaction tx, OperationalTarget target,
-        CancellationToken ct)
+    static async ValueTask<OperationalProcessorState?> ReadStateAsync(
+        IKvTransaction tx,
+        OperationalTarget target,
+        CancellationToken ct
+    )
     {
         var value = await tx.GetAsync(Key(target), ct).ConfigureAwait(false);
         var state = value is KvFound { Value: var valueBytes }
             ? JsonSerializer.Deserialize(valueBytes.Span,
                 FitzJsonContext.Default.OperationalProcessorState)
             : null;
+
         if (state is not null && state.Target != target)
             throw new InvalidDataException("The operational document does not match the requested target.");
+
         return state;
     }
 
@@ -177,24 +211,31 @@ public sealed class FitzOperationalStore : IOperationalStore, IOperationalReacti
             ? JsonSerializer.Deserialize(valueBytes.Span,
                 FitzJsonContext.Default.OperationalTargetArray)!
             : [];
+
         if (existing.Contains(target))
             return;
+
         await tx.PutAsync(IndexKey(target.Scope), JsonSerializer.SerializeToUtf8Bytes(
                 existing.Append(target).ToArray(), FitzJsonContext.Default.OperationalTargetArray), ct)
             .ConfigureAwait(false);
         await tx.CommitAsync(KvDurability.Sync, ct).ConfigureAwait(false);
     }
 
-    async ValueTask<bool> WriteAsync(CheckpointIdentity identity, Func<IKvTransaction, ValueTask<bool>> write,
-        CancellationToken ct)
+    async ValueTask<bool> WriteAsync(
+        CheckpointIdentity identity,
+        Func<IKvTransaction, ValueTask<bool>> write,
+        CancellationToken ct
+    )
     {
         var tx = await FitzKvCheckpoints.BeginAsync(_client, FitzKvCheckpoints.WorkloadRoute(_route, identity),
             KvMode.ReadWrite, "Operations", identity, ct).ConfigureAwait(false);
         var committed = false;
+
         try
         {
             if (!await write(tx).ConfigureAwait(false))
                 return false;
+
             await tx.CommitAsync(KvDurability.Sync, ct).ConfigureAwait(false);
             committed = true;
             return true;

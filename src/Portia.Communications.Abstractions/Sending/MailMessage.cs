@@ -24,15 +24,21 @@ public sealed class MailMessage
     {
         ArgumentNullException.ThrowIfNull(to);
         var recipients = to.ToArray();
+
         if (recipients.Length is 0 or > MaximumRecipients)
             throw new ArgumentException($"An email needs 1-{MaximumRecipients} recipients.", nameof(to));
+
         if (!recipients.All(IsAddress))
             throw new ArgumentException("An email recipient is not a valid address.", nameof(to));
+
         if (string.IsNullOrWhiteSpace(subject) || subject.Length > 998 || subject.Any(char.IsControl))
             throw new ArgumentException("An email subject must be one nonblank line of at most 998 characters.",
                 nameof(subject));
+
+
         if (string.IsNullOrWhiteSpace(text))
             throw new ArgumentException("An email needs a nonblank plain-text body.", nameof(text));
+
         To = Array.AsReadOnly(recipients);
         Subject = subject;
         Text = text;
@@ -77,14 +83,20 @@ public sealed class MailMessage
         {
             ArgumentNullException.ThrowIfNull(value);
             var attachments = value.Take(MaximumAttachments + 1).ToArray();
+
             if (attachments.Length > MaximumAttachments)
                 throw new ArgumentException($"A message accepts at most {MaximumAttachments} attachments.", nameof(value));
+
+
             if (attachments.Any(static attachment => attachment is null))
                 throw new ArgumentException("An attachment cannot be null.", nameof(value));
+
             var totalBytes = attachments.Sum(static attachment => (long)attachment.Content.Length);
+
             if (totalBytes > MaximumAttachmentBytes)
                 throw new ArgumentException($"Combined attachment content must not exceed {MaximumAttachmentBytes} bytes.",
                     nameof(value));
+
             field = Array.AsReadOnly(attachments);
         }
     } = Array.Empty<MailAttachment>();
@@ -97,6 +109,7 @@ public sealed class MailMessage
     {
         if (value is not { Length: > 2 and <= 320 })
             return false;
+
         var at = value.LastIndexOf('@');
         return at > 0 && at < value.Length - 1
                       && !value.Any(c => char.IsWhiteSpace(c) || char.IsControl(c) || c is ',' or ';' or '<' or '>');
@@ -120,9 +133,12 @@ public sealed class SmsMessage
     {
         if (!IsE164(to))
             throw new ArgumentException("An SMS recipient must be an E.164 number.", nameof(to));
+
+
         if (string.IsNullOrWhiteSpace(body) || body.Length > MaximumBodyLength)
             throw new ArgumentException($"An SMS body must be 1-{MaximumBodyLength} nonblank characters.",
                 nameof(body));
+
         To = to;
         Body = body;
     }

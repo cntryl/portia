@@ -28,7 +28,9 @@ sealed class OperationalSession(
             {
                 if (!state.Repairs.Any(r => r.PlanId == resume.Id && r.Status == OperationalRepairStatuses.Running))
                     return state;
+
                 var now = clock.GetUtcNow();
+
                 try
                 {
                     _ = PortiaOperations.RequireCurrentPlan(state, resume.Id, now);
@@ -38,6 +40,7 @@ sealed class OperationalSession(
                 {
                     return CompleteRepair(state, OperationalRepairStatuses.Invalidated, null, state.Checkpoint);
                 }
+
 
                 return CompleteRepair(state with { Block = null, ConsecutiveFailures = 0 },
                     OperationalRepairStatuses.Resumed, null, state.Checkpoint);
@@ -80,8 +83,13 @@ sealed class OperationalSession(
                 error: RequestError.Validation("The original recovery source set is unavailable."));
     }
 
-    internal async ValueTask AcquireAsync(OperationalTarget target, string kind,
-        OperationalProcessingSettings settings, ProjectionCheckpoint? checkpoint, CancellationToken ct)
+    internal async ValueTask AcquireAsync(
+        OperationalTarget target,
+        string kind,
+        OperationalProcessingSettings settings,
+        ProjectionCheckpoint? checkpoint,
+        CancellationToken ct
+    )
     {
         _target = target;
         await RequiredAsync("ownership-acquisition", async () =>
@@ -129,9 +137,11 @@ sealed class OperationalSession(
                             : r).ToArray(),
                     Block = replayInterruptedRepair ? null : prior.Block
                 };
+
             if (!await store.CompareExchangeAsync(next, prior?.Revision ?? 0, prior?.OwnerSession ?? Guid.Empty, ct)
                     .ConfigureAwait(false))
                 return false;
+
             _state = next;
             return true;
         }, ct).ConfigureAwait(false);
@@ -141,12 +151,15 @@ sealed class OperationalSession(
     internal async ValueTask<bool> PrepareAsync(ProjectionCheckpoint checkpoint, CancellationToken ct)
     {
         _failureRecorded = false;
+
         if (InterruptedSources is { Count: > 0 } && _state.Checkpoint != checkpoint.Cursor.Value)
             InterruptedSources = null;
+
         await ChangeAsync(state =>
         {
             if (state.Checkpoint == checkpoint.Cursor.Value)
                 return state;
+
             var now = clock.GetUtcNow();
             return state with
             {
@@ -170,9 +183,11 @@ sealed class OperationalSession(
                     : repair).ToArray()
             };
         }, ct).ConfigureAwait(false);
+
         if (_repairPlan is { } active &&
             !_state.Repairs.Any(r => r.PlanId == active && r.Status == OperationalRepairStatuses.Running))
             _repairPlan = null;
+
         if (_repairPlan is { } running && !_state.Approvals.Any(a => a.PlanId == running
                                                                      && !a.Revoked && a.ExpiresAt > clock.GetUtcNow()))
         {
@@ -186,11 +201,15 @@ sealed class OperationalSession(
         if (_state.Block is null)
             return RetryAt is not { } eligibleAt || clock.GetUtcNow() >= eligibleAt;
 
+
         if (_repairPlan is not null)
             return true;
+
         var queued = _state.Repairs.FirstOrDefault(r => r.Status == OperationalRepairStatuses.Queued);
+
         if (queued is null)
             return false;
+
         RepairPlan? claimed = null;
         await ChangeAsync(state =>
         {
@@ -217,10 +236,13 @@ sealed class OperationalSession(
                     : r).ToArray()
             };
         }, ct).ConfigureAwait(false);
+
         if (!_state.Repairs.Any(r => r.Id == queued.Id && r.Status == OperationalRepairStatuses.Running))
             return false;
+
         _repairPlan = queued.PlanId;
         var failedAttempt = _state.Attempts.Single(a => a.Id == claimed!.FailedAttemptId);
+
         if (claimed!.Action == RepairActions.Resume && failedAttempt.Outcome is
             OperationalAttemptOutcomes.CommittedCleanupFailed or OperationalAttemptOutcomes.Indeterminate)
         {
@@ -231,6 +253,7 @@ sealed class OperationalSession(
                 failedAttempt.Id, checkpoint.Cursor.Value), ct).ConfigureAwait(false);
             _repairPlan = null;
         }
+
 
         return true;
     }
@@ -243,14 +266,19 @@ sealed class OperationalSession(
             : normal;
     }
 
-    internal async ValueTask<Guid> BeginAsync(IReadOnlyList<DomainEventRecord> records,
-        ProjectionCheckpoint checkpoint, CancellationToken ct)
+    internal async ValueTask<Guid> BeginAsync(
+        IReadOnlyList<DomainEventRecord> records,
+        ProjectionCheckpoint checkpoint,
+        CancellationToken ct
+    )
     {
         var sources = records.Select(OperationalSource.From).ToArray();
         var expected = ActivePlan?.Sources ?? InterruptedSources;
+
         if (expected is { Count: > 0 } && !expected.SequenceEqual(sources))
             throw new ProcessorFailureException(_target.Identity, checkpoint, ProcessorFailureStage.Handling,
                 error: RequestError.Validation("The original recovery source set changed before invocation."));
+
         var id = Guid.NewGuid();
         var started = clock.GetUtcNow();
         _trace = new OperationalTraceBuffer(options.MaxTraceEntries);
@@ -274,6 +302,7 @@ sealed class OperationalSession(
                                                     || existing.NextCheckpoint != sources[^1].NextCursor ||
                                                     !existing.Sources.SequenceEqual(sources))
                     throw new InvalidDataException("The persisted attempt start does not match this invocation.");
+
                 return state;
             }
 
@@ -296,8 +325,12 @@ sealed class OperationalSession(
         return ProcessingObservation.Capture(trace.Record);
     }
 
-    internal async ValueTask CommitReactionAsync(IOperationalReactionCheckpointStore checkpoints,
-        ProjectionCheckpoint expected, ProjectionCheckpoint next, CancellationToken ct)
+    internal async ValueTask CommitReactionAsync(
+        IOperationalReactionCheckpointStore checkpoints,
+        ProjectionCheckpoint expected,
+        ProjectionCheckpoint next,
+        CancellationToken ct
+    )
     {
         var id = _attempt ?? throw new InvalidOperationException("A durable attempt start is required.");
         await RequiredAsync("reactor-completion", async () =>
@@ -311,9 +344,11 @@ sealed class OperationalSession(
             }
 
             var replacement = Succeed(state, id, next.Cursor.Value) with { Revision = checked(state.Revision + 1) };
+
             if (!await checkpoints.CommitAsync(replacement, state.Revision, _owner, id, expected.Cursor.Value,
                     next.Cursor.Value, ct).ConfigureAwait(false))
                 return false;
+
             _state = replacement;
             return true;
         }, ct).ConfigureAwait(false);
@@ -331,11 +366,16 @@ sealed class OperationalSession(
         InterruptedSources = null;
     }
 
-    internal async ValueTask RecordFailureAsync(Exception exception, ProjectionCheckpoint? committed,
-        CancellationToken ct, bool outcomeUnknown = false)
+    internal async ValueTask RecordFailureAsync(
+        Exception exception,
+        ProjectionCheckpoint? committed,
+        CancellationToken ct,
+        bool outcomeUnknown = false
+    )
     {
         if (_failureRecorded)
             return;
+
         var diagnostic = exception as ProcessorFailureException;
         var id = _attempt ?? Guid.NewGuid();
         await ChangeAsync(state =>
@@ -343,6 +383,7 @@ sealed class OperationalSession(
             // Runner completion is recorded once, even when hosting sees the same exception.
             if (state.Attempts.Any(a => a.Id == id && a.Outcome != OperationalAttemptOutcomes.Running))
                 return state;
+
             var now = clock.GetUtcNow();
             var prior = state.Attempts.SingleOrDefault(a => a.Id == id)
                         ?? new OperationalAttempt(id, _owner, now, null, OperationalAttemptOutcomes.Running,
@@ -403,8 +444,12 @@ sealed class OperationalSession(
                 : a).ToArray()
         }, OperationalRepairStatuses.Committed, id, checkpoint));
 
-    OperationalProcessorState CompleteRepair(OperationalProcessorState state, string status, Guid? attempt,
-        string? checkpoint)
+    OperationalProcessorState CompleteRepair(
+        OperationalProcessorState state,
+        string status,
+        Guid? attempt,
+        string? checkpoint
+    )
         => _repairPlan is not { } id
             ? state
             : state with
@@ -417,11 +462,14 @@ sealed class OperationalSession(
     OperationalProcessorState InvalidateObsoleteQueuedRepairs(OperationalProcessorState state)
     {
         OperationalRepair[]? repairs = null;
+
         for (var index = 0; index < state.Repairs.Count; index++)
         {
             var repair = state.Repairs[index];
+
             if (repair.Status != OperationalRepairStatuses.Queued)
                 continue;
+
             try
             {
                 _ = PortiaOperations.RequireCurrentPlan(state, repair.PlanId, clock.GetUtcNow());
@@ -435,6 +483,7 @@ sealed class OperationalSession(
             }
         }
 
+
         return repairs is null ? state : state with { Repairs = repairs };
     }
 
@@ -446,27 +495,36 @@ sealed class OperationalSession(
     async ValueTask<OperationalProcessorState> ReadOwnedAsync(CancellationToken ct)
     {
         var state = await store.ReadAsync(_target, ct).ConfigureAwait(false);
+
         if (state?.OwnerSession != _owner)
             throw new OperationalOwnershipException();
+
         return state;
     }
 
-    async ValueTask ChangeAsync(Func<OperationalProcessorState, OperationalProcessorState> change, CancellationToken ct,
-        string transition = "journal-transition")
+    async ValueTask ChangeAsync(
+        Func<OperationalProcessorState, OperationalProcessorState> change,
+        CancellationToken ct,
+        string transition = "journal-transition"
+    )
     {
         await RequiredAsync(transition, async () =>
         {
             var current = await ReadOwnedAsync(ct).ConfigureAwait(false);
             var next = InvalidateObsoleteQueuedRepairs(change(current));
+
             if (ReferenceEquals(next, current))
             {
                 _state = current;
                 return true;
             }
 
+
             next = Retain(next) with { Revision = checked(current.Revision + 1) };
+
             if (!await store.CompareExchangeAsync(next, current.Revision, _owner, ct).ConfigureAwait(false))
                 return false;
+
             _state = next;
             return true;
         }, ct).ConfigureAwait(false);
@@ -517,12 +575,14 @@ sealed class OperationalSession(
     async ValueTask RequiredAsync(string transition, Func<ValueTask<bool>> operation, CancellationToken ct)
     {
         OperationalJournalWait? wait = null;
+
         try
         {
             while (true)
             {
                 ct.ThrowIfCancellationRequested();
                 var reason = "contention";
+
                 try
                 {
                     if (await operation().ConfigureAwait(false))
@@ -540,6 +600,7 @@ sealed class OperationalSession(
                 {
                     reason = ex.GetType().Name;
                 }
+
 
                 var now = clock.GetUtcNow();
                 var failures = wait?.Failures ?? 0;

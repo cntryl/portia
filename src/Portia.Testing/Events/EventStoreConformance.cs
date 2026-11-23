@@ -36,6 +36,7 @@ public static class EventStoreConformance
     {
         var store = await probe.OpenAsync(ct).ConfigureAwait(false);
         var records = await ReadAsync(store, Stream(probe, "absent"), 0, ct).ConfigureAwait(false);
+
         if (records.Count != 0)
         {
             throw new ConformanceViolationException(
@@ -43,8 +44,11 @@ public static class EventStoreConformance
         }
     }
 
-    static async ValueTask VerifyAppendAndReadOrderAsync(IEventStoreConformanceProbe probe, ExpectedRecords expected,
-        CancellationToken ct)
+    static async ValueTask VerifyAppendAndReadOrderAsync(
+        IEventStoreConformanceProbe probe,
+        ExpectedRecords expected,
+        CancellationToken ct
+    )
     {
         var store = await probe.OpenAsync(ct).ConfigureAwait(false);
         var stream = Stream(probe, "ordered");
@@ -53,19 +57,23 @@ public static class EventStoreConformance
         await expected.AppendAsync(store, stream, 2, [Event(id, 3)], ct).ConfigureAwait(false);
 
         var records = await ReadAsync(store, stream, 0, ct).ConfigureAwait(false);
+
         if (records.Count != 3)
         {
             throw new ConformanceViolationException($"Expected 3 appended records; read {records.Count}.");
         }
 
+
         for (var index = 0; index < records.Count; index++)
         {
             var record = records[index];
+
             if (record.ResourceOffset != (ulong)index)
             {
                 throw new ConformanceViolationException(
                     $"Record {index} reported resource offset {record.ResourceOffset}; offsets must be contiguous and zero-based.");
             }
+
 
             if (record.Event.Metadata.AggregateVersion != (ulong)(index + 1))
             {
@@ -84,27 +92,37 @@ public static class EventStoreConformance
         var audits = Stream(probe, "audits");
         await expected.AppendAsync(store, audits, 0, [Event(id, 0, isAudit: true)], ct).ConfigureAwait(false);
         var auditRecords = await ReadAsync(store, audits, 0, ct).ConfigureAwait(false);
+
         if (auditRecords.Count != 1)
             throw new ConformanceViolationException("Expected one original audit record.");
+
         expected.Verify(auditRecords, "audit stream read");
     }
 
-    static async ValueTask VerifyResumeFromOffsetAsync(IEventStoreConformanceProbe probe, ExpectedRecords expected,
-        CancellationToken ct)
+    static async ValueTask VerifyResumeFromOffsetAsync(
+        IEventStoreConformanceProbe probe,
+        ExpectedRecords expected,
+        CancellationToken ct
+    )
     {
         var store = await probe.OpenAsync(ct).ConfigureAwait(false);
         var records = await ReadAsync(store, Stream(probe, "ordered"), 2, ct).ConfigureAwait(false);
+
         if (records.Count != 1 || records[0].ResourceOffset != 2)
         {
             throw new ConformanceViolationException(
                 "Reading from an offset must return exactly the records at and after it, keeping their absolute offsets.");
         }
 
+
         expected.Verify(records, "stream offset resume");
     }
 
-    static async ValueTask VerifyStaleAppendConflictsAsync(IEventStoreConformanceProbe probe, ExpectedRecords expected,
-        CancellationToken ct)
+    static async ValueTask VerifyStaleAppendConflictsAsync(
+        IEventStoreConformanceProbe probe,
+        ExpectedRecords expected,
+        CancellationToken ct
+    )
     {
         var store = await probe.OpenAsync(ct).ConfigureAwait(false);
         var stream = Stream(probe, "conflict");
@@ -123,8 +141,14 @@ public static class EventStoreConformance
             ct).ConfigureAwait(false);
     }
 
-    static async ValueTask RequireConflictAsync(IEventStore store, EventStreamAddress stream,
-        ulong expectedStreamPosition, DomainEvent domainEvent, string message, CancellationToken ct)
+    static async ValueTask RequireConflictAsync(
+        IEventStore store,
+        EventStreamAddress stream,
+        ulong expectedStreamPosition,
+        DomainEvent domainEvent,
+        string message,
+        CancellationToken ct
+    )
     {
         try
         {
@@ -147,25 +171,33 @@ public static class EventStoreConformance
         throw new ConformanceViolationException(message);
     }
 
-    static async ValueTask VerifyConflictLeavesStreamUnchangedAsync(IEventStoreConformanceProbe probe,
-        ExpectedRecords expected, CancellationToken ct)
+    static async ValueTask VerifyConflictLeavesStreamUnchangedAsync(
+        IEventStoreConformanceProbe probe,
+        ExpectedRecords expected,
+        CancellationToken ct
+    )
     {
         var store = await probe.OpenAsync(ct).ConfigureAwait(false);
         var stream = Stream(probe, "conflict");
         var records = await ReadAsync(store, stream, 0, ct).ConfigureAwait(false);
+
         if (records.Count != 1)
         {
             throw new ConformanceViolationException(
                 $"After a rejected append the stream holds {records.Count} records; a conflicting append must write nothing.");
         }
 
+
         expected.Verify(records, "read after rejected append");
     }
 
     // Writers racing at one expected position: exactly one may win. A store that checks the position and then
     // appends in two steps lets several through, which breaks every aggregate's optimistic concurrency.
-    static async ValueTask VerifyConcurrentAppendsConflictAsync(IEventStoreConformanceProbe probe,
-        ExpectedRecords expected, CancellationToken ct)
+    static async ValueTask VerifyConcurrentAppendsConflictAsync(
+        IEventStoreConformanceProbe probe,
+        ExpectedRecords expected,
+        CancellationToken ct
+    )
     {
         const int writers = 8;
         var store = await probe.OpenAsync(ct).ConfigureAwait(false);
@@ -174,6 +206,7 @@ public static class EventStoreConformance
         var attempts = Enumerable.Range(0, writers).Select(_ => Task.Run(async () =>
         {
             await start.Task.WaitAsync(ct).ConfigureAwait(false);
+
             try
             {
                 await expected.AppendAsync(store, stream, 0, [Event(Uuid.CreateVersion4(), 1)], ct)
@@ -188,17 +221,22 @@ public static class EventStoreConformance
         start.SetResult();
         var winners = (await Task.WhenAll(attempts).ConfigureAwait(false)).Count(won => won);
         var records = await ReadAsync(store, stream, 0, ct).ConfigureAwait(false);
+
         if (winners != 1 || records.Count != 1)
         {
             throw new ConformanceViolationException(
                 $"{writers} concurrent appends at one expected position let {winners} succeed and left {records.Count} records; exactly one must win and the rest must conflict.");
         }
 
+
         expected.Verify(records, "concurrent append read");
     }
 
-    static async ValueTask VerifyPatternReadCoversStreamsAsync(IEventStoreConformanceProbe probe,
-        ExpectedRecords expected, CancellationToken ct)
+    static async ValueTask VerifyPatternReadCoversStreamsAsync(
+        IEventStoreConformanceProbe probe,
+        ExpectedRecords expected,
+        CancellationToken ct
+    )
     {
         var store = await probe.OpenAsync(ct).ConfigureAwait(false);
 
@@ -223,6 +261,7 @@ public static class EventStoreConformance
 
         var pattern = EventStreamPattern.ForPattern(probe.Realm, probe.Area);
         var records = await ReadAsync(store, pattern, EventCursor.Start, ct).ConfigureAwait(false);
+
         if (records.FirstOrDefault(record =>
                 record.Stream.Realm != probe.Realm || record.Stream.Area != probe.Area) is { } foreign)
         {
@@ -230,12 +269,15 @@ public static class EventStoreConformance
                 $"A pattern read for '{pattern}' returned a record from stream '{foreign.Stream}' outside the pattern; it must never return another realm's or area's events.");
         }
 
+
         var streams = records.Select(record => record.Stream.Resource).Distinct().ToArray();
+
         if (!streams.Contains("ordered") || !streams.Contains("conflict"))
         {
             throw new ConformanceViolationException(
                 $"A pattern read returned streams [{string.Join(", ", streams)}]; it must cover every stream in the area.");
         }
+
 
         if (records.Any(record => record.NextCursor == EventCursor.Start))
         {
@@ -246,11 +288,13 @@ public static class EventStoreConformance
         var interleaved = records
             .Where(record => record.Stream.Resource.StartsWith("interleave-", StringComparison.Ordinal))
             .Select(record => (record.Stream.Resource, record.Event.Metadata.AggregateVersion)).ToArray();
+
         if (!interleaved.SequenceEqual([("interleave-a", 1UL), ("interleave-b", 1UL), ("interleave-a", 2UL)]))
         {
             throw new ConformanceViolationException(
                 $"A pattern read returned interleaved appends as [{string.Join(", ", interleaved)}]; it must return records across streams in append order.");
         }
+
 
         expected.Verify(records, "pattern read");
 
@@ -259,11 +303,13 @@ public static class EventStoreConformance
         for (var index = 0; index < records.Count; index++)
         {
             var resumed = await ReadAsync(store, pattern, records[index].NextCursor, ct).ConfigureAwait(false);
+
             if (!resumed.Select(Position).SequenceEqual(records.Skip(index + 1).Select(Position)))
             {
                 throw new ConformanceViolationException(
                     $"Resuming from record {index}'s cursor did not continue with the records after it; a pattern read must resume immediately after the record that issued its cursor.");
             }
+
 
             expected.Verify(resumed, "issued cursor resume");
         }
@@ -285,21 +331,33 @@ public static class EventStoreConformance
         return ev;
     }
 
-    static async ValueTask<List<DomainEventRecord>> ReadAsync(IEventStore store, EventStreamAddress stream,
-        ulong fromOffset, CancellationToken ct)
+    static async ValueTask<List<DomainEventRecord>> ReadAsync(
+        IEventStore store,
+        EventStreamAddress stream,
+        ulong fromOffset,
+        CancellationToken ct
+    )
     {
         var records = new List<DomainEventRecord>();
+
         await foreach (var record in store.ReadAsync(stream, fromOffset, ct).ConfigureAwait(false))
             records.Add(record);
+
         return records;
     }
 
-    static async ValueTask<List<DomainEventRecord>> ReadAsync(IEventStore store, EventStreamPattern pattern,
-        EventCursor cursor, CancellationToken ct)
+    static async ValueTask<List<DomainEventRecord>> ReadAsync(
+        IEventStore store,
+        EventStreamPattern pattern,
+        EventCursor cursor,
+        CancellationToken ct
+    )
     {
         var records = new List<DomainEventRecord>();
+
         await foreach (var record in store.ReadAsync(pattern, cursor, ct).ConfigureAwait(false))
             records.Add(record);
+
         return records;
     }
 
@@ -308,11 +366,17 @@ public static class EventStoreConformance
         readonly ConcurrentDictionary<(EventStreamAddress, ulong), (ulong Sequence, DomainEventMetadata Metadata)>
             _records = new();
 
-        public async ValueTask AppendAsync(IEventStore store, EventStreamAddress stream, ulong position,
-            IReadOnlyList<DomainEvent> events, CancellationToken ct)
+        public async ValueTask AppendAsync(
+            IEventStore store,
+            EventStreamAddress stream,
+            ulong position,
+            IReadOnlyList<DomainEvent> events,
+            CancellationToken ct
+        )
         {
             var originals = events.Select(ev => (((ConformanceEvent)ev).Sequence, ev.Metadata)).ToArray();
             await store.AppendAsync(stream, position, events, ct).ConfigureAwait(false);
+
             for (var index = 0; index < originals.Length; index++)
                 _records[(stream, position + (ulong)index)] = originals[index];
         }
@@ -322,14 +386,18 @@ public static class EventStoreConformance
             foreach (var record in records)
             {
                 var location = $"{path} '{record.Stream}' offset {record.ResourceOffset}";
+
                 if (!_records.TryGetValue((record.Stream, record.ResourceOffset), out var original))
                     throw new ConformanceViolationException($"Unexpected original record at {location}.");
+
                 if (record.Event is not ConformanceEvent ev)
                     throw new ConformanceViolationException(
                         $"Event type changed at {location}; expected {nameof(ConformanceEvent)}, actual {record.Event.GetType().Name}.");
+
                 if (ev.Sequence != original.Sequence)
                     throw new ConformanceViolationException(
                         $"Event payload changed at {location}; expected Sequence={original.Sequence}, actual {ev.Sequence}.");
+
                 if (ev.Metadata != original.Metadata ||
                     ev.Metadata.OccurredOn.Offset != original.Metadata.OccurredOn.Offset)
                     throw new ConformanceViolationException(

@@ -45,13 +45,24 @@ sealed class AccountDemoAuthenticationHandler(
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         if (!Request.Headers.TryGetValue("X-Demo-Tenant", out var tenant))
+        {
             return Task.FromResult(AuthenticateResult.NoResult());
+        }
+
         if (!Request.Headers.TryGetValue("X-Demo-Account", out var accountId))
+        {
             return Task.FromResult(AuthenticateResult.NoResult());
+        }
+
         if (tenant.Count != 1 || string.IsNullOrWhiteSpace(tenant[0]))
+        {
             return Task.FromResult(AuthenticateResult.Fail("X-Demo-Tenant must contain one tenant ID."));
+        }
+
         if (accountId.Count != 1 || string.IsNullOrWhiteSpace(accountId[0]))
+        {
             return Task.FromResult(AuthenticateResult.Fail("X-Demo-Account must contain one account ID."));
+        }
 
         var identity = new ClaimsIdentity(
             [new Claim("tenant_id", tenant[0]!),

@@ -47,6 +47,7 @@ public sealed class FleetLifecycleTests
                 stopping = lifetime.CancelAsync();
             else
                 Volatile.Write(ref snapshot, []);
+
             error = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
         }
         finally
@@ -87,6 +88,7 @@ public sealed class FleetLifecycleTests
         {
             if (Interlocked.Increment(ref started) == 2)
                 ready.TrySetResult();
+
             if (workloadFails && route == retained)
             {
                 var stop = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -162,6 +164,7 @@ public sealed class FleetLifecycleTests
         {
             if (Interlocked.Increment(ref starts) == (stuckSibling ? 2 : 1))
                 started.TrySetResult();
+
             return partition == stuck ? releaseSibling.Task : completion.Task;
         }, options, lifetime.Token);
         await started.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
@@ -182,6 +185,7 @@ public sealed class FleetLifecycleTests
             Volatile.Write(ref snapshot, []);
             completion.SetException(terminal);
             clock.Advance(interval);
+
             if (stuckSibling)
             {
                 await WaitForDelayAsync(timeout).WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
@@ -192,6 +196,7 @@ public sealed class FleetLifecycleTests
             {
                 nextReconciliation = WaitForDelayAsync(interval);
                 await Task.WhenAny(run, nextReconciliation).WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+
                 if (run.IsCompleted)
                     failure = await Record.ExceptionAsync(() => run);
             }
@@ -201,6 +206,7 @@ public sealed class FleetLifecycleTests
             releaseSibling.TrySetResult();
             await lifetime.CancelAsync();
             _ = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
+
             if (nextReconciliation is not null)
                 _ = await Record.ExceptionAsync(() => nextReconciliation);
         }
@@ -208,6 +214,7 @@ public sealed class FleetLifecycleTests
         // Assert
         Assert.Equal(interval, openingDelay);
         Assert.Same(terminal, failure);
+
         if (stuckSibling)
         {
             var cleanup =
@@ -243,6 +250,7 @@ public sealed class FleetLifecycleTests
         var run = coordinator.RunAsync(() => Volatile.Read(ref snapshot), async (id, ct) =>
         {
             tokens[id] = ct;
+
             if (id == a)
             {
                 await fault.Task.ConfigureAwait(false);
@@ -251,7 +259,9 @@ public sealed class FleetLifecycleTests
 
             // The test retains registrations so a resumed cancelled delay cannot dispose them
             // before CancelAsync invokes the application's callback.
+
             registrations.Add(ct.Register(() => (id == b ? firstCancelled : secondCancelled).TrySetResult()));
+
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
@@ -259,6 +269,7 @@ public sealed class FleetLifecycleTests
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
             }
+
 
             if (id == b)
                 await secondCancelled.Task;
@@ -274,10 +285,12 @@ public sealed class FleetLifecycleTests
                 fault.SetException(terminalFailure);
             else
                 Volatile.Write(ref snapshot, []);
+
             clock.Advance(interval);
             await firstCancelled.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
             _ = await Record.ExceptionAsync(() => secondCancelled.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
             bothCancelled = tokens[b].IsCancellationRequested && tokens[c].IsCancellationRequested;
+
             if (terminal && bothCancelled)
                 failure = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
         }
@@ -285,6 +298,7 @@ public sealed class FleetLifecycleTests
         {
             await lifetime.CancelAsync();
             _ = await Record.ExceptionAsync(() => run.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
+
             foreach (var registration in registrations)
                 registration.Dispose();
         }
@@ -293,6 +307,7 @@ public sealed class FleetLifecycleTests
         Assert.Equal(interval, openingDelay);
         Assert.True(bothCancelled,
             "Sibling c was still running while the coordinator awaited b's cooperative cleanup.");
+
         if (terminal)
             Assert.Same(terminalFailure, failure);
     }

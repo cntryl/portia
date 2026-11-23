@@ -339,11 +339,16 @@ public sealed class ReactorRunnerTests
 
         public List<string> SavedCursors { get; } = [];
 
-        public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity,
-            CancellationToken ct = default) => ValueTask.FromResult(_checkpoint);
+        public ValueTask<ProjectionCheckpoint> LoadAsync(
+            CheckpointIdentity identity,
+            CancellationToken ct = default
+        ) => ValueTask.FromResult(_checkpoint);
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-            CancellationToken ct = default)
+        public ValueTask SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default
+        )
         {
             ct.ThrowIfCancellationRequested();
             _checkpoint = checkpoint;
@@ -351,12 +356,18 @@ public sealed class ReactorRunnerTests
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint expected,
-            ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+        public ValueTask SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint expected,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default
+        )
         {
             ct.ThrowIfCancellationRequested();
+
             if (_checkpoint != expected)
                 throw new ProjectionConcurrencyException("stale checkpoint");
+
             _checkpoint = checkpoint;
             SavedCursors.Add(checkpoint.Cursor.ToString());
             return ValueTask.CompletedTask;
@@ -369,8 +380,10 @@ public sealed class ReactorRunnerTests
         public List<ulong> AggregateVersions { get; } = [];
         public List<int> BatchSizes { get; } = [];
 
-        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts,
-            CancellationToken ct)
+        protected override ValueTask<Result> ReactBatchAsync(
+            IReadOnlyList<IReactorContext> contexts,
+            CancellationToken ct
+        )
         {
             ct.ThrowIfCancellationRequested();
             BatchSizes.Add(contexts.Count);
@@ -384,8 +397,11 @@ public sealed class ReactorRunnerTests
     {
         public List<bool> SawMutation { get; } = [];
 
-        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
-            CancellationToken ct)
+        protected override ValueTask<Result> ReactToEventAsync(
+            DomainEventRecord record,
+            IExecutionContext context,
+            CancellationToken ct
+        )
         {
             var actor = context.Actor;
             SawMutation.Add(actor.HasClaim("mutation", "first"));

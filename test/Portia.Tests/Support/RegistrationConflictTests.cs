@@ -381,8 +381,10 @@ public sealed class RegistrationConflictTests
         Assert.DoesNotContain(services, item => item.ServiceType == typeof(WorkloadRegistration));
     }
 
-    static RequestTransportRegistration Transport(string operation = "execute",
-        string discriminator = "transport-conflict") => new(typeof(TransportConflictRequest),
+    static RequestTransportRegistration Transport(
+        string operation = "execute",
+        string discriminator = "transport-conflict"
+    ) => new(typeof(TransportConflictRequest),
         [RequestTransportId.Callable],
         new RequestRouteAttribute("tests", "requests", "universal", operation),
         new DiscriminatorAttribute(discriminator));
@@ -411,8 +413,11 @@ sealed class UniversalActionAuthorizer : IRequestAuthorizer<UniversalAction>
 // A behavior used only to exercise order conflicts.
 sealed class CountingBehavior : IRequestPipelineBehavior<UniversalAction>
 {
-    public ValueTask<Result> HandleAsync(IRequestContext<UniversalAction> context, RequestPipelineNext next,
-        CancellationToken ct) => next(ct);
+    public ValueTask<Result> HandleAsync(
+        IRequestContext<UniversalAction> context,
+        RequestPipelineNext next,
+        CancellationToken ct
+    ) => next(ct);
 }
 
 // A component that wrongly claims both the authorizer and the guard role.

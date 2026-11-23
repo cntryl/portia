@@ -111,8 +111,11 @@ public sealed class ApplicationContractAnalyzerTests
     [InlineData("[Discriminator(\"orders.place__order\", 1)]", "Commands", "IRequest")]
     [InlineData("", "Queries", "IStreamRequest<int>")]
     [InlineData("", "Events", "DomainEvent")]
-    public void ShouldReportWireIdentityGivenMissingOrInvalidDiscriminator(string attribute, string folder,
-        string contract)
+    public void ShouldReportWireIdentityGivenMissingOrInvalidDiscriminator(
+        string attribute,
+        string folder,
+        string contract
+    )
     {
         // Arrange
         var source =

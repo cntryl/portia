@@ -36,6 +36,7 @@ public sealed class PutBodyCaseTests
 
         // Assert
         Assert.Equal(expected, response.StatusCode);
+
         if (expected == HttpStatusCode.NoContent)
             Assert.Single(probe.Handled);
         else
@@ -99,6 +100,7 @@ public sealed class PutBodyCaseTests
         var references = schema.GetProperty("oneOf").EnumerateArray()
             .Select(choice => choice.GetProperty("$ref").GetString()).ToArray();
         Assert.Equal(2, references.Length);
+
         foreach (var name in new[] { "rename", "archive" })
         {
             var pointer = mapping.GetProperty(name).GetString()!;
@@ -175,8 +177,10 @@ public sealed class PutBodyCaseTests
         app.Use((context, next) =>
         {
             var claims = new List<Claim> { new("permission", "assets:rename") };
+
             if (allowArchive)
                 claims.Add(new Claim("permission", "assets:archive"));
+
             context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
             return next(context);
         });

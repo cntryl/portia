@@ -8,8 +8,11 @@ sealed record CancellationReport(string Case, string Size, CancellationObservati
 
 static class CancellationProbe
 {
-    internal static async Task<CancellationObservation> RunTrialAsync(Func<CancellationToken, Task<BenchmarkCase>> prepare,
-        int delay, CancellationToken ct)
+    internal static async Task<CancellationObservation> RunTrialAsync(
+        Func<CancellationToken, Task<BenchmarkCase>> prepare,
+        int delay,
+        CancellationToken ct
+    )
     {
         if (delay is < 0 or > 1000)
             throw new ArgumentOutOfRangeException(nameof(delay));
@@ -17,6 +20,7 @@ static class CancellationProbe
         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
         BenchmarkCase? operation = null;
         var pending = Task.CompletedTask;
+
         try
         {
             operation = await prepare(cancellation.Token).ConfigureAwait(false);
@@ -29,6 +33,7 @@ static class CancellationProbe
             pending = execution;
             await entered.Task.WaitAsync(TimeSpan.FromSeconds(10), ct).ConfigureAwait(false);
             await Task.Delay(delay, CancellationToken.None).ConfigureAwait(false);
+
             if (execution.IsCompleted)
             {
                 try
@@ -42,15 +47,19 @@ static class CancellationProbe
                 }
             }
 
+
             var start = Stopwatch.GetTimestamp();
             pending = Task.WhenAll(cancellation.CancelAsync(), execution);
             using var timer = new CancellationTokenSource();
             var deadline = Task.Delay(TimeSpan.FromSeconds(5), timer.Token);
+
             if (await Task.WhenAny(pending, deadline).ConfigureAwait(false) == deadline)
                 return new("unresponsive", Stopwatch.GetElapsedTime(start).TotalMilliseconds,
                     "Request did not stop within five seconds; terminate this probe process before another trial.");
 
+
             await timer.CancelAsync().ConfigureAwait(false);
+
             try
             {
                 await pending.ConfigureAwait(false);
@@ -78,6 +87,7 @@ static class CancellationProbe
                 _ = DisposeWhenStoppedAsync(pending);
         }
 
+
         void DisposeResources()
         {
             using (cancellation)
@@ -91,12 +101,19 @@ static class CancellationProbe
         }
     }
 
-    public static async Task<CancellationReport> RunAsync(CaseSpec spec, string size, int trials, int delay,
-        CancellationToken ct)
+    public static async Task<CancellationReport> RunAsync(
+        CaseSpec spec,
+        string size,
+        int trials,
+        int delay,
+        CancellationToken ct
+    )
     {
         if (spec.Kind == "fixes" && spec.Operation is not ("discover" or "discover-cached" or "preview" or "compute"))
             throw new ArgumentException("Cancellation probes cover code-fix computation; applying a workspace change is a separate commit boundary.", nameof(spec));
+
         var results = new List<CancellationObservation>();
+
         for (var i = 0; i < trials; i++)
         {
             ct.ThrowIfCancellationRequested();
@@ -104,9 +121,11 @@ static class CancellationProbe
                 .ConfigureAwait(false);
             results.Add(result);
             Console.Error.WriteLine(System.Text.Json.JsonSerializer.Serialize(result, Campaign.Json));
+
             if (result.Error is not null)
                 break;
         }
+
         return new CancellationReport(spec.Id, size, results.ToArray(),
             "Cancellation requested after public request entry; not a claim about a specific callback. Completed-before-cancel requests are separate. Five-second response watchdog. Latencies diagnostic until collected on an accepted host; code-fix publication is excluded.",
             Campaign.Identity(), Campaign.FixtureHash(spec, size));

@@ -10,10 +10,12 @@ public sealed record ActorAttribution(string Subject, string Issuer)
     internal static ActorAttribution FromPrincipal(ClaimsPrincipal principal)
     {
         var identity = principal.Identities.FirstOrDefault(value => value.IsAuthenticated);
+
         if (identity == null)
         {
             return new ActorAttribution("anonymous", "Portia");
         }
+
 
         var subject = identity.FindFirst(ClaimTypes.NameIdentifier) ?? identity.FindFirst("sub");
         return subject is null || string.IsNullOrWhiteSpace(subject.Value) ||

@@ -28,12 +28,14 @@ public sealed class ImmutableExampleTests
             })).AddHttp().AddRequestHandler<ImmutableExampleHandler>().AddRequestHandler<DefaultedImmutableHandler>();
         await using var app = builder.Build();
         _ = app.MapPortiaOpenApi();
+
         if (defaulted)
             _ = app.MapPortiaPost<DefaultedImmutableRequest, string>("/immutable", configuration => configuration
                 .RequestExample("sample", new DefaultedImmutableRequest("example")));
         else
             _ = app.MapPortiaPost<ImmutableExampleRequest, string>("/immutable", configuration => configuration
                 .RequestExample("sample", new ImmutableExampleRequest("example", null)));
+
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
@@ -56,8 +58,10 @@ sealed class DefaultedImmutableRequest(string? text = null) : IRequest<string>, 
 
 sealed class DefaultedImmutableHandler : IRequestHandler<DefaultedImmutableRequest, string>
 {
-    public ValueTask<Result<string>> HandleAsync(IRequestContext<DefaultedImmutableRequest> context,
-        CancellationToken ct) =>
+    public ValueTask<Result<string>> HandleAsync(
+        IRequestContext<DefaultedImmutableRequest> context,
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult(Result<string>.Success(context.Request.Text!));
 }
 

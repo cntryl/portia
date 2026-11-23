@@ -7,10 +7,12 @@ public sealed record WorkloadRegistration
         IWorkloadDescriptor descriptor,
         string name,
         WorkloadScope scope,
-        Action<WorkloadOptions>? configure)
+        Action<WorkloadOptions>? configure
+    )
     {
         if (!Enum.IsDefined(scope))
             throw new ArgumentOutOfRangeException(nameof(scope), scope, "Choose a defined workload scope.");
+
         var options = new WorkloadOptions();
         configure?.Invoke(options);
         Scope = scope;
@@ -21,6 +23,7 @@ public sealed record WorkloadRegistration
         options.Processing.Validate();
         _ = IdentityText.Require(name, nameof(name));
         Name = name;
+
         if (!descriptor.SupportsRebuild &&
             // Asked of the descriptor rather than tested against a known descriptor type, so a
             // component kind added later answers for itself instead of silently gaining rebuilds.
@@ -28,6 +31,7 @@ public sealed record WorkloadRegistration
         {
             throw new ArgumentException("Reactors do not support projection rebuild generations.", nameof(configure));
         }
+
 
         Descriptor = descriptor;
         ComponentType = descriptor.ComponentType;

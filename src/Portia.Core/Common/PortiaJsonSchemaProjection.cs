@@ -30,6 +30,7 @@ static class PortiaJsonSchemaProjection
             {
                 if (info.Kind != JsonTypeInfoKind.Object)
                     return;
+
                 for (var index = info.Properties.Count - 1; index >= 0; index--)
                 {
                     var property = info.Properties[index];
@@ -41,11 +42,13 @@ static class PortiaJsonSchemaProjection
                           (property.Set is not null || property.AssociatedParameter is not null ||
                            handling == JsonObjectCreationHandling.Populate)
                         : member?.Output != false && property.Get is not null;
+
                     if (!permitted)
                     {
                         info.Properties.RemoveAt(index);
                         continue;
                     }
+
 
                     if (input)
                     {

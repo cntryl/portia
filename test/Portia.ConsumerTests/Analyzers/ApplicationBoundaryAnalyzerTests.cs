@@ -77,8 +77,11 @@ public sealed class ApplicationBoundaryAnalyzerTests
     [InlineData("Shop.Api", "Shop.Worker", "Shop.Api")]
     [InlineData("Shop.Worker", "Shop.Api", "Shop.Worker")]
     [InlineData("Shop.Api", "Example.Shop.Worker", "Example.Shop.Api")]
-    public void ShouldRejectSiblingHostReferenceGivenApplicationPrefix(string project, string dependency,
-        string assemblyName)
+    public void ShouldRejectSiblingHostReferenceGivenApplicationPrefix(
+        string project,
+        string dependency,
+        string assemblyName
+    )
     {
         // Arrange
         var reference = GeneratorCompilation.ReferenceNamed(dependency, "public class Dependency;");

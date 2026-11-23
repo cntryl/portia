@@ -32,6 +32,7 @@ public sealed class ApplicationStructureCodeFixTests
         document = workspace.CurrentSolution.GetDocument(document.Id)!;
         Assert.Single(await document.Project.GetSourceGeneratedDocumentsAsync(TestContext.Current.CancellationToken));
         CodeAction action;
+
         if (fixAll)
         {
             var provider = new ApplicationStructureCodeFixProvider();
@@ -45,6 +46,7 @@ public sealed class ApplicationStructureCodeFixTests
             var (actions, _) = await ActionsAsync(document, "PORTIA202");
             action = Assert.Single(actions);
         }
+
 
         var solution = await ApplyAsync(action);
         var project = solution.GetProject(document.Project.Id)!;
@@ -129,6 +131,7 @@ public sealed class ApplicationStructureCodeFixTests
         Assert.Contains("class Fixture", (await solution.GetDocument(document.Id)!.GetTextAsync(TestContext.Current.CancellationToken)).ToString(),
             StringComparison.Ordinal);
         await AssertCompilesAsync(project);
+
         foreach (var item in project.Documents)
             Assert.DoesNotContain(await DiagnosticsAsync(item, new ApplicationStructureAnalyzer()),
                 item => item.Id == "PORTIA200");
@@ -168,14 +171,17 @@ public sealed class ApplicationStructureCodeFixTests
         Assert.Equal(expectedNames, project.Documents.Select(document => document.Name)
             .OrderBy(name => name, StringComparer.Ordinal));
         var remaining = scope == FixAllScope.Document ? "Pair.cs" : null;
+
         foreach (var document in project.Documents)
         {
             var diagnostics = await DiagnosticsAsync(document, new ApplicationStructureAnalyzer());
+
             if (document.Name == remaining)
                 Assert.Contains(diagnostics, diagnostic => diagnostic.Id == "PORTIA201");
             else
                 Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA201");
         }
+
 
         await AssertCompilesAsync(project);
     }
@@ -207,10 +213,12 @@ public sealed class ApplicationStructureCodeFixTests
         var solution = await ApplyAsync(action);
 
         var project = solution.GetProject(first.Project.Id)!;
+
         foreach (var document in project.Documents)
         {
             var text = (await document.GetTextAsync(TestContext.Current.CancellationToken)).ToString();
             var diagnostics = await DiagnosticsAsync(document, new ApplicationStructureAnalyzer());
+
             if (scope == FixAllScope.Document && document.Name == "Currency.cs")
             {
                 Assert.Contains("namespace Old", text, StringComparison.Ordinal);
@@ -223,25 +231,34 @@ public sealed class ApplicationStructureCodeFixTests
             }
         }
 
+
         await AssertCompilesAsync(project);
     }
 
     sealed class StructureDiagnosticProvider : FixAllContext.DiagnosticProvider
     {
-        public override async Task<IEnumerable<Diagnostic>> GetDocumentDiagnosticsAsync(Document document,
-            CancellationToken cancellationToken) =>
+        public override async Task<IEnumerable<Diagnostic>> GetDocumentDiagnosticsAsync(
+            Document document,
+            CancellationToken cancellationToken
+        ) =>
             await DiagnosticsAsync(document, new ApplicationStructureAnalyzer());
 
-        public override Task<IEnumerable<Diagnostic>> GetProjectDiagnosticsAsync(Project project,
-            CancellationToken cancellationToken) =>
+        public override Task<IEnumerable<Diagnostic>> GetProjectDiagnosticsAsync(
+            Project project,
+            CancellationToken cancellationToken
+        ) =>
             Task.FromResult(Enumerable.Empty<Diagnostic>());
 
-        public override async Task<IEnumerable<Diagnostic>> GetAllDiagnosticsAsync(Project project,
-            CancellationToken cancellationToken)
+        public override async Task<IEnumerable<Diagnostic>> GetAllDiagnosticsAsync(
+            Project project,
+            CancellationToken cancellationToken
+        )
         {
             var diagnostics = new List<Diagnostic>();
+
             foreach (var document in project.Documents)
                 diagnostics.AddRange(await GetDocumentDiagnosticsAsync(document, cancellationToken));
+
             return diagnostics;
         }
     }
@@ -282,6 +299,7 @@ public sealed class ApplicationStructureCodeFixTests
         Assert.DoesNotContain("record Currency", (await solution.GetDocument(document.Id)!.GetTextAsync(TestContext.Current.CancellationToken)).ToString(),
             StringComparison.Ordinal);
         await AssertCompilesAsync(solution.GetProject(document.Project.Id)!);
+
         foreach (var item in documents)
             Assert.Empty(await DiagnosticsAsync(item, new ApplicationStructureAnalyzer()));
     }
@@ -484,8 +502,12 @@ public sealed class ApplicationStructureCodeFixTests
     [Theory]
     [InlineData("PORTIA200", "public record Price; public record Currency;", "Price.cs", "Currency.cs")]
     [InlineData("PORTIA201", "public record Currency;", "Wrong.cs", "Currency.cs")]
-    public async Task ShouldPreserveExistingFilesGivenDestinationCollision(string id, string source, string filename,
-        string destination)
+    public async Task ShouldPreserveExistingFilesGivenDestinationCollision(
+        string id,
+        string source,
+        string filename,
+        string destination
+    )
     {
         // Arrange
         using var workspace = new AdhocWorkspace();
@@ -662,6 +684,7 @@ public sealed class ApplicationStructureCodeFixTests
             .Select(document => document.Name).OrderBy(name => name, StringComparer.Ordinal));
         Assert.Equal("namespace Shop.Core.Features.Orders.Values; public record Foo;",
             (await solution.GetDocument(first.Id)!.GetTextAsync(TestContext.Current.CancellationToken)).ToString());
+
         foreach (var document in solution.GetProject(first.Project.Id)!.Documents)
             Assert.Contains(await DiagnosticsAsync(document, new ApplicationStructureAnalyzer()),
                 diagnostic => diagnostic.Id == "PORTIA201");
@@ -716,8 +739,10 @@ public sealed class ApplicationStructureCodeFixTests
         return [.. diagnostics.Where(item => item.Location.SourceTree == tree)];
     }
 
-    static async Task<(IReadOnlyList<CodeAction> Actions, Diagnostic Diagnostic)> ActionsAsync(Document document,
-        string id)
+    static async Task<(IReadOnlyList<CodeAction> Actions, Diagnostic Diagnostic)> ActionsAsync(
+        Document document,
+        string id
+    )
     {
         DiagnosticAnalyzer analyzer =
             id == "PORTIA210" ? new ApplicationContractAnalyzer() : new ApplicationStructureAnalyzer();

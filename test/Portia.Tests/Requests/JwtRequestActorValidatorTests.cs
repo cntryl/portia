@@ -273,8 +273,13 @@ public sealed class JwtRequestActorValidatorTests
             await validator.ValidateAsync(token, cancellation.Token));
     }
 
-    static string CreateToken(DateTime expires, string subject, SymmetricSecurityKey? signingKey = null,
-        DateTime? notBefore = null, Dictionary<string, object>? claims = null)
+    static string CreateToken(
+        DateTime expires,
+        string subject,
+        SymmetricSecurityKey? signingKey = null,
+        DateTime? notBefore = null,
+        Dictionary<string, object>? claims = null
+    )
     {
         var handler = new JsonWebTokenHandler();
         var descriptor = new SecurityTokenDescriptor

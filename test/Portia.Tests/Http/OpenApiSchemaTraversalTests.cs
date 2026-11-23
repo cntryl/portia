@@ -58,6 +58,7 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
             (await ReadDocumentAsync(client, format)).Paths!["/tenant-collections"].Operations![HttpMethod.Post];
         var request = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
         var result = operation.Responses!["200"].Content!["application/json"].Schema!;
+
         foreach (var envelope in new[] { request, result })
         {
             var collection = envelope.Properties![dictionary ? "values" : "items"];
@@ -109,6 +110,7 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
             (await ReadDocumentAsync(client, format)).Paths!["/dictionary-traversal"].Operations![HttpMethod.Post];
         var request = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
         var result = operation.Responses!["200"].Content!["application/json"].Schema!;
+
         foreach (var dictionary in new[] { request, result })
         {
             Assert.True(dictionary.Type!.Value.HasFlag(JsonSchemaType.Object));
@@ -156,6 +158,7 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
             (await ReadDocumentAsync(client, format)).Paths!["/polymorphic-traversal"].Operations![HttpMethod.Post];
         var request = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
         var result = operation.Responses!["200"].Content!["application/json"].Schema!;
+
         foreach (var polymorphic in new[] { request, result })
         {
             Assert.Equal(2, polymorphic.AnyOf!.Count);
@@ -208,6 +211,7 @@ public sealed class OpenApiSchemaTraversalTests : IAsyncDisposable
             (await ReadDocumentAsync(client, format)).Paths!["/nullable-traversal"].Operations![HttpMethod.Post];
         var request = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
         var result = operation.Responses!["200"].Content!["application/json"].Schema!;
+
         foreach (var envelope in new[] { request, result })
         {
             Assert.Contains("required_count", envelope.Required!);

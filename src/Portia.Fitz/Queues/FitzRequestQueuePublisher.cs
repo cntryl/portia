@@ -19,28 +19,46 @@ public sealed class FitzRequestQueuePublisher(
     readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
     /// <inheritdoc />
-    public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
-        CancellationToken ct = default)
+    public ValueTask EnqueueAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, IQueuable
         => EnqueueAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <inheritdoc />
-    public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
-        RequestMetadata metadata, CancellationToken ct = default)
+    public ValueTask EnqueueAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        RequestMetadata metadata,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, IQueuable
         => EnqueueCoreAsync(request, routeValues, actorToken, metadata, null, ct);
 
     /// <inheritdoc />
-    public ValueTask EnqueueWithOptionsAsync<TRequest>(TRequest request, RequestRouteValues routeValues,
+    public ValueTask EnqueueWithOptionsAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
         string? actorToken,
-        RequestQueueOptions options, CancellationToken ct)
+        RequestQueueOptions options,
+        CancellationToken ct
+    )
         where TRequest : IRequest, IQueuable
         => EnqueueWithOptionsAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), options, ct);
 
     /// <inheritdoc />
-    public ValueTask EnqueueWithOptionsAsync<TRequest>(TRequest request, RequestRouteValues routeValues,
+    public ValueTask EnqueueWithOptionsAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
         string? actorToken,
-        RequestMetadata metadata, RequestQueueOptions options, CancellationToken ct = default)
+        RequestMetadata metadata,
+        RequestQueueOptions options,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, IQueuable
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -49,8 +67,14 @@ public sealed class FitzRequestQueuePublisher(
         return EnqueueCoreAsync(request, routeValues, actorToken, metadata, options, ct);
     }
 
-    async ValueTask EnqueueCoreAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
-        RequestMetadata metadata, RequestQueueOptions? options, CancellationToken ct)
+    async ValueTask EnqueueCoreAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        RequestMetadata metadata,
+        RequestQueueOptions? options,
+        CancellationToken ct
+    )
         where TRequest : IRequest, IQueuable
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -60,15 +84,18 @@ public sealed class FitzRequestQueuePublisher(
         using var activity = PortiaTelemetry.StartSend(requestName, "queue", "fitz");
         var started = PortiaTelemetry.StartTimestamp();
         var outcome = "success";
+
         try
         {
             var route = FitzRouting.ResolveQueueRoute(_catalog, request, routeValues);
             var body = _serializer.Serialize(request, actorToken, metadata, PortiaTelemetry.CaptureTraceContext());
+
             if (options is null)
                 _ = await _queue.EnqueueAsync(route, body, (TimeSpan?)null, ct).ConfigureAwait(false);
             else
                 _ = await _queue.EnqueueAsync(route, body, new QueueEnqueueOptions(options.Delay,
                     options.TtlHours is { } hours ? TimeSpan.FromHours(hours) : null), ct).ConfigureAwait(false);
+
             PortiaTelemetry.RecordOutcome(activity, true, null);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

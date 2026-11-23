@@ -35,6 +35,7 @@ static class ContractAttributeDiagnostics
         context.RegisterSourceOutput(diagnostics.Combine(owners), static (output, input) =>
         {
             var diagnostic = input.Left!;
+
             if (input.Right.Contains(diagnostic.Owner))
                 output.ReportDiagnostic(Diagnostic.Create(Invalid, diagnostic.Location.ToLocation(), diagnostic.Name,
                     diagnostic.Reason));
@@ -44,12 +45,16 @@ static class ContractAttributeDiagnostics
     static Problem? Inspect(GeneratorSyntaxContext context, CancellationToken ct)
     {
         var syntax = (AttributeSyntax)context.Node;
+
         if (context.SemanticModel.GetSymbolInfo(syntax, ct).Symbol is not IMethodSymbol constructor)
             return null;
+
         var name = constructor.ContainingType.ToDisplayString();
+
         if (!JsonDescriptionEmission.IsValidationAttribute(name) &&
             name != "System.ComponentModel.DefaultValueAttribute" && name != RequiredWhenShape.AttributeName)
             return null;
+
         var owner = syntax.Parent?.Parent;
         var symbol = owner is FieldDeclarationSyntax field
             ? context.SemanticModel.GetDeclaredSymbol(field.Declaration.Variables[0], ct)
@@ -58,17 +63,22 @@ static class ContractAttributeDiagnostics
                 : context.SemanticModel.GetDeclaredSymbol(owner, ct);
         var attribute = symbol?.GetAttributes()
             .FirstOrDefault(candidate => candidate.ApplicationSyntaxReference?.Span == syntax.Span);
+
         if (attribute is null)
             return null;
+
         var args = attribute.ConstructorArguments;
         string? reason = null;
+
         if (name == RequiredWhenShape.AttributeName && symbol?.ContainingType is { } contract)
         {
             var property = symbol as IPropertySymbol ?? contract.GetMembers().OfType<IPropertySymbol>()
                 .FirstOrDefault(member => string.Equals(member.Name, symbol.Name, StringComparison.OrdinalIgnoreCase));
+
             if (property is null || RequiredWhenShape.Resolve(contract, property, attribute) is null)
                 reason = "RequiredWhen needs a readable constructor-bound nullable member with a null omitted value and a separate readable string selector without a default.";
         }
+
 
         if (name is "System.ComponentModel.DataAnnotations.RangeAttribute"
                 or "System.ComponentModel.DefaultValueAttribute" &&
@@ -86,6 +96,7 @@ static class ContractAttributeDiagnostics
         {
             var min =
                 attribute.NamedArguments.FirstOrDefault(pair => pair.Key == "MinimumLength").Value.Value as int? ?? 0;
+
             if (length < 0 || min < 0 || min > length)
                 reason = "StringLength requires 0 <= MinimumLength <= MaximumLength.";
         }
@@ -107,6 +118,7 @@ static class ContractAttributeDiagnostics
                 .FirstOrDefault(candidate => candidate.HasExplicitDefaultValue &&
                                              string.Equals(candidate.Name, property.Name,
                                                  StringComparison.OrdinalIgnoreCase));
+
             if (parameter is not null &&
                 Convert.ToString(parameter.ExplicitDefaultValue, CultureInfo.InvariantCulture) !=
                 Convert.ToString(args.FirstOrDefault().Value, CultureInfo.InvariantCulture))
@@ -114,10 +126,12 @@ static class ContractAttributeDiagnostics
                     "DefaultValue contradicts the known constructor default; the attribute does not initialize the property.";
         }
 
+
         if (attribute.NamedArguments.Any(pair =>
                 pair.Key == "ErrorMessageResourceType" && !pair.Value.IsNull))
             reason =
                 "Resource-backed validation requires reflection. Use a literal ErrorMessage or a typed request guard.";
+
         var memberType = symbol switch
         {
             IPropertySymbol propertyType => propertyType.Type,
@@ -125,24 +139,29 @@ static class ContractAttributeDiagnostics
             IParameterSymbol parameterType => parameterType.Type,
             _ => null
         };
+
         if (JsonDescriptionEmission.IsValidationAttribute(name) && symbol is IPropertySymbol
             {
                 GetMethod.DeclaredAccessibility: not Accessibility.Public
             })
             reason = "Value validation needs an accessible public getter; otherwise its rule cannot be enforced.";
+
         if (name is "System.ComponentModel.DataAnnotations.MinLengthAttribute"
                 or "System.ComponentModel.DataAnnotations.MaxLengthAttribute" &&
             memberType is not null && JsonDescriptionEmission.CountExpression(memberType) is null)
             reason = "Length validation needs a string, array, ICollection<T> or IReadOnlyCollection<T>.";
+
         if (name == "Cntryl.Portia.DecimalStringRangeAttribute" && memberType is not null)
         {
             var scalar = memberType is INamedTypeSymbol
             {
                 OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
             } nullable ? nullable.TypeArguments[0] : memberType;
+
             if (scalar is not INamedTypeSymbol named || !SymbolNames.Is(named, "Cntryl.Portia.DecimalString"))
                 reason = "DecimalStringRange requires a DecimalString or nullable DecimalString member.";
         }
+
 
         var containingType = symbol as INamedTypeSymbol ?? symbol?.ContainingType;
         return reason is null || containingType is null

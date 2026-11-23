@@ -44,15 +44,19 @@ public sealed class OpenApiDocumentCachingTests : IAsyncDisposable
         // Assert
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         var documentBytes = (await first.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken)).Length;
+
         for (var i = 0; i < 10; i++)
             _ = await client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
+
 
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
         var before = GC.GetTotalAllocatedBytes(true);
+
         for (var i = 0; i < iterations; i++)
             _ = await client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
+
         var allocated = (GC.GetTotalAllocatedBytes(true) - before) / iterations;
 
         Assert.True(allocated < documentBytes * 4L,

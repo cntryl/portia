@@ -23,5 +23,6 @@ public interface IDomainEventWriter
         EventStreamAddress stream,
         ulong expectedStreamPosition,
         IReadOnlyList<DomainEvent> events,
-        CancellationToken ct = default);
+        CancellationToken ct = default
+    );
 }

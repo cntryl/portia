@@ -45,6 +45,7 @@ sealed class FitzApplicationWorkers(
         {
             using var scope = scopes.CreateScope();
             var coordinator = scope.ServiceProvider.GetService<IWorkloadCoordinator>();
+
             if (coordinator is FitzWorkloadCoordinator && configuration.Fleet is null)
                 throw new InvalidOperationException(
                     "Fitz:ApplicationName or an explicit UseFleet(...) is required when Fitz coordinates workloads.");
@@ -56,17 +57,21 @@ sealed class FitzApplicationWorkers(
             var options = scope.ServiceProvider.GetService<IOptions<QueueRunnerOptions>>()?.Value
                           ?? new QueueRunnerOptions();
             options.Validate();
+
             if (options.TerminalAttempt is > 0)
                 throw new InvalidOperationException(
                     "Fitz queue workers do not support QueueRunnerOptions.TerminalAttempt because Fitz does not expose durable attempt counts.");
         }
 
         var required = _workers.SelectMany(worker => worker.Requirements).ToHashSet();
+
         if (_workers.OfType<FitzScheduleWorkerDefinition>().Any())
             _ = required.Add(typeof(IScheduledRequestActorValidator));
+
         foreach (var registration in _workloads)
         {
             _ = required.Add(typeof(IEventStore));
+
             if (registration.Scope == WorkloadScope.PerTenant)
             {
                 _ = required.Add(typeof(ITenantDirectory));
@@ -85,11 +90,13 @@ sealed class FitzApplicationWorkers(
     {
         // Also validate for callers that start the hosted service directly.
         await StartingAsync(cancellationToken).ConfigureAwait(false);
+
         if (validations?.HasPendingEndpointValidations is true)
         {
             _deferredStart = true;
             return;
         }
+
 
         await StartWorkersAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -99,6 +106,7 @@ sealed class FitzApplicationWorkers(
         // Published before anything is released, so a start still in flight either sees it or
         // has already stored what this stop releases.
         Volatile.Write(ref _stopRequested, 1);
+
         try
         {
             await base.StopAsync(cancellationToken).ConfigureAwait(false);
@@ -113,6 +121,7 @@ sealed class FitzApplicationWorkers(
     {
         if (!_deferredStart)
             return;
+
         _deferredStart = false;
         await validations!.WaitForEndpointValidationsAsync(cancellationToken).ConfigureAwait(false);
         await StartWorkersAsync(cancellationToken).ConfigureAwait(false);
@@ -126,7 +135,9 @@ sealed class FitzApplicationWorkers(
         // A stop that arrived while a deferred start waited must not be followed by workers.
         if (Volatile.Read(ref _stopRequested) != 0)
             return;
+
         await connection.StartAsync(cancellationToken).ConfigureAwait(false);
+
         try
         {
             if (_workers.OfType<FitzRpcWorkerDefinition>().Any())
@@ -143,6 +154,7 @@ sealed class FitzApplicationWorkers(
             }
 
             await base.StartAsync(cancellationToken).ConfigureAwait(false);
+
             if (Volatile.Read(ref _stopRequested) != 0)
             {
                 // The stop may have run before the executing task existed, so it stopped nothing.
@@ -164,6 +176,7 @@ sealed class FitzApplicationWorkers(
         var host = new FitzWorkerHost(connection.Client, scopes, serializer, catalog, _clock,
             queueLogger, noticeLogger, scheduleLogger, runnerLogger, notificationLogger);
         var listeners = new List<Func<CancellationToken, Task>>();
+
         foreach (var worker in _workers)
         {
             if (worker.CreateRunner(host) is { } run)
@@ -173,21 +186,26 @@ sealed class FitzApplicationWorkers(
             }
         }
 
+
         return SuperviseAsync(listeners, stoppingToken);
     }
 
-    internal static async Task SuperviseAsync(IEnumerable<Func<CancellationToken, Task>> listeners,
-        CancellationToken stoppingToken)
+    internal static async Task SuperviseAsync(
+        IEnumerable<Func<CancellationToken, Task>> listeners,
+        CancellationToken stoppingToken
+    )
     {
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         var tasks = new List<Task>();
         List<Exception> faults = [];
+
         try
         {
             foreach (var listener in listeners)
             {
                 if (lifetime.IsCancellationRequested)
                     break;
+
                 tasks.Add(listener(lifetime.Token));
             }
 
@@ -201,6 +219,7 @@ sealed class FitzApplicationWorkers(
 
         // A terminal listener failure must reach the host even while sibling listeners are healthy.
         // Cancel and observe all siblings before propagating it, including failures during cleanup.
+
         try
         {
             await lifetime.CancelAsync().ConfigureAwait(false);
@@ -211,6 +230,7 @@ sealed class FitzApplicationWorkers(
         }
 
         var completion = Task.WhenAll(tasks);
+
         try
         {
             await completion.ConfigureAwait(false);
@@ -226,14 +246,22 @@ sealed class FitzApplicationWorkers(
                 faults.Add(error);
         }
 
+
         if (faults.Count == 1)
             ExceptionDispatchInfo.Capture(faults[0]).Throw();
+
         if (faults.Count > 1)
             throw new AggregateException(faults);
     }
 
-    internal static async Task RetryAsync(string runnerName, Func<CancellationToken, Task> run, TimeSpan interval,
-        TimeProvider clock, ILogger? logger, CancellationToken ct)
+    internal static async Task RetryAsync(
+        string runnerName,
+        Func<CancellationToken, Task> run,
+        TimeSpan interval,
+        TimeProvider clock,
+        ILogger? logger,
+        CancellationToken ct
+    )
     {
         while (!ct.IsCancellationRequested)
         {
@@ -255,6 +283,7 @@ sealed class FitzApplicationWorkers(
             }
 
             PortiaTelemetry.RecordWorkerRestart(runnerName, "execution");
+
             try
             {
                 await Task.Delay(interval, clock, ct).ConfigureAwait(false);
@@ -269,6 +298,7 @@ sealed class FitzApplicationWorkers(
     async ValueTask ReleaseRpcAsync()
     {
         var rpc = Interlocked.Exchange(ref _rpc, null);
+
         if (rpc is not null)
         {
             await rpc.DisposeAsync().ConfigureAwait(false);

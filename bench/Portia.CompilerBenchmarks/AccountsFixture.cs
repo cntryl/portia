@@ -32,6 +32,7 @@ sealed class AccountsFixture
         _references = [.. _project.References.Select(reference => MetadataReference.CreateFromFile(Resolve(directory, reference.File),
             new MetadataReferenceProperties(MetadataImageKind.Assembly, [.. reference.Aliases], reference.EmbedInteropTypes)))];
         var generators = new List<ISourceGenerator>();
+
         foreach (var analyzer in _project.Analyzers)
         {
             var path = analyzer.Name switch
@@ -44,6 +45,7 @@ sealed class AccountsFixture
             reference.AnalyzerLoadFailed += (_, error) => throw new InvalidOperationException("Captured analyzer could not load: " + error.Message);
             generators.AddRange(reference.GetGenerators(LanguageNames.CSharp));
         }
+
         _generators = [.. generators];
         _options = new CapturedOptions(_project.Configurations);
         _additional = [.. _project.AdditionalFiles.Select(file => new CapturedAdditionalText(file))];
@@ -72,13 +74,16 @@ sealed class AccountsFixture
         {
             var block = tree.GetRoot().DescendantNodes().OfType<BlockSyntax>().FirstOrDefault();
             var topLevel = tree.GetRoot().DescendantNodes().OfType<GlobalStatementSyntax>().FirstOrDefault();
+
             if (block is null && topLevel is null)
                 continue;
+
             var position = block is not null ? block.OpenBraceToken.Span.End : topLevel!.SpanStart;
             var source = tree.GetText();
             return compilation.ReplaceSyntaxTree(tree, tree.WithChangedText(source.WithChanges(
                 new TextChange(new TextSpan(position, 0), "\n// compiler benchmark body edit\n"))));
         }
+
         throw new InvalidOperationException("Accounts project has no method/statement block to edit.");
     }
 

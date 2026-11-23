@@ -37,9 +37,11 @@ public sealed class RequestNotificationRunner(
             var transport = delivered.Invocation.TransportName;
             var completed = false;
             using var process = PortiaTelemetry.StartProcess(requestName, delivered.Invocation, delivered.TraceContext);
+
             try
             {
                 await using var scope = await _scopeFactory.CreateAsync(ct).ConfigureAwait(false);
+
                 if (delivered.Actor is
                     // The result's failure category can't change anything at this transport's level
                     // (no ack/redelivery). An unrecognized exception is still caught below.
@@ -54,6 +56,7 @@ public sealed class RequestNotificationRunner(
                     // the invocation through RequestDispatch — a fired schedule must not report a
                     // different transport depending on which authentication path delivered it.
                     var trusted = delivered.ToDelivery(scope.TimeProvider);
+
                     try
                     {
                         var outcome = await scope.Bus.DispatchAsync(delivered.Request,
@@ -80,6 +83,7 @@ public sealed class RequestNotificationRunner(
                     completed = dispatch.WasDispatched && dispatch.Outcome.IsSuccess;
                 }
 
+
                 if (!completed)
                 {
                     PortiaTelemetry.RecordLostDelivery(requestName, transport, _logger);
@@ -96,6 +100,7 @@ public sealed class RequestNotificationRunner(
                 // is simply lost. Continue processing later deliveries.
                 if (process?.GetTagItem("portia.outcome") is not "fault")
                     PortiaTelemetry.RecordFault(process, ex);
+
                 PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), RunnerFaultStage.Execution, ex,
                     _logger, recordException: false);
             }

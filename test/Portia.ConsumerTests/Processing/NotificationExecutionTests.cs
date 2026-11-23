@@ -95,6 +95,7 @@ public sealed class NotificationExecutionTests
                     : new NoticeInvocation(wire.Route) { MessagingSystem = "fitz" },
                 context.Invocation);
         });
+
         if (scheduled)
         {
             Assert.NotEqual(parent.CauseId, handler.Contexts[0].CausationId);
@@ -203,8 +204,10 @@ public sealed class NotificationExecutionTests
     [Theory]
     [InlineData(RequestScheduleDeliveryMode.One, ScheduleDeliveryMode.Once)]
     [InlineData(RequestScheduleDeliveryMode.Broadcast, ScheduleDeliveryMode.Broadcast)]
-    public async Task ShouldCarryDeliveryModeUntranslatedGivenRequestedMode(RequestScheduleDeliveryMode requested,
-        ScheduleDeliveryMode expected)
+    public async Task ShouldCarryDeliveryModeUntranslatedGivenRequestedMode(
+        RequestScheduleDeliveryMode requested,
+        ScheduleDeliveryMode expected
+    )
     {
         // Arrange
         var wire = new Wire();
@@ -323,8 +326,13 @@ public sealed class NotificationExecutionTests
             => Task.FromResult(new NoticeSubscription(selector, Repeat(new NoticeMessage(Route, Body), ct),
                 _ => ValueTask.CompletedTask, Task.CompletedTask));
 
-        public async Task<string?> CreateAsync(string route, string cron, ScheduleDeliveryMode mode,
-            ReadOnlyMemory<byte> payload, CancellationToken ct = default)
+        public async Task<string?> CreateAsync(
+            string route,
+            string cron,
+            ScheduleDeliveryMode mode,
+            ReadOnlyMemory<byte> payload,
+            CancellationToken ct = default
+        )
         {
             Mode = mode;
             await PublishAsync(route, payload, ct);

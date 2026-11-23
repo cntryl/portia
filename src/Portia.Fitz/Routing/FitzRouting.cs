@@ -18,8 +18,11 @@ static class FitzRouting
     /// <summary>
     ///     Builds a 4-segment Fitz RPC route: <c>rpc://{realm}/{area}/{resource}/{operation}</c>.
     /// </summary>
-    public static string ResolveRpcRoute(RequestTransportCatalog catalog, IRequestBase request,
-        RequestRouteValues routeValues) =>
+    public static string ResolveRpcRoute(
+        RequestTransportCatalog catalog,
+        IRequestBase request,
+        RequestRouteValues routeValues
+    ) =>
         ResolveRoute(catalog, "rpc", request, routeValues, true);
 
     /// <summary>
@@ -40,27 +43,41 @@ static class FitzRouting
     ///     Builds a 3-segment Fitz queue route: <c>queue://{realm}/{area}/{resource}</c>. The
     ///     request's declared operation, if any, is not part of a Fitz queue route.
     /// </summary>
-    public static string ResolveQueueRoute(RequestTransportCatalog catalog, IRequestBase request,
-        RequestRouteValues routeValues) =>
+    public static string ResolveQueueRoute(
+        RequestTransportCatalog catalog,
+        IRequestBase request,
+        RequestRouteValues routeValues
+    ) =>
         ResolveRoute(catalog, "queue", request, routeValues, false);
 
     /// <summary>
     ///     Builds a 3-segment Fitz notice route: <c>notice://{realm}/{area}/{resource}</c>. The
     ///     request's declared operation, if any, is not part of a Fitz notice route.
     /// </summary>
-    public static string ResolveNoticeRoute(RequestTransportCatalog catalog, IRequestBase request,
-        RequestRouteValues routeValues) =>
+    public static string ResolveNoticeRoute(
+        RequestTransportCatalog catalog,
+        IRequestBase request,
+        RequestRouteValues routeValues
+    ) =>
         ResolveRoute(catalog, "notice", request, routeValues, false);
 
     /// <summary>
     ///     Builds a 4-segment Fitz schedule route: <c>schedule://{realm}/{area}/{resource}/{operation}</c>.
     /// </summary>
-    public static string ResolveScheduleRoute(RequestTransportCatalog catalog, IRequestBase request,
-        RequestRouteValues routeValues) =>
+    public static string ResolveScheduleRoute(
+        RequestTransportCatalog catalog,
+        IRequestBase request,
+        RequestRouteValues routeValues
+    ) =>
         ResolveRoute(catalog, "schedule", request, routeValues, true);
 
-    static string ResolveRoute(RequestTransportCatalog catalog, string scheme, IRequestBase request,
-        RequestRouteValues routeValues, bool includeOperation)
+    static string ResolveRoute(
+        RequestTransportCatalog catalog,
+        string scheme,
+        IRequestBase request,
+        RequestRouteValues routeValues,
+        bool includeOperation
+    )
     {
         var route = catalog.Get(request.GetType()).Route;
         var resolved = $"{scheme}://{Segment(route.Realm, routeValues.Realm, nameof(route.Realm))}"
@@ -78,8 +95,10 @@ static class FitzRouting
             ? declared
             : suppliedValue ?? throw new InvalidOperationException(
                 $"Route segment '{segmentName}' is wildcarded and was not supplied in {nameof(RequestRouteValues)}.");
+
         if (string.IsNullOrWhiteSpace(value) || !value.All(IsSegmentCharacter))
             throw new InvalidOperationException($"Route segment '{segmentName}' contains unsupported characters.");
+
         return value.Length <= MaximumSegmentLength
             ? value
             : throw new InvalidOperationException(

@@ -38,12 +38,14 @@ public sealed class AzureObjectStorageIntegrationTests
         using var host = services.BuildServiceProvider();
         using var transfer = new HttpClient();
         var storage = host.GetRequiredService<IObjectStorage>();
+
         foreach (var location in locations.Values)
         {
             await service.CreateBlobContainerAsync(location.BucketReference, cancellationToken: TestContext.Current.CancellationToken);
         }
 
         // Act
+
         var run = async () => await ObjectStorageConformance.VerifyAsync(storage, firstTenant, secondTenant,
             async (part, bytes, ct) =>
             {

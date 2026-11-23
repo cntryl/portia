@@ -47,14 +47,23 @@ static partial class Campaign
     public static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
     static readonly JsonSerializerOptions PrettyJson = new() { WriteIndented = true };
 
-    public static async Task<WorkerReport> WorkerAsync(CaseSpec spec, string size, int samples, int warmup,
+    public static async Task<WorkerReport> WorkerAsync(
+        CaseSpec spec,
+        string size,
+        int samples,
+        int warmup,
         CancellationToken ct,
-        Action<Sample>? completed = null, bool completionAck = false)
+        Action<Sample>? completed = null,
+        bool completionAck = false
+    )
     {
         CompilerHost.VerifyInventory();
+
         for (var i = 0; i < warmup; i++)
             _ = await BenchmarkCase.MeasureAsync(spec, size, -1, ct: ct).ConfigureAwait(false);
+
         var rows = new List<Sample>();
+
         for (var i = 0; i < samples; i++)
         {
             ct.ThrowIfCancellationRequested();
@@ -62,12 +71,14 @@ static partial class Campaign
                 () =>
                 {
                     Console.WriteLine(JsonSerializer.Serialize(new { RequestCompleted = i }, Json));
+
                     if (completionAck && Console.ReadLine() != "continue:" + i.ToString(System.Globalization.CultureInfo.InvariantCulture))
                         throw new InvalidOperationException("Controller did not acknowledge the request boundary.");
                 }, ct).ConfigureAwait(false);
             rows.Add(row);
             completed?.Invoke(row);
         }
+
 
         var identity = Identity();
         using var process = Process.GetCurrentProcess();
@@ -106,12 +117,22 @@ static partial class Campaign
             RuntimeInformation.OSDescription, RuntimeInformation.ProcessArchitecture.ToString(), assemblies);
     }
 
-    public static async Task<WorkerResult> LaunchAsync(string assembly, CaseSpec spec, string size, int samples,
+    public static async Task<WorkerResult> LaunchAsync(
+        string assembly,
+        CaseSpec spec,
+        string size,
+        int samples,
         int warmup,
-        int pair, string side, TimeSpan timeout, CancellationToken ct, Func<string, Task>? progress = null)
+        int pair,
+        string side,
+        TimeSpan timeout,
+        CancellationToken ct,
+        Func<string, Task>? progress = null
+    )
     {
         var start = new ProcessStartInfo("dotnet")
         { RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = true, UseShellExecute = false };
+
         foreach (var argument in new[]
                  {
                      Path.GetFullPath(assembly), "worker", "--corpus", spec.Kind == "accounts" ? "accounts" : "core", "--case", spec.Id, "--size", size,
@@ -119,11 +140,14 @@ static partial class Campaign
                      "--warmup", warmup.ToString(System.Globalization.CultureInfo.InvariantCulture), "--completion-ack", "true"
                  })
             start.ArgumentList.Add(argument);
+
         using var process = new Process { StartInfo = start };
         using var monitor = new HostMonitor(process);
         var watch = Stopwatch.StartNew();
+
         if (!process.Start())
             throw new InvalidOperationException("Could not launch worker.");
+
         double? firstRequest = null;
         var stdout = ReadWorkerAsync(process.StandardOutput, samples, progress, async index =>
         {
@@ -134,32 +158,41 @@ static partial class Campaign
         var stderr = process.StandardError.ReadToEndAsync(CancellationToken.None);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(timeout);
+
         try
         {
             var exited = process.WaitForExitAsync(deadline.Token);
+
             while (!exited.IsCompleted)
             {
                 _ = await Task.WhenAny(exited, Task.Delay(1000, CancellationToken.None)).ConfigureAwait(false);
                 deadline.Token.ThrowIfCancellationRequested();
+
                 if (stdout.IsFaulted)
                     _ = await stdout.ConfigureAwait(false);
+
                 if (!exited.IsCompleted && !monitor.Observe())
                 {
                     process.Kill(entireProcessTree: true);
                     break;
                 }
             }
+
             await exited.ConfigureAwait(false);
             var output = await stdout.ConfigureAwait(false);
             var error = await stderr.ConfigureAwait(false);
+
             if (process.ExitCode != 0)
                 return new WorkerResult(pair, side, assembly, watch.Elapsed.TotalMilliseconds, null,
                     "exit=" + process.ExitCode + "; " + error + output, monitor.Complete());
+
             var report = JsonSerializer.Deserialize<WorkerReport>(output, Json) ??
                          throw new InvalidOperationException("Empty worker report.");
+
             if (report.Format != Format || report.Case != spec.Id || report.Size != size || report.Samples.Length != samples
                 || !double.IsFinite(report.LifetimeCpuMilliseconds) || report.LifetimeCpuMilliseconds <= 0)
                 throw new InvalidOperationException("Worker did not report the requested case and sample count.");
+
             var host = monitor.Complete(report.LifetimeCpuMilliseconds);
             return new WorkerResult(pair, side, assembly, watch.Elapsed.TotalMilliseconds, report,
                 host.Accepted ? null : "host rejected: " + string.Join("; ", host.Reasons), host, firstRequest);
@@ -168,11 +201,14 @@ static partial class Campaign
         {
             if (!process.HasExited)
                 process.Kill(entireProcessTree: true);
+
             await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+
             try
             { _ = await stdout.ConfigureAwait(false); }
             catch (Exception readError) when (readError is JsonException or InvalidOperationException or IOException)
             { /* Completed progress records have already been flushed to the raw log. */ }
+
             _ = await stderr.ConfigureAwait(false);
             return new WorkerResult(pair, side, assembly, watch.Elapsed.TotalMilliseconds, null,
                 error is OperationCanceledException ? (ct.IsCancellationRequested ? "campaign canceled" : "worker timed out") : error.Message,
@@ -180,13 +216,28 @@ static partial class Campaign
         }
     }
 
-    public static async Task<int> RunAsync(string baseline, string candidate, CaseSpec[] cases, string size,
-        string directory, int pairs, int samples, int warmup, int seconds, CancellationToken ct, bool calibration = false, bool firstLoad = false)
+    public static async Task<int> RunAsync(
+        string baseline,
+        string candidate,
+        CaseSpec[] cases,
+        string size,
+        string directory,
+        int pairs,
+        int samples,
+        int warmup,
+        int seconds,
+        CancellationToken ct,
+        bool calibration = false,
+        bool firstLoad = false
+    )
     {
         if (firstLoad && (samples != 1 || warmup != 0))
             throw new InvalidOperationException("First-load collection requires one sample and no warmup per process.");
+
+
         if (calibration && CompilerHost.FileHash(baseline) != CompilerHost.FileHash(candidate))
             throw new InvalidOperationException("A/A calibration requires the same immutable executable.");
+
         Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "run-" + Guid.NewGuid().ToString("N"));
         await using var stream = new FileStream(path + ".jsonl", FileMode.CreateNew, FileAccess.Write, FileShare.Read);
@@ -197,12 +248,15 @@ static partial class Campaign
         var preflight = await HostMonitor.IdleAsync(10, deadline.Token).ConfigureAwait(false);
         await writer.WriteLineAsync(JsonSerializer.Serialize(new { Preflight = preflight }, Json)).ConfigureAwait(false);
         var complete = preflight.Accepted;
+
         if (!complete)
             Console.Error.WriteLine("Host preflight rejected: " + string.Join("; ", preflight.Reasons));
+
         foreach (var spec in cases)
         {
             if (!complete)
                 break;
+
             for (var pair = 0; pair < pairs; pair++)
             {
                 foreach (var side in pair % 2 == 0
@@ -217,8 +271,10 @@ static partial class Campaign
 
                     var idle = await HostMonitor.IdleAsync(1, deadline.Token).ConfigureAwait(false);
                     await writer.WriteLineAsync(JsonSerializer.Serialize(new { pair, side, Idle = idle }, Json)).ConfigureAwait(false);
+
                     if (!idle.Accepted)
                     { complete = false; break; }
+
                     var result = await LaunchAsync(side == "baseline" ? baseline : candidate, spec, size, samples,
                         warmup, pair, side, TimeSpan.FromSeconds(seconds), deadline.Token, async line =>
                         {
@@ -233,6 +289,7 @@ static partial class Campaign
                     await writer.WriteLineAsync(JsonSerializer.Serialize(result, Json)).ConfigureAwait(false);
                     Console.Error.WriteLine(
                         $"{spec.Id} pair {pair + 1}/{pairs} {side}: {(result.Error is null ? "verified" : result.Error)}");
+
                     if (result.Error is not null)
                     {
                         complete = false;
@@ -250,11 +307,13 @@ static partial class Campaign
 
         Comparison[] comparisons = [];
         string? comparisonError = null;
+
         if (complete)
         {
             try
             {
                 comparisons = Compare(results);
+
                 if (firstLoad)
                 {
                     var first = CompareFirstRequests(results);
@@ -267,6 +326,7 @@ static partial class Campaign
                 comparisonError = error.Message;
             }
         }
+
 
         var calibrated = calibration && complete && pairs >= 10 && samples * pairs >= 100 && CalibrationAccepted(comparisons);
         var report = new
@@ -314,14 +374,18 @@ static partial class Campaign
     {
         var report = "";
         var requests = 0;
+
         while (await reader.ReadLineAsync(CancellationToken.None).ConfigureAwait(false) is { } line)
         {
             if (line.StartsWith("{\"RequestCompleted\":", StringComparison.Ordinal))
             {
                 using var marker = JsonDocument.Parse(line);
+
                 if (requests >= samples || marker.RootElement.GetProperty("RequestCompleted").GetInt32() != requests)
                     throw new InvalidOperationException("Worker reported an out-of-order request boundary.");
+
                 await requestCompleted(requests++).ConfigureAwait(false);
+
                 if (progress is not null)
                     await progress(line).ConfigureAwait(false);
             }
@@ -334,8 +398,11 @@ static partial class Campaign
                 report = line;
         }
 
+
+
         if (requests != samples)
             throw new InvalidOperationException("Worker did not report every request boundary.");
+
         return report;
     }
 
@@ -349,6 +416,7 @@ static partial class Campaign
     public static Comparison[] Compare(IReadOnlyList<WorkerResult> results)
     {
         var comparisons = new List<Comparison>();
+
         foreach (var group in results.GroupBy(result =>
                      result.Report?.Case ?? throw new InvalidOperationException("Cannot compare failed workers.")))
         {
@@ -357,6 +425,7 @@ static partial class Campaign
             {
                 var baseline = pair.Single(item => item.Side == "baseline").Report!;
                 var candidate = pair.Single(item => item.Side == "candidate").Report!;
+
                 foreach (var report in new[] { baseline, candidate })
                     if (report.Samples.Where((row, index) =>
                             row.Index != index || row.Case != report.Case || row.Size != report.Size
@@ -368,6 +437,7 @@ static partial class Campaign
                         .Any())
                         throw new InvalidOperationException(
                             "Worker report contains missing, invalid or misidentified samples.");
+
                 if (baseline.Format != candidate.Format || baseline.Format != Format ||
                     baseline.FixtureHash != candidate.FixtureHash || baseline.HarnessHash != candidate.HarnessHash
                     || baseline.Warmup != candidate.Warmup || baseline.WarmupSize != candidate.WarmupSize
@@ -381,9 +451,11 @@ static partial class Campaign
                     candidate.Assemblies["System.Text.Json.SourceGeneration"])
                     throw new InvalidOperationException(
                         "Baseline and candidate have incompatible workload or host manifests.");
+
                 if (!baseline.Samples.Select(row => row.Evidence.OutputHash)
                     .SequenceEqual(candidate.Samples.Select(row => row.Evidence.OutputHash)))
                     throw new InvalidOperationException("Baseline/candidate outputs differ at a requested sample index.");
+
                 return (Baseline: baseline, Candidate: candidate);
             }).ToArray();
             comparisons.Add(CompareMetric(group.Key, "median-ms", blocks.Select(block =>
@@ -402,20 +474,28 @@ static partial class Campaign
                  Quantile(block.Candidate.Samples.Select(row => row.CpuMilliseconds), .5))).ToArray(), 1));
         }
 
+
         return comparisons.ToArray();
     }
 
-    public static Comparison CompareMetric(string scenario, string metric, (double Baseline, double Candidate)[] pairs,
-        double absolute)
+    public static Comparison CompareMetric(
+        string scenario,
+        string metric,
+        (double Baseline, double Candidate)[] pairs,
+        double absolute
+    )
     {
         if (pairs.Length == 0 || pairs.Any(pair => !double.IsFinite(pair.Baseline) || !double.IsFinite(pair.Candidate)))
             throw new InvalidOperationException("Comparison requires finite complete pairs.");
+
         var deltas = pairs.Select(pair => pair.Candidate - pair.Baseline).ToArray();
         var random = new Random(175);
         var bootstrap = new double[2000];
+
         for (var i = 0; i < bootstrap.Length; i++)
             bootstrap[i] = Quantile(Enumerable.Range(0, pairs.Length).Select(_ => deltas[random.Next(deltas.Length)]),
                 .5);
+
         var lower = Quantile(bootstrap, .025);
         var upper = Quantile(bootstrap, .975);
         var allowance = Math.Max(Quantile(pairs.Select(pair => pair.Baseline), .5) * .05, absolute);
@@ -428,8 +508,10 @@ static partial class Campaign
     public static double Quantile(IEnumerable<double> source, double fraction)
     {
         var values = source.Order().ToArray();
+
         if (values.Length == 0)
             throw new InvalidOperationException("No observations.");
+
         return values[Math.Clamp((int)Math.Ceiling(fraction * values.Length) - 1, 0, values.Length - 1)];
     }
 }

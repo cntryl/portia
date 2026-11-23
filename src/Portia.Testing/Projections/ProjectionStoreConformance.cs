@@ -90,6 +90,7 @@ public static class ProjectionStoreConformance
         var firstBatch = await first.Store
             .BeginAsync(new ProjectionBatchContext(probe.LiveIdentity, checkpoint), ct)
             .ConfigureAwait(false);
+
         try
         {
             await first.StageValueAsync("winner", ct).ConfigureAwait(false);
@@ -104,6 +105,7 @@ public static class ProjectionStoreConformance
         finally
         {
             await firstBatch.DisposeAsync().ConfigureAwait(false);
+
             if (!winnerCommitted && staleOpen is not null)
             {
                 await DiscardAsync(staleOpen).ConfigureAwait(false);
@@ -114,6 +116,7 @@ public static class ProjectionStoreConformance
         // compares the checkpoint as it opens — or when it commits, for a store that compares the
         // checkpoint it read. Both are conformant, so the conflict is allowed to surface anywhere in the
         // losing sequence; what it must never do is succeed, or fail as anything but the shared exception.
+
         var conflict = await CaptureAsync(async () =>
         {
             await using var staleBatch = await staleOpen.ConfigureAwait(false);
@@ -195,12 +198,19 @@ public static class ProjectionStoreConformance
         }
     }
 
-    static async ValueTask RequireStateAsync(IProjectionStoreConformanceProbe probe, CheckpointIdentity identity,
-        string? expectedValue, ProjectionCheckpoint expectedCheckpoint, string scenario, CancellationToken ct)
+    static async ValueTask RequireStateAsync(
+        IProjectionStoreConformanceProbe probe,
+        CheckpointIdentity identity,
+        string? expectedValue,
+        ProjectionCheckpoint expectedCheckpoint,
+        string scenario,
+        CancellationToken ct
+    )
     {
         await using var session = await probe.OpenSessionAsync(ct).ConfigureAwait(false);
         var value = await session.ReadValueAsync(identity, ct).ConfigureAwait(false);
         var checkpoint = await session.Store.LoadCheckpointAsync(identity, ct).ConfigureAwait(false);
+
         if (!string.Equals(value, expectedValue, StringComparison.Ordinal) || checkpoint != expectedCheckpoint)
         {
             throw new ConformanceViolationException(
@@ -261,6 +271,7 @@ public static class ProjectionStoreConformance
     {
         ArgumentNullException.ThrowIfNull(live);
         ArgumentNullException.ThrowIfNull(rebuild);
+
         if (live.RebuildId is not null || rebuild.RebuildId is null
                                        || live.ComponentName != rebuild.ComponentName ||
                                        live.Pattern != rebuild.Pattern)

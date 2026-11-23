@@ -30,9 +30,14 @@ sealed class TransientReloadFailureCheckpointStore : IProjectionCheckpointStore,
     public ValueTask SaveAsync(
         CheckpointIdentity identity,
         ProjectionCheckpoint checkpoint,
-        CancellationToken ct = default) => _inner.SaveAsync(identity, checkpoint, ct);
+        CancellationToken ct = default
+    ) => _inner.SaveAsync(identity, checkpoint, ct);
 
-    public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint expected,
-        ProjectionCheckpoint checkpoint, CancellationToken ct = default) =>
+    public ValueTask SaveAsync(
+        CheckpointIdentity identity,
+        ProjectionCheckpoint expected,
+        ProjectionCheckpoint checkpoint,
+        CancellationToken ct = default
+    ) =>
         ((IConditionalProjectionCheckpointStore)_inner).SaveAsync(identity, expected, checkpoint, ct);
 }

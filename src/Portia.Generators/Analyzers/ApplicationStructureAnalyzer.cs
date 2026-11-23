@@ -37,7 +37,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         "PortiaStructure", DiagnosticSeverity.Warning, true);
 
     static readonly DiagnosticDescriptor ProjectRole = new("PORTIA213", "Unsupported application project role",
-        "Application project '{0}' must end in .Common, .Core, .Api, or .Worker; mark test projects with IsTestProject",
+        "Application project '{0}' must use Common, Core, Api, Worker, Mcp, Host, or Shared, via PortiaProjectRole or portia_project_role; mark test projects with IsTestProject",
         "PortiaStructure", DiagnosticSeverity.Warning, true, customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     static readonly string[] CommonFolders = ["Commands", "Queries", "Events", "Models", "Values", "Serialization"];
@@ -63,7 +63,8 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         {
             if (ApplicationProject.From(start.Options.AnalyzerConfigOptionsProvider) is not { } project)
                 return;
-            if (!project.IsTest && project.Role is not ("Common" or "Core" or "Api" or "Worker"))
+
+            if (!project.IsTest && project.Role is not ("Common" or "Core" or "Api" or "Worker" or "Mcp" or "Host" or "Shared"))
             {
                 start.RegisterCompilationEndAction(end => end.ReportDiagnostic(
                     Diagnostic.Create(ProjectRole, Location.None, project.Name)));
@@ -74,15 +75,19 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         });
     }
 
-    static void AnalyzeFile(SemanticModelAnalysisContext context, ApplicationProject project,
-        AggregateOwnershipIndex aggregateOwnership)
+    static void AnalyzeFile(
+        SemanticModelAnalysisContext context,
+        ApplicationProject project,
+        AggregateOwnershipIndex aggregateOwnership
+    )
     {
         var tree = context.SemanticModel.SyntaxTree;
         var root = tree.GetRoot(context.CancellationToken);
         var declarations = root.DescendantNodes()
             .Where(node => node is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax)
             .Where(node => node.Parent is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax).ToArray();
-        if (!project.IsTest && project.Role is "Api" or "Worker")
+
+        if (!project.IsTest && project.Role is "Api" or "Worker" or "Mcp")
         {
             foreach (var declaration in root.DescendantNodes().Where(node => node is BaseTypeDeclarationSyntax))
             {
@@ -90,14 +95,19 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                     || !(ApplicationProject.IsRequest(type) || ApplicationProject.DerivesFrom(type, "DomainEvent")
                          || ApplicationProject.DerivesFrom(type, "Aggregate") || PortiaComponentRoles.IsComponent(type)))
                     continue;
+
                 context.ReportDiagnostic(Diagnostic.Create(FolderRole, Identifier(declaration).GetLocation(), type.Name,
                     project.Role, "hosts compose application features; authored aggregates, contracts, and Portia business components belong in Common or Core"));
             }
         }
+
+
         if (declarations.Length == 0)
             return;
+
         var typeDeclarations = new List<SyntaxNode>(declarations.Length);
         var declaredTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+
         foreach (var declaration in declarations)
         {
             if (context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is not INamedTypeSymbol
@@ -106,12 +116,14 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                 typeDeclarations.Add(declaration);
         }
 
+
         var path = project.RelativePath(tree);
         var filename = tree.FilePath.Replace('\\', '/').Split('/').Last();
         var keeper = typeDeclarations.FirstOrDefault(declaration => MatchesFilename(declaration, filename,
                          context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) as
                              INamedTypeSymbol)) ??
                      typeDeclarations[0];
+
         foreach (var declaration in typeDeclarations.Where(declaration => declaration != keeper))
         {
             var type =
@@ -120,6 +132,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             context.ReportDiagnostic(Diagnostic.Create(OneType, Identifier(declaration).GetLocation(), properties,
                 filename));
         }
+
 
         var folders = project.Role == "Common" ? CommonFolders : CoreFolders;
         var featureProject = !project.IsTest && project.Role is "Common" or "Core";
@@ -148,6 +161,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is INamedTypeSymbol type
             && IsPortiaJsonContext(type)
             && JsonContextShape.UnsupportedReason(type) is null);
+
         if (featureProject && path.Length != 0 && !featureFile && !registrationFile && !featureRegistrationFile
             && !featureJsonContextFile && !sharedCoreFile && !assemblyContextFile)
         {
@@ -158,14 +172,18 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                 detail));
         }
 
+
         foreach (var declaration in declarations)
         {
             context.CancellationToken.ThrowIfCancellationRequested();
+
             if (context.SemanticModel.GetDeclaredSymbol(declaration, context.CancellationToken) is not INamedTypeSymbol
                 symbol)
                 continue;
+
             var identifier = Identifier(declaration);
             var expectedFile = Filename(symbol);
+
             if (declarations.Length == 1 && !MatchesFilename(declaration, filename, symbol))
             {
                 context.ReportDiagnostic(Diagnostic.Create(FileName, identifier.GetLocation(),
@@ -173,10 +191,12 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                     expectedFile));
             }
 
+
             if (path.Length > 0)
             {
                 var expectedNamespace =
                     string.Join(".", new[] { project.RootNamespace }.Concat(path.Take(path.Length - 1)));
+
                 if (symbol.ContainingNamespace.ToDisplayString() != expectedNamespace)
                 {
                     var properties = ImmutableDictionary<string, string?>.Empty
@@ -222,6 +242,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             {
                 var text = tree.GetText(context.CancellationToken);
                 var lines = text.Lines.Count - (text.Lines[text.Lines.Count - 1].Span.Length == 0 ? 1 : 0);
+
                 if (lines > 400)
                     context.ReportDiagnostic(Diagnostic.Create(AggregateSize, identifier.GetLocation(), filename));
             }
@@ -252,8 +273,10 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             _ => 0
         };
         var expected = Filename(Identifier(declaration).ValueText, arity);
+
         if (filename == expected)
             return true;
+
         return declaration is TypeDeclarationSyntax typeDeclaration && symbol?.DeclaringSyntaxReferences.Length > 1
                                                                     && typeDeclaration.Modifiers.Any(SyntaxKind
                                                                         .PartialKeyword)
@@ -265,8 +288,14 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                                                                     && filename.Length > expected.Length + 1;
     }
 
-    static bool BelongsIn(INamedTypeSymbol symbol, string folder, ApplicationProject project, string feature,
-        AggregateOwnershipIndex aggregateOwnership, CancellationToken cancellationToken)
+    static bool BelongsIn(
+        INamedTypeSymbol symbol,
+        string folder,
+        ApplicationProject project,
+        string feature,
+        AggregateOwnershipIndex aggregateOwnership,
+        CancellationToken cancellationToken
+    )
     {
         var request = ApplicationProject.IsRequest(symbol);
         var domainEvent = ApplicationProject.DerivesFrom(symbol, "DomainEvent");
@@ -326,9 +355,12 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         if (symbol.Name.EndsWith("Action", StringComparison.Ordinal)
             && (symbol.TypeKind == TypeKind.Enum || symbol.IsRecord))
             return true;
+
+
         if (!symbol.IsStatic || !(symbol.Name.EndsWith("Actions", StringComparison.Ordinal)
                                   || symbol.Name.EndsWith("Operations", StringComparison.Ordinal)))
             return false;
+
         var members = symbol.GetMembers().Where(member => !member.IsImplicitlyDeclared).ToArray();
         return members.Length > 0 && members.All(member => member is IFieldSymbol
         {
@@ -357,9 +389,11 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                                                        && accessor.Body is null && accessor.ExpressionBody is null)));
         }
 
+
         if (symbol.TypeKind == TypeKind.Enum)
             return symbol.DeclaringSyntaxReferences.Select(reference => reference.GetSyntax())
                 .OfType<EnumDeclarationSyntax>().All(declaration => declaration.Members.Count > 0);
+
         if (symbol.TypeKind is not (TypeKind.Class or TypeKind.Struct)
             || symbol.DeclaringSyntaxReferences.Length == 0)
             return false;
@@ -425,8 +459,10 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         public bool Contains(string feature, INamedTypeSymbol target, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             while (!Monitor.TryEnter(_gate, 50))
                 cancellationToken.ThrowIfCancellationRequested();
+
             try
             {
                 _byFeature ??= Build(cancellationToken);
@@ -441,8 +477,10 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         public int EntityOwnerCount(string feature, INamedTypeSymbol entity, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+
             while (!Monitor.TryEnter(_gate, 50))
                 cancellationToken.ThrowIfCancellationRequested();
+
             try
             {
                 _byFeature ??= Build(cancellationToken);
@@ -463,13 +501,16 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             var entityTypes = new Dictionary<string, HashSet<INamedTypeSymbol>>(StringComparer.Ordinal);
             var ownership = new Dictionary<string, Dictionary<INamedTypeSymbol, int>>(StringComparer.Ordinal);
             var countedRoots = new Dictionary<string, HashSet<INamedTypeSymbol>>(StringComparer.Ordinal);
+
             foreach (var tree in compilation.SyntaxTrees)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var path = project.RelativePath(tree);
+
                 if (path.Length != 5 || path[0] != "Features" || path[2] != "Aggregates" || path[3] != "Entities")
                     continue;
 #pragma warning disable RS1030 // Entity identity is compared semantically across source trees.
+
                 var entityModel = compilation.GetSemanticModel(tree);
 #pragma warning restore RS1030
                 foreach (var declaration in tree.GetRoot(cancellationToken).DescendantNodes().OfType<TypeDeclarationSyntax>())
@@ -477,16 +518,20 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                     {
                         if (!entityTypes.TryGetValue(path[1], out var entities))
                             entityTypes.Add(path[1], entities = NewSymbolSet());
+
                         _ = entities.Add(entity.OriginalDefinition);
                     }
             }
+
             foreach (var tree in compilation.SyntaxTrees)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var path = project.RelativePath(tree);
+
                 if (path.Length == 5 && path[0] == "Features" && path[2] == "Aggregates"
                     && path[3] == "Entities")
                     continue;
+
                 if (path.Length != 4 || path[0] != "Features" || path[2] != "Aggregates")
                     continue;
 #pragma warning disable RS1030 // Ownership requires binding aggregate references in other source trees.
@@ -496,33 +541,41 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                              .OfType<TypeDeclarationSyntax>())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+
                     if (model.GetDeclaredSymbol(declaration, cancellationToken) is not INamedTypeSymbol aggregate
                         || !ApplicationProject.DerivesFrom(aggregate, "Aggregate"))
                         continue;
+
                     if (!features.TryGetValue(path[1], out var types))
                         features.Add(path[1], types = [with(SymbolEqualityComparer.Default)]);
+
                     if (!ownership.TryGetValue(path[1], out var featureOwners))
                         ownership.Add(path[1], featureOwners = NewOwnerMap());
+
                     if (!aggregate.IsAbstract && entityTypes.TryGetValue(path[1], out var featureEntities))
                     {
                         if (!countedRoots.TryGetValue(path[1], out var roots))
                             countedRoots.Add(path[1], roots = NewSymbolSet());
+
                         if (roots.Add(aggregate.OriginalDefinition))
                         {
                             foreach (var entity in featureEntities)
                             {
                                 if (!StoresEntity(aggregate, entity))
                                     continue;
+
                                 featureOwners[entity] = featureOwners.TryGetValue(entity, out var owners) ? owners + 1 : 1;
                             }
                         }
                     }
+
                     foreach (var node in declaration.DescendantNodes().OfType<SimpleNameSyntax>())
                     {
                         cancellationToken.ThrowIfCancellationRequested();
                         var referenced = model.GetAliasInfo(node, cancellationToken)?.Target
                                          ?? model.GetSymbolInfo(node, cancellationToken).Symbol;
                         var type = referenced as INamedTypeSymbol ?? referenced?.ContainingType;
+
                         if (type is not null)
                             _ = types.Add(type.OriginalDefinition);
                     }
@@ -544,16 +597,19 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                 {
                     if (member.IsStatic)
                         continue;
+
                     var storedType = member switch
                     {
                         IFieldSymbol field => field.Type,
                         IPropertySymbol property when IsAutoProperty(property) => property.Type,
                         _ => null
                     };
+
                     if (storedType is not null && ContainsType(storedType, entity))
                         return true;
                 }
             }
+
             return false;
         }
 
@@ -567,6 +623,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         {
             if (candidate is INamedTypeSymbol named && SymbolEqualityComparer.Default.Equals(named.OriginalDefinition, target))
                 return true;
+
             return candidate switch
             {
                 IArrayTypeSymbol array => ContainsType(array.ElementType, target),

@@ -21,13 +21,16 @@ public sealed class MailAttachment
             || fileName is "." or "..")
             throw new ArgumentException("An attachment filename must be a single nonblank name of at most 255 characters.",
                 nameof(fileName));
+
         if (string.IsNullOrWhiteSpace(mediaType) || mediaType.Any(char.IsControl)
             || !MediaTypeHeaderValue.TryParse(mediaType, out var parsed) || parsed.Parameters.Count != 0
             || parsed.MediaType!.Contains('*', StringComparison.Ordinal))
             throw new ArgumentException("An attachment media type must be a MIME type without parameters.",
                 nameof(mediaType));
+
         if (content.IsEmpty || content.Length > MaximumContentBytes)
             throw new ArgumentException($"Attachment content must be 1-{MaximumContentBytes} bytes.", nameof(content));
+
 
         FileName = fileName;
         MediaType = parsed!.MediaType!;

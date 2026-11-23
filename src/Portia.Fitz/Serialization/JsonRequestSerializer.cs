@@ -22,6 +22,7 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
         _options = options;
         var descriptors = registrations.ToArray();
         Catalog = new RequestTransportCatalog(descriptors);
+
         foreach (var registration in descriptors)
         {
             var descriptor = new Contract(registration.Discriminator.Name, registration.Discriminator.Version,
@@ -39,11 +40,15 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
         {
             using var document = JsonDocument.Parse(data);
             var root = document.RootElement;
+
             if (!root.TryGetProperty("version", out var version))
                 throw Permanent("A request envelope requires a version.");
+
             var envelopeVersion = version.GetInt32();
+
             if (envelopeVersion != 2)
                 throw Retryable("Unsupported request envelope version; Portia accepts version 2 only.");
+
 
             var name = RequiredString(root, "contract");
             var contractVersion = RequiredProperty(root, "contract_version").GetInt32();
@@ -51,8 +56,10 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
                            ?? throw Permanent("A request envelope requires logical metadata.");
             metadata.Validate();
             var payload = RequiredProperty(root, "payload");
+
             if (payload.ValueKind is not JsonValueKind.Object)
                 throw Permanent("A request envelope payload must be a JSON object.");
+
             var actor = OptionalString(root, "actor_token");
             var traceparent = OptionalString(root, "traceparent");
             var tracestate = OptionalString(root, "tracestate");
@@ -96,10 +103,12 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
         using var document = JsonDocument.Parse(data);
         var root = document.RootElement;
         var (success, error) = ReadOutcome(root);
+
         if (!success)
         {
             return Result<TOut>.Failure(error!);
         }
+
 
         if (!root.TryGetProperty("value", out var value))
         {
@@ -115,11 +124,13 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
     {
         writer.WriteStartObject();
         writer.WriteBoolean("is_success", outcome.IsSuccess);
+
         if (!outcome.IsSuccess)
         {
             writer.WritePropertyName("error");
             JsonSerializer.Serialize(writer, outcome.Error, FitzJsonContext.Default.RequestError);
         }
+
 
         writer.WriteEndObject();
     });
@@ -134,6 +145,7 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
         {
             writer.WriteStartObject();
             writer.WriteBoolean("is_success", result.IsSuccess);
+
             if (result.IsSuccess)
             {
                 writer.WritePropertyName("value");
@@ -145,13 +157,18 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
                 JsonSerializer.Serialize(writer, result.Error, FitzJsonContext.Default.RequestError);
             }
 
+
             writer.WriteEndObject();
         });
     }
 
     /// <inheritdoc />
-    public ReadOnlyMemory<byte> Serialize(IRequestBase request, string? actorToken, RequestMetadata metadata,
-        RequestTraceContext? traceContext)
+    public ReadOnlyMemory<byte> Serialize(
+        IRequestBase request,
+        string? actorToken,
+        RequestMetadata metadata,
+        RequestTraceContext? traceContext
+    )
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(metadata);
@@ -169,17 +186,21 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
             writer.WriteNumber("contract_version", descriptor.Version);
             writer.WritePropertyName("payload");
             JsonSerializer.Serialize(writer, request, descriptor.JsonTypeInfo);
+
             if (actorToken is not null)
             {
                 writer.WriteString("actor_token", actorToken);
             }
 
+
             writer.WritePropertyName("metadata");
             JsonSerializer.Serialize(writer, metadata, FitzJsonContext.Default.RequestMetadata);
+
             if (traceContext?.TraceParent is not null)
             {
                 writer.WriteString("traceparent", traceContext.TraceParent);
             }
+
 
             if (traceContext?.TraceState is not null)
             {
@@ -199,6 +220,7 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
     void Add(Contract descriptor)
     {
         var key = (descriptor.Name, descriptor.Version);
+
         if (_byName.TryGetValue(key, out var existing) && existing.Type != descriptor.Type)
         {
             throw new InvalidOperationException(
@@ -207,6 +229,7 @@ public sealed class JsonRequestSerializer : IRequestSerializer, IRequestDeserial
 
         // One type serializes under one discriminator: letting a second registration silently
         // replace the first would make the same request leave on two different contracts.
+
         if (_byType.TryGetValue(descriptor.Type, out var registered) &&
             (registered.Name != descriptor.Name || registered.Version != descriptor.Version))
         {

@@ -25,15 +25,21 @@ sealed class PortiaContractExamples(
                     example.Use.HasFlag(input ? PortiaContractUse.Input : PortiaContractUse.Output))
                 .Select(example => Resolve(json, example, input)).ToArray());
 
-    internal static PortiaResolvedExample Resolve(JsonSerializerOptions json, PortiaContractMetadataRegistry contracts,
-        PortiaContractExample example, bool input)
+    internal static PortiaResolvedExample Resolve(
+        JsonSerializerOptions json,
+        PortiaContractMetadataRegistry contracts,
+        PortiaContractExample example,
+        bool input
+    )
     {
         try
         {
             var error = PortiaContractValidation.Validate(contracts, example.Value, CancellationToken.None,
                 example.Type, input ? PortiaContractUse.Input : PortiaContractUse.Output);
+
             if (error is not null)
                 throw new InvalidOperationException(error.Message);
+
             var options = PortiaJsonSchemaProjection.For(json, json, input);
             var info = options.GetTypeInfo(example.Type);
             var value = JsonSerializer.SerializeToNode(example.Value, info);
@@ -60,13 +66,16 @@ sealed class PortiaContractExamples(
         readonly Lock _gate = new();
         readonly Dictionary<(Type Type, bool Input), IReadOnlyList<PortiaResolvedExample>> _values = [];
 
-        internal IReadOnlyList<PortiaResolvedExample> Resolve((Type Type, bool Input) key,
-            Func<IReadOnlyList<PortiaResolvedExample>> create)
+        internal IReadOnlyList<PortiaResolvedExample> Resolve(
+            (Type Type, bool Input) key,
+            Func<IReadOnlyList<PortiaResolvedExample>> create
+        )
         {
             lock (_gate)
             {
                 if (!_values.TryGetValue(key, out var value))
                     _values.Add(key, value = create());
+
                 return value;
             }
         }

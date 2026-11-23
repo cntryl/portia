@@ -621,6 +621,7 @@ public sealed class MultiTenancyTests
         Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")), reader.Current);
 
         var pending = reader.MoveNextAsync().AsTask();
+
         try
         {
             Assert.Equal(pollInterval, await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
@@ -779,6 +780,7 @@ public sealed class MultiTenancyTests
         {
             _ = tenant;
             _ = started.TrySetResult();
+
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, token);
@@ -865,6 +867,7 @@ public sealed class MultiTenancyTests
         {
             _ = tenant;
             _ = started.TrySetResult();
+
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, token);
@@ -907,6 +910,7 @@ public sealed class MultiTenancyTests
         // Arrange
         var directory = new RemovalDirectory();
         var options = new MultiTenantRunnerOptions();
+
         switch (option)
         {
             case nameof(MultiTenantRunnerOptions.RestartInterval):
@@ -921,6 +925,7 @@ public sealed class MultiTenancyTests
         }
 
         // Act
+
         var exception = Record.Exception(() => new MultiTenantRunner(directory, options));
 
         // Assert
@@ -975,11 +980,17 @@ public sealed class MultiTenancyTests
     {
         public List<EventCursor> Cursors { get; } = [];
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
-            CancellationToken ct) => inner.ReadAsync(stream, fromOffset, ct);
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset,
+            CancellationToken ct
+        ) => inner.ReadAsync(stream, fromOffset, ct);
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            CancellationToken ct)
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            CancellationToken ct
+        )
         {
             Cursors.Add(cursor);
             return inner.ReadAsync(pattern, cursor, ct);
@@ -1080,8 +1091,10 @@ public sealed class MultiTenancyTests
                 [EnumeratorCancellation] CancellationToken ct = default)
             {
                 ReadCount++;
+
                 if (ReadCount == 1)
                     yield return new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("cursor"));
+
                 await Task.CompletedTask;
             }
 
@@ -1121,6 +1134,7 @@ public sealed class MultiTenancyTests
                 [EnumeratorCancellation] CancellationToken ct = default)
             {
                 yield return new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme"));
+
                 await foreach (var change in changes.ReadAllAsync(ct))
                     yield return change;
             }
@@ -1160,11 +1174,13 @@ public sealed class MultiTenancyTests
                 [EnumeratorCancellation] CancellationToken ct = default)
             {
                 ReadCount++;
+
                 if (ReadCount == 1)
                 {
                     yield return new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme"));
                     throw new IOException("Directory disconnected.");
                 }
+
 
                 if (RemovedWhileDisconnected)
                 {
@@ -1192,28 +1208,38 @@ public sealed class MultiTenancyTests
         public List<ulong> RequestedOffsets { get; } = [];
         public int SubscriptionCount => Volatile.Read(ref _subscriptionCount);
 
-        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
-            CancellationToken ct = default)
+        public ValueTask<IDomainEventSubscription> SubscribeAsync(
+            EventStreamPattern pattern,
+            CancellationToken ct = default
+        )
         {
             _ = Interlocked.Increment(ref _subscriptionCount);
             _ = Interlocked.Increment(ref _activeSubscriptions);
             return ValueTask.FromResult<IDomainEventSubscription>(new CursorSubscription(this));
         }
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset = 0,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            [EnumeratorCancellation] CancellationToken ct = default)
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            [EnumeratorCancellation] CancellationToken ct = default
+        )
         {
             var fromOffset = cursor == EventCursor.Start ? 0 : ulong.Parse(cursor.Value!, CultureInfo.InvariantCulture);
             RequestedOffsets.Add(fromOffset);
             AllReadsHadSubscription &= Volatile.Read(ref _activeSubscriptions) > 0;
+
             foreach (var record in _records.Where(record => record.ResourceOffset >= fromOffset).ToArray())
             {
                 ct.ThrowIfCancellationRequested();
                 yield return record;
             }
+
 
             await Task.CompletedTask;
         }
@@ -1235,6 +1261,7 @@ public sealed class MultiTenancyTests
             {
                 if (Interlocked.Exchange(ref owner._failFirstWait, 0) != 0)
                     throw new IOException("Cursor watch failed.");
+
                 return new ValueTask(Task.Delay(Timeout.InfiniteTimeSpan, ct));
             }
 
@@ -1253,8 +1280,10 @@ public sealed class MultiTenancyTests
 
     sealed class DroppingNotifier : IDomainEventNotifier
     {
-        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
-            CancellationToken ct = default) => ValueTask.FromResult<IDomainEventSubscription>(new Subscription());
+        public ValueTask<IDomainEventSubscription> SubscribeAsync(
+            EventStreamPattern pattern,
+            CancellationToken ct = default
+        ) => ValueTask.FromResult<IDomainEventSubscription>(new Subscription());
 
         sealed class Subscription : IDomainEventSubscription
         {
@@ -1277,19 +1306,27 @@ public sealed class MultiTenancyTests
         public TaskCompletionSource SubscribeStarted { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public async ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
-            CancellationToken ct = default)
+        public async ValueTask<IDomainEventSubscription> SubscribeAsync(
+            EventStreamPattern pattern,
+            CancellationToken ct = default
+        )
         {
             _ = SubscribeStarted.TrySetResult();
             await _allowSubscription.Task.WaitAsync(ct);
             return new Subscription(this);
         }
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset = 0,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            [EnumeratorCancellation] CancellationToken ct = default)
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            [EnumeratorCancellation] CancellationToken ct = default
+        )
         {
             _ = ReadStarted.TrySetResult();
             await _allowRead.Task.WaitAsync(ct);

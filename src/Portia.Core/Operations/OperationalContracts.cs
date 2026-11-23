@@ -35,12 +35,16 @@ public sealed record OperationalTarget(
             var parts = Pattern?.StartsWith("stream://", StringComparison.Ordinal) == true
                 ? Pattern[9..].Split('/')
                 : [];
+
             if (parts.Length != 3)
                 throw new ArgumentException("An operational target requires a canonical bound stream pattern.");
+
             var pattern = EventStreamPattern.ForPattern(parts[0], parts[1] == "*" ? null : parts[1],
                 parts[2] == "*" ? null : parts[2]);
+
             if (Scope.Tenant is { } tenant && pattern.Realm != tenant)
                 throw new ArgumentException("The target pattern must belong to its exact tenant scope.");
+
             return new CheckpointIdentity(Processor, pattern, RebuildId);
         }
     }
@@ -66,52 +70,91 @@ public enum OperationalAccess
 public interface IOperationalAuthorizer
 {
     /// <summary>Evaluates a host policy without granting downstream command permissions.</summary>
-    ValueTask<bool> AuthorizeAsync(ClaimsPrincipal actor, OperationalScope scope,
-        OperationalAccess permission, CancellationToken ct = default);
+    ValueTask<bool> AuthorizeAsync(
+        ClaimsPrincipal actor,
+        OperationalScope scope,
+        OperationalAccess permission,
+        CancellationToken ct = default
+    );
 }
 
 /// <summary>Durable processor diagnosis and operator-approved recovery.</summary>
 public interface IPortiaOperations
 {
     /// <summary>Describes registrations without constructing application dependencies.</summary>
-    ValueTask<ApplicationTopology> DescribeApplicationAsync(ClaimsPrincipal actor, OperationalScope scope,
-        CancellationToken ct = default);
+    ValueTask<ApplicationTopology> DescribeApplicationAsync(
+        ClaimsPrincipal actor,
+        OperationalScope scope,
+        CancellationToken ct = default
+    );
 
     /// <summary>Reports processing health for an exact scope.</summary>
-    ValueTask<OperationalHealth> GetSystemHealthAsync(ClaimsPrincipal actor, OperationalScope scope,
-        CancellationToken ct = default);
+    ValueTask<OperationalHealth> GetSystemHealthAsync(
+        ClaimsPrincipal actor,
+        OperationalScope scope,
+        CancellationToken ct = default
+    );
 
     /// <summary>Lists blocked workloads in an exact scope.</summary>
-    ValueTask<IReadOnlyList<OperationalProcessorState>> ListIssuesAsync(ClaimsPrincipal actor, OperationalScope scope,
-        CancellationToken ct = default);
+    ValueTask<IReadOnlyList<OperationalProcessorState>> ListIssuesAsync(
+        ClaimsPrincipal actor,
+        OperationalScope scope,
+        CancellationToken ct = default
+    );
 
     /// <summary>Reads one workload's durable evidence.</summary>
-    ValueTask<OperationalProcessorState?> InspectProcessorAsync(ClaimsPrincipal actor, OperationalTarget target,
-        CancellationToken ct = default);
+    ValueTask<OperationalProcessorState?> InspectProcessorAsync(
+        ClaimsPrincipal actor,
+        OperationalTarget target,
+        CancellationToken ct = default
+    );
 
     /// <summary>Reads a recorded attempt and its bounded, local causal evidence.</summary>
-    ValueTask<OperationalAttempt> TraceCausalityAsync(ClaimsPrincipal actor, OperationalTarget target, Guid attemptId,
-        CancellationToken ct = default);
+    ValueTask<OperationalAttempt> TraceCausalityAsync(
+        ClaimsPrincipal actor,
+        OperationalTarget target,
+        Guid attemptId,
+        CancellationToken ct = default
+    );
 
     /// <summary>Persists an immutable plan without invoking application code.</summary>
-    ValueTask<RepairPlan> PreviewRepairAsync(ClaimsPrincipal actor, OperationalTarget target,
-        CancellationToken ct = default);
+    ValueTask<RepairPlan> PreviewRepairAsync(
+        ClaimsPrincipal actor,
+        OperationalTarget target,
+        CancellationToken ct = default
+    );
 
     /// <summary>Approves an exact plan; hosts must exclude this permission from agent credentials.</summary>
-    ValueTask<RepairApproval> ApproveRepairAsync(ClaimsPrincipal actor, OperationalTarget target, Guid planId,
-        CancellationToken ct = default);
+    ValueTask<RepairApproval> ApproveRepairAsync(
+        ClaimsPrincipal actor,
+        OperationalTarget target,
+        Guid planId,
+        CancellationToken ct = default
+    );
 
     /// <summary>Revokes an approval before the owning worker claims execution.</summary>
-    ValueTask RevokeRepairAsync(ClaimsPrincipal actor, OperationalTarget target, Guid planId,
-        CancellationToken ct = default);
+    ValueTask RevokeRepairAsync(
+        ClaimsPrincipal actor,
+        OperationalTarget target,
+        Guid planId,
+        CancellationToken ct = default
+    );
 
     /// <summary>Reauthorizes and queues one execution per plan; duplicates return that execution.</summary>
-    ValueTask<OperationalRepair> ExecuteRepairAsync(ClaimsPrincipal actor, OperationalTarget target, Guid planId,
-        CancellationToken ct = default);
+    ValueTask<OperationalRepair> ExecuteRepairAsync(
+        ClaimsPrincipal actor,
+        OperationalTarget target,
+        Guid planId,
+        CancellationToken ct = default
+    );
 
     /// <summary>Reports the approved unit's processing outcome, without a business consistency verdict.</summary>
-    ValueTask<OperationalRepair> VerifyRepairAsync(ClaimsPrincipal actor, OperationalTarget target, Guid planId,
-        CancellationToken ct = default);
+    ValueTask<OperationalRepair> VerifyRepairAsync(
+        ClaimsPrincipal actor,
+        OperationalTarget target,
+        Guid planId,
+        CancellationToken ct = default
+    );
 }
 
 /// <summary>Durable workload documents with conditional, synchronously persisted state transitions.</summary>
@@ -121,24 +164,37 @@ public interface IOperationalStore
     ValueTask<OperationalProcessorState?> ReadAsync(OperationalTarget target, CancellationToken ct = default);
 
     /// <summary>Lists only documents in the supplied exact scope.</summary>
-    ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(OperationalScope scope,
-        CancellationToken ct = default);
+    ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(
+        OperationalScope scope,
+        CancellationToken ct = default
+    );
 
     /// <summary>
     /// Replaces a document only when revision and owner match. Revision zero and an empty owner
     /// require absence. The replacement revision must be exactly one greater.
     /// </summary>
     /// <exception cref="ProjectionConcurrencyException">A competing transaction prevented the write; reload before retrying.</exception>
-    ValueTask<bool> CompareExchangeAsync(OperationalProcessorState replacement, long expectedRevision,
-        Guid expectedOwner, CancellationToken ct = default);
+    ValueTask<bool> CompareExchangeAsync(
+        OperationalProcessorState replacement,
+        long expectedRevision,
+        Guid expectedOwner,
+        CancellationToken ct = default
+    );
 }
 
 /// <summary>Atomically commits a reactor completion receipt, repair outcome, and existing checkpoint key.</summary>
 public interface IOperationalReactionCheckpointStore : IProjectionCheckpointStore
 {
     /// <summary>Commits only when checkpoint, owner, running attempt, and document revision still match.</summary>
-    ValueTask<bool> CommitAsync(OperationalProcessorState replacement, long expectedRevision, Guid ownerSession,
-        Guid attemptId, string? expectedCheckpoint, string? nextCheckpoint, CancellationToken ct = default);
+    ValueTask<bool> CommitAsync(
+        OperationalProcessorState replacement,
+        long expectedRevision,
+        Guid ownerSession,
+        Guid attemptId,
+        string? expectedCheckpoint,
+        string? nextCheckpoint,
+        CancellationToken ct = default
+    );
 }
 
 /// <summary>Describes only the application's selected registrations.</summary>

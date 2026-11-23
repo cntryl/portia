@@ -16,8 +16,11 @@ public sealed class McpPrimitiveTests
     [Theory]
     [InlineData("--resource-only", "resources", "resources/templates/list")]
     [InlineData("--prompt-only", "prompts", "prompts/list")]
-    public async Task ShouldEmitPrivateZeroTtlHintsGivenModernProtocol(string mode, string capability,
-        string listMethod)
+    public async Task ShouldEmitPrivateZeroTtlHintsGivenModernProtocol(
+        string mode,
+        string capability,
+        string listMethod
+    )
     {
         // Arrange
         var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent?.Name
@@ -42,6 +45,7 @@ public sealed class McpPrimitiveTests
 
         // Assert
         Assert.True(process.Start());
+
         try
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -65,6 +69,7 @@ public sealed class McpPrimitiveTests
             var result = listed.RootElement.GetProperty("result");
             Assert.Equal(0, result.GetProperty("ttlMs").GetInt32());
             Assert.Equal("private", result.GetProperty("cacheScope").GetString());
+
             if (mode == "--resource-only")
             {
                 await process.StandardInput.WriteLineAsync(
@@ -80,6 +85,7 @@ public sealed class McpPrimitiveTests
         {
             if (!process.HasExited)
                 process.Kill();
+
             await process.WaitForExitAsync(TestContext.Current.CancellationToken);
         }
     }

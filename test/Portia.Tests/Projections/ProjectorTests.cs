@@ -202,11 +202,17 @@ public sealed class ProjectorTests
 
     sealed class StaleOffsetEventReader(DomainEventRecord record) : IDomainEventReader
     {
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset = 0,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            [EnumeratorCancellation] CancellationToken ct = default)
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            [EnumeratorCancellation] CancellationToken ct = default
+        )
         {
             ct.ThrowIfCancellationRequested();
             await Task.Yield();

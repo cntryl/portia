@@ -174,8 +174,11 @@ public sealed class AzureMailSenderTests
 
         public Exception? Failure { get; init; }
 
-        public override Task<EmailSendOperation> SendAsync(WaitUntil wait, EmailMessage message,
-            CancellationToken cancellationToken = default)
+        public override Task<EmailSendOperation> SendAsync(
+            WaitUntil wait,
+            EmailMessage message,
+            CancellationToken cancellationToken = default
+        )
         {
             Requests.Add((wait, message));
             return Failure is null

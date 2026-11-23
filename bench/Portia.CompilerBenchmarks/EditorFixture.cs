@@ -8,8 +8,10 @@ static class EditorFixture
     public static async Task ExportAsync(string output, CancellationToken ct)
     {
         var directory = Path.GetFullPath(output);
+
         if (Directory.Exists(directory))
             throw new InvalidOperationException("Use a new directory for each disposable editor fixture.");
+
         Directory.CreateDirectory(directory);
         var project = new XElement("Project", new XAttribute("Sdk", "Microsoft.NET.Sdk"),
             new XElement("PropertyGroup", new XElement("TargetFramework", "net11.0"),

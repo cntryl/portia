@@ -327,6 +327,7 @@ public sealed class OpenApiDescriptionTests
         _ = builder.Services.AddPortia().AddHttp(options =>
         {
             options.OpenApi.DescribeMember("limit", "Shared limit.");
+
             if (scope is "type" or "endpoint")
                 options.OpenApi.DescribeSchema<OpenApiAnnotatedRequest>("Application request.",
                     d => d.Property(x => x.Limit, "Application limit."));
@@ -336,6 +337,7 @@ public sealed class OpenApiDescriptionTests
         _ = app.MapPortiaPost<OpenApiAnnotatedRequest, OpenApiAnnotatedNode>("/attribute-precedence", c =>
         {
             _ = c.FromQuery(x => x.Limit);
+
             if (scope == "endpoint")
                 _ = c.Describe(x => x.Limit, "Endpoint limit.");
         });

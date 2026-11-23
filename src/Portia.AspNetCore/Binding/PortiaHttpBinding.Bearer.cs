@@ -13,10 +13,12 @@ public static partial class PortiaHttpBinding
     public static string? ReadBearerCredential(HttpContext context)
     {
         var values = context.Request.Headers.Authorization;
+
         if (values.Count == 0)
         {
             return null;
         }
+
 
         if (values.Count != 1)
         {
@@ -24,10 +26,12 @@ public static partial class PortiaHttpBinding
         }
 
         var value = values[0];
+
         if (value is null || !value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
             throw new BadHttpRequestException("Authorization must contain one Bearer credential.");
         }
+
 
         var credential = value.AsSpan(7).Trim();
         return credential.IsEmpty || credential.Contains(' ')
@@ -48,11 +52,13 @@ public static partial class PortiaHttpBinding
     public static string? ReadPortableBearerCredential(HttpContext context)
     {
         var credential = ReadBearerCredential(context);
+
         if (credential is null && IsAuthenticated(context))
         {
             throw new BadHttpRequestException(
                 "Asynchronous delivery of an authenticated request requires a Bearer credential.");
         }
+
 
         return credential;
     }

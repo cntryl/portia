@@ -19,8 +19,12 @@ public sealed class AwsMailEventIngesterTests
     [InlineData("Reject", "reject", DeliveryEventKind.Rejected, "raw")]
     [InlineData("DeliveryDelay", "deliveryDelay", DeliveryEventKind.Delayed, "raw")]
     [InlineData("Rendering Failure", "failure", DeliveryEventKind.Failed, "raw")]
-    public async Task ShouldHandCorrelatedEventToReceiverGivenSesEvent(string eventType, string detailProperty,
-        DeliveryEventKind expected, string envelope)
+    public async Task ShouldHandCorrelatedEventToReceiverGivenSesEvent(
+        string eventType,
+        string detailProperty,
+        DeliveryEventKind expected,
+        string envelope
+    )
     {
         // Arrange
         var receiver = new RecordingReceiver();
@@ -140,6 +144,7 @@ public sealed class AwsMailEventIngesterTests
         {
             if (Failure is not null)
                 return ValueTask.FromException(Failure);
+
             Events.Add(deliveryEvent);
             return ValueTask.CompletedTask;
         }

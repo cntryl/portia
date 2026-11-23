@@ -15,13 +15,17 @@ public static partial class PortiaHttpBinding
     {
         ArgumentNullException.ThrowIfNull(context);
         var maximum = MaximumBodyBytes(context);
+
         if (context.Request.ContentLength > maximum)
             throw new HttpPayloadTooLargeException();
+
         if (context.Features.Get<IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } feature &&
             (feature.MaxRequestBodySize is null || feature.MaxRequestBodySize > maximum))
             feature.MaxRequestBodySize = maximum;
+
         if (context.Items.ContainsKey(BodyLimitAppliedKey))
             return;
+
         context.Request.Body = new LimitedRequestBodyStream(context.Request.Body, maximum);
         context.Items.Add(BodyLimitAppliedKey, null);
     }
@@ -78,17 +82,25 @@ public static partial class PortiaHttpBinding
         public override int ReadByte()
         {
             var value = inner.ReadByte();
+
             if (value >= 0)
                 _ = Count(1);
+
             return value;
         }
 
-        public override Task<int> ReadAsync(byte[] buffer, int offset, int count,
-            CancellationToken cancellationToken) =>
+        public override Task<int> ReadAsync(
+            byte[] buffer,
+            int offset,
+            int count,
+            CancellationToken cancellationToken
+        ) =>
             ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
 
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer,
-            CancellationToken cancellationToken = default) =>
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default
+        ) =>
             Count(await inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false));
 
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
@@ -106,6 +118,7 @@ public static partial class PortiaHttpBinding
         {
             if (disposing)
                 inner.Dispose();
+
             base.Dispose(disposing);
         }
     }

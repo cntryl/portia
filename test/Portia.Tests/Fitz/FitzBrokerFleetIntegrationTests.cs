@@ -122,6 +122,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
         await waiterAcquired.Task.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
 
         waiterCts.Cancel();
+
         try
         {
             await waiterRun;
@@ -130,6 +131,7 @@ public sealed class FitzBrokerFleetIntegrationTests(FitzBrokerFixture broker)
         {
             // Expected.
         }
+
 
         holderCts.Cancel();
 

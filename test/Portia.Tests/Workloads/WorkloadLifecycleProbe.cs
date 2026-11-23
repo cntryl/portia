@@ -20,11 +20,17 @@ sealed class WorkloadLifecycleDescriptor(
 
     public void Validate(IServiceProvider services, string componentName) => validate?.Invoke();
 
-    public ValueTask<ProjectionCheckpoint> LoadCheckpoint(IServiceProvider services, ProjectionRunOptions options,
-        CancellationToken ct) => ValueTask.FromResult(default(ProjectionCheckpoint));
+    public ValueTask<ProjectionCheckpoint> LoadCheckpoint(
+        IServiceProvider services,
+        ProjectionRunOptions options,
+        CancellationToken ct
+    ) => ValueTask.FromResult(default(ProjectionCheckpoint));
 
-    public ValueTask<ProjectionPassResult> RunPass(IServiceProvider services, ProjectionRunOptions options,
-        CancellationToken ct) => pass(ct);
+    public ValueTask<ProjectionPassResult> RunPass(
+        IServiceProvider services,
+        ProjectionRunOptions options,
+        CancellationToken ct
+    ) => pass(ct);
 
     public void Register(IServiceCollection services)
     {
@@ -33,8 +39,11 @@ sealed class WorkloadLifecycleDescriptor(
 
 sealed class WorkloadLifecycleCoordinator : IWorkloadCoordinator
 {
-    public Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-        Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default)
+    public Task RunAsync(
+        Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
+        Func<WorkloadIdentity, CancellationToken, Task> run,
+        CancellationToken ct = default
+    )
         => run(workloads().Single(), ct);
 }
 
@@ -42,8 +51,10 @@ sealed class WorkloadLifecycleNotifier(bool throwOnDispose, bool throwOnSubscrib
 {
     internal IOException CleanupFailure { get; } = new("subscription disposal failed");
 
-    public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
-        CancellationToken ct = default)
+    public ValueTask<IDomainEventSubscription> SubscribeAsync(
+        EventStreamPattern pattern,
+        CancellationToken ct = default
+    )
         => throwOnSubscribe
             ? ValueTask.FromException<IDomainEventSubscription>(new IOException("subscription unavailable"))
             : ValueTask.FromResult<IDomainEventSubscription>(new Subscription(this, throwOnDispose));
@@ -63,15 +74,21 @@ static class WorkloadLifecycleTestHost
     {
         var services = new ServiceCollection();
         _ = services.AddPortia();
+
         if (directory is not null)
             _ = services.AddSingleton(directory);
+
         _ = services.AddSingleton<IDomainEventReader>(new InMemoryEventStore());
         return services.BuildServiceProvider();
     }
 
-    internal static PortiaWorkloadService Worker(ServiceProvider provider, WorkloadLifecycleDescriptor descriptor,
-        IDomainEventNotifier? notifier = null, IWorkloadCoordinator? coordinator = null,
-        ITenantDirectory? directory = null)
+    internal static PortiaWorkloadService Worker(
+        ServiceProvider provider,
+        WorkloadLifecycleDescriptor descriptor,
+        IDomainEventNotifier? notifier = null,
+        IWorkloadCoordinator? coordinator = null,
+        ITenantDirectory? directory = null
+    )
     {
         var registration = new WorkloadRegistration(descriptor, "test",
             directory is null ? WorkloadScope.Global : WorkloadScope.PerTenant,

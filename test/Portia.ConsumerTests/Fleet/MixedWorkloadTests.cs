@@ -13,8 +13,10 @@ public sealed class MixedWorkloadTests
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
+
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
+
         _ = builder.Services.AddSingleton<ObservedScopes>();
         _ = builder.Services.AddScoped<IConsumerScope, ScopeProbe>();
         var coordinator = new Coordinator();
@@ -36,6 +38,7 @@ public sealed class MixedWorkloadTests
         // for; the global one keeps the realm the fixture declares, so its event has to be
         // seeded there rather than under a literal that no longer matches.
         var realms = new[] { "alpha", "beta", ConsumerStreams.Realm };
+
         for (var i = 0; i < realms.Length; i++)
         {
             await store.AppendAsync(new EventStreamAddress(realms[i], "accounts", ids[i].ToString()), 0,
@@ -43,6 +46,7 @@ public sealed class MixedWorkloadTests
         }
 
         // Act
+
         await host.StartAsync(TestContext.Current.CancellationToken);
 
         // Assert
@@ -98,6 +102,7 @@ public sealed class MixedWorkloadTests
     static async Task Until(Func<bool> condition)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
         while (!condition())
             await Task.Delay(10, timeout.Token);
     }
@@ -147,8 +152,11 @@ public sealed class MixedWorkloadTests
         public ConcurrentDictionary<WorkloadIdentity, bool> Active { get; } = new();
         public ConcurrentDictionary<WorkloadIdentity, int> Starts { get; } = new();
 
-        public async Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-            Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default)
+        public async Task RunAsync(
+            Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
+            Func<WorkloadIdentity, CancellationToken, Task> run,
+            CancellationToken ct = default
+        )
         {
             var runs = new Dictionary<WorkloadIdentity, (CancellationTokenSource Cancellation, Task Task)>();
 
@@ -156,6 +164,7 @@ public sealed class MixedWorkloadTests
             {
                 var item = runs[id];
                 await item.Cancellation.CancelAsync();
+
                 try
                 {
                     await item.Task;
@@ -163,6 +172,7 @@ public sealed class MixedWorkloadTests
                 catch (OperationCanceledException) when (item.Cancellation.IsCancellationRequested)
                 {
                 }
+
 
                 item.Cancellation.Dispose();
                 _ = runs.Remove(id);
@@ -174,8 +184,10 @@ public sealed class MixedWorkloadTests
                 while (true)
                 {
                     var snapshot = workloads();
+
                     foreach (var id in runs.Keys.Except(snapshot).ToArray())
                         await Stop(id);
+
                     foreach (var id in snapshot.Except(runs.Keys).ToArray())
                     {
                         var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);

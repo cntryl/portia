@@ -69,20 +69,25 @@ static class ReferencedEventNames
     static Func<string, bool> Create(Compilation compilation)
     {
         var names = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols)
             names.UnionWith(ByAssembly.GetValue(assembly, EventNames));
 
         // A handler/value alias must not disable event-name filtering for the entire project.
         // Resolve aliases once, add names that actually alias events, and keep the conservative
         // fallback for namespaces or unresolved targets whose members cannot be narrowed here.
+
         foreach (var tree in compilation.SyntaxTrees)
         {
             var aliases = tree.GetRoot()
                 .DescendantNodes(node => node is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax)
                 .OfType<UsingDirectiveSyntax>().Where(directive => directive.Alias is not null).ToArray();
+
             if (aliases.Length == 0)
                 continue;
+
             var model = compilation.GetSemanticModel(tree);
+
             foreach (var directive in aliases)
             {
                 if (model.GetDeclaredSymbol(directive)?.Target is not INamedTypeSymbol
@@ -90,6 +95,7 @@ static class ReferencedEventNames
                         TypeKind: not TypeKind.Error
                     } target)
                     return static _ => true;
+
                 if (DerivesFromDomainEvent(target))
                     _ = names.Add(directive.Alias!.Name.Identifier.ValueText);
             }
@@ -101,20 +107,24 @@ static class ReferencedEventNames
     static HashSet<string> EventNames(IAssemblySymbol assembly)
     {
         var names = new HashSet<string>(StringComparer.Ordinal);
+
         if (!assembly.Modules.Any(module => module.ReferencedAssemblySymbols.Any(reference =>
                 reference.Name == "Portia.Abstractions")))
         {
             return names;
         }
 
+
         var pending = new Stack<INamespaceOrTypeSymbol>();
         pending.Push(assembly.GlobalNamespace);
+
         while (pending.Count > 0)
         {
             foreach (var member in pending.Pop().GetMembers())
             {
                 if (member is INamespaceOrTypeSymbol container)
                     pending.Push(container);
+
                 if (member is INamedTypeSymbol { DeclaredAccessibility: Accessibility.Public } type
                     && DerivesFromDomainEvent(type))
                 {
@@ -122,6 +132,7 @@ static class ReferencedEventNames
                 }
             }
         }
+
 
         return names;
     }

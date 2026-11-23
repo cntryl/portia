@@ -300,6 +300,7 @@ public sealed class ProcessorStatusRpcTests
         rpc.BlockWithdrawals = true;
 
         var shutdown = registrar.DisposeAsync().AsTask();
+
         try
         {
             await rpc.FirstWithdrawalStarted.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
@@ -357,8 +358,10 @@ public sealed class ProcessorStatusRpcTests
     {
         internal int Calls { get; private set; }
 
-        public ValueTask<Result<ProcessorStatus>> HandleAsync(IRequestContext<GetProcessorStatus> context,
-            CancellationToken ct)
+        public ValueTask<Result<ProcessorStatus>> HandleAsync(
+            IRequestContext<GetProcessorStatus> context,
+            CancellationToken ct
+        )
         {
             Calls++;
             return ValueTask.FromResult(Result<ProcessorStatus>.Success(new ProcessorStatus(context.Request.Processor,
@@ -393,13 +396,20 @@ public sealed class ProcessorStatusRpcTests
         public RpcCall CallStreamingAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public RpcCall CallStreamingAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? timeout,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public RpcCall CallStreamingAsync(
+            string route,
+            ReadOnlyMemory<byte> body,
+            TimeSpan? timeout,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 #pragma warning restore RS0026
 
-        public Task<RpcWorkerRegistration> RegisterWorkerAsync(string pattern,
+        public Task<RpcWorkerRegistration> RegisterWorkerAsync(
+            string pattern,
             Func<RpcRequest, IRpcResponseWriter, CancellationToken, ValueTask> handler,
-            RpcWorkerOptions? options = null, CancellationToken ct = default) =>
+            RpcWorkerOptions? options = null,
+            CancellationToken ct = default
+        ) =>
             Task.FromResult(new RpcWorkerRegistration(pattern, async token =>
             {
                 if (!BlockWithdrawals)
@@ -416,6 +426,7 @@ public sealed class ProcessorStatusRpcTests
                 }
 
                 _ = SecondWithdrawalStarted.TrySetResult();
+
                 try
                 {
                     await ReleaseSecondWithdrawal.Task.WaitAsync(token);
@@ -443,26 +454,37 @@ public sealed class ProcessorStatusRpcTests
         public RpcCall CallStreamingAsync(string route, ReadOnlyMemory<byte> body, CancellationToken ct = default)
             => _inner.CallStreamingAsync(route, body, ct);
 
-        public RpcCall CallStreamingAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? timeout,
-            CancellationToken ct = default)
+        public RpcCall CallStreamingAsync(
+            string route,
+            ReadOnlyMemory<byte> body,
+            TimeSpan? timeout,
+            CancellationToken ct = default
+        )
             => _inner.CallStreamingAsync(route, body, timeout, ct);
 #pragma warning restore RS0026
 
-        public async Task<RpcWorkerRegistration> RegisterWorkerAsync(string pattern,
+        public async Task<RpcWorkerRegistration> RegisterWorkerAsync(
+            string pattern,
             Func<RpcRequest, IRpcResponseWriter, CancellationToken, ValueTask> handler,
-            RpcWorkerOptions? options = null, CancellationToken ct = default)
+            RpcWorkerOptions? options = null,
+            CancellationToken ct = default
+        )
         {
             if (!_patterns.Add(pattern))
                 throw new InvalidOperationException("ALREADY_REGISTERED");
+
             var registration = await _inner.RegisterWorkerAsync(pattern, handler, options, ct);
             _registrations.Add(registration);
             return new RpcWorkerRegistration(pattern, token =>
             {
                 if (AllowWithdrawal)
                     return WithdrawAsync(registration, pattern, token);
+
                 FailedWithdrawals++;
+
                 if (AllowWithdrawalAfterFailure)
                     AllowWithdrawal = true;
+
                 return ValueTask.FromException(new IOException("Native withdrawal failed."));
             });
         }

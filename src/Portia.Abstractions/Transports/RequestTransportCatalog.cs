@@ -14,6 +14,7 @@ public sealed class RequestTransportCatalog
     {
         ArgumentNullException.ThrowIfNull(registrations);
         var byType = new Dictionary<Type, RequestTransportRegistration>();
+
         foreach (var registration in registrations)
         {
             if (byType.TryGetValue(registration.RequestType, out var existing))
@@ -28,6 +29,7 @@ public sealed class RequestTransportCatalog
 
             byType.Add(registration.RequestType, registration);
         }
+
 
         _registrations = byType.ToFrozenDictionary();
     }

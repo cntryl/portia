@@ -595,8 +595,11 @@ public sealed class RequestScenarioTests
 
     internal sealed class CancelledBehavior(ScenarioLog log) : IRequestPipelineBehavior<ScenarioCancelledCommand>
     {
-        public ValueTask<Result> HandleAsync(IRequestContext<ScenarioCancelledCommand> context,
-            RequestPipelineNext next, CancellationToken ct)
+        public ValueTask<Result> HandleAsync(
+            IRequestContext<ScenarioCancelledCommand> context,
+            RequestPipelineNext next,
+            CancellationToken ct
+        )
         {
             log.Tokens.Add(ct);
             return next(ct);
@@ -606,15 +609,19 @@ public sealed class RequestScenarioTests
     internal sealed class CancelledHandler(ScenarioLog log, ScopeMarker scope)
         : IRequestHandler<ScenarioCancelledCommand>, IRequestHandler<ScenarioCancelledQuery, int>
     {
-        public async ValueTask<Result> HandleAsync(IRequestContext<ScenarioCancelledCommand> context,
-            CancellationToken ct)
+        public async ValueTask<Result> HandleAsync(
+            IRequestContext<ScenarioCancelledCommand> context,
+            CancellationToken ct
+        )
         {
             await WaitAsync(ct);
             return Result.Success;
         }
 
-        public async ValueTask<Result<int>> HandleAsync(IRequestContext<ScenarioCancelledQuery> context,
-            CancellationToken ct)
+        public async ValueTask<Result<int>> HandleAsync(
+            IRequestContext<ScenarioCancelledQuery> context,
+            CancellationToken ct
+        )
         {
             await WaitAsync(ct);
             return Result<int>.Success(1);
@@ -645,8 +652,10 @@ public sealed class RequestScenarioTests
 
     internal sealed class ScenarioNestedDenialStreamHandler : IStreamRequestHandler<ScenarioNestedDenialStream, int>
     {
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<ScenarioNestedDenialStream> context,
-            [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<int> HandleAsync(
+            IRequestContext<ScenarioNestedDenialStream> context,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             yield return 1;
             await Task.Yield();
@@ -673,8 +682,10 @@ public sealed class RequestScenarioTests
 
     internal sealed class ScenarioPermissionCommandHandler : IRequestHandler<ScenarioPermissionCommand>
     {
-        public ValueTask<Result> HandleAsync(IRequestContext<ScenarioPermissionCommand> context,
-            CancellationToken ct) =>
+        public ValueTask<Result> HandleAsync(
+            IRequestContext<ScenarioPermissionCommand> context,
+            CancellationToken ct
+        ) =>
             ValueTask.FromResult(Result.Success);
     }
 
@@ -687,10 +698,13 @@ public sealed class RequestScenarioTests
     internal sealed class ScenarioStreamHandler(ScenarioLog log, ScopeMarker scope)
         : IStreamRequestHandler<ScenarioStream, int>
     {
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<ScenarioStream> context,
-            [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<int> HandleAsync(
+            IRequestContext<ScenarioStream> context,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             log.Scopes.Add(scope);
+
             try
             {
                 log.StreamProduced++;
@@ -745,8 +759,11 @@ public sealed class RequestScenarioTests
 
     internal sealed class ScenarioBehavior(ScenarioLog log) : IRequestPipelineBehavior<ScenarioCommand>
     {
-        public ValueTask<Result> HandleAsync(IRequestContext<ScenarioCommand> context, RequestPipelineNext next,
-            CancellationToken ct)
+        public ValueTask<Result> HandleAsync(
+            IRequestContext<ScenarioCommand> context,
+            RequestPipelineNext next,
+            CancellationToken ct
+        )
         {
             log.Steps.Add("behavior");
             return next(ct);

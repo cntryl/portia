@@ -52,6 +52,7 @@ public sealed class ExplicitWorkloadTests
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         await worker.StartAsync(TestContext.Current.CancellationToken);
+
         try
         {
             var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
@@ -129,27 +130,33 @@ public sealed class ExplicitWorkloadTests
 
         // Act
         var registrations = new List<(int Workloads, int Coordinators)>();
+
         foreach (var infrastructureFirst in new[] { true, false })
         {
             var services = new ServiceCollection();
+
             if (infrastructureFirst)
             {
                 _ = services.AddPortia().AddFitz(configuration);
             }
 
+
             var portia = services.AddPortia().AddWorkers();
             _ = portia.AddProjector<TenantFirstProjector>("first-projector", WorkloadScope.PerTenant);
             _ = portia.AddProjector<SecondProjector>("second-projector", WorkloadScope.Global);
+
             if (!infrastructureFirst)
             {
                 _ = services.AddPortia().AddFitz(configuration);
             }
+
 
             registrations.Add((services.Count(item => item.ServiceType == typeof(WorkloadRegistration)),
                 services.Count(item => item.ServiceType == typeof(IWorkloadCoordinator))));
         }
 
         // Assert
+
         Assert.All(registrations, registration =>
         {
             Assert.Equal(2, registration.Workloads);
@@ -231,7 +238,10 @@ public sealed class ExplicitWorkloadTests
 
     sealed class CompletedCoordinator : IWorkloadCoordinator
     {
-        public Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-            Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default) => Task.CompletedTask;
+        public Task RunAsync(
+            Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
+            Func<WorkloadIdentity, CancellationToken, Task> run,
+            CancellationToken ct = default
+        ) => Task.CompletedTask;
     }
 }

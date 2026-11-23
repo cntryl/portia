@@ -47,13 +47,19 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
         ArgumentNullException.ThrowIfNull(additional);
         EnsureInput();
+
         if (BodyType is not null)
             throw new InvalidOperationException("Only one custom request body can be declared.");
+
         var types = new[] { contentType }.Concat(additional).ToArray();
+
         if (types.Any(string.IsNullOrWhiteSpace))
             throw new ArgumentException("Content types cannot be empty.", nameof(additional));
+
+
         if (types.Distinct(StringComparer.OrdinalIgnoreCase).Count() != types.Length)
             throw new InvalidOperationException("Custom request body content types must be unique.");
+
         BodyType = typeof(TBody);
         BodyOptional = optional;
         BodyContentTypes = types;
@@ -64,12 +70,16 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         EnsureMutable();
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         EnsureInput();
+
         if (_parameters.Any(item =>
                 item.Location == location && StringComparer.OrdinalIgnoreCase.Equals(item.Name, name)))
             throw new InvalidOperationException(
                 $"The custom {location} parameter '{name}' is declared more than once.");
+
+
         if (description is not null)
             ArgumentException.ThrowIfNullOrWhiteSpace(description);
+
         _parameters.Add(new PortiaHttpContractParameter(name, typeof(T), location, required, description));
     }
 
@@ -77,6 +87,7 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     {
         EnsureMutable();
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
+
         if (!_descriptions.TryAdd(member, description))
             throw new InvalidOperationException($"OpenAPI member '{member}' is described more than once.");
     }
@@ -85,10 +96,12 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     {
         EnsureMutable();
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
+
         if (status is { } code)
         {
             if (code is < 100 or > 599)
                 throw new ArgumentOutOfRangeException(nameof(status));
+
             if (!_responseDescriptions.TryAdd(code, description))
                 throw new InvalidOperationException($"OpenAPI response '{code}' is described more than once.");
         }
@@ -96,6 +109,7 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         {
             if (_successDescription is not null)
                 throw new InvalidOperationException("OpenAPI success response is described more than once.");
+
             _successDescription = description;
         }
     }
@@ -103,8 +117,10 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     public void FromQuery(string member)
     {
         EnsureMutable();
+
         if (_queryMembers.Contains(member, StringComparer.Ordinal))
             throw new InvalidOperationException($"FromQuery is declared more than once for '{member}'.");
+
         _queryMembers.Add(member);
     }
 
@@ -112,10 +128,14 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     {
         EnsureMutable();
         PortiaHttpHeaderName.Validate(name);
+
         if (_headerMembers.ContainsKey(member))
             throw new InvalidOperationException($"FromHeader is declared more than once for '{member}'.");
+
+
         if (_headerMembers.Values.Contains(name, StringComparer.OrdinalIgnoreCase))
             throw new InvalidOperationException($"HTTP header '{name}' is declared more than once.");
+
         _headerMembers.Add(member, name);
     }
 
@@ -125,12 +145,16 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(value);
         ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
+
         if (status is < 100 or > 599)
             throw new ArgumentOutOfRangeException(nameof(status));
+
         var examples = status.HasValue ? _responseExamples : _requestExamples;
+
         if (examples.Any(item => item.Example.Name == name && item.Status == status &&
                                  string.Equals(item.ContentType, contentType, StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException($"HTTP example '{name}' is declared more than once.");
+
         examples.Add(new PortiaHttpExample(new PortiaContractExample(typeof(T), name, value, summary,
             status.HasValue ? PortiaContractUse.Output : PortiaContractUse.Input), contentType, status));
     }
@@ -138,14 +162,18 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     public void ResponseHeader<T>(int status, string name, string description, bool required)
     {
         EnsureMutable();
+
         if (status is < 100 or > 599)
             throw new ArgumentOutOfRangeException(nameof(status));
+
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
+
         if (_responseHeaders.Any(item =>
                 item.Status == status && string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException(
                 $"Response header '{name}' is declared more than once for status {status}.");
+
         _responseHeaders.Add(new PortiaHttpResponseHeader(status, name, typeof(T), description, required));
     }
 
@@ -162,8 +190,10 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     public void NoInput()
     {
         EnsureMutable();
+
         if (BodyType is not null || _parameters.Count != 0)
             throw new InvalidOperationException("NoInput cannot be combined with custom input declarations.");
+
         _noInput = true;
     }
 
@@ -177,10 +207,14 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     {
         EnsureMutable();
         ArgumentException.ThrowIfNullOrWhiteSpace(template);
+
         if (_hasResultHandler)
             throw new InvalidOperationException("Created cannot be combined with OnResult.");
+
+
         if (_created is not null)
             throw new InvalidOperationException("Created can only be configured once.");
+
         _created = (template, payloadType);
     }
 
@@ -196,8 +230,10 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     public void RegisterResultHandler()
     {
         EnsureMutable();
+
         if (_created is not null)
             throw new InvalidOperationException("Created cannot be combined with OnResult.");
+
         _hasResultHandler = true;
     }
 
@@ -206,6 +242,7 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         if (success && response is null && _responses.Any(item => ResponseStatus(item) is >= 200 and < 400))
             throw new InvalidOperationException(
                 "OnResult must return a response for a successful result when a custom success response is declared.");
+
         return response;
     }
 
@@ -214,9 +251,11 @@ sealed class PortiaEndpointConfigurationState<TRequest>
         if ((_queryMembers.Count != 0 || _headerMembers.Count != 0) && Binder is not null)
             throw new InvalidOperationException(
                 "FromQuery and FromHeader apply to default binding; declare OnBind inputs with Parameter.");
+
         if (_descriptions.Count > 0 && Binder is not null)
             throw new InvalidOperationException(
                 "Describe applies to default binding; describe OnBind inputs with Parameter.");
+
         foreach (var name in _descriptions.Keys)
         {
             if (!members.Any(member => string.Equals(member.Name, name, StringComparison.OrdinalIgnoreCase)))
@@ -224,19 +263,27 @@ sealed class PortiaEndpointConfigurationState<TRequest>
                     $"Describe member '{name}' is not a constructor-bound request member.");
         }
 
+
         if (binderRequired && Binder is null)
             throw new InvalidOperationException("This request shape requires OnBind.");
+
         if (Binder is null && (_noInput || BodyType is not null || _parameters.Count != 0))
             throw new InvalidOperationException("Custom input declarations require OnBind.");
+
+
         if (Binder is not null && !_noInput && BodyType is null && _parameters.Count == 0)
             throw new InvalidOperationException("OnBind must declare its inputs with Accepts, Parameter, or NoInput.");
+
         _frozen = true;
     }
 
-    public void ApplyMetadata(IEndpointRouteBuilder app, IEndpointConventionBuilder builder,
+    public void ApplyMetadata(
+        IEndpointRouteBuilder app,
+        IEndpointConventionBuilder builder,
         IReadOnlyDictionary<string, Func<TRequest, object?>>? requestMembers = null,
         IReadOnlyDictionary<string, Func<object?, object?>>? payloadMembers = null,
-        bool createPayloadIsNullable = false)
+        bool createPayloadIsNullable = false
+    )
     {
         var validations = app.ServiceProvider.GetRequiredService<PortiaStartupValidationRegistry>();
         // RouteGroupBuilder.DataSources contains the group's unprefixed child sources. Building
@@ -250,12 +297,14 @@ sealed class PortiaEndpointConfigurationState<TRequest>
                 // grouped pattern; the endpoint-validation gate below holds Portia workers until then.
                 foreach (var source in app.ServiceProvider.GetServices<EndpointDataSource>())
                     _ = source.Endpoints;
+
                 return;
             }
 
             foreach (var source in app.DataSources)
                 _ = source.Endpoints;
         });
+
         if (BodyType is not null)
         {
             if (typeof(Stream).IsAssignableFrom(BodyType))
@@ -270,16 +319,20 @@ sealed class PortiaEndpointConfigurationState<TRequest>
             }
         }
 
+
         builder.Add(endpoint => endpoint.Metadata.Add(new PortiaOpenApiDescriptions(
             new Dictionary<string, string>(_descriptions, StringComparer.OrdinalIgnoreCase),
             new Dictionary<int, string>(_responseDescriptions), _successDescription)));
         builder.Add(endpoint => endpoint.Metadata.Add(new PortiaOpenApiEnrichment(
             [.. _requestExamples], [.. _responseExamples], [.. _responseHeaders])));
+
         foreach (var response in _responses)
             builder.Add(endpoint => endpoint.Metadata.Add(response));
+
         var endpointValidation = Binder is not null || _created is not null
             ? validations.BeginEndpointValidation()
             : null;
+
         if (_created is { } created)
             builder.Add(endpoint =>
             {
@@ -300,13 +353,16 @@ sealed class PortiaEndpointConfigurationState<TRequest>
                     contentTypes));
                 endpoint.Metadata.Add(new PortiaCreatedResponseMetadata(StatusCodes.Status201Created, created.PayloadType,
                     contentTypes));
+
                 if (created.PayloadType is null && endpoint.Metadata.OfType<IHttpMethodMetadata>()
                         .Any(metadata => metadata.HttpMethods.Contains(HttpMethods.Put, StringComparer.OrdinalIgnoreCase)))
                     endpoint.Metadata.Add(new PortiaCreatedResponseMetadata(StatusCodes.Status204NoContent, null, []));
             });
+
         if (_hasResultHandler)
             builder.Add(endpoint => endpoint.Metadata.Add(new PortiaCustomHttpResult(
                 [.. _responses.Select(ResponseStatus)])));
+
         if (Binder is not null)
             builder.Add(endpoint =>
             {
@@ -315,12 +371,15 @@ sealed class PortiaEndpointConfigurationState<TRequest>
                 var routeNames = route.Parameters.Select(item => item.Name).ToArray();
                 var declared = _parameters.Where(item => item.Location == PortiaHttpParameterLocation.Route)
                     .Select(item => item.Name).ToArray();
+
                 if (routeNames.Length != declared.Length ||
                     routeNames.Any(name => !declared.Contains(name, StringComparer.Ordinal)))
                     throw new InvalidOperationException(
                         "Custom route parameters must exactly match the complete route pattern, including route groups and casing.");
+
                 endpoint.Metadata.Add(new PortiaCustomHttpContract([.. _parameters]));
             });
+
         if (endpointValidation is not null)
             builder.Finally(_ => endpointValidation.Complete());
     }
@@ -328,8 +387,10 @@ sealed class PortiaEndpointConfigurationState<TRequest>
     void SetBinder(Func<HttpContext, CancellationToken, ValueTask<TRequest>> binder)
     {
         EnsureMutable();
+
         if (Binder is not null)
             throw new InvalidOperationException("OnBind can only be configured once.");
+
         Binder = binder;
     }
 

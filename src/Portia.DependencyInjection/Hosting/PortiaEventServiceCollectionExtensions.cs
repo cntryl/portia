@@ -20,10 +20,12 @@ public static class PortiaEventServiceCollectionExtensions
         lock (services)
         {
             events = Events.GetOrCreateValue(services);
+
             if (!events.Add(typeof(TEvent)))
             {
                 return;
             }
+
 
             _ = services.AddSingleton(new EventMarker<TEvent>());
             _ = services.AddSingleton(new EventRegistration(catalog => _ = catalog.Register<TEvent>(version, name)));
@@ -33,8 +35,10 @@ public static class PortiaEventServiceCollectionExtensions
     internal static DomainEventTypeCatalog BuildCatalog(IServiceProvider services)
     {
         var catalog = new DomainEventTypeCatalog();
+
         foreach (var registration in services.GetServices<EventRegistration>())
             registration.Add(catalog);
+
         return catalog;
     }
 

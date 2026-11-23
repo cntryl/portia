@@ -38,6 +38,7 @@ static class HttpBindingShape
                                                          ==
                                                          "System.Diagnostics.CodeAnalysis.SetsRequiredMembersAttribute"))
             return false;
+
         for (var current = request; current is not null; current = current.BaseType)
         {
             if (current.GetMembers().Any(member => member is IPropertySymbol { IsRequired: true }
@@ -55,8 +56,11 @@ static class HttpBindingShape
     {
         if (parameter.RefKind != RefKind.None)
             return false;
+
+
         if (!textBound)
             return true;
+
         var type = UnwrapNullable(parameter.Type);
         return type.SpecialType == SpecialType.System_String || type.TypeKind == TypeKind.Enum ||
                GetTextParseKind(type) != TextParseKind.None;
@@ -66,6 +70,7 @@ static class HttpBindingShape
     {
         type = UnwrapNullable(type);
         var simple = false;
+
         foreach (var method in type.GetMembers("TryParse").OfType<IMethodSymbol>())
         {
             if (!method.IsStatic || method.IsGenericMethod || method.MethodKind != MethodKind.Ordinary ||
@@ -87,6 +92,7 @@ static class HttpBindingShape
             if (method.Parameters[1].RefKind == RefKind.None && IsFormatProvider(method.Parameters[1].Type))
                 return TextParseKind.FormatProvider;
         }
+
 
         return simple ? TextParseKind.String : TextParseKind.None;
     }

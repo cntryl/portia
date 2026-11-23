@@ -11,8 +11,11 @@ public static class RequestDeliveryScopes
     ///     <see langword="null" /> to use <see cref="TimeProvider.System" />.
     /// </param>
     /// <returns>A factory handing out one independently disposable scope per delivery.</returns>
-    public static IRequestDeliveryScopeFactory Fixed(IRequestBus bus, IRequestActorValidator actorValidator,
-        TimeProvider? timeProvider = null) => new FixedFactory(bus, actorValidator, timeProvider);
+    public static IRequestDeliveryScopeFactory Fixed(
+        IRequestBus bus,
+        IRequestActorValidator actorValidator,
+        TimeProvider? timeProvider = null
+    ) => new FixedFactory(bus, actorValidator, timeProvider);
 
     /// <summary>Uses the supplied queue dependencies and optional terminal observer for every delivery.</summary>
     /// <param name="bus">The bus that executes validated requests.</param>
@@ -27,9 +30,13 @@ public static class RequestDeliveryScopes
     ///     <see langword="null" /> to use <see cref="TimeProvider.System" />.
     /// </param>
     /// <returns>A factory handing out one independently disposable scope per delivery.</returns>
-    public static IQueueDeliveryScopeFactory FixedQueue(IRequestBus bus, IRequestActorValidator actorValidator,
-        QueueRunnerOptions? options = null, IQueuedRequestTerminalHandler? terminalHandler = null,
-        TimeProvider? timeProvider = null) => new FixedQueueFactory(
+    public static IQueueDeliveryScopeFactory FixedQueue(
+        IRequestBus bus,
+        IRequestActorValidator actorValidator,
+        QueueRunnerOptions? options = null,
+        IQueuedRequestTerminalHandler? terminalHandler = null,
+        TimeProvider? timeProvider = null
+    ) => new FixedQueueFactory(
         bus, actorValidator, timeProvider, options ?? new QueueRunnerOptions(), terminalHandler);
 
     // Each call returns its own scope, because the port promises one independently disposable

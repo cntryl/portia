@@ -4,8 +4,13 @@ namespace Cntryl.Portia.Consumer;
 
 static class HttpConsumerScenario
 {
-    public static Assembly Compile(string declaration, string handle, string mapping, string configuration = "",
-        string resultType = "string")
+    public static Assembly Compile(
+        string declaration,
+        string handle,
+        string mapping,
+        string configuration = "",
+        string resultType = "string"
+    )
         => GeneratorCompilation.Compile($$"""
                                           using System;
                                           using System.Globalization;
@@ -82,13 +87,22 @@ static class HttpConsumerScenario
                                           """, new RegistrationCallInterceptorGenerator(),
             new RequestHttpBindingGenerator());
 
-    public static Task<(int Status, string Body)> RunAsync(Assembly assembly, string path, string? json = null,
-        bool snake = false, bool converter = false)
+    public static Task<(int Status, string Body)> RunAsync(
+        Assembly assembly,
+        string path,
+        string? json = null,
+        bool snake = false,
+        bool converter = false
+    )
         => (Task<(int, string)>)assembly.GetType("HttpScenario")!.GetMethod("Run")!.Invoke(null,
             [path, json, snake, converter])!;
 
-    public static Task<(int Status, string Body, string? Location)> RunWithLocationAsync(Assembly assembly,
-        string path, string? json = null, string? method = null)
+    public static Task<(int Status, string Body, string? Location)> RunWithLocationAsync(
+        Assembly assembly,
+        string path,
+        string? json = null,
+        string? method = null
+    )
         => (Task<(int, string, string?)>)assembly.GetType("HttpScenario")!.GetMethod("RunWithLocation")!.Invoke(null,
             [path, json, false, false, method])!;
 }

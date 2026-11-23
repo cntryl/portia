@@ -37,15 +37,19 @@ public static partial class PortiaHttpBinding
     {
         if (context.GetEndpoint()?.Metadata.GetMetadata<IAntiforgeryMetadata>() is { RequiresValidation: false })
             return;
+
         if (context.Features.Get<IAntiforgeryValidationFeature>() is { } feature)
         {
             if (!feature.IsValid)
                 throw new AntiforgeryValidationException("Invalid antiforgery token.", feature.Error);
+
             return;
         }
 
+
         if (context.RequestServices.GetService<IAntiforgery>() is not { } antiforgery)
             throw new HttpUnsupportedMediaTypeException("Form bodies require antiforgery validation.");
+
         await antiforgery.ValidateRequestAsync(context).ConfigureAwait(false);
     }
 }

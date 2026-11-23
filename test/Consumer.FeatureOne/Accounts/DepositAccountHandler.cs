@@ -21,10 +21,12 @@ public sealed class DepositAccountHandler(
             account.Deposit(request.Amount);
             return AggregateOutcome.Commit(Result.Success);
         }, context, ct);
+
         if (result.IsSuccess)
         {
             effects.Record("business", request.Id, request.Amount, scope.Id);
         }
+
 
         return result;
     }

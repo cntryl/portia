@@ -24,8 +24,11 @@ public interface IRequestPipelineBehavior<in TRequest> where TRequest : IRequest
     /// </param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of the request, whether produced here or by the continuation.</returns>
-    ValueTask<Result> HandleAsync(IRequestContext<TRequest> context, RequestPipelineNext continuation,
-        CancellationToken ct);
+    ValueTask<Result> HandleAsync(
+        IRequestContext<TRequest> context,
+        RequestPipelineNext continuation,
+        CancellationToken ct
+    );
 }
 
 /// <summary>Wraps execution of a matching result-bearing request handler.</summary>
@@ -40,6 +43,9 @@ public interface IRequestPipelineBehavior<in TRequest, TOut> where TRequest : IR
     /// </param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of the request, whether produced here or by the continuation.</returns>
-    ValueTask<Result<TOut>> HandleAsync(IRequestContext<TRequest> context, RequestPipelineNext<TOut> continuation,
-        CancellationToken ct);
+    ValueTask<Result<TOut>> HandleAsync(
+        IRequestContext<TRequest> context,
+        RequestPipelineNext<TOut> continuation,
+        CancellationToken ct
+    );
 }

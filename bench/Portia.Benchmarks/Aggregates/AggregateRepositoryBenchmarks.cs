@@ -57,22 +57,35 @@ public class AggregateRepositoryBenchmarks
     {
         public DomainEventRecord[] Records { get; set; } = [];
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
-            CancellationToken ct) => Read(fromOffset, ct);
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset,
+            CancellationToken ct
+        ) => Read(fromOffset, ct);
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            CancellationToken ct) =>
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            CancellationToken ct
+        ) =>
             Read(cursor == EventCursor.Start ? 0 : ulong.Parse(cursor.Value!, CultureInfo.InvariantCulture), ct);
 
-        public ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,
-            IReadOnlyList<DomainEvent> events, CancellationToken ct = default) => ValueTask.CompletedTask;
+        public ValueTask AppendAsync(
+            EventStreamAddress stream,
+            ulong expectedStreamPosition,
+            IReadOnlyList<DomainEvent> events,
+            CancellationToken ct = default
+        ) => ValueTask.CompletedTask;
 
-        async IAsyncEnumerable<DomainEventRecord> Read(ulong fromOffset,
-            [EnumeratorCancellation] CancellationToken ct)
+        async IAsyncEnumerable<DomainEventRecord> Read(
+            ulong fromOffset,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             foreach (var record in Records)
             {
                 ct.ThrowIfCancellationRequested();
+
                 if (record.ResourceOffset >= fromOffset)
                     yield return record;
             }

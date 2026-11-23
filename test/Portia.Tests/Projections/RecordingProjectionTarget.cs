@@ -12,7 +12,8 @@ sealed class RecordingProjectionTarget : ITestProjectionRepository
 
     public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
         CheckpointIdentity identity,
-        CancellationToken ct = default)
+        CancellationToken ct = default
+    )
     {
         ct.ThrowIfCancellationRequested();
         return ValueTask.FromResult(_checkpoint);
@@ -20,7 +21,8 @@ sealed class RecordingProjectionTarget : ITestProjectionRepository
 
     public ValueTask<IProjectionBatch> BeginAsync(
         ProjectionBatchContext context,
-        CancellationToken ct = default)
+        CancellationToken ct = default
+    )
     {
         ct.ThrowIfCancellationRequested();
         Contexts.Add(context);

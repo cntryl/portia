@@ -16,6 +16,10 @@ public interface IConditionalProjectionCheckpointStore
     /// <param name="checkpoint">The checkpoint reached by the successful pass.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <exception cref="ProjectionConcurrencyException">Another owner advanced the checkpoint.</exception>
-    ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint expected,
-        ProjectionCheckpoint checkpoint, CancellationToken ct = default);
+    ValueTask SaveAsync(
+        CheckpointIdentity identity,
+        ProjectionCheckpoint expected,
+        ProjectionCheckpoint checkpoint,
+        CancellationToken ct = default
+    );
 }

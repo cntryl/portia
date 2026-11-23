@@ -58,10 +58,12 @@ public abstract record DomainEvent
     internal void ValidateAttribution(EventAttribution attribution)
     {
         var metadata = Metadata;
+
         if (!_aggregateOwned)
         {
             throw new InvalidOperationException("Only pending aggregate emissions can receive save attribution.");
         }
+
 
         if ((metadata.CorrelationId is { } correlation && correlation != attribution.CorrelationId)
             || (metadata.CausationId is { } cause && cause != attribution.CausationId)

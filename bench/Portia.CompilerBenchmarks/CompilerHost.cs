@@ -66,12 +66,14 @@ static class CompilerHost
         var types = component == "all" ? Generators : [Generators.Single(type => type.Name == component)];
         var generators = types
             .Select(type => ((IIncrementalGenerator)Activator.CreateInstance(type)!).AsSourceGenerator()).ToList();
+
         if (withJson)
         {
             var assembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.GetFullPath(JsonGeneratorPath));
             generators.Add(((IIncrementalGenerator)Activator.CreateInstance(assembly.GetType(
                 "System.Text.Json.SourceGeneration.JsonSourceGenerator", throwOnError: true)!)!).AsSourceGenerator());
         }
+
 
         return CSharpGeneratorDriver.Create(generators, parseOptions: ParseOptions,
             driverOptions: new GeneratorDriverOptions(default, tracking));
@@ -114,6 +116,7 @@ static class CompilerHost
             .Select(item => item.Exception!.ToString())
             .Concat(result.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)
                 .Select(item => item.ToString())).ToList();
+
         if (compile)
         {
             var output = input.AddSyntaxTrees(result.GeneratedTrees);
@@ -121,6 +124,7 @@ static class CompilerHost
             failures.AddRange(output.Emit(stream).Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)
                 .Select(item => item.ToString()));
         }
+
 
         if (failures.Count != 0)
             throw new InvalidOperationException(string.Join(Environment.NewLine, failures.Take(20)));

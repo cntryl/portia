@@ -29,6 +29,7 @@ public static partial class PortiaHttpBinding
     public static async ValueTask<IFormCollection> ReadFormBodyAsync(HttpContext context, CancellationToken ct)
     {
         EnsureBodyWithinLimit(context);
+
         try
         {
             await ValidateAntiforgeryAsync(context).ConfigureAwait(false);
@@ -57,10 +58,14 @@ public static partial class PortiaHttpBinding
     public static string? ReadForm(IFormCollection form, string name, bool emptyIsMissing)
     {
         ArgumentNullException.ThrowIfNull(form);
+
         if (!form.TryGetValue(name, out var values) || values.Count == 0)
             return null;
+
+
         if (values.Count != 1)
             throw new BadHttpRequestException($"Expected one value for '{name}'.");
+
         return emptyIsMissing && string.IsNullOrEmpty(values[0]) ? null : values[0];
     }
 
@@ -74,19 +79,26 @@ public static partial class PortiaHttpBinding
     public static string? ReadFormBoolean(IFormCollection form, string name)
     {
         ArgumentNullException.ThrowIfNull(form);
+
         if (!form.TryGetValue(name, out var values))
             return null;
+
         var isSet = false;
         var found = false;
+
         foreach (var value in values)
         {
             if (string.IsNullOrEmpty(value))
                 continue;
+
+
             if (!TryParseFormBoolean(value, out var parsed))
                 return value;
+
             found = true;
             isSet |= parsed;
         }
+
 
         return !found ? null : isSet ? bool.TrueString : bool.FalseString;
     }

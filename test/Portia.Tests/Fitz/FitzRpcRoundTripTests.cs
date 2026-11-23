@@ -318,18 +318,25 @@ public sealed class FitzRpcRoundTripTests
                 new RequestError(RequestErrorKind.Unauthorized, "Token expired.")));
     }
 
-    static async IAsyncEnumerable<RpcResponseFrame> ThrowAfterDispatch(TaskCompletionSource dispatched,
-        Exception? exception)
+    static async IAsyncEnumerable<RpcResponseFrame> ThrowAfterDispatch(
+        TaskCompletionSource dispatched,
+        Exception? exception
+    )
     {
         dispatched.TrySetResult();
         await Task.Yield();
+
         if (exception is not null)
             throw exception;
+
         yield break;
     }
 
-    static async IAsyncEnumerable<RpcResponseFrame> YieldResponseThenWait(ReadOnlyMemory<byte> response,
-        TaskCompletionSource responseReceived, [EnumeratorCancellation] CancellationToken ct = default)
+    static async IAsyncEnumerable<RpcResponseFrame> YieldResponseThenWait(
+        ReadOnlyMemory<byte> response,
+        TaskCompletionSource responseReceived,
+        [EnumeratorCancellation] CancellationToken ct = default
+    )
     {
         yield return new RpcResponseFrame(response, 0);
         responseReceived.TrySetResult();
@@ -409,17 +416,24 @@ public sealed class FitzRpcRoundTripTests
             return call;
         }
 
-        public RpcCall CallStreamingAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? timeout,
-            CancellationToken ct = default)
+        public RpcCall CallStreamingAsync(
+            string route,
+            ReadOnlyMemory<byte> body,
+            TimeSpan? timeout,
+            CancellationToken ct = default
+        )
         {
             _ = timeout;
             return CallStreamingAsync(route, body, ct);
         }
 #pragma warning restore RS0026
 
-        public Task<RpcWorkerRegistration> RegisterWorkerAsync(string pattern,
+        public Task<RpcWorkerRegistration> RegisterWorkerAsync(
+            string pattern,
             Func<RpcRequest, IRpcResponseWriter, CancellationToken, ValueTask> handler,
-            RpcWorkerOptions? options = null, CancellationToken ct = default) =>
+            RpcWorkerOptions? options = null,
+            CancellationToken ct = default
+        ) =>
             throw new NotSupportedException();
     }
 }

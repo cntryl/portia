@@ -20,8 +20,11 @@ public sealed class AwsObjectStorage(
         sessionProtector ?? throw new ArgumentNullException(nameof(sessionProtector));
 
     /// <inheritdoc />
-    public async ValueTask<ObjectUploadSession> CreateUploadAsync(TenantId tenantId, ObjectDigest expected,
-        CancellationToken ct = default)
+    public async ValueTask<ObjectUploadSession> CreateUploadAsync(
+        TenantId tenantId,
+        ObjectDigest expected,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
@@ -51,24 +54,32 @@ public sealed class AwsObjectStorage(
     }
 
     /// <inheritdoc />
-    public ValueTask<ObjectUploadPart> SignPartAsync(ObjectUploadSession session, int partNumber, TimeSpan lifetime,
-        CancellationToken ct = default)
+    public ValueTask<ObjectUploadPart> SignPartAsync(
+        ObjectUploadSession session,
+        int partNumber,
+        TimeSpan lifetime,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(session);
         ct.ThrowIfCancellationRequested();
+
         if (partNumber is < 1 or > MaximumParts)
         {
             throw new ArgumentOutOfRangeException(nameof(partNumber));
         }
 
+
         var duration = ObjectStorageRules.BoundLifetime(lifetime);
         var payload = SessionPayload.Decode(session.Token, _sessionProtector);
         ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt);
         var expiresAt = DateTimeOffset.UtcNow.Add(duration);
+
         if (expiresAt > payload.ExpiresAt)
         {
             expiresAt = payload.ExpiresAt;
         }
+
 
         var uri = _client.GetPreSignedURL(new GetPreSignedUrlRequest
         {
@@ -84,8 +95,11 @@ public sealed class AwsObjectStorage(
     }
 
     /// <inheritdoc />
-    public async ValueTask CompleteUploadAsync(ObjectUploadSession session, IReadOnlyList<ObjectPartReceipt> parts,
-        CancellationToken ct = default)
+    public async ValueTask CompleteUploadAsync(
+        ObjectUploadSession session,
+        IReadOnlyList<ObjectPartReceipt> parts,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(parts);
@@ -105,6 +119,7 @@ public sealed class AwsObjectStorage(
 
         var ordered = parts.OrderBy(static part => part.PartNumber).ToArray();
         var uploadIdGone = false;
+
         try
         {
             await _client.CompleteMultipartUploadAsync(new CompleteMultipartUploadRequest
@@ -128,6 +143,7 @@ public sealed class AwsObjectStorage(
             throw new InvalidDataException("S3 rejected the uploaded parts or their receipts.", exception);
         }
 
+
         if (uploadIdGone &&
             await HeadAndVerifyAsync(payload.Bucket, payload.ObjectKey, payload.Sha256, payload.Length, ct)
                 .ConfigureAwait(false))
@@ -137,6 +153,7 @@ public sealed class AwsObjectStorage(
         }
 
         (string Digest, string ETag) verified;
+
         try
         {
             verified = await VerifyStagingAsync(payload, ct).ConfigureAwait(false);
@@ -160,6 +177,7 @@ public sealed class AwsObjectStorage(
             throw;
         }
 
+
         await PromoteVerifiedAsync(payload, verified.Digest, verified.ETag, ct).ConfigureAwait(false);
         await TryCleanupStagingAsync(payload).ConfigureAwait(false);
     }
@@ -169,6 +187,7 @@ public sealed class AwsObjectStorage(
     {
         ArgumentNullException.ThrowIfNull(session);
         var payload = SessionPayload.Decode(session.Token, _sessionProtector);
+
         try
         {
             await _client.AbortMultipartUploadAsync(new AbortMultipartUploadRequest
@@ -185,12 +204,16 @@ public sealed class AwsObjectStorage(
         }
 
         // A failed abort propagates unchanged; the caller retries the abort, which then cleans staging.
+
         await CleanupStagingAsync(payload, CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public async ValueTask<bool> HeadAndVerifyAsync(TenantId tenantId, ObjectDigest expected,
-        CancellationToken ct = default)
+    public async ValueTask<bool> HeadAndVerifyAsync(
+        TenantId tenantId,
+        ObjectDigest expected,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
@@ -200,18 +223,24 @@ public sealed class AwsObjectStorage(
     }
 
     /// <inheritdoc />
-    public async ValueTask<ObjectDownload> CreateDownloadAsync(TenantId tenantId, ObjectDigest expected,
-        TimeSpan lifetime, CancellationToken ct = default)
+    public async ValueTask<ObjectDownload> CreateDownloadAsync(
+        TenantId tenantId,
+        ObjectDigest expected,
+        TimeSpan lifetime,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(expected);
         var duration = ObjectStorageRules.BoundLifetime(lifetime);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
         var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
+
         if (!await HeadAndVerifyAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct)
                 .ConfigureAwait(false))
         {
             throw new FileNotFoundException("The verified object was not found.");
         }
+
 
         var expiresAt = DateTimeOffset.UtcNow.Add(duration);
         var url = _client.GetPreSignedURL(new GetPreSignedUrlRequest
@@ -226,17 +255,22 @@ public sealed class AwsObjectStorage(
     }
 
     /// <inheritdoc />
-    public async ValueTask<Stream?> OpenReadAsync(TenantId tenantId, ObjectDigest expected,
-        CancellationToken ct = default)
+    public async ValueTask<Stream?> OpenReadAsync(
+        TenantId tenantId,
+        ObjectDigest expected,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(expected);
         var location = await ResolveAsync(tenantId, ct).ConfigureAwait(false);
         var objectKey = ObjectStorageRules.ObjectKey(_tenantResolver, tenantId, expected);
+
         if (!await HeadAndVerifyAsync(location.BucketReference, objectKey, expected.Sha256, expected.Length, ct)
                 .ConfigureAwait(false))
         {
             return null;
         }
+
 
         try
         {
@@ -261,6 +295,7 @@ public sealed class AwsObjectStorage(
     async ValueTask<ObjectStorageLocation> ResolveAsync(TenantId tenantId, CancellationToken ct)
     {
         var location = await _tenantResolver.ResolveAsync(tenantId, ct).ConfigureAwait(false);
+
         if (string.IsNullOrWhiteSpace(location.BucketReference) ||
             string.IsNullOrWhiteSpace(location.EncryptionKeyReference))
         {
@@ -268,49 +303,64 @@ public sealed class AwsObjectStorage(
                 "Tenant storage resolution must provide bucket and encryption-key references.");
         }
 
+
         return location;
     }
 
     async ValueTask<(string Digest, string ETag)> VerifyStagingAsync(SessionPayload payload, CancellationToken ct)
     {
         using var staged = await _client.GetObjectAsync(payload.Bucket, payload.StagingKey, ct).ConfigureAwait(false);
+
         if (string.IsNullOrWhiteSpace(staged.ETag))
         {
             throw new InvalidOperationException("S3 did not return an ETag for the staged object.");
         }
 
+
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         var buffer = new byte[64 * 1024];
         long length = 0;
+
         while (true)
         {
             var read = await staged.ResponseStream.ReadAsync(buffer, ct).ConfigureAwait(false);
+
             if (read == 0)
             {
                 break;
             }
 
+
             length = checked(length + read);
+
             if (length > payload.Length)
             {
                 throw new InvalidDataException("Uploaded object exceeds its declared length.");
             }
 
+
             hash.AppendData(buffer, 0, read);
         }
 
+
         var computed = hash.GetHashAndReset();
+
         if (length != payload.Length ||
             !CryptographicOperations.FixedTimeEquals(computed, Convert.FromHexString(payload.Sha256)))
         {
             throw new InvalidDataException("Uploaded object length or SHA-256 does not match the declared content.");
         }
 
+
         return (Convert.ToHexString(computed).ToLowerInvariant(), staged.ETag);
     }
 
-    async ValueTask PromoteVerifiedAsync(SessionPayload payload, string verifiedDigest, string stagedETag,
-        CancellationToken ct)
+    async ValueTask PromoteVerifiedAsync(
+        SessionPayload payload,
+        string verifiedDigest,
+        string stagedETag,
+        CancellationToken ct
+    )
     {
         for (var attempt = 1; attempt <= MaximumConditionalCopyAttempts; attempt++)
         {
@@ -360,8 +410,13 @@ public sealed class AwsObjectStorage(
         }
     }
 
-    async ValueTask<bool> HeadAndVerifyAsync(string bucket, string objectKey, string sha256, long length,
-        CancellationToken ct)
+    async ValueTask<bool> HeadAndVerifyAsync(
+        string bucket,
+        string objectKey,
+        string sha256,
+        long length,
+        CancellationToken ct
+    )
     {
         try
         {
@@ -427,10 +482,12 @@ public sealed class AwsObjectStorage(
         get
         {
             var config = _client.Config;
+
             if (Uri.TryCreate(config.ServiceURL, UriKind.Absolute, out var endpoint))
             {
                 return endpoint.Scheme == Uri.UriSchemeHttp ? Protocol.HTTP : Protocol.HTTPS;
             }
+
 
             return config.UseHttp ? Protocol.HTTP : Protocol.HTTPS;
         }
@@ -455,6 +512,7 @@ public sealed class AwsObjectStorage(
             {
                 var json = protector.Unprotect(token);
                 var payload = JsonSerializer.Deserialize(json, AwsUploadSessionJsonContext.Default.SessionPayload);
+
                 if (payload is null || string.IsNullOrWhiteSpace(payload.Bucket) ||
                     string.IsNullOrWhiteSpace(payload.KmsKey) ||
                     string.IsNullOrWhiteSpace(payload.ObjectKey) || string.IsNullOrWhiteSpace(payload.StagingKey) ||
@@ -465,6 +523,7 @@ public sealed class AwsObjectStorage(
                 {
                     throw new FormatException();
                 }
+
 
                 return payload;
             }
@@ -509,6 +568,7 @@ public sealed class AwsObjectStorage(
         {
             if (disposing)
                 _response.Dispose();
+
             base.Dispose(disposing);
         }
 

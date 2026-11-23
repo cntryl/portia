@@ -62,8 +62,12 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                 input.Left.Right, input.Right));
     }
 
-    static void Report(SourceProductionContext output, ImmutableArray<RootUse> uses,
-        ImmutableArray<string> declaredCoverage, string? referencedCoverage)
+    static void Report(
+        SourceProductionContext output,
+        ImmutableArray<RootUse> uses,
+        ImmutableArray<string> declaredCoverage,
+        string? referencedCoverage
+    )
     {
         // No Portia JSON context attribute means the application is not built against Portia's JSON contract.
         if (referencedCoverage is null)
@@ -72,11 +76,13 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
         var covered = new HashSet<string>(declaredCoverage, StringComparer.Ordinal);
         covered.UnionWith(referencedCoverage.Split('\n'));
         var required = new Dictionary<string, RootUse>(StringComparer.Ordinal);
+
         foreach (var use in uses)
         {
             if (!required.ContainsKey(use.Key))
                 required.Add(use.Key, use);
         }
+
 
         foreach (var use in required.Values.Where(use => !covered.Contains(use.Key))
                      .OrderBy(use => use.Display, StringComparer.Ordinal))
@@ -108,18 +114,22 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
     {
         var invocation = (InvocationExpressionSyntax)context.Node;
         var model = context.SemanticModel;
+
         if (model.GetSymbolInfo(invocation, ct).Symbol is not IMethodSymbol method)
             return ImmutableArray<RootUse>.Empty;
+
 
         var roots = ImmutableArray.CreateBuilder<RootUse>();
         var location = invocation.GetLocation();
         var name = method.Name;
         var registration = IsPortiaRegistration(method);
         var endpointMapping = IsPortiaEndpointMapping(method);
+
         if ((registration && name is "AddEvent" or "RegisterDynamicRequest" or "AddExample") || endpointMapping)
         {
             foreach (var argument in method.TypeArguments)
                 Add(argument);
+
             if (registration && name == "RegisterDynamicRequest" &&
                 method.TypeArguments.FirstOrDefault() is INamedTypeSymbol dynamicRequest)
                 foreach (var contract in dynamicRequest.AllInterfaces.Where(contract =>
@@ -128,6 +138,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                     Add(contract.TypeArguments[0]);
         }
 
+
         if (name is ("AddMcpTool" or "AddMcpResource" or "AddMcpPrompt") && IsPortiaMcpRegistration(method)
                                                                          && method.TypeArguments.FirstOrDefault() is
                                                                              INamedTypeSymbol mcpRequest)
@@ -135,6 +146,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
             Add(mcpRequest);
             var requestContract = mcpRequest.AllInterfaces.FirstOrDefault(iface =>
                 iface.OriginalDefinition.ToDisplayString() == "Cntryl.Portia.IRequest<TOut>");
+
             if (requestContract is not null)
                 Add(requestContract.TypeArguments[0]);
         }
@@ -174,6 +186,7 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                 ? route
                 : string.Empty;
             var constructor = HttpBindingShape.SinglePublicConstructor(request);
+
             if (constructor is not null && constructor.Parameters.All(parameter =>
                     HttpBindingShape.IsSupportedParameter(parameter,
                         HttpBindingShape.IsRouteParameter(pattern, parameter.Name))))
@@ -192,10 +205,12 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
             var streamType = name is "Accepts" or "Produces"
                 ? model.Compilation.GetTypeByMetadataName("System.IO.Stream")
                 : null;
+
             foreach (var argument in method.TypeArguments)
             {
                 if (name is "Accepts" or "Produces" && IsOrDerivesFrom(argument, streamType))
                     continue;
+
                 Add(argument);
             }
         }
@@ -252,9 +267,11 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
             var keys = CoverageByAssembly.GetValue(assembly, owner =>
             {
                 var coverage = new List<string>();
+
                 foreach (var attribute in owner.GetAttributes())
                 {
                     ct.ThrowIfCancellationRequested();
+
                     if (attribute.AttributeClass is { } type && SymbolNames.Is(type,
                                                                  "Cntryl.Portia.PortiaJsonRootAttribute")
                                                              && attribute.ConstructorArguments.FirstOrDefault().Value is
@@ -262,8 +279,10 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                         coverage.Add(Key(root));
                 }
 
+
                 return coverage.ToArray();
             });
+
             foreach (var key in keys)
                 yield return key;
         }
@@ -275,12 +294,15 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
     {
         if (baseType is null || type is not INamedTypeSymbol current)
             return false;
+
         var candidate = (INamedTypeSymbol?)current;
+
         for (; candidate is not null; candidate = candidate.BaseType)
         {
             if (SymbolEqualityComparer.Default.Equals(candidate, baseType))
                 return true;
         }
+
 
         return false;
     }

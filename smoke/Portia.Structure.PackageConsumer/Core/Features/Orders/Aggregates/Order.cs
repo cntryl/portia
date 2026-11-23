@@ -35,17 +35,30 @@ public sealed class Order : Aggregate
     public Result ChangeLineQuantity(Uuid lineId, int quantity)
     {
         if (lineId == Uuid.Empty)
+        {
             return RequestError.Validation("Line ID is required.");
+        }
 
         var existing = _lines.GetValueOrDefault(lineId);
+
         if (existing?.Quantity == quantity)
+        {
             return Result.Success;
+        }
+
         var candidate = existing ?? new OrderLine(lineId);
+
         if (!candidate.CanChangeQuantity(quantity))
+        {
             return RequestError.Validation("Line quantity must be between 1 and 10.");
+        }
+
         var otherQuantity = TotalQuantity - (existing?.Quantity ?? 0);
+
         if (otherQuantity + quantity > 12)
+        {
             return RequestError.Validation("Order quantity cannot exceed 12.");
+        }
 
         RaiseEvent(new OrderLineQuantityChanged(lineId, quantity));
         return Result.Success;
@@ -54,7 +67,10 @@ public sealed class Order : Aggregate
     void Apply(OrderLineQuantityChanged ev)
     {
         if (!_lines.TryGetValue(ev.LineId, out var line))
+        {
             _lines.Add(ev.LineId, line = new OrderLine(ev.LineId));
+        }
+
         line.ApplyQuantity(ev.Quantity);
     }
 }

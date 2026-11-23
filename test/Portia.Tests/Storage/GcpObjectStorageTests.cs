@@ -76,8 +76,10 @@ public sealed class GcpObjectStorageTests
         var session = await harness.Storage.CreateUploadAsync(new TenantId("tenant-one"), digest, TestContext.Current.CancellationToken);
         var signed = await harness.Storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken);
         var receipt = new ObjectPartReceipt(1, harness.Gcs.PutSigned(signed.UploadUri, content));
+
         if (replay)
             await harness.Storage.CompleteUploadAsync(session, [receipt], TestContext.Current.CancellationToken);
+
         harness.Seed("tenant-one-bucket", digest, content);
         var key = ("tenant-one-bucket", $"content/sha256/{digest.Sha256[..2]}/{digest.Sha256}");
         var destination = harness.Gcs.Objects[key] with { KmsKey = missingKey ? null : Harness.KeyOf("tenant-two") };
@@ -93,6 +95,7 @@ public sealed class GcpObjectStorageTests
         Assert.Same(destination, harness.Gcs.Objects[key]);
         Assert.DoesNotContain(harness.Gcs.Requests.Skip(previousRequests),
             static request => request.Method == "DELETE");
+
         if (!replay)
             Assert.NotEmpty(harness.Gcs.Names("tenant-one-bucket", "staging/"));
     }
@@ -449,6 +452,7 @@ public sealed class GcpObjectStorageTests
         var tenant = new TenantId("tenant-one");
         var session = await harness.Storage.CreateUploadAsync(tenant, digest, TestContext.Current.CancellationToken);
         var receipts = new List<ObjectPartReceipt>();
+
         foreach (var (number, bytes) in new[] { (3, tail), (1, first), (2, second) })
         {
             var uri = (await harness.Storage.SignPartAsync(session, number, TimeSpan.FromMinutes(1), TestContext.Current.CancellationToken)).UploadUri;
@@ -456,6 +460,7 @@ public sealed class GcpObjectStorageTests
         }
 
         // Act
+
         await harness.Storage.CompleteUploadAsync(session, receipts, TestContext.Current.CancellationToken);
 
         // Assert
@@ -660,10 +665,12 @@ public sealed class GcpObjectStorageTests
         public static Harness Create(string purpose = Protector, Harness? sameKeyRingAs = null)
         {
             var gcs = sameKeyRingAs?.Gcs ?? new FakeGcsHandler();
+
             foreach (var tenant in new[] { "tenant-one", "tenant-two" })
             {
                 gcs.BucketKeys[$"{tenant}-bucket"] = KeyOf(tenant);
             }
+
 
             var protection = sameKeyRingAs?.Protection ?? BuildProtection();
             return new Harness

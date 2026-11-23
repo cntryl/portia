@@ -27,6 +27,7 @@ public sealed class FitzKvCheckpointIdentityTests
             new EventStreamAddress(realm, area, resource)).ParamName);
         _ = Assert.Throws<ArgumentException>(() =>
             EventStreamAddress.Parse($"stream://{realm}/{area}/{resource}"));
+
         if (segment != "realm")
             _ = Assert.Throws<ArgumentException>(() => EventStreamPattern.ForTenant(area, resource));
     }

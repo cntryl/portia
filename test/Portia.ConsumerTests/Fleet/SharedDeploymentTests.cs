@@ -38,6 +38,7 @@ public sealed class SharedDeploymentTests
             _ = Shared(workerBuilder.Services, client, effects, id).AddWorkers().AddWorkers();
             using var worker = workerBuilder.Build();
             await worker.StartAsync(TestContext.Current.CancellationToken);
+
             try
             {
                 await effects.WaitForAsync("business", aggregateId: id);
@@ -129,8 +130,10 @@ public sealed class SharedDeploymentTests
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
+
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
+
         _ = builder.Services.AddAccounts();
         _ = builder.Services.AddPortia()
             .AddProjector<TenantFirstProjector>("first-projector", WorkloadScope.PerTenant)
@@ -146,11 +149,16 @@ public sealed class SharedDeploymentTests
         Assert.Contains(nameof(ITenantDirectory), error.Message, StringComparison.Ordinal);
     }
 
-    static PortiaBuilder Shared(IServiceCollection services, FitzClient client, ConsumerHost.Effects effects,
-        Uuid first)
+    static PortiaBuilder Shared(
+        IServiceCollection services,
+        FitzClient client,
+        ConsumerHost.Effects effects,
+        Uuid first
+    )
     {
         foreach (var descriptor in ConsumerHost.CreateServices())
             services.Add(descriptor);
+
         _ = services.RemoveAll<IEventStore>();
         _ = services.RemoveAll<ConsumerHost.Effects>();
         _ = services.AddSingleton(effects);

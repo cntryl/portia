@@ -17,11 +17,13 @@ sealed class QueueRunnerHostedService(
     {
         if (validations is not null)
             await validations.WaitForEndpointValidationsAsync(stoppingToken).ConfigureAwait(false);
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 await _runner.RunAsync(stoppingToken).ConfigureAwait(false);
+
                 if (!stoppingToken.IsCancellationRequested)
                 {
                     PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, logger: logger);
@@ -41,6 +43,7 @@ sealed class QueueRunnerHostedService(
             }
 
             PortiaTelemetry.RecordWorkerRestart(nameof(QueueRunner), "execution");
+
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(1), _clock, stoppingToken).ConfigureAwait(false);

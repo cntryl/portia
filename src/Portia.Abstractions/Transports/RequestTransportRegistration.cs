@@ -68,8 +68,10 @@ public sealed class RequestTransportRegistration(
     {
         ArgumentNullException.ThrowIfNull(transports);
         var result = new HashSet<RequestTransportId>(transports);
+
         if (result.Count == 0 || result.Any(static transport => string.IsNullOrWhiteSpace(transport.Value)))
             throw new ArgumentException("At least one valid transport ID is required.", nameof(transports));
+
         return result;
     }
 }

@@ -15,8 +15,13 @@ public interface IRequestScheduler
     ///     Providers whose ordinary scheduling path adds volatile envelope data must override this method.
     ///     The concrete route is the cancellation identity; another definition at that route replaces it.
     /// </remarks>
-    ValueTask<string> EnsureAsync<TRequest>(TRequest request, RequestScheduleSpec spec,
-        RequestRouteValues routeValues, ClaimsPrincipal actor, CancellationToken ct = default)
+    ValueTask<string> EnsureAsync<TRequest>(
+        TRequest request,
+        RequestScheduleSpec spec,
+        RequestRouteValues routeValues,
+        ClaimsPrincipal actor,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ISchedulable
         => ScheduleAsync(request, spec, routeValues, actor, ct);
 
@@ -41,7 +46,8 @@ public interface IRequestScheduler
         RequestScheduleSpec spec,
         RequestRouteValues routeValues,
         ClaimsPrincipal actor,
-        CancellationToken ct = default)
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ISchedulable
         => ScheduleAsync(request, spec, routeValues, actor, RequestMetadata.FromRequest(request), ct);
 
@@ -66,7 +72,8 @@ public interface IRequestScheduler
         RequestRouteValues routeValues,
         ClaimsPrincipal actor,
         RequestMetadata metadata,
-        CancellationToken ct = default)
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ISchedulable;
 
     /// <summary>

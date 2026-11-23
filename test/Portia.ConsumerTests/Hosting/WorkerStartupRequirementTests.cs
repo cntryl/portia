@@ -34,8 +34,10 @@ public sealed class WorkerStartupRequirementTests
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
+
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
+
         _ = builder.Services.AddPortia().AddProjector<TenantFirstProjector>("first-projector", WorkloadScope.PerTenant)
             .AddWorkers().UseSingleProcessWorkloads();
 
@@ -53,8 +55,10 @@ public sealed class WorkerStartupRequirementTests
     {
         // Arrange
         var builder = Host.CreateApplicationBuilder();
+
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
+
         _ = builder.Services.AddPortia()
             .AddProjector<FirstProjector>("first-projector", WorkloadScope.Global,
                 options => options.PollInterval = TimeSpan.FromDays(1))

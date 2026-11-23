@@ -30,6 +30,7 @@ public static class ProjectorDispatch<T> where T : class, IProjector
     {
         ArgumentNullException.ThrowIfNull(factory);
         var dispatch = new Dispatch(factory, Array.AsReadOnly(subscriptions));
+
         if (Interlocked.CompareExchange(ref Registered, dispatch, null) is not null)
             throw new InvalidOperationException($"Dispatch already registered for {typeof(T)}.");
     }

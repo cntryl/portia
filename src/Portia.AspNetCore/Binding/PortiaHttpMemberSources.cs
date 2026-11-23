@@ -38,16 +38,20 @@ public sealed class PortiaHttpMemberSources
         ArgumentNullException.ThrowIfNull(builder);
         var query = new List<string>();
         var headers = new List<PortiaHeaderMember>();
+
         for (var index = 0; index < _members.Length; index++)
         {
             if (_query[index])
                 query.Add(_members[index].Name);
+
             if (_headers[index] is { } header)
                 headers.Add(new PortiaHeaderMember(_members[index].Name, header));
         }
 
+
         if (query.Count != 0)
             builder.Add(endpoint => endpoint.Metadata.Add(new PortiaQueryMembers(query)));
+
         if (headers.Count != 0)
             builder.Add(endpoint => endpoint.Metadata.Add(new PortiaHeaderMembers(headers)));
     }
@@ -56,21 +60,29 @@ public sealed class PortiaHttpMemberSources
     internal static PortiaHttpMemberSources None(PortiaHttpMember[] members) =>
         new(members, new bool[members.Length], new string?[members.Length]);
 
-    internal static PortiaHttpMemberSources Resolve(Type requestType, PortiaHttpMember[] members,
-        IReadOnlyList<string> queryMembers, IReadOnlyDictionary<string, string> headerMembers,
-        IReadOnlyList<PortiaHeaderBinding> applicationHeaders)
+    internal static PortiaHttpMemberSources Resolve(
+        Type requestType,
+        PortiaHttpMember[] members,
+        IReadOnlyList<string> queryMembers,
+        IReadOnlyDictionary<string, string> headerMembers,
+        IReadOnlyList<PortiaHeaderBinding> applicationHeaders
+    )
     {
         var query = new bool[members.Length];
         var headers = new string?[members.Length];
+
         foreach (var name in queryMembers)
             query[Redirectable(members, name, "FromQuery")] = true;
+
 
         foreach (var (name, header) in headerMembers)
         {
             var index = Redirectable(members, name, "FromHeader");
+
             if (query[index])
                 throw new InvalidOperationException(
                     $"Request member '{name}' cannot bind from both a query parameter and an HTTP header.");
+
             headers[index] = header;
         }
 
@@ -78,20 +90,29 @@ public sealed class PortiaHttpMemberSources
         {
             if (!binding.Contract.IsAssignableFrom(requestType))
                 continue;
+
             var index = Array.FindIndex(members,
                 item => string.Equals(item.Name, binding.Member, StringComparison.OrdinalIgnoreCase));
+
             if (index < 0)
                 throw new InvalidOperationException(
                     $"'{requestType.Name}' implements '{binding.Contract.Name}', but '{binding.Member}' is not a constructor-bound request member.");
+
             var bound = $"Request member '{binding.Member}' of '{requestType.Name}' is bound from header '{binding.Name}' application-wide and";
+
             if (members[index].Source == "route")
                 throw new InvalidOperationException($"{bound} cannot bind from the route.");
+
             if (!members[index].Scalar)
                 throw new InvalidOperationException($"{bound} must be a string, enum, or TryParse scalar.");
+
             if (query[index])
                 throw new InvalidOperationException($"{bound} cannot also be declared FromQuery.");
+
+
             if (headers[index] is { } declared && !string.Equals(declared, binding.Name, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException($"{bound} cannot also bind from header '{declared}'.");
+
             headers[index] = binding.Name;
         }
 
@@ -110,14 +131,18 @@ public sealed class PortiaHttpMemberSources
     {
         var index = Array.FindIndex(members,
             item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase));
+
         if (index < 0)
             throw new InvalidOperationException(
                 $"{declaration} member '{name}' is not a constructor-bound request member.");
+
         if (members[index].Source == "route")
             throw new InvalidOperationException($"{declaration} member '{name}' is already bound from the route.");
+
         if (!members[index].Scalar)
             throw new InvalidOperationException(
                 $"{declaration} member '{name}' must be a string, enum, or TryParse scalar.");
+
         return index;
     }
 }

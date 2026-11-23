@@ -263,8 +263,10 @@ public sealed class GeneratorShapeTests
     [Theory]
     [InlineData("accounts:{Missing}:read", "PORTIA011")]
     [InlineData("accounts:{AccountId}:read", "PORTIA013")]
-    public void ShouldReportInvalidPermissionGivenSelectedHandlerWhenGeneratingRegistrations(string permission,
-        string diagnosticId)
+    public void ShouldReportInvalidPermissionGivenSelectedHandlerWhenGeneratingRegistrations(
+        string permission,
+        string diagnosticId
+    )
     {
         // Arrange
         var source = $$"""

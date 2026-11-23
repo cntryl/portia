@@ -35,8 +35,12 @@ sealed class RunnerExportCapture : IDisposable
 
     public void Dispose() => _provider.Dispose();
 
-    public void AssertCorrelated(int expectedEventId, LogLevel expectedLevel, int expectedDeliveries,
-        int? expectedExecutions = null)
+    public void AssertCorrelated(
+        int expectedEventId,
+        LogLevel expectedLevel,
+        int expectedDeliveries,
+        int? expectedExecutions = null
+    )
     {
         Flush();
         var processes = Activities.Where(activity => activity.OperationName == PortiaTelemetry.ProcessActivityName)
@@ -46,12 +50,14 @@ sealed class RunnerExportCapture : IDisposable
         Assert.Equal(expectedDeliveries, processes.Select(activity => activity.TraceId).Distinct().Count());
         var logs = Logs.Where(log => log.EventId.Id == expectedEventId).ToArray();
         Assert.Equal(expectedDeliveries, logs.Length);
+
         foreach (var log in logs)
         {
             Assert.Equal(expectedLevel, log.LogLevel);
             Assert.Contains(processes, process => process.TraceId == log.TraceId && process.SpanId == log.SpanId);
             Assert.Contains(log.Attributes!, attribute => attribute.Key == "{OriginalFormat}");
             Assert.NotNull(log.FormattedMessage);
+
             if (expectedEventId == 1002)
             {
                 Assert.NotNull(log.Exception);
@@ -75,6 +81,7 @@ sealed class RunnerExportCapture : IDisposable
                     attribute => attribute.Key == "Transport" && attribute.Value is "queue" or "notice" or "schedule");
             }
         }
+
 
         Assert.Equal(expectedDeliveries + (expectedExecutions ?? expectedDeliveries), Activities.Count);
     }

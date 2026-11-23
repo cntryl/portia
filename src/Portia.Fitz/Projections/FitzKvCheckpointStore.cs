@@ -36,8 +36,12 @@ public sealed class FitzKvCheckpointStore(IKvClient client, string route) :
     public FitzKvCheckpointStore(IKvClient client, string route, KvDurability durability) : this(client, route)
         => _durability = FitzKvCheckpoints.RequireDurability(durability);
 
-    async ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
-        ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+    async ValueTask IConditionalProjectionCheckpointStore.SaveAsync(
+        CheckpointIdentity identity,
+        ProjectionCheckpoint expected,
+        ProjectionCheckpoint checkpoint,
+        CancellationToken ct
+    )
         => await SaveCoreAsync(identity, expected, checkpoint, ct).ConfigureAwait(false);
 
     /// <inheritdoc />
@@ -49,18 +53,26 @@ public sealed class FitzKvCheckpointStore(IKvClient client, string route) :
     }
 
     /// <inheritdoc />
-    public async ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-        CancellationToken ct = default)
+    public async ValueTask SaveAsync(
+        CheckpointIdentity identity,
+        ProjectionCheckpoint checkpoint,
+        CancellationToken ct = default
+    )
         => await SaveCoreAsync(identity, null, checkpoint, ct).ConfigureAwait(false);
 
-    async ValueTask SaveCoreAsync(CheckpointIdentity identity, ProjectionCheckpoint? expected,
-        ProjectionCheckpoint checkpoint, CancellationToken ct)
+    async ValueTask SaveCoreAsync(
+        CheckpointIdentity identity,
+        ProjectionCheckpoint? expected,
+        ProjectionCheckpoint checkpoint,
+        CancellationToken ct
+    )
     {
         ArgumentNullException.ThrowIfNull(identity);
         var componentRoute = FitzKvCheckpoints.WorkloadRoute(_route, identity);
         var tx = await FitzKvCheckpoints
             .BeginAsync(_client, componentRoute, KvMode.ReadWrite, "Checkpoint", identity, ct).ConfigureAwait(false);
         var failed = false;
+
         try
         {
             if (expected is { } expectedCheckpoint)
@@ -69,6 +81,7 @@ public sealed class FitzKvCheckpointStore(IKvClient client, string route) :
                 var actual = stored is KvFound { Value: var storedBytes }
                     ? new ProjectionCheckpoint(FitzKvCheckpoints.Decode(storedBytes.Span))
                     : ProjectionCheckpoint.Start;
+
                 if (actual != expectedCheckpoint)
                     throw new ProjectionConcurrencyException(
                         $"Checkpoint for '{identity.ComponentName}' changed from the expected value before save.");

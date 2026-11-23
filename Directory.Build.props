@@ -15,4 +15,13 @@
     <PackageVersion>0.14.10</PackageVersion>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(ManagePackageVersionsCentrally)' == 'true'">
+    <PackageReference Include="Cntryl.Conventions.Analyzers" PrivateAssets="all"/>
+    <PackageReference Include="Cntryl.Conventions.CodeFixes" PrivateAssets="all"/>
+  </ItemGroup>
+  <ItemGroup Condition="'$(ManagePackageVersionsCentrally)' != 'true'">
+    <PackageReference Include="Cntryl.Conventions.Analyzers" Version="1.0.5" PrivateAssets="all"/>
+    <PackageReference Include="Cntryl.Conventions.CodeFixes" Version="1.0.5" PrivateAssets="all"/>
+  </ItemGroup>
 </Project>

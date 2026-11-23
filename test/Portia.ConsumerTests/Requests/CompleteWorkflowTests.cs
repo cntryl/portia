@@ -39,16 +39,20 @@ public sealed class CompleteWorkflowTests
             options.ValidateScopes = true;
             options.ValidateOnBuild = true;
         });
+
         foreach (var descriptor in ConsumerHost.CreateServices())
             builder.Services.Add(descriptor);
+
         _ = builder.Services.AddReporting();
         _ = builder.Services.AddAccounts();
         _ = builder.Services.AddPortia().AddHttp();
+
         if (fitzStore)
         {
             _ = builder.Services.AddSingleton<IEventStore>(provider =>
                 new FitzEventStore(client.Stream, provider.GetRequiredService<IDomainEventSerializer>()));
         }
+
 
         _ = builder.Services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
         var requestSerializer = ConsumerJson.CreateSerializer();
@@ -109,6 +113,7 @@ public sealed class CompleteWorkflowTests
                 Assert.Equal(4UL, account.Version);
                 Assert.Equal(4UL, account.CommittedStreamPosition);
                 var records = new List<DomainEventRecord>();
+
                 await foreach (var record in scope.ServiceProvider.GetRequiredService<IEventStore>()
                                    .ReadAsync(ConsumerStreams.AccountsPattern, ct: TestContext.Current.CancellationToken))
                 {
@@ -117,6 +122,7 @@ public sealed class CompleteWorkflowTests
                         records.Add(record);
                     }
                 }
+
 
                 Assert.Equal(5, records.Count);
                 Assert.All(records, record =>

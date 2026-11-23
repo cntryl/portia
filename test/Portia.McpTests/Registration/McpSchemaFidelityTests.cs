@@ -48,6 +48,7 @@ public sealed class McpSchemaFidelityTests
         var tool = Assert.Single(await client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken), candidate => candidate.Name == name);
         var result = await client.CallToolAsync(name, new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken);
         Assert.False(result.IsError);
+
         if (!structured)
         {
             Assert.Null(tool.ProtocolTool.OutputSchema);
@@ -56,9 +57,11 @@ public sealed class McpSchemaFidelityTests
             return;
         }
 
+
         var schema = JsonSchema.Build(Assert.IsType<JsonElement>(tool.ProtocolTool.OutputSchema),
             new BuildOptions { Dialect = Dialect.Draft202012, SchemaRegistry = new() });
         Assert.True(schema.Evaluate(Assert.IsType<JsonElement>(result.StructuredContent)).IsValid);
+
         if (name == "schema.nullable")
             Assert.Equal(JsonValueKind.Null, result.StructuredContent!.Value.GetProperty("result").ValueKind);
         else
@@ -181,6 +184,7 @@ public sealed class McpSchemaFidelityTests
                 result.Content.OfType<TextContentBlock>().Select(content => content.Text)));
         Assert.Equal(valid ? 1 : 0, probe.Count);
         Assert.Equal(valid, schema.Evaluate(document.RootElement).IsValid);
+
         if (valid)
         {
             Assert.Equal(document.RootElement.TryGetProperty("inherited", out var inherited)
@@ -296,8 +300,11 @@ public sealed class McpSchemaFidelityTests
 
     public sealed class ScalarProbeConverter : JsonConverter<ScalarProbe>
     {
-        public override ScalarProbe Read(ref Utf8JsonReader reader, Type typeToConvert,
-            JsonSerializerOptions options) =>
+        public override ScalarProbe Read(
+            ref Utf8JsonReader reader,
+            Type typeToConvert,
+            JsonSerializerOptions options
+        ) =>
             new(reader.GetString()!);
 
         public override void Write(Utf8JsonWriter writer, ScalarProbe value, JsonSerializerOptions options) =>
@@ -324,8 +331,10 @@ public sealed class McpSchemaFidelityTests
 
     public sealed class ResolverRenamedGreetingHandler : IRequestHandler<ResolverRenamedGreeting, string>
     {
-        public ValueTask<Result<string>> HandleAsync(IRequestContext<ResolverRenamedGreeting> context,
-            CancellationToken ct) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
+        public ValueTask<Result<string>> HandleAsync(
+            IRequestContext<ResolverRenamedGreeting> context,
+            CancellationToken ct
+        ) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
     }
 }
 

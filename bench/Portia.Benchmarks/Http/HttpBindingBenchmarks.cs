@@ -73,11 +73,13 @@ public class HttpBindingBenchmarks : IDisposable
     public int MixedTwentyMembers()
     {
         var total = 0;
+
         for (var index = 0; index < 20; index++)
         {
             total += PortiaHttpBinding.ReadBody<MixedBinding, int>(_mixedBody.RootElement, _mixedOptions, index,
                 _mixedClrNames[index], _mixedJsonNames[index], false, false, 0);
         }
+
 
         return total;
     }

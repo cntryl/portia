@@ -18,8 +18,10 @@ static class IdentityText
         for (var index = 0; index < value.Length; index++)
         {
             var character = value[index];
+
             if (character == '\0' || char.IsLowSurrogate(character))
                 return false;
+
             if (char.IsHighSurrogate(character)
                 && (++index == value.Length || !char.IsLowSurrogate(value[index])))
                 return false;

@@ -47,8 +47,12 @@ public sealed class CompilerContractRegressionTests
     [InlineData("namespace App_A {", "}", "namespace App {", "A_Context")]
     [InlineData("public class App_A {", "}", "public class App {", "A_Context")]
     [InlineData("namespace @App_A {", "}", "namespace @App {", "@A_Context")]
-    public void ShouldCompileGivenDistinctContextIdentities(string firstContainer, string end, string secondContainer,
-        string secondName)
+    public void ShouldCompileGivenDistinctContextIdentities(
+        string firstContainer,
+        string end,
+        string secondContainer,
+        string secondName
+    )
     {
         // Arrange
         var source = ContextUsings + "public sealed record Payload;" +
@@ -72,9 +76,15 @@ public sealed class CompilerContractRegressionTests
     [InlineData("", "public", "Context", "private", "", "", "constructor")]
     [InlineData("", "public", "Context", "protected", "", "", "constructor")]
     [InlineData("", "public", "Context", "public", "missing", "", "constructor")]
-    public void ShouldDiagnoseContextWithoutInvalidGeneratedReferencesGivenInvalidContextDeclaration(string prefix,
-        string visibility, string name,
-        string constructorVisibility, string variant, string suffix, string requirement)
+    public void ShouldDiagnoseContextWithoutInvalidGeneratedReferencesGivenInvalidContextDeclaration(
+        string prefix,
+        string visibility,
+        string name,
+        string constructorVisibility,
+        string variant,
+        string suffix,
+        string requirement
+    )
     {
         // A private container is nested so the application declaration itself is legal.
         // Arrange
@@ -383,11 +393,14 @@ public sealed class CompilerContractRegressionTests
     [InlineData(
         "public Context(JsonSerializerOptions options, bool other = false) : base(options) { } public Context(JsonSerializerOptions options, int other = 0) : base(options) { }",
         "ambiguous")]
-    public void ShouldDiagnoseContextBeforeFactoryEmissionGivenUnusableOptionsConstructor(string member,
-        string expected)
+    public void ShouldDiagnoseContextBeforeFactoryEmissionGivenUnusableOptionsConstructor(
+        string member,
+        string expected
+    )
     {
         // Arrange
         var context = ManualContext("Context");
+
         if (expected == "ambiguous")
             context = context.Replace("public Context(JsonSerializerOptions options) : base(options) { }", member,
                 StringComparison.Ordinal);
@@ -395,6 +408,7 @@ public sealed class CompilerContractRegressionTests
             context = context.Replace("protected override", member + " protected override", StringComparison.Ordinal);
 
         // Act
+
         var diagnostics = GeneratorCompilation.OutputDiagnostics(
             ContextUsings + "public sealed record Payload;" + context,
             new JsonRootMarkerGenerator());
@@ -435,8 +449,12 @@ public sealed class CompilerContractRegressionTests
                                  using Cntryl.Portia;
                                  """;
 
-    static string ManualContext(string name, string visibility = "internal", string constructorVisibility = "public",
-        bool missingConstructor = false)
+    static string ManualContext(
+        string name,
+        string visibility = "internal",
+        string constructorVisibility = "public",
+        bool missingConstructor = false
+    )
     {
         var simple = name.Split('<')[0];
         var constructor = missingConstructor

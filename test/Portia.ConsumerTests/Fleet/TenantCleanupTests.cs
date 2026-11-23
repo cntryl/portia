@@ -22,10 +22,12 @@ public sealed class TenantCleanupTests
         {
             using var registration = ct.Register(() => throw new IOException("Cancellation callback failed"));
             started[tenant] = ct;
+
             if (started.Count == 3)
             {
                 _ = allStarted.TrySetResult();
             }
+
 
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
         }, (tenant, stopToken) =>
@@ -65,6 +67,7 @@ public sealed class TenantCleanupTests
             [EnumeratorCancellation] CancellationToken ct = default)
         {
             await Task.CompletedTask;
+
             foreach (var name in new[] { "a", "b", "c" })
                 yield return new TenantId(name);
         }

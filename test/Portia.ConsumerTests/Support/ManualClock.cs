@@ -50,6 +50,7 @@ sealed class ManualClock : TimeProvider
         {
             _now += duration;
             ready = [.. _timers.Where(timer => timer.Due <= _now)];
+
             foreach (var timer in ready)
                 timer.Due = timer.Period > TimeSpan.Zero ? _now + timer.Period : DateTimeOffset.MaxValue;
         }
@@ -77,10 +78,12 @@ sealed class ManualClock : TimeProvider
 
                 Due = dueTime < TimeSpan.Zero ? DateTimeOffset.MaxValue : clock._now + dueTime;
                 Period = period;
+
                 if (dueTime >= TimeSpan.Zero)
                 {
                     _ = clock._scheduled.Writer.TryWrite(dueTime);
                 }
+
 
                 return true;
             }

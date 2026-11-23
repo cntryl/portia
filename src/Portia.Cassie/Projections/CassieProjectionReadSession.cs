@@ -37,6 +37,7 @@ public sealed class CassieProjectionReadSession : IAsyncDisposable
     {
         if (Interlocked.Exchange(ref _lease, null) is not { } lease)
             return;
+
         try
         {
             await _connection.DisposeAsync().ConfigureAwait(false);

@@ -19,6 +19,7 @@ public sealed class FixedTenantDirectory : ITenantDirectory
     {
         ArgumentNullException.ThrowIfNull(tenants);
         _tenants = [.. tenants];
+
         if (_tenants.Distinct().Count() != _tenants.Length)
             throw new ArgumentException("Each tenant can appear only once.", nameof(tenants));
     }
@@ -28,6 +29,7 @@ public sealed class FixedTenantDirectory : ITenantDirectory
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         await Task.CompletedTask.ConfigureAwait(false);
+
         foreach (var tenant in _tenants)
         {
             ct.ThrowIfCancellationRequested();

@@ -130,20 +130,30 @@ public sealed class ScenarioDrainTests
         public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
             => inner.LoadAsync(identity, ct);
 
-        public async ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-            CancellationToken ct = default)
+        public async ValueTask SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default
+        )
         {
             await inner.SaveAsync(identity, checkpoint, ct);
+
             if (checkpoint.Cursor.ToString() == "4096")
                 cancellation.Cancel();
         }
 
-        async ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
-            ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+        async ValueTask IConditionalProjectionCheckpointStore.SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint expected,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct
+        )
         {
             if (inner is not IConditionalProjectionCheckpointStore conditional)
                 throw new InvalidOperationException("The wrapped checkpoint store must support conditional saves.");
+
             await conditional.SaveAsync(identity, expected, checkpoint, ct);
+
             if (checkpoint.Cursor.ToString() == "4096")
                 cancellation.Cancel();
         }
@@ -196,16 +206,22 @@ public sealed class ScenarioDrainTests
         CancellationTokenSource? cancellation = null)
         : BatchProjector(store, EventStreamPattern.ForPattern("test", "users"))
     {
-        protected override ValueTask<Result> ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records,
-            IProjectorContext context, CancellationToken ct)
+        protected override ValueTask<Result> ProjectBatchAsync(
+            IReadOnlyList<DomainEventRecord> records,
+            IProjectorContext context,
+            CancellationToken ct
+        )
         {
             foreach (var record in records)
             {
                 ct.ThrowIfCancellationRequested();
+
                 if (seen.Count == 4096 && failure is not null)
                     throw failure;
+
                 if (record.Event is UserCreated ev)
                     seen.Add(ev.UserId);
+
                 if (seen.Count == 300)
                     cancellation?.Cancel();
             }
@@ -221,16 +237,21 @@ public sealed class ScenarioDrainTests
         CancellationTokenSource? cancellation = null)
         : BatchReactor(store, EventStreamPattern.ForPattern("test", "users"))
     {
-        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts,
-            CancellationToken ct)
+        protected override ValueTask<Result> ReactBatchAsync(
+            IReadOnlyList<IReactorContext> contexts,
+            CancellationToken ct
+        )
         {
             foreach (var context in contexts)
             {
                 ct.ThrowIfCancellationRequested();
+
                 if (seen.Count == 4096 && failure is not null)
                     throw failure;
+
                 if (context.Source.Event is UserCreated ev)
                     seen.Add(ev.UserId);
+
                 if (seen.Count == 300)
                     cancellation?.Cancel();
             }
@@ -241,12 +262,16 @@ public sealed class ScenarioDrainTests
 
     sealed class CancelAfterPassStore(IProjectionStore inner, CancellationTokenSource cancellation) : IProjectionStore
     {
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-            CancellationToken ct = default)
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+            CheckpointIdentity identity,
+            CancellationToken ct = default
+        )
             => inner.LoadCheckpointAsync(identity, ct);
 
-        public async ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context,
-            CancellationToken ct = default)
+        public async ValueTask<IProjectionBatch> BeginAsync(
+            ProjectionBatchContext context,
+            CancellationToken ct = default
+        )
             => new Batch(await inner.BeginAsync(context, ct), cancellation);
 
         sealed class Batch(IProjectionBatch innerBatch, CancellationTokenSource cancellation) : IProjectionBatch
@@ -254,6 +279,7 @@ public sealed class ScenarioDrainTests
             public async ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
             {
                 await innerBatch.CommitAsync(checkpoint, ct);
+
                 if (checkpoint.Cursor.ToString() == "4096")
                     cancellation.Cancel();
             }

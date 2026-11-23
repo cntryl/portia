@@ -21,6 +21,7 @@ public sealed partial class ComponentHostingTests
 
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+
         try
         {
             await worker.StartAsync(TestContext.Current.CancellationToken);
@@ -31,6 +32,7 @@ public sealed partial class ComponentHostingTests
             await worker.StopAsync(TestContext.Current.CancellationToken);
             worker.Dispose();
         }
+
 
         var effect = Assert.Single(provider.GetRequiredService<ConsumerHost.Effects>().Items);
         Assert.Equal("upgraded-reactor", effect.Component);
@@ -61,6 +63,7 @@ public sealed partial class ComponentHostingTests
 
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+
         try
         {
             await worker.StartAsync(TestContext.Current.CancellationToken);
@@ -69,6 +72,7 @@ public sealed partial class ComponentHostingTests
             await ConsumerHost.SeedAsync(provider, id, 1);
             changes.Signal();
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+
             while (effects.Items.Count < 2)
                 await Task.Delay(10, timeout.Token);
         }
@@ -77,6 +81,7 @@ public sealed partial class ComponentHostingTests
             await worker.StopAsync(TestContext.Current.CancellationToken);
             (worker as IDisposable)?.Dispose();
         }
+
 
         Assert.Equal(2, effects.Items.Count);
         Assert.Equal(2, effects.Items.Select(item => item.ScopeId).Distinct().Count());
@@ -102,6 +107,7 @@ public sealed partial class ComponentHostingTests
 
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+
         try
         {
             await worker.StartAsync(TestContext.Current.CancellationToken);
@@ -116,6 +122,7 @@ public sealed partial class ComponentHostingTests
             Assert.Equal(1, changes.DisposalCount);
             clock.Advance(TimeSpan.FromSeconds(1));
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+
             while (changes.SubscriptionCount < 2)
                 await Task.Delay(10, timeout.Token);
         }
@@ -124,6 +131,7 @@ public sealed partial class ComponentHostingTests
             await worker.StopAsync(TestContext.Current.CancellationToken);
             (worker as IDisposable)?.Dispose();
         }
+
 
         Assert.Equal(2, changes.SubscriptionCount);
         Assert.Equal(2, changes.DisposalCount);
@@ -148,15 +156,18 @@ public sealed partial class ComponentHostingTests
 
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+
         try
         {
             await worker.StartAsync(TestContext.Current.CancellationToken);
             await provider.GetRequiredService<ConsumerHost.Effects>().WaitForAsync("first-projector");
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+
             while (changes.SubscriptionCount < 3)
                 await Task.Delay(10, timeout.Token);
             // Retrying every 20ms poll would make about fifty attempts in this second; backing off
             // like a failed pass makes a handful.
+
             await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
 
             Assert.InRange(changes.SubscriptionCount, 3, 12);
@@ -228,9 +239,11 @@ public sealed partial class ComponentHostingTests
 
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+
         try
         {
             await worker.StartAsync(TestContext.Current.CancellationToken);
+
             for (var pass = 1; pass <= 3; pass++)
             {
                 Assert.Equal(TimeSpan.FromSeconds(pass == 2 ? 2 : 1), await clock.WaitForDelayAsync(TestContext.Current.CancellationToken));
@@ -238,6 +251,7 @@ public sealed partial class ComponentHostingTests
                 Assert.Equal(rebuildId, Assert.Single(storage.Checkpoints).Key.RebuildId);
                 _ = Assert.Single(effects.Items);
                 Assert.All(effects.Scopes.Values, Assert.True);
+
                 if (pass < 3)
                 {
                     clock.Advance(TimeSpan.FromSeconds(pass));
@@ -310,6 +324,7 @@ public sealed partial class ComponentHostingTests
 
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+
         try
         {
             await worker.StartAsync(TestContext.Current.CancellationToken);
@@ -320,6 +335,7 @@ public sealed partial class ComponentHostingTests
             await worker.StopAsync(TestContext.Current.CancellationToken);
             (worker as IDisposable)?.Dispose();
         }
+
 
         Assert.True(reader.Disposed);
         var scopes = provider.GetRequiredService<ConsumerHost.Effects>().Scopes;
@@ -350,6 +366,7 @@ public sealed partial class ComponentHostingTests
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         var id = Uuid.CreateVersion4();
         await ConsumerHost.SeedAsync(provider, id);
+
         try
         {
             await worker.StartAsync(TestContext.Current.CancellationToken);
@@ -371,6 +388,7 @@ public sealed partial class ComponentHostingTests
             await worker.StopAsync(TestContext.Current.CancellationToken);
             (worker as IDisposable)?.Dispose();
         }
+
 
         Assert.All(effects.Scopes.Values, Assert.True);
     }
@@ -397,10 +415,12 @@ public sealed partial class ComponentHostingTests
         // Assert
         _ = Assert.Single(workers);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
+
         try
         {
             foreach (var worker in workers)
                 await worker.StartAsync(TestContext.Current.CancellationToken);
+
             await effects.WaitForAsync("first-reactor");
             await effects.WaitForAsync("second-reactor");
         }
@@ -412,6 +432,7 @@ public sealed partial class ComponentHostingTests
                 (worker as IDisposable)?.Dispose();
             }
         }
+
 
         if (scoped)
         {
@@ -441,10 +462,12 @@ public sealed partial class ComponentHostingTests
         // Assert
         _ = Assert.Single(workers);
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
+
         try
         {
             foreach (var worker in workers)
                 await worker.StartAsync(TestContext.Current.CancellationToken);
+
             await effects.WaitForAsync("first-projector");
             await effects.WaitForAsync("second-projector");
         }
@@ -457,6 +480,7 @@ public sealed partial class ComponentHostingTests
             }
         }
 
+
         if (scoped)
         {
             Assert.All(effects.Scopes.Values, Assert.True);
@@ -468,14 +492,21 @@ public sealed partial class ComponentHostingTests
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool Disposed { get; private set; }
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
-            CancellationToken ct = default)
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset = 0,
+            CancellationToken ct = default
+        )
             => throw new NotSupportedException();
 
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            [EnumeratorCancellation] CancellationToken ct = default)
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            [EnumeratorCancellation] CancellationToken ct = default
+        )
         {
             Entered.SetResult();
+
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
@@ -484,6 +515,7 @@ public sealed partial class ComponentHostingTests
             {
                 Disposed = true;
             }
+
 
             yield break;
         }
@@ -506,13 +538,17 @@ public sealed partial class ComponentHostingTests
         public int SubscriptionCount => Volatile.Read(ref _subscriptionCount);
         public bool FailSubscriptions { get; init; }
 
-        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
-            CancellationToken ct = default)
+        public ValueTask<IDomainEventSubscription> SubscribeAsync(
+            EventStreamPattern pattern,
+            CancellationToken ct = default
+        )
         {
             _ = Interlocked.Increment(ref _subscriptionCount);
+
             if (FailSubscriptions)
                 return ValueTask.FromException<IDomainEventSubscription>(
                     new InvalidOperationException("Notification subscription failed."));
+
 
             _ = Subscribed.TrySetResult();
             return ValueTask.FromResult<IDomainEventSubscription>(new Subscription(this, _signals.Reader));

@@ -100,6 +100,7 @@ public sealed class QueueBrokerTests
         finally
         {
             cancellation.Cancel();
+
             try
             {
                 await run;

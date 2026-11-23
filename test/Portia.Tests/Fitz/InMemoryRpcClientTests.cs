@@ -28,9 +28,11 @@ public sealed class InMemoryRpcClientTests
 
         // Assert
         Assert.False(call.Cancellation.IsCompleted);
+
         await foreach (var _ in call)
         {
         }
+
 
         Assert.NotNull(receivedBudget);
         Assert.InRange(receivedBudget.Value, TimeSpan.Zero, TimeSpan.FromMinutes(1) - TimeSpan.FromTicks(1));
@@ -167,10 +169,12 @@ public sealed class InMemoryRpcClientTests
             var pattern = $"rpc://tenant/area/resource-{index}/run";
             var registration = await rpc.RegisterWorkerAsync(pattern, (_, _, _) => ValueTask.CompletedTask,
                 ct: ct);
+
             await foreach (var _ in rpc.CallStreamingAsync($"rpc://tenant/area/resource-{index}/run",
                                ReadOnlyMemory<byte>.Empty, ct))
             {
             }
+
 
             await registration.DisposeAsync();
         }));

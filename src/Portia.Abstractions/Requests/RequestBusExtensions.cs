@@ -20,8 +20,12 @@ public static class RequestBusExtensions
     /// <param name="reaction">The triggering reaction execution.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The command outcome, returned by the reactor handler so Portia can apply its retry policy.</returns>
-    public static ValueTask<Result> SendReactionAsync(this IRequestBus bus, IUnaryRequest command,
-        IReactorContext reaction, CancellationToken ct = default)
+    public static ValueTask<Result> SendReactionAsync(
+        this IRequestBus bus,
+        IUnaryRequest command,
+        IReactorContext reaction,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(bus);
         ArgumentNullException.ThrowIfNull(command);
@@ -39,18 +43,28 @@ public static class RequestBusExtensions
     /// </param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of handling the request.</returns>
-    public static ValueTask<Result> SendAsync(this IRequestBus bus, IUnaryRequest request, ClaimsPrincipal actor,
-        CancellationToken ct = default)
+    public static ValueTask<Result> SendAsync(
+        this IRequestBus bus,
+        IUnaryRequest request,
+        ClaimsPrincipal actor,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(bus);
+
         if (RequestMetadata.IdentityError(request) is { } error)
             return ValueTask.FromResult(Result.Failure(error));
+
         return DispatchUnaryAsync(bus, request,
             bus.CreateContext(actor, request is IIdentifiedRequest ? RequestMetadata.FromRequest(request) : null), ct);
     }
 
-    static ValueTask<Result> DispatchUnaryAsync(IRequestBus bus, IUnaryRequest request,
-        RequestDispatchContext context, CancellationToken ct) =>
+    static ValueTask<Result> DispatchUnaryAsync(
+        IRequestBus bus,
+        IUnaryRequest request,
+        RequestDispatchContext context,
+        CancellationToken ct
+    ) =>
         request is IRequest noValue ? bus.DispatchAsync(noValue, context, ct) :
         request.DispatchWithoutValueAsync(bus, context, ct);
 
@@ -61,12 +75,18 @@ public static class RequestBusExtensions
     /// <param name="actor">The actor making the request.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of handling the request.</returns>
-    public static ValueTask<Result<TOut>> SendAsync<TOut>(this IRequestBus bus, IRequest<TOut> request,
-        ClaimsPrincipal actor, CancellationToken ct = default)
+    public static ValueTask<Result<TOut>> SendAsync<TOut>(
+        this IRequestBus bus,
+        IRequest<TOut> request,
+        ClaimsPrincipal actor,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(bus);
+
         if (RequestMetadata.IdentityError(request) is { } error)
             return ValueTask.FromResult(Result<TOut>.Failure(error));
+
         return bus.DispatchAsync(request,
             bus.CreateContext(actor, request is IIdentifiedRequest ? RequestMetadata.FromRequest(request) : null), ct);
     }
@@ -78,8 +98,12 @@ public static class RequestBusExtensions
     /// <param name="actor">The actor making the request.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The items produced, streamed as they become available.</returns>
-    public static IAsyncEnumerable<TOut> StreamAsync<TOut>(this IRequestBus bus, IStreamRequest<TOut> request,
-        ClaimsPrincipal actor, CancellationToken ct = default)
+    public static IAsyncEnumerable<TOut> StreamAsync<TOut>(
+        this IRequestBus bus,
+        IStreamRequest<TOut> request,
+        ClaimsPrincipal actor,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(bus);
         return bus.DispatchStreamAsync(request,
@@ -92,13 +116,19 @@ public static class RequestBusExtensions
     /// <param name="parent">The execution causing this request.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of handling the request.</returns>
-    public static ValueTask<Result> SendAsync(this IRequestBus bus, IUnaryRequest request, IExecutionContext parent,
-        CancellationToken ct = default)
+    public static ValueTask<Result> SendAsync(
+        this IRequestBus bus,
+        IUnaryRequest request,
+        IExecutionContext parent,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(bus);
         ArgumentNullException.ThrowIfNull(parent);
+
         if (RequestMetadata.IdentityError(request) is { } error)
             return ValueTask.FromResult(Result.Failure(error));
+
         return DispatchUnaryAsync(bus, request,
             bus.CreateContext(parent.Actor, RequestMetadata.FromRequest(request, parent)), ct);
     }
@@ -110,13 +140,19 @@ public static class RequestBusExtensions
     /// <param name="parent">The execution causing this request.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of handling the request.</returns>
-    public static ValueTask<Result<TOut>> SendAsync<TOut>(this IRequestBus bus, IRequest<TOut> request,
-        IExecutionContext parent, CancellationToken ct = default)
+    public static ValueTask<Result<TOut>> SendAsync<TOut>(
+        this IRequestBus bus,
+        IRequest<TOut> request,
+        IExecutionContext parent,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(bus);
         ArgumentNullException.ThrowIfNull(parent);
+
         if (RequestMetadata.IdentityError(request) is { } error)
             return ValueTask.FromResult(Result<TOut>.Failure(error));
+
         return bus.DispatchAsync(request, bus.CreateContext(parent.Actor, RequestMetadata.FromRequest(request, parent)),
             ct);
     }
@@ -128,8 +164,12 @@ public static class RequestBusExtensions
     /// <param name="parent">The execution causing this request.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The items produced, streamed as they become available.</returns>
-    public static IAsyncEnumerable<TOut> StreamAsync<TOut>(this IRequestBus bus, IStreamRequest<TOut> request,
-        IExecutionContext parent, CancellationToken ct = default)
+    public static IAsyncEnumerable<TOut> StreamAsync<TOut>(
+        this IRequestBus bus,
+        IStreamRequest<TOut> request,
+        IExecutionContext parent,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(bus);
         ArgumentNullException.ThrowIfNull(parent);

@@ -19,8 +19,11 @@ public sealed class AggregateReplayFailureTests
     [InlineData(0, true, true)]
     [InlineData(1, true, true)]
     [InlineData(2, true, true)]
-    public async Task ShouldDiscardAggregateGivenReplayApplicationFailure(int failureIndex, bool readOnly,
-        bool useOverride)
+    public async Task ShouldDiscardAggregateGivenReplayApplicationFailure(
+        int failureIndex,
+        bool readOnly,
+        bool useOverride
+    )
     {
         // Arrange
         var id = Uuid.CreateVersion4();

@@ -40,16 +40,23 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
     }
 
     /// <summary>Declares the custom-bound request body.</summary>
-    public TConfiguration Accepts<TBody>(string contentType, bool isOptional = false,
-        params string[] additionalContentTypes)
+    public TConfiguration Accepts<TBody>(
+        string contentType,
+        bool isOptional = false,
+        params string[] additionalContentTypes
+    )
     {
         _state.Accepts<TBody>(contentType, isOptional, additionalContentTypes);
         return (TConfiguration)this;
     }
 
     /// <summary>Declares a custom-bound non-body request value.</summary>
-    public TConfiguration Parameter<T>(string name, PortiaHttpParameterLocation location, bool required = true,
-        string? description = null)
+    public TConfiguration Parameter<T>(
+        string name,
+        PortiaHttpParameterLocation location,
+        bool required = true,
+        string? description = null
+    )
     {
         _state.Parameter<T>(name, location, required, description);
         return (TConfiguration)this;
@@ -135,16 +142,25 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
     }
 
     /// <summary>Adds a typed input example; generated binding projects route and query values out of the body.</summary>
-    public TConfiguration RequestExample<TBody>(string name, TBody value, string? summary = null,
-        string contentType = "application/json") where TBody : notnull
+    public TConfiguration RequestExample<TBody>(
+        string name,
+        TBody value,
+        string? summary = null,
+        string contentType = "application/json"
+    ) where TBody : notnull
     {
         _state.Example(name, value, summary, contentType, null);
         return (TConfiguration)this;
     }
 
     /// <summary>Adds a typed example to an existing response status and content type.</summary>
-    public TConfiguration ResponseExample<TBody>(int statusCode, string name, TBody value, string? summary = null,
-        string contentType = "application/json") where TBody : notnull
+    public TConfiguration ResponseExample<TBody>(
+        int statusCode,
+        string name,
+        TBody value,
+        string? summary = null,
+        string contentType = "application/json"
+    ) where TBody : notnull
     {
         _state.Example(name, value, summary, contentType, statusCode);
         return (TConfiguration)this;
@@ -178,9 +194,13 @@ public abstract class PortiaEndpointConfigurationBase<TRequest, TConfiguration>
 
     /// <summary>Applies HTTP metadata with generated accessors for create URI placeholders.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public void ApplyMetadata(IEndpointRouteBuilder app, IEndpointConventionBuilder builder,
+    public void ApplyMetadata(
+        IEndpointRouteBuilder app,
+        IEndpointConventionBuilder builder,
         IReadOnlyDictionary<string, Func<TRequest, object?>> requestMembers,
-        IReadOnlyDictionary<string, Func<object?, object?>>? payloadMembers, bool createPayloadIsNullable) =>
+        IReadOnlyDictionary<string, Func<object?, object?>>? payloadMembers,
+        bool createPayloadIsNullable
+    ) =>
         _state.ApplyMetadata(app, builder, requestMembers, payloadMembers, createPayloadIsNullable);
 
     /// <summary>Rejects mutation after endpoint mapping.</summary>

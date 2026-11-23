@@ -60,7 +60,9 @@ sealed record ContractCanceledValidationStream(CancellationTokenSource Cancellat
 
 sealed class ContractCanceledValidationHandler : IStreamRequestHandler<ContractCanceledValidationStream, int>
 {
-    public IAsyncEnumerable<int> HandleAsync(IRequestContext<ContractCanceledValidationStream> context,
-        CancellationToken ct) =>
+    public IAsyncEnumerable<int> HandleAsync(
+        IRequestContext<ContractCanceledValidationStream> context,
+        CancellationToken ct
+    ) =>
         throw new InvalidOperationException("A canceled request must not invoke its handler.");
 }

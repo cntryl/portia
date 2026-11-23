@@ -61,8 +61,11 @@ public sealed class ManualReactorRebuildTests
     {
         internal int Reads { get; private set; }
 
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
-            [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             Reads++;
             ct.ThrowIfCancellationRequested();
@@ -70,8 +73,11 @@ public sealed class ManualReactorRebuildTests
             yield break;
         }
 
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            [EnumeratorCancellation] CancellationToken ct = default)
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            [EnumeratorCancellation] CancellationToken ct = default
+        )
         {
             Reads++;
             ct.ThrowIfCancellationRequested();
@@ -91,19 +97,28 @@ public sealed class ManualReactorRebuildTests
         public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
             => ValueTask.FromResult(ProjectionCheckpoint.Start);
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-            CancellationToken ct = default)
+        public ValueTask SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default
+        )
         {
             Writes++;
             return ValueTask.CompletedTask;
         }
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint expected,
-            ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+        public ValueTask SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint expected,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default
+        )
         {
             ct.ThrowIfCancellationRequested();
+
             if (expected != ProjectionCheckpoint.Start)
                 throw new ProjectionConcurrencyException("stale checkpoint");
+
             Writes++;
             return ValueTask.CompletedTask;
         }
@@ -112,8 +127,11 @@ public sealed class ManualReactorRebuildTests
     sealed class RecordingReactor(IProjectionCheckpointStore checkpoints, List<Uuid> effects)
         : Reactor(checkpoints, EventStreamPattern.ForPattern("test", "reactors"))
     {
-        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
-            CancellationToken ct)
+        protected override ValueTask<Result> ReactToEventAsync(
+            DomainEventRecord record,
+            IExecutionContext context,
+            CancellationToken ct
+        )
         {
             effects.Add(record.Event.Metadata.EventId);
             return ValueTask.FromResult(Result.Success);
@@ -123,8 +141,10 @@ public sealed class ManualReactorRebuildTests
     sealed class RecordingBatchReactor(IProjectionCheckpointStore checkpoints, List<Uuid> effects)
         : BatchReactor(checkpoints, EventStreamPattern.ForPattern("test", "reactors"))
     {
-        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts,
-            CancellationToken ct)
+        protected override ValueTask<Result> ReactBatchAsync(
+            IReadOnlyList<IReactorContext> contexts,
+            CancellationToken ct
+        )
         {
             effects.AddRange(contexts.Select(context => context.Source.Event.Metadata.EventId));
             return ValueTask.FromResult(Result.Success);

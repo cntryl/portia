@@ -85,8 +85,10 @@ public sealed class McpRegistrationTests
     public sealed class IdentifiedInvocationHandler(IdentifiedProbe probe)
         : IRequestHandler<IdentifiedInvocation, string>
     {
-        public ValueTask<Result<string>> HandleAsync(IRequestContext<IdentifiedInvocation> context,
-            CancellationToken ct)
+        public ValueTask<Result<string>> HandleAsync(
+            IRequestContext<IdentifiedInvocation> context,
+            CancellationToken ct
+        )
         {
             probe.RequestIds.Add(context.RequestId);
             probe.Executions.Add(context.ExecutionId);
@@ -1017,10 +1019,12 @@ public sealed class McpRegistrationTests
         await app.StartAsync(TestContext.Current.CancellationToken);
         await using var client = await HttpClientAsync(app);
         var arguments = new Dictionary<string, object?>();
+
         if (explicitNull)
             arguments["name"] = null;
 
         // Act
+
         var result = await client.CallToolAsync("greetings.read", arguments, cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
@@ -1166,6 +1170,7 @@ public sealed class McpRegistrationTests
         string? toolsResponse;
         string? callResponse;
         string remainder;
+
         try
         {
             // Act
@@ -1197,6 +1202,7 @@ public sealed class McpRegistrationTests
         }
 
         // Assert
+
         Assert.False(string.IsNullOrWhiteSpace(response), "The stdio host returned no initialize response.");
         using (JsonDocument.Parse(response))
         {
@@ -1403,8 +1409,10 @@ public sealed class McpRegistrationTests
 
     public sealed class InheritedDocumentedGreetingHandler : IRequestHandler<InheritedDocumentedGreeting, string>
     {
-        public ValueTask<Result<string>> HandleAsync(IRequestContext<InheritedDocumentedGreeting> context,
-            CancellationToken ct) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
+        public ValueTask<Result<string>> HandleAsync(
+            IRequestContext<InheritedDocumentedGreeting> context,
+            CancellationToken ct
+        ) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
     }
 
     public sealed class ReadGreetingHandler : IRequestHandler<ReadGreeting, string>
@@ -1439,8 +1447,10 @@ public sealed class McpRegistrationTests
     public sealed class InspectNestedInputHandler(InvocationProbe probe)
         : IRequestHandler<InspectNestedInput, string>
     {
-        public ValueTask<Result<string>> HandleAsync(IRequestContext<InspectNestedInput> context,
-            CancellationToken ct)
+        public ValueTask<Result<string>> HandleAsync(
+            IRequestContext<InspectNestedInput> context,
+            CancellationToken ct
+        )
         {
             probe.Invoked();
             return ValueTask.FromResult(Result<string>.Success(
@@ -1502,13 +1512,19 @@ public sealed class McpRegistrationTests
         public async ValueTask<bool> TryCommitAsync(int expectedVersion, CancellationToken ct)
         {
             Interlocked.Increment(ref _attempts);
+
             if (Volatile.Read(ref _version) != expectedVersion)
                 return false;
+
+
             if (Interlocked.Increment(ref _validated) == 2)
                 _bothValidated.TrySetResult();
+
             await _bothValidated.Task.WaitAsync(ct);
+
             if (Interlocked.CompareExchange(ref _version, expectedVersion + 1, expectedVersion) != expectedVersion)
                 return false;
+
             Interlocked.Increment(ref _commits);
             return true;
         }
@@ -1541,10 +1557,13 @@ public sealed class McpRegistrationTests
 
     public sealed class WaitForCancellationHandler(CancellationProbe probe) : IRequestHandler<WaitForCancellation>
     {
-        public async ValueTask<Result> HandleAsync(IRequestContext<WaitForCancellation> context,
-            CancellationToken ct)
+        public async ValueTask<Result> HandleAsync(
+            IRequestContext<WaitForCancellation> context,
+            CancellationToken ct
+        )
         {
             probe.Started.TrySetResult();
+
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
@@ -1566,14 +1585,18 @@ public sealed class McpRegistrationTests
 
     public sealed class ExternalGreetingHandler : IRequestHandler<ExternalGreeting, string>
     {
-        public ValueTask<Result<string>> HandleAsync(IRequestContext<ExternalGreeting> context,
-            CancellationToken ct) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
+        public ValueTask<Result<string>> HandleAsync(
+            IRequestContext<ExternalGreeting> context,
+            CancellationToken ct
+        ) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
     }
 
     public sealed class UndocumentedGreetingHandler : IRequestHandler<UndocumentedGreeting, string>
     {
-        public ValueTask<Result<string>> HandleAsync(IRequestContext<UndocumentedGreeting> context,
-            CancellationToken ct) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
+        public ValueTask<Result<string>> HandleAsync(
+            IRequestContext<UndocumentedGreeting> context,
+            CancellationToken ct
+        ) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
     }
 
     /// <summary>Returns <see cref="ReadGreeting" /> when the <see langword="null" /> value is missing; owners use &quot;Tom &amp; Jerry&quot;.</summary>
@@ -1582,8 +1605,10 @@ public sealed class McpRegistrationTests
 
     public sealed class MarkupGreetingHandler : IRequestHandler<MarkupGreeting, string>
     {
-        public ValueTask<Result<string>> HandleAsync(IRequestContext<MarkupGreeting> context,
-            CancellationToken ct) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
+        public ValueTask<Result<string>> HandleAsync(
+            IRequestContext<MarkupGreeting> context,
+            CancellationToken ct
+        ) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
     }
 
     /// <summary>Reads a greeting inherited by the concrete MCP request.</summary>
@@ -1595,8 +1620,10 @@ public sealed class McpRegistrationTests
 
     public sealed class InheritedGreetingHandler : IRequestHandler<InheritedGreeting, string>
     {
-        public ValueTask<Result<string>> HandleAsync(IRequestContext<InheritedGreeting> context,
-            CancellationToken ct) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
+        public ValueTask<Result<string>> HandleAsync(
+            IRequestContext<InheritedGreeting> context,
+            CancellationToken ct
+        ) => ValueTask.FromResult(Result<string>.Success(context.Request.Name));
     }
 
     public sealed class NamedActorProvider(string name) : IMcpActorProvider
@@ -1684,8 +1711,13 @@ public sealed class McpRegistrationTests
 
             public bool IsEnabled(LogLevel logLevel) => true;
 
-            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-                Func<TState, Exception?, string> formatter) =>
+            public void Log<TState>(
+                LogLevel logLevel,
+                EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter
+            ) =>
                 entries.Enqueue(new LogEntry(logLevel, exception, formatter(state, exception)));
         }
     }

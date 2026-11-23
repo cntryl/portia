@@ -15,26 +15,34 @@ static class JsonDescriptionEmission
         var description = attributes.FirstOrDefault(attribute =>
                 attribute.AttributeClass?.ToDisplayString() == "System.ComponentModel.DescriptionAttribute")
             ?.ConstructorArguments.FirstOrDefault().Value as string;
+
         if (!string.IsNullOrWhiteSpace(description))
             return description;
+
         var display = attributes.FirstOrDefault(attribute =>
             attribute.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.DisplayAttribute");
         // Resource-backed display descriptions require application-owned localization.
+
         if (display?.NamedArguments.Any(argument => argument.Key == "ResourceType" && !argument.Value.IsNull) == true)
             return null;
+
         description =
             display?.NamedArguments.FirstOrDefault(argument => argument.Key == "Description").Value.Value as string;
+
         if (!string.IsNullOrWhiteSpace(description))
             return description;
+
         if (symbol is IPropertySymbol property)
         {
             if (property.OverriddenProperty is { } overridden && Description(overridden) is { } inherited)
                 return inherited;
+
             foreach (var constructor in property.ContainingType.InstanceConstructors)
             {
                 var parameter = constructor.Parameters.FirstOrDefault(candidate =>
                     string.Equals(candidate.Name, property.Name, StringComparison.OrdinalIgnoreCase) &&
                     SymbolEqualityComparer.Default.Equals(candidate.Type, property.Type));
+
                 if (parameter is not null && Description(parameter) is { } parameterText)
                     return parameterText;
             }
@@ -55,6 +63,7 @@ static class JsonDescriptionEmission
         do
         {
             changed = false;
+
             foreach (var node in nodes.Values)
                 if (node.Children.Any(child =>
                         validated.Contains(child.WithNullableAnnotation(NullableAnnotation.NotAnnotated))))
@@ -62,15 +71,19 @@ static class JsonDescriptionEmission
         } while (changed);
 
         var blocks = new SortedDictionary<string, string>(StringComparer.Ordinal);
+
         foreach (var node in nodes.Values)
         {
             var type = node.Type;
+
             if (type is not (INamedTypeSymbol or IArrayTypeSymbol))
                 continue;
+
             var unsupported = node.Members.FirstOrDefault(member => Attributes(member).Any(attribute =>
                 attribute.AttributeClass?.ToDisplayString() is "System.ComponentModel.DataAnnotations.RangeAttribute"
                     or "System.ComponentModel.DefaultValueAttribute" &&
                 attribute.ConstructorArguments.FirstOrDefault().Kind == TypedConstantKind.Type));
+
             if (unsupported is not null)
             {
                 var identity = Type(type);
@@ -83,45 +96,64 @@ static class JsonDescriptionEmission
                 continue;
             }
 
+
             var facts = new StringBuilder();
             AppendFacts(facts, type);
+
             if (validated.Contains(type))
                 facts.AppendLine("HasValidation = true,");
+
+
             if (node.Elements is not null && validated.Contains(type))
                 facts.Append("Elements = static value => ").Append(node.Elements).AppendLine(",")
                     .Append("ElementType = typeof(").Append(Type(node.Children[0])).AppendLine("),");
+
             var members = new StringBuilder();
+
             foreach (var member in node.Members.OrderBy(member => member.Name, StringComparer.Ordinal))
             {
                 var memberType = member is IPropertySymbol property ? property.Type : ((IFieldSymbol)member).Type;
+
                 if (memberType.IsRefLikeType || memberType.TypeKind is TypeKind.Pointer or TypeKind.FunctionPointer)
                     continue;
+
                 var memberFacts = new StringBuilder();
                 AppendFacts(memberFacts, member);
                 var rules = ValidationRules(member).ToArray();
+
                 if (rules.Length > 0)
                     memberFacts.Append(
                             "Rules = new global::System.ComponentModel.DataAnnotations.ValidationAttribute[] { ")
                         .Append(string.Join(", ", rules)).AppendLine(" },");
+
+
                 if (rules.Length > 0 && CountExpression(memberType) is { } count)
                     memberFacts.Append("Count = static value => ").Append(count).AppendLine(",");
+
                 var conditions = RequiredWhenShape.Attributes(member)
                     .Select(attribute => RequiredWhenShape.Resolve((INamedTypeSymbol)type, member, attribute))
                     .Where(shape => shape is not null).ToArray();
+
                 if (conditions.Length > 0)
                 {
                     memberFacts.AppendLine("RequiredWhen = new global::Cntryl.Portia.PortiaRequiredWhen[] {");
+
                     foreach (var condition in conditions)
                         memberFacts.Append("new(").Append(Literal(condition!.Selector)).Append(", ")
                             .Append(Literal(condition.Value)).Append(", static value => ((")
                             .Append(Type(type)).Append(")value).@").Append(condition.Selector).AppendLine("),");
+
                     memberFacts.AppendLine("},");
                 }
 
+
                 var validates = rules.Length > 0 || conditions.Length > 0 ||
                                 validated.Contains(memberType.WithNullableAnnotation(NullableAnnotation.NotAnnotated));
+
                 if (validates)
                     memberFacts.AppendLine("HasValidation = true,");
+
+
                 if (validates &&
                     (member is IFieldSymbol || member is IPropertySymbol
                     {
@@ -129,31 +161,42 @@ static class JsonDescriptionEmission
                     }))
                     memberFacts.Append("GetValue = static value => ((").Append(Type(type)).Append(")value).@")
                         .Append(member.Name).AppendLine(",");
+
                 AppendBindingFacts(memberFacts, member, memberType, (INamedTypeSymbol)type);
+
                 if (memberFacts.Length == 0)
                     continue;
+
                 var jsonName = Attributes(member).FirstOrDefault(attribute =>
                         attribute.AttributeClass?.ToDisplayString() ==
                         "System.Text.Json.Serialization.JsonPropertyNameAttribute")
                     ?.ConstructorArguments.FirstOrDefault().Value as string;
+
                 if (jsonName is not null)
                     memberFacts.Append("JsonName = ").Append(Literal(jsonName)).AppendLine(",");
+
                 members.Append("new(").Append(Literal(member.Name)).Append(", typeof(").Append(Type(memberType))
                     .AppendLine(")) {").Append(memberFacts).AppendLine("},");
             }
 
+
             if (members.Length > 0)
                 facts.AppendLine("Members = new global::Cntryl.Portia.PortiaContractMemberMetadata[] {").Append(members)
                     .AppendLine("},");
+
             if (facts.Length == 0)
                 continue;
+
+
             if (type.Locations.Any(location => location.IsInSource))
                 facts.AppendLine("IsSourceDefinition = true,");
+
             var name = Type(type);
             blocks[name] = "if (type == typeof(" + name +
                            ")) { return new global::Cntryl.Portia.PortiaContractMetadata(typeof(" + name + ")) { " +
                            facts + " }; }\n";
         }
+
 
         return string.Concat(blocks.Values) + "return null;";
     }
@@ -166,14 +209,18 @@ static class JsonDescriptionEmission
     {
         var nodes = new Dictionary<ITypeSymbol, Node>(SymbolEqualityComparer.Default);
         var pending = new Queue<ITypeSymbol>(roots);
+
         while (pending.Count > 0)
         {
             var type = pending.Dequeue().WithNullableAnnotation(NullableAnnotation.NotAnnotated);
+
             if (nodes.ContainsKey(type) || type.IsRefLikeType ||
                 type.TypeKind is TypeKind.Pointer or TypeKind.FunctionPointer or TypeKind.TypeParameter)
                 continue;
+
             var node = new Node(type);
             nodes.Add(type, node);
+
             if (type is IArrayTypeSymbol array)
             {
                 node.Children.Add(array.ElementType);
@@ -189,6 +236,7 @@ static class JsonDescriptionEmission
                         or "System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>");
                 var enumerable = interfaces.FirstOrDefault(candidate =>
                     candidate.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T);
+
                 if (dictionary is not null)
                 {
                     node.Children.Add(dictionary.TypeArguments[1]);
@@ -211,6 +259,7 @@ static class JsonDescriptionEmission
                          !named.ContainingNamespace.ToDisplayString().StartsWith("System.", StringComparison.Ordinal))
                 {
                     var names = new HashSet<string>(StringComparer.Ordinal);
+
                     for (var current = named; current is not null; current = current.BaseType)
                     {
                         foreach (var member in current.GetMembers())
@@ -218,6 +267,7 @@ static class JsonDescriptionEmission
                             if (member.IsStatic || member.DeclaredAccessibility != Accessibility.Public ||
                                 !names.Add(member.Name))
                                 continue;
+
                             if (member is IPropertySymbol { IsIndexer: false } property)
                             {
                                 node.Members.Add(member);
@@ -231,6 +281,7 @@ static class JsonDescriptionEmission
                         }
                     }
 
+
                     foreach (var attribute in named.GetAttributes())
                         if (attribute.AttributeClass?.ToDisplayString() ==
                             "System.Text.Json.Serialization.JsonDerivedTypeAttribute" &&
@@ -239,9 +290,11 @@ static class JsonDescriptionEmission
                 }
             }
 
+
             foreach (var child in node.Children)
                 pending.Enqueue(child);
         }
+
 
         return nodes;
     }
@@ -261,8 +314,11 @@ static class JsonDescriptionEmission
     {
         if (type.SpecialType == SpecialType.System_String || type is IArrayTypeSymbol)
             return "((" + Type(type) + ")value).Length";
+
+
         if (type is not INamedTypeSymbol named)
             return null;
+
         var collection = named.AllInterfaces.Prepend(named).FirstOrDefault(candidate =>
             candidate.OriginalDefinition.ToDisplayString() is
                 "System.Collections.Generic.ICollection<T>" or "System.Collections.Generic.IReadOnlyCollection<T>");
@@ -272,8 +328,10 @@ static class JsonDescriptionEmission
     static IEnumerable<AttributeData> Attributes(ISymbol symbol)
     {
         var own = symbol.GetAttributes();
+
         foreach (var attribute in own)
             yield return attribute;
+
         if (symbol is IPropertySymbol property)
         {
             var constructors = property.ContainingType.InstanceConstructors
@@ -285,6 +343,7 @@ static class JsonDescriptionEmission
             var parameter = binding?.Parameters.FirstOrDefault(candidate =>
                 string.Equals(candidate.Name, property.Name, StringComparison.OrdinalIgnoreCase) &&
                 SymbolEqualityComparer.Default.Equals(candidate.Type, property.Type));
+
             if (parameter is not null)
                 foreach (var attribute in parameter.GetAttributes())
                     if (!own.Any(candidate =>
@@ -299,21 +358,28 @@ static class JsonDescriptionEmission
                     yield return attribute;
     }
 
-    static void AppendBindingFacts(StringBuilder source, ISymbol member, ITypeSymbol memberType,
-        INamedTypeSymbol contract)
+    static void AppendBindingFacts(
+        StringBuilder source,
+        ISymbol member,
+        ITypeSymbol memberType,
+        INamedTypeSymbol contract
+    )
     {
         var attributes = Attributes(member).ToArray();
         var defaultValue = attributes.FirstOrDefault(attribute =>
             attribute.AttributeClass?.ToDisplayString() == "System.ComponentModel.DefaultValueAttribute");
+
         if (defaultValue is { ConstructorArguments.Length: 1 })
         {
             source.Append("HasDefault = true, DefaultValue = ");
+
             if (defaultValue.ConstructorArguments[0].IsNull)
                 source.AppendLine("null,");
             else
                 source.Append('(').Append(Type(memberType)).Append(")(")
                     .Append(Constant(defaultValue.ConstructorArguments[0])).AppendLine("),");
         }
+
 
         var constructor = contract.InstanceConstructors
             .Where(ctor => ctor.DeclaredAccessibility == Accessibility.Public).ToArray();
@@ -325,8 +391,11 @@ static class JsonDescriptionEmission
             string.Equals(candidate.Name, member.Name, StringComparison.OrdinalIgnoreCase) &&
             SymbolEqualityComparer.Default.Equals(candidate.Type, memberType));
         var validates = ValidationRules(member).Any();
+
         if (parameter is not null && validates)
             source.AppendLine("ConstructorBound = true,");
+
+
         if (parameter is { HasExplicitDefaultValue: true })
             source.Append("HasBindingDefault = true, BindingDefaultValue = ")
                 .Append(Value(parameter.ExplicitDefaultValue, parameter.Type)).AppendLine(",");
@@ -334,13 +403,16 @@ static class JsonDescriptionEmission
             source.Append("BindingDefaultValue = default(").Append(Type(parameter.Type)).AppendLine("),");
         else if (parameter is null && KnownInitializer(member, memberType, binding) is { } initializer)
             source.Append("HasBindingDefault = true, BindingDefaultValue = ").Append(initializer).AppendLine(",");
+
         var ignore = attributes.FirstOrDefault(attribute =>
             attribute.AttributeClass?.ToDisplayString() == "System.Text.Json.Serialization.JsonIgnoreAttribute");
         var condition = ignore is null
             ? -1
             : ignore.NamedArguments.FirstOrDefault(argument => argument.Key == "Condition").Value.Value as int? ?? 1;
+
         if (condition is 1 or 5)
             source.AppendLine("Input = false,");
+
         if (condition is 1 or 4)
             source.AppendLine("Output = false,");
     }
@@ -350,6 +422,7 @@ static class JsonDescriptionEmission
         // Metadata must not instantiate a DTO or evaluate arbitrary constructor/initializer code.
         if (constructor is null || !constructor.IsImplicitlyDeclared)
             return null;
+
         var syntax = member.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
         var initializer = syntax switch
         {
@@ -357,28 +430,37 @@ static class JsonDescriptionEmission
             VariableDeclaratorSyntax field => field.Initializer?.Value,
             _ => null
         };
+
         if (initializer is LiteralExpressionSyntax literal)
         {
             if (literal.IsKind(SyntaxKind.DefaultLiteralExpression))
                 return "default(" + Type(type) + ")";
+
+
             if (literal.Token.Value is null)
                 return Value(null, type);
+
             var scalar = type is INamedTypeSymbol
             {
                 OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
             } nullable
                 ? nullable.TypeArguments[0]
                 : type;
+
             if (scalar.SpecialType == SpecialType.None && scalar.TypeKind != TypeKind.Enum)
                 return literal.Token.Value is null && !type.IsValueType ? "null" : null;
+
             return "(" + Type(type) + ")(" + Value(literal.Token.Value, scalar) + ")";
         }
 
+
         var hasRule = ValidationRules(member).Any() || Attributes(member).Any(attribute =>
             attribute.AttributeClass?.ToDisplayString() == "System.ComponentModel.DefaultValueAttribute");
+
         if (initializer is null && hasRule && syntax is PropertyDeclarationSyntax { AccessorList: { } accessors } &&
             accessors.Accessors.All(accessor => accessor.Body is null && accessor.ExpressionBody is null))
             return "default(" + Type(type) + ")";
+
         return null;
     }
 
@@ -398,8 +480,10 @@ static class JsonDescriptionEmission
         foreach (var attribute in Attributes(symbol))
         {
             var name = attribute.AttributeClass?.ToDisplayString();
+
             if (!IsValidationAttribute(name))
                 continue;
+
             var arguments = string.Join(", ", attribute.ConstructorArguments.Select(Constant));
             var settings = string.Join(", ",
                 attribute.NamedArguments.Select(argument => argument.Key + " = " + Constant(argument.Value)));
@@ -411,8 +495,11 @@ static class JsonDescriptionEmission
     {
         if (constant.IsNull)
             return "null";
+
+
         if (constant.Kind == TypedConstantKind.Type && constant.Value is ITypeSymbol type)
             return "typeof(" + type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ")";
+
         return Value(constant.Value, constant.Type);
     }
 
@@ -425,17 +512,24 @@ static class JsonDescriptionEmission
             }
                 ? "default(" + Type(type) + ")"
                 : "null";
+
         if (value is string text)
             return Literal(text);
+
         if (value is bool boolean)
             return boolean ? "true" : "false";
+
         if (value is char character)
             return Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(character, true);
+
         if (value is float single && (float.IsNaN(single) || float.IsInfinity(single)))
             return "global::System.Single." +
                    (float.IsNaN(single) ? "NaN" : single > 0 ? "PositiveInfinity" : "NegativeInfinity");
+
+
         if (type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
             type = nullable.TypeArguments[0];
+
         var literal = Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture)!;
         var suffix = value is double ? "D" :
             value is float ? "F" :
@@ -443,9 +537,11 @@ static class JsonDescriptionEmission
             value is long ? "L" :
             value is ulong ? "UL" :
             value is uint ? "U" : "";
+
         if (value is double number && (double.IsNaN(number) || double.IsInfinity(number)))
             return "global::System.Double." +
                    (double.IsNaN(number) ? "NaN" : number > 0 ? "PositiveInfinity" : "NegativeInfinity");
+
         return type?.TypeKind == TypeKind.Enum ? "(" + Type(type) + ")" + literal : literal + suffix;
     }
 
@@ -453,13 +549,18 @@ static class JsonDescriptionEmission
     {
         if (Description(symbol) is { } description)
             source.Append("Description = ").Append(Literal(description)).AppendLine(",");
+
+
         if (Title(symbol) is { } title)
             source.Append("Title = ").Append(Literal(title)).AppendLine(",");
+
         var obsolete = Attributes(symbol).FirstOrDefault(attribute =>
             attribute.AttributeClass?.ToDisplayString() == "System.ObsoleteAttribute");
+
         if (obsolete is not null)
         {
             source.AppendLine("Deprecated = true,");
+
             if (obsolete.ConstructorArguments.FirstOrDefault().Value is string message)
                 source.Append("DeprecationMessage = ").Append(Literal(message)).AppendLine(",");
         }
@@ -470,8 +571,10 @@ static class JsonDescriptionEmission
         var display = Attributes(symbol).FirstOrDefault(attribute =>
             attribute.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.DisplayAttribute");
         var name = display?.NamedArguments.FirstOrDefault(argument => argument.Key == "Name").Value.Value as string;
+
         if (display?.NamedArguments.Any(argument => argument.Key == "ResourceType" && !argument.Value.IsNull) == true)
             name = null;
+
         return name ?? Attributes(symbol).FirstOrDefault(attribute =>
                 attribute.AttributeClass?.ToDisplayString() == "System.ComponentModel.DisplayNameAttribute")
             ?.ConstructorArguments.FirstOrDefault().Value as string;

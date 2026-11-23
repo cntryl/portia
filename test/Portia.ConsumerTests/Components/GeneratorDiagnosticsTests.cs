@@ -89,9 +89,12 @@ public sealed class GeneratorDiagnosticsTests
     [InlineData("PORTIA106", "IRequestAuthorizer<Command>",
         "public ValueTask<Result> AuthorizeAsync(IRequestContext<Command> context, CancellationToken ct) => default;",
         "Request authorizer 'Component' takes effect-capable dependency '")]
-    public void ShouldReportPortia105And106GivenPreflightEffectCapableDependencies(string id, string role,
+    public void ShouldReportPortia105And106GivenPreflightEffectCapableDependencies(
+        string id,
+        string role,
         string member,
-        string messagePrefix)
+        string messagePrefix
+    )
     {
         // Arrange
         var source = $$"""
@@ -1150,7 +1153,11 @@ public sealed class GeneratorDiagnosticsTests
     [InlineData("PORTIA105", "IRequestGuard<Req>", "GuardAsync", "IProjectionCheckpointStore")]
     [InlineData("PORTIA106", "IRequestAuthorizer<Req>", "AuthorizeAsync", "IProjectionCheckpointStore")]
     public void ShouldSuggestQueryOnlyInterfaceGivenPreflightProjectionStoreDiagnostic(
-        string diagnosticId, string role, string method, string dependencyType)
+        string diagnosticId,
+        string role,
+        string method,
+        string dependencyType
+    )
     {
         // Arrange
         var source = $$"""

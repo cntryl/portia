@@ -17,24 +17,33 @@ public sealed class InMemoryProjectionCheckpointStore : IProjectionCheckpointSto
         ValueTask.FromResult(_checkpoints.GetValueOrDefault(identity, ProjectionCheckpoint.Start));
 
     /// <inheritdoc />
-    public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-        CancellationToken ct = default)
+    public ValueTask SaveAsync(
+        CheckpointIdentity identity,
+        ProjectionCheckpoint checkpoint,
+        CancellationToken ct = default
+    )
     {
         _checkpoints[identity] = checkpoint;
         return ValueTask.CompletedTask;
     }
 
-    ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint expected,
-        ProjectionCheckpoint checkpoint, CancellationToken ct)
+    ValueTask IConditionalProjectionCheckpointStore.SaveAsync(
+        CheckpointIdentity identity,
+        ProjectionCheckpoint expected,
+        ProjectionCheckpoint checkpoint,
+        CancellationToken ct
+    )
     {
         ArgumentNullException.ThrowIfNull(identity);
         ct.ThrowIfCancellationRequested();
         lock (_gate)
         {
             var actual = _checkpoints.GetValueOrDefault(identity, ProjectionCheckpoint.Start);
+
             if (actual != expected)
                 throw new ProjectionConcurrencyException(
                     $"Checkpoint for '{identity.ComponentName}' changed from the expected value before save.");
+
             _checkpoints[identity] = checkpoint;
         }
         return ValueTask.CompletedTask;

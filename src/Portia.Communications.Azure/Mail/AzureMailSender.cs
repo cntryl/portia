@@ -25,28 +25,39 @@ public sealed class AzureMailSender : IMailSender
     }
 
     /// <inheritdoc />
-    public async ValueTask<SendOutcome> SendAsync(TenantId tenant, SendId id, MailMessage message,
-        CancellationToken ct = default)
+    public async ValueTask<SendOutcome> SendAsync(
+        TenantId tenant,
+        SendId id,
+        MailMessage message,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(message);
         _ = SendId.Require(id, nameof(id));
+
         if (tenant.Value is null)
             throw new ArgumentException("A tenant ID is required.", nameof(tenant));
+
         var identity = await _tenantResolver.ResolveAsync(tenant, ct).ConfigureAwait(false);
+
         if (string.IsNullOrWhiteSpace(identity?.FromAddress))
             throw new InvalidOperationException("The tenant has no sender address.");
+
 
         var request = new EmailMessage(
             identity.FromAddress,
             new EmailRecipients(message.To.Select(static address => new EmailAddress(address))),
             new EmailContent(message.Subject) { PlainText = message.Text, Html = message.Html });
+
         foreach (var attachment in message.Attachments)
             request.Attachments.Add(new EmailAttachment(attachment.FileName, attachment.MediaType,
                 BinaryData.FromBytes(attachment.Content.AsMemory())));
+
         if (message.ReplyTo is not null)
             request.ReplyTo.Add(new EmailAddress(message.ReplyTo));
 
         ct.ThrowIfCancellationRequested();
+
         try
         {
             var operation = await _client.SendAsync(WaitUntil.Started, request, ct).ConfigureAwait(false);

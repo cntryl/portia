@@ -35,14 +35,18 @@ public sealed class FleetPartitionRunnerTests
         var run = runner.RunAsync([partition], (_, _) => Task.CompletedTask, options, lifetime.Token);
 
         var delays = new List<TimeSpan>();
+
         while (delays.Count < 4)
         {
             var delay = await clock.WaitForDelayAsync(lifetime.Token);
+
             if (delay == options.ReconciliationInterval)
                 continue;
+
             delays.Add(delay);
             clock.Advance(delay);
         }
+
 
         await lifetime.CancelAsync();
 
@@ -212,6 +216,7 @@ public sealed class FleetPartitionRunnerTests
             {
                 _ = starts.AddOrUpdate(route, 1, (_, count) => count + 1);
                 active[route] = true;
+
                 try
                 {
                     await Task.Delay(Timeout.InfiniteTimeSpan, ct);
@@ -246,6 +251,7 @@ public sealed class FleetPartitionRunnerTests
         static async Task Wait(Func<bool> condition)
         {
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
             while (!condition())
                 await Task.Delay(10, timeout.Token);
         }
@@ -631,8 +637,11 @@ public sealed class FleetPartitionRunnerTests
         }
     }
 
-    static async Task RunUntilCancelledRecordingAcquisition(string partition, ConcurrentBag<string> acquisitions,
-        CancellationToken ct)
+    static async Task RunUntilCancelledRecordingAcquisition(
+        string partition,
+        ConcurrentBag<string> acquisitions,
+        CancellationToken ct
+    )
     {
         acquisitions.Add(partition);
 
@@ -704,8 +713,13 @@ public sealed class FleetPartitionRunnerTests
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
         public bool IsEnabled(LogLevel logLevel) => true;
 
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter) =>
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter
+        ) =>
             Entries.Add((logLevel, eventId, formatter(state, exception), exception));
     }
 }

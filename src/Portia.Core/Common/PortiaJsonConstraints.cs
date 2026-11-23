@@ -15,16 +15,20 @@ static class PortiaJsonConstraints
     {
         if (!member.Input && member.Output)
             schema["readOnly"] = true;
+
         if (member.Input && !member.Output)
             schema["writeOnly"] = true;
+
         if (member.HasBindingDefault || member.HasDefault)
         {
             var value = member.HasBindingDefault ? member.BindingDefaultValue : member.DefaultValue;
+
             if (member.Rules.All(rule => PortiaContractValidation.IsValid(member, rule, value)))
                 schema["default"] = JsonSerializer.SerializeToNode(value, options.GetTypeInfo(member.Type));
             else
                 _ = schema.Remove("default");
         }
+
 
         foreach (var rule in member.Rules)
         {
@@ -147,6 +151,7 @@ static class PortiaJsonConstraints
     static void Bound(JsonObject schema, string keyword, object bound)
     {
         var number = Convert.ToDouble(bound, CultureInfo.InvariantCulture);
+
         if (double.IsFinite(number))
             schema[keyword] = JsonValue.Create(number);
     }
@@ -155,22 +160,29 @@ static class PortiaJsonConstraints
     {
         if (pattern.Contains("(?", StringComparison.Ordinal))
             return false;
+
         for (var index = 0; index < pattern.Length; index++)
         {
             var character = pattern[index];
+
             if (character > 127 || character is '\\' or '.' or '$' or '^' or ']' or '}')
                 return false;
+
             if (character == '{')
             {
                 var end = pattern.IndexOf('}', index + 1);
+
                 if (end < 0)
                     return false;
+
                 var bounds = pattern.AsSpan(index + 1, end - index - 1);
                 var comma = bounds.IndexOf(',');
                 var minimum = comma < 0 ? bounds : bounds[..comma];
+
                 if (minimum.IsEmpty || minimum.ContainsAnyExceptInRange('0', '9') ||
                     comma >= 0 && bounds[(comma + 1)..].ContainsAnyExceptInRange('0', '9'))
                     return false;
+
                 index = end;
                 continue;
             }
@@ -180,19 +192,24 @@ static class PortiaJsonConstraints
             // Only unambiguous ASCII literals/ranges are portable inside classes. In .NET,
             // a leading ']' is a literal and nested '[' can introduce class subtraction.
             var count = 0;
+
             while (++index < pattern.Length && pattern[index] != ']')
             {
                 if (!char.IsAsciiLetterOrDigit(pattern[index]))
                     return false;
+
                 count++;
+
                 if (index + 1 < pattern.Length && pattern[index + 1] == '-')
                 {
                     if (index + 2 >= pattern.Length || !char.IsAsciiLetterOrDigit(pattern[index + 2]) ||
                         pattern[index + 2] < pattern[index])
                         return false;
+
                     index += 2;
                 }
             }
+
 
             if (count == 0 || index == pattern.Length)
                 return false;
@@ -208,6 +225,7 @@ static class PortiaJsonConstraints
             for (var index = types.Count - 1; index >= 0; index--)
                 if (types[index]?.GetValue<string>() == "null")
                     types.RemoveAt(index);
+
             if (types.Count == 1)
                 schema["type"] = types[0]!.DeepClone();
         }

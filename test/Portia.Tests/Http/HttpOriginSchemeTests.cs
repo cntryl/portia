@@ -23,8 +23,12 @@ public sealed class HttpOriginSchemeTests
     [InlineData("https", "example.test:8443", "https://example.test", true)]
     [InlineData("https", "example.test", "https://example.test:8443", true)]
     [InlineData("http", "example.test:443", "https://example.test:443", true)]
-    public void ShouldCompareOriginSchemeGivenMatchingHostAndDefaultPorts(string scheme, string host, string origin,
-        bool rejected)
+    public void ShouldCompareOriginSchemeGivenMatchingHostAndDefaultPorts(
+        string scheme,
+        string host,
+        string origin,
+        bool rejected
+    )
     {
         // Arrange
         var context = new DefaultHttpContext();

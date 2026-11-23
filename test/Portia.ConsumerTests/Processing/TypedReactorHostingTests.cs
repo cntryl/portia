@@ -92,8 +92,10 @@ public sealed class TypedReactorHostingTests
         {
             var attempt = Interlocked.Increment(ref attempts.Count);
             await attempts.Observed.Writer.WriteAsync(new Invocation(context, scope.Id), ct);
+
             if (attempt == 1)
                 return Result.Failure(RequestError.Conflict("effect still pending", isTransient: true));
+
 
             await attempts.Complete.Task.WaitAsync(ct);
             return Result.Success;

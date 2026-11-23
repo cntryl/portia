@@ -17,8 +17,10 @@ public sealed class OperationalStartAcknowledgementTests
         var journal = new LostStartAcknowledgementStore();
         var session = await SessionAsync(journal);
         var records = new List<DomainEventRecord>();
+
         await foreach (var record in (await OperationalExecutionTests.EventsAsync()).ReadAsync(Target.Identity.Pattern, ct: TestContext.Current.CancellationToken))
             records.Add(record);
+
         journal.LoseNextStartAcknowledgement = true;
 
         var attempt = await session.BeginAsync(records, ProjectionCheckpoint.Start, TestContext.Current.CancellationToken);
@@ -38,8 +40,10 @@ public sealed class OperationalStartAcknowledgementTests
         var journal = new LostStartAcknowledgementStore();
         var session = await SessionAsync(journal);
         var records = new List<DomainEventRecord>();
+
         await foreach (var record in (await OperationalExecutionTests.EventsAsync()).ReadAsync(Target.Identity.Pattern, ct: TestContext.Current.CancellationToken))
             records.Add(record);
+
         journal.FailNextStartBeforeCommit = true;
 
         // Act
@@ -97,11 +101,17 @@ public sealed class OperationalStartAcknowledgementTests
         public ValueTask<OperationalProcessorState?> ReadAsync(OperationalTarget target, CancellationToken ct = default)
             => _inner.ReadAsync(target, ct);
 
-        public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(OperationalScope scope,
-            CancellationToken ct = default) => _inner.ListAsync(scope, ct);
+        public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(
+            OperationalScope scope,
+            CancellationToken ct = default
+        ) => _inner.ListAsync(scope, ct);
 
-        public async ValueTask<bool> CompareExchangeAsync(OperationalProcessorState replacement,
-            long expectedRevision, Guid expectedOwner, CancellationToken ct = default)
+        public async ValueTask<bool> CompareExchangeAsync(
+            OperationalProcessorState replacement,
+            long expectedRevision,
+            Guid expectedOwner,
+            CancellationToken ct = default
+        )
         {
             if (FailNextStartBeforeCommit && replacement.Attempts.Any(attempt => attempt.Outcome == "running"))
             {
@@ -110,6 +120,7 @@ public sealed class OperationalStartAcknowledgementTests
             }
 
             var result = await _inner.CompareExchangeAsync(replacement, expectedRevision, expectedOwner, ct);
+
             if (result && LoseNextStartAcknowledgement &&
                 replacement.Attempts.Any(attempt => attempt.Outcome == "running"))
             {
@@ -117,18 +128,28 @@ public sealed class OperationalStartAcknowledgementTests
                 throw new IOException("the journal committed the attempt start but its acknowledgement was lost");
             }
 
+
             return result;
         }
 
         public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
             => _inner.LoadAsync(identity, ct);
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-            CancellationToken ct = default) => _inner.SaveAsync(identity, checkpoint, ct);
+        public ValueTask SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default
+        ) => _inner.SaveAsync(identity, checkpoint, ct);
 
-        public ValueTask<bool> CommitAsync(OperationalProcessorState replacement, long expectedRevision,
-            Guid ownerSession, Guid attemptId, string? expectedCheckpoint, string? nextCheckpoint,
-            CancellationToken ct = default)
+        public ValueTask<bool> CommitAsync(
+            OperationalProcessorState replacement,
+            long expectedRevision,
+            Guid ownerSession,
+            Guid attemptId,
+            string? expectedCheckpoint,
+            string? nextCheckpoint,
+            CancellationToken ct = default
+        )
             => _inner.CommitAsync(replacement, expectedRevision, ownerSession, attemptId,
                 expectedCheckpoint, nextCheckpoint, ct);
     }

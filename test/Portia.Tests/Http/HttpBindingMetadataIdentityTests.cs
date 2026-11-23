@@ -19,6 +19,7 @@ public sealed class HttpBindingMetadataIdentityTests
         {
             if (info.Type != typeof(ReorderedBinding))
                 return;
+
             foreach (var property in info.Properties)
                 property.Name = "wire_" + property.Name;
         });
@@ -134,6 +135,7 @@ public sealed class HttpBindingMetadataIdentityTests
         {
             if (info.Type != typeof(ReorderedBinding))
                 return;
+
             info.Properties.Clear();
             info.Properties.Add(info.CreateJsonPropertyInfo(typeof(int), "unrelated"));
         });

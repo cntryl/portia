@@ -175,10 +175,12 @@ public sealed class AdminMcpTests
         builder.Services.AddSingleton<IPortiaOperations>(PortiaOperations.Create(builder.Configuration,
             new EmptyStore(), new OperationalOptions(),
             new EmptyTopology(), new ReadAuthorizer(), null));
+
         if (adminFirst)
             application.AddAdminMcpHttp().AddMcpHttp();
         else
             application.AddMcpHttp().AddAdminMcpHttp();
+
         await using var app = builder.Build();
         app.Use((context, next) =>
         {
@@ -302,17 +304,23 @@ public sealed class AdminMcpTests
 
     sealed class ReadAuthorizer : IOperationalAuthorizer
     {
-        public ValueTask<bool> AuthorizeAsync(ClaimsPrincipal actor, OperationalScope scope,
+        public ValueTask<bool> AuthorizeAsync(
+            ClaimsPrincipal actor,
+            OperationalScope scope,
             OperationalAccess permission,
-            CancellationToken ct = default) =>
+            CancellationToken ct = default
+        ) =>
             ValueTask.FromResult(scope == OperationalScope.Global && permission == OperationalAccess.Read);
     }
 
     sealed class AllowAllPolicy : IOperationalAuthorizer
     {
-        public ValueTask<bool> AuthorizeAsync(ClaimsPrincipal actor, OperationalScope scope,
+        public ValueTask<bool> AuthorizeAsync(
+            ClaimsPrincipal actor,
+            OperationalScope scope,
             OperationalAccess permission,
-            CancellationToken ct = default) => ValueTask.FromResult(true);
+            CancellationToken ct = default
+        ) => ValueTask.FromResult(true);
     }
 
     sealed class EmptyStore : IOperationalStore
@@ -321,19 +329,27 @@ public sealed class AdminMcpTests
             ReadAsync(OperationalTarget target, CancellationToken ct = default) =>
             ValueTask.FromResult<OperationalProcessorState?>(null);
 
-        public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(OperationalScope scope,
-            CancellationToken ct = default) => ValueTask.FromResult<IReadOnlyList<OperationalProcessorState>>([]);
+        public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(
+            OperationalScope scope,
+            CancellationToken ct = default
+        ) => ValueTask.FromResult<IReadOnlyList<OperationalProcessorState>>([]);
 
-        public ValueTask<bool> CompareExchangeAsync(OperationalProcessorState replacement, long expectedRevision,
+        public ValueTask<bool> CompareExchangeAsync(
+            OperationalProcessorState replacement,
+            long expectedRevision,
             Guid expectedOwner,
-            CancellationToken ct = default) => throw new NotSupportedException();
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
     }
 
     sealed class ApprovalPolicy : IOperationalAuthorizer
     {
-        public ValueTask<bool> AuthorizeAsync(ClaimsPrincipal actor, OperationalScope scope,
+        public ValueTask<bool> AuthorizeAsync(
+            ClaimsPrincipal actor,
+            OperationalScope scope,
             OperationalAccess permission,
-            CancellationToken ct = default) => ValueTask.FromResult(scope == OperationalScope.Global
+            CancellationToken ct = default
+        ) => ValueTask.FromResult(scope == OperationalScope.Global
                                                                     && (permission != OperationalAccess.Approve ||
                                                                         actor.IsInRole("operator")));
     }
@@ -356,17 +372,23 @@ public sealed class AdminMcpTests
         public ValueTask<OperationalProcessorState?> ReadAsync(OperationalTarget target, CancellationToken ct = default)
             => ValueTask.FromResult<OperationalProcessorState?>(target == State.Target ? State : null);
 
-        public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(OperationalScope scope,
-            CancellationToken ct = default)
+        public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(
+            OperationalScope scope,
+            CancellationToken ct = default
+        )
             => ValueTask.FromResult<IReadOnlyList<OperationalProcessorState>>(
                 scope == State.Target.Scope ? [State] : []);
 
-        public ValueTask<bool> CompareExchangeAsync(OperationalProcessorState replacement, long expectedRevision,
+        public ValueTask<bool> CompareExchangeAsync(
+            OperationalProcessorState replacement,
+            long expectedRevision,
             Guid expectedOwner,
-            CancellationToken ct = default)
+            CancellationToken ct = default
+        )
         {
             if (State.Revision != expectedRevision || State.OwnerSession != expectedOwner)
                 return ValueTask.FromResult(false);
+
             State = replacement;
             return ValueTask.FromResult(true);
         }

@@ -18,8 +18,12 @@ THandler, TOut>(
     where TRequest : IStreamRequest<TOut>
     where THandler : class, IStreamRequestHandler<TRequest, TOut>
 {
-    IAsyncEnumerable<TOut> IStreamRequestInvocation<TOut>.Invoke(IServiceProvider services,
-        IStreamRequest<TOut> request, IRequestContext context, CancellationToken ct)
+    IAsyncEnumerable<TOut> IStreamRequestInvocation<TOut>.Invoke(
+        IServiceProvider services,
+        IStreamRequest<TOut> request,
+        IRequestContext context,
+        CancellationToken ct
+    )
         => services.GetRequiredService<THandler>()
             .HandleAsync((IRequestContext<TRequest>)context, ct);
 

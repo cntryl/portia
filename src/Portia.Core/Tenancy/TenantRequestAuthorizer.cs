@@ -15,8 +15,10 @@ public sealed class TenantRequestAuthorizer(IActorTenantResolver tenants) : IReq
     public async ValueTask<Result> AuthorizeAsync(IRequestContext<ITenantRequest> context, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(context);
+
         if (RequestActor.IsSystem(context.Actor))
             return Result.Success;
+
 
         var tenant = await tenants.ResolveAsync(context.Actor, ct).ConfigureAwait(false);
         return tenant == context.Request.Tenant

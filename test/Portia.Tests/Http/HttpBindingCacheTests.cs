@@ -89,6 +89,7 @@ public sealed class HttpBindingCacheTests
     static JsonSerializerOptions Options(string? name = null)
     {
         var resolver = new DefaultJsonTypeInfoResolver();
+
         if (name is not null)
         {
             resolver.Modifiers.Add(info =>
@@ -97,6 +98,7 @@ public sealed class HttpBindingCacheTests
                     info.Properties[0].Name = name;
             });
         }
+
 
         return new JsonSerializerOptions(JsonSerializerDefaults.Web) { TypeInfoResolver = resolver };
     }

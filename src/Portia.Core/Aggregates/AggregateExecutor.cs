@@ -6,8 +6,12 @@ namespace Cntryl.Portia;
 public sealed class AggregateExecutor(IAggregateReader reader, IAggregateWriter writer) : IAggregateExecutor
 {
     /// <inheritdoc />
-    public async ValueTask<Result> ExecuteAsync<TAggregate>(TAggregate aggregate,
-        Func<TAggregate, AggregateOutcome> operation, IExecutionContext context, CancellationToken ct = default)
+    public async ValueTask<Result> ExecuteAsync<TAggregate>(
+        TAggregate aggregate,
+        Func<TAggregate, AggregateOutcome> operation,
+        IExecutionContext context,
+        CancellationToken ct = default
+    )
         where TAggregate : Aggregate
     {
         ArgumentNullException.ThrowIfNull(aggregate);
@@ -21,8 +25,12 @@ public sealed class AggregateExecutor(IAggregateReader reader, IAggregateWriter 
     }
 
     /// <inheritdoc />
-    public async ValueTask<Result<TOut>> ExecuteAsync<TAggregate, TOut>(TAggregate aggregate,
-        Func<TAggregate, AggregateOutcome<TOut>> operation, IExecutionContext context, CancellationToken ct = default)
+    public async ValueTask<Result<TOut>> ExecuteAsync<TAggregate, TOut>(
+        TAggregate aggregate,
+        Func<TAggregate, AggregateOutcome<TOut>> operation,
+        IExecutionContext context,
+        CancellationToken ct = default
+    )
         where TAggregate : Aggregate
     {
         ArgumentNullException.ThrowIfNull(aggregate);
@@ -51,8 +59,12 @@ public sealed class AggregateExecutor(IAggregateReader reader, IAggregateWriter 
         }
     }
 
-    ValueTask ApplyAsync<TAggregate>(TAggregate aggregate, AggregateDisposition disposition,
-        IExecutionContext context, CancellationToken ct)
+    ValueTask ApplyAsync<TAggregate>(
+        TAggregate aggregate,
+        AggregateDisposition disposition,
+        IExecutionContext context,
+        CancellationToken ct
+    )
         where TAggregate : Aggregate
     {
         switch (disposition)

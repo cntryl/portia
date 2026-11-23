@@ -29,8 +29,10 @@ public sealed class AggregateOnHandlerAnalyzer : DiagnosticAnalyzer
             var aggregateType = startContext.Compilation.GetTypeByMetadataName("Cntryl.Portia.Aggregate");
             var expectedMethod = aggregateType?.GetMembers("On").OfType<IMethodSymbol>()
                 .FirstOrDefault(static candidate => candidate.TypeParameters.Length == 1);
+
             if (expectedMethod is null)
                 return;
+
 
             var resultType = startContext.Compilation.GetTypeByMetadataName("Cntryl.Portia.Result");
             var genericResultType = startContext.Compilation.GetTypeByMetadataName("Cntryl.Portia.Result`1");
@@ -51,9 +53,13 @@ public sealed class AggregateOnHandlerAnalyzer : DiagnosticAnalyzer
         });
     }
 
-    static void AnalyzeRegistration(SyntaxNodeAnalysisContext context, IMethodSymbol expectedMethod,
-        INamedTypeSymbol? resultType, INamedTypeSymbol? genericResultType,
-        ConcurrentDictionary<IMethodSymbol, byte> registeredHandlers)
+    static void AnalyzeRegistration(
+        SyntaxNodeAnalysisContext context,
+        IMethodSymbol expectedMethod,
+        INamedTypeSymbol? resultType,
+        INamedTypeSymbol? genericResultType,
+        ConcurrentDictionary<IMethodSymbol, byte> registeredHandlers
+    )
     {
         var invocation = (InvocationExpressionSyntax)context.Node;
         var name = invocation.Expression switch
@@ -62,17 +68,22 @@ public sealed class AggregateOnHandlerAnalyzer : DiagnosticAnalyzer
             SimpleNameSyntax simpleName => simpleName.Identifier.ValueText,
             _ => string.Empty
         };
+
         if (name != "On" || invocation.ArgumentList.Arguments.Count != 1
             || context.SemanticModel.GetSymbolInfo(invocation, context.CancellationToken).Symbol is not IMethodSymbol
                 method
             || !SymbolEqualityComparer.Default.Equals(method.OriginalDefinition, expectedMethod.OriginalDefinition))
             return;
 
+
         var argument = invocation.ArgumentList.Arguments[0].Expression;
+
         while (argument is ParenthesizedExpressionSyntax parenthesized)
             argument = parenthesized.Expression;
 
+
         SyntaxNode? handlerBody;
+
         if (argument is LambdaExpressionSyntax lambda)
         {
             handlerBody = lambda.Body;
@@ -94,6 +105,7 @@ public sealed class AggregateOnHandlerAnalyzer : DiagnosticAnalyzer
             return;
         }
 
+
         if (handlerBody is null)
             return;
 
@@ -102,10 +114,15 @@ public sealed class AggregateOnHandlerAnalyzer : DiagnosticAnalyzer
             context.ReportDiagnostic(Diagnostic.Create(BusinessLogic, decision.GetLocation()));
     }
 
-    static void AnalyzeMethod(SyntaxNodeAnalysisContext context, INamedTypeSymbol? resultType,
-        INamedTypeSymbol? genericResultType, ConcurrentDictionary<IMethodSymbol, Location> findings)
+    static void AnalyzeMethod(
+        SyntaxNodeAnalysisContext context,
+        INamedTypeSymbol? resultType,
+        INamedTypeSymbol? genericResultType,
+        ConcurrentDictionary<IMethodSymbol, Location> findings
+    )
     {
         var syntax = (MethodDeclarationSyntax)context.Node;
+
         if (syntax.ReturnType is not PredefinedTypeSyntax
             { Keyword.RawKind: (int)SyntaxKind.VoidKeyword }
             || syntax.ParameterList.Parameters.Count != 1
@@ -113,17 +130,26 @@ public sealed class AggregateOnHandlerAnalyzer : DiagnosticAnalyzer
                 modifier.IsKind(SyntaxKind.RefKeyword) || modifier.IsKind(SyntaxKind.OutKeyword)
                 || modifier.IsKind(SyntaxKind.InKeyword)))
             return;
+
+
         if (context.SemanticModel.GetDeclaredSymbol(syntax, context.CancellationToken) is not IMethodSymbol method
             || syntax.Body is null && syntax.ExpressionBody is null)
             return;
+
         var handlerBody = (SyntaxNode?)syntax.Body ?? syntax.ExpressionBody!.Expression;
+
         if (FindDecision(handlerBody, context.SemanticModel, resultType, genericResultType,
                 context.CancellationToken) is { } decision)
             findings.TryAdd(method.OriginalDefinition, decision.GetLocation());
     }
 
-    static SyntaxNode? FindDecision(SyntaxNode body, SemanticModel semanticModel, INamedTypeSymbol? resultType,
-        INamedTypeSymbol? genericResultType, CancellationToken cancellationToken)
+    static SyntaxNode? FindDecision(
+        SyntaxNode body,
+        SemanticModel semanticModel,
+        INamedTypeSymbol? resultType,
+        INamedTypeSymbol? genericResultType,
+        CancellationToken cancellationToken
+    )
     {
         foreach (var node in body.DescendantNodesAndSelf(descendIntoChildren: child =>
                      child == body || child is not AnonymousFunctionExpressionSyntax
@@ -134,11 +160,14 @@ public sealed class AggregateOnHandlerAnalyzer : DiagnosticAnalyzer
                               && semanticModel.GetSymbolInfo(call, cancellationToken).Symbol is
                                   IMethodSymbol calledMethod
                               && ReturnsResult(calledMethod.ReturnType, resultType, genericResultType);
+
             if (!hasDecision)
                 continue;
 
+
             return node;
         }
+
         return null;
     }
 
@@ -146,6 +175,7 @@ public sealed class AggregateOnHandlerAnalyzer : DiagnosticAnalyzer
     {
         if (type is not INamedTypeSymbol named)
             return false;
+
         var definition = named.OriginalDefinition;
         return result is not null && SymbolEqualityComparer.Default.Equals(definition, result)
                || genericResult is not null && SymbolEqualityComparer.Default.Equals(definition, genericResult);

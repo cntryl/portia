@@ -7,8 +7,11 @@ public sealed class FitzFleetMembership(ILeaseClient client) : IFleetMembership
     readonly ILeaseClient _client = client ?? throw new ArgumentNullException(nameof(client));
 
     /// <inheritdoc />
-    public Task RunAsync(FleetRunOptions options, Func<ILeaseInventoryObserver, CancellationToken, Task> callback,
-        CancellationToken ct = default)
+    public Task RunAsync(
+        FleetRunOptions options,
+        Func<ILeaseInventoryObserver, CancellationToken, Task> callback,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(callback);

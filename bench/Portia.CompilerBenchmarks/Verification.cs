@@ -5,8 +5,11 @@ static class Verification
     public static void Coverage(IEnumerable<string> expected, IEnumerable<string> actual) =>
         Equal("component coverage", expected, actual);
 
-    public static void Changes(IReadOnlyDictionary<string, string> before,
-        IReadOnlyDictionary<string, string> after, IEnumerable<string> expected)
+    public static void Changes(
+        IReadOnlyDictionary<string, string> before,
+        IReadOnlyDictionary<string, string> after,
+        IEnumerable<string> expected
+    )
     {
         var changed = before.Keys.Union(after.Keys, StringComparer.Ordinal).Where(key =>
             !before.TryGetValue(key, out var left) || !after.TryGetValue(key, out var right) || left != right);
@@ -20,6 +23,7 @@ static class Verification
     {
         var left = expected.Order(StringComparer.Ordinal).ToArray();
         var right = actual.Order(StringComparer.Ordinal).ToArray();
+
         if (!left.SequenceEqual(right, StringComparer.Ordinal))
             throw new InvalidOperationException(
                 $"Unexpected {label}. Expected: {string.Join(", ", left)}; actual: {string.Join(", ", right)}.");

@@ -207,8 +207,11 @@ public sealed class RequestIdentityTests
         Assert.Throws<ArgumentException>(() => RequestMetadata.FromRequest(new IdentifiedCommand(Uuid.Empty)));
     }
 
-    internal static ServiceProvider Compose(IdentifiedQueryHandler query, IdentifiedCommandHandler command,
-        IdentityAuthorizer authorization)
+    internal static ServiceProvider Compose(
+        IdentifiedQueryHandler query,
+        IdentifiedCommandHandler command,
+        IdentityAuthorizer authorization
+    )
     {
         var services = new ServiceCollection();
         _ = services.AddSingleton(query);
@@ -261,8 +264,10 @@ public sealed class RequestIdentityTests
 
     sealed class IdentityActorValidator : IRequestActorValidator
     {
-        public ValueTask<Result<System.Security.Claims.ClaimsPrincipal>> ValidateAsync(string? token,
-            CancellationToken ct = default) =>
+        public ValueTask<Result<System.Security.Claims.ClaimsPrincipal>> ValidateAsync(
+            string? token,
+            CancellationToken ct = default
+        ) =>
             ValueTask.FromResult(Result<System.Security.Claims.ClaimsPrincipal>.Success(RequestActor.System));
     }
 

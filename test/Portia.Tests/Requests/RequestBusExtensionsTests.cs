@@ -101,25 +101,37 @@ public sealed class RequestBusExtensionsTests
     {
         public RequestDispatchContext? Context { get; private set; }
 
-        public ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
-            CancellationToken ct = default) => ValueTask.FromResult(Result.Success);
+        public ValueTask<Result> AuthorizeAsync(
+            IRequestBase request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        ) => ValueTask.FromResult(Result.Success);
 
         public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>
             new(actor, metadata: metadata);
 
-        public ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context,
-            CancellationToken ct = default)
+        public ValueTask<Result> DispatchAsync(
+            IRequest request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        )
         {
             Context = context;
             return ValueTask.FromResult(outcome);
         }
 
-        public ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context,
-            CancellationToken ct = default) =>
+        public ValueTask<Result<TOut>> DispatchAsync<TOut>(
+            IRequest<TOut> request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        ) =>
             throw new NotSupportedException();
 
-        public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request,
-            RequestDispatchContext context, CancellationToken ct = default) =>
+        public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(
+            IStreamRequest<TOut> request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        ) =>
             throw new NotSupportedException();
     }
 }

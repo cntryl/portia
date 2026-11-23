@@ -316,12 +316,16 @@ public sealed class TwilioSmsSenderTests
             Requests.Add(new CapturedRequest(request.Method, request.RequestUri!, request.Headers.Authorization,
                 form.Split('&').Select(pair => pair.Split('=', 2)).ToDictionary(
                     pair => WebUtility.UrlDecode(pair[0]), pair => WebUtility.UrlDecode(pair[1]))));
+
             if (Failure is not null)
                 throw Failure;
+
             var response = new HttpResponseMessage(status)
             { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+
             if (RetryAfter is { } delay)
                 response.Headers.RetryAfter = new RetryConditionHeaderValue(delay);
+
             return response;
         }
     }

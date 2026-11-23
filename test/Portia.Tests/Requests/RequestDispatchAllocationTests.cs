@@ -59,8 +59,10 @@ public sealed class RequestDispatchAllocationTests
         GC.WaitForPendingFinalizers();
         GC.Collect();
         var before = GC.GetAllocatedBytesForCurrentThread();
+
         for (var i = 0; i < Iterations; i++)
             Complete(dispatch());
+
         return (GC.GetAllocatedBytesForCurrentThread() - before) / (double)Iterations;
     }
 
@@ -79,7 +81,8 @@ public sealed class RequestDispatchAllocationTests
     {
         public OptimizedBuildFactAttribute(
             [CallerFilePath] string? sourceFilePath = null,
-            [CallerLineNumber] int sourceLineNumber = -1)
+            [CallerLineNumber] int sourceLineNumber = -1
+        )
             : base(sourceFilePath, sourceLineNumber)
         {
             if (typeof(RequestBus).Assembly.GetCustomAttribute<DebuggableAttribute>()?.IsJITOptimizerDisabled

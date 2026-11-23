@@ -56,8 +56,10 @@ public sealed class ExecutionLifecycleTests
     {
         public IRequestContext<Query>? Context { get; private set; }
 
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<Query> context,
-            [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<int> HandleAsync(
+            IRequestContext<Query> context,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             Context = context;
             yield return 1;

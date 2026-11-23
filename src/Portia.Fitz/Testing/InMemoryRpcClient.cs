@@ -44,10 +44,12 @@ public sealed class InMemoryRpcClient : IRpcClient
         ReadOnlyMemory<byte> body,
         TimeSpan? timeout,
         TaskCompletionSource<RpcCancellationOutcome> cancellation,
-        [EnumeratorCancellation] CancellationToken ct)
+        [EnumeratorCancellation] CancellationToken ct
+    )
     {
         var budgetStartedAt = Stopwatch.GetTimestamp();
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
         if (timeout is { } budget)
         {
             if (budget == TimeSpan.Zero)
@@ -55,6 +57,7 @@ public sealed class InMemoryRpcClient : IRpcClient
             else
                 deadline.CancelAfter(budget);
         }
+
 
         var callToken = deadline.Token;
 
@@ -64,15 +67,18 @@ public sealed class InMemoryRpcClient : IRpcClient
             Worker? worker;
             lock (_gate)
                 worker = _workers.LastOrDefault(candidate => Matches(route, candidate.Pattern));
+
             if (worker is null)
             {
                 cancellation.TrySetResult(RpcCancellationOutcome.NotRequested);
                 throw new InvalidOperationException($"No worker is registered for route '{route}'.");
             }
 
+
             callToken.ThrowIfCancellationRequested();
             using var invocation = new WorkerInvocation(worker, route, body.ToArray(), timeout,
                 budgetStartedAt, cancellation, callToken);
+
             await foreach (var frame in invocation.ReadAsync(callToken).ConfigureAwait(false))
             {
                 callToken.ThrowIfCancellationRequested();
@@ -90,7 +96,8 @@ public sealed class InMemoryRpcClient : IRpcClient
         string pattern,
         Func<RpcRequest, IRpcResponseWriter, CancellationToken, ValueTask> handler,
         RpcWorkerOptions? options = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default
+    )
     {
         var worker = new Worker(pattern, handler);
         lock (_gate)
@@ -110,11 +117,13 @@ public sealed class InMemoryRpcClient : IRpcClient
     {
         var routeMarker = route.IndexOf("://", StringComparison.Ordinal);
         var patternMarker = pattern.IndexOf("://", StringComparison.Ordinal);
+
         if (routeMarker < 1 || patternMarker < 1 ||
             !route.AsSpan(0, routeMarker).SequenceEqual(pattern.AsSpan(0, patternMarker)))
         {
             return false;
         }
+
 
         var routeSegments = route[(routeMarker + 3)..].Split('/');
         var patternSegments = pattern[(patternMarker + 3)..].Split('/');
@@ -122,15 +131,18 @@ public sealed class InMemoryRpcClient : IRpcClient
         var patternIndex = 0;
         var lastDoubleWildcard = -1;
         var lastDoubleMatch = 0;
+
         while (routeIndex < routeSegments.Length)
         {
             var segment = patternIndex < patternSegments.Length ? patternSegments[patternIndex] : null;
+
             if (segment == "*" || string.Equals(segment, routeSegments[routeIndex], StringComparison.Ordinal))
             {
                 routeIndex++;
                 patternIndex++;
                 continue;
             }
+
 
             if (segment == "**")
             {
@@ -148,8 +160,11 @@ public sealed class InMemoryRpcClient : IRpcClient
             patternIndex = lastDoubleWildcard + 1;
         }
 
+
+
         while (patternIndex < patternSegments.Length && patternSegments[patternIndex] == "**")
             patternIndex++;
+
         return patternIndex == patternSegments.Length;
     }
 
@@ -175,8 +190,15 @@ public sealed class InMemoryRpcClient : IRpcClient
         bool _terminal;
         int _disposed;
 
-        public WorkerInvocation(Worker worker, string route, ReadOnlyMemory<byte> body, TimeSpan? timeout,
-            long budgetStartedAt, TaskCompletionSource<RpcCancellationOutcome> cancellation, CancellationToken ct)
+        public WorkerInvocation(
+            Worker worker,
+            string route,
+            ReadOnlyMemory<byte> body,
+            TimeSpan? timeout,
+            long budgetStartedAt,
+            TaskCompletionSource<RpcCancellationOutcome> cancellation,
+            CancellationToken ct
+        )
         {
             _cancellation = cancellation;
             _callerRegistration = ct.Register(Cancel);
@@ -204,9 +226,12 @@ public sealed class InMemoryRpcClient : IRpcClient
             {
                 if (_terminal)
                     throw new InvalidOperationException("The RPC call has already completed.");
+
                 var sequence = _sequence++;
+
                 if (!isFinal || !body.IsEmpty)
                     _ = _frames.Writer.TryWrite(new RpcResponseFrame(body.ToArray(), sequence));
+
                 if (isFinal)
                     Complete();
             }
@@ -214,8 +239,14 @@ public sealed class InMemoryRpcClient : IRpcClient
             return ValueTask.CompletedTask;
         }
 
-        async Task RunAsync(Worker worker, string route, ReadOnlyMemory<byte> body, TimeSpan? timeout,
-            long budgetStartedAt, CancellationToken ct)
+        async Task RunAsync(
+            Worker worker,
+            string route,
+            ReadOnlyMemory<byte> body,
+            TimeSpan? timeout,
+            long budgetStartedAt,
+            CancellationToken ct
+        )
         {
             try
             {
@@ -244,6 +275,7 @@ public sealed class InMemoryRpcClient : IRpcClient
             {
                 if (_terminal)
                     return;
+
                 _terminal = true;
                 _cancellation.TrySetResult(RpcCancellationOutcome.NotRequested);
                 _ = _frames.Writer.TryComplete(exception);
@@ -256,6 +288,7 @@ public sealed class InMemoryRpcClient : IRpcClient
             {
                 if (_terminal)
                     return;
+
                 _terminal = true;
                 _forwarding = CancelWorkerAsync();
                 _cancellation.TrySetResult(RpcCancellationOutcome.Forwarded);

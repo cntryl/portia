@@ -152,8 +152,11 @@ public sealed class ProcessorBaseTests
     sealed class Reaction(ReactionRepository repository)
         : Reactor(repository, EventStreamPattern.ForPattern("bases", "accounts"))
     {
-        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
-            CancellationToken ct)
+        protected override ValueTask<Result> ReactToEventAsync(
+            DomainEventRecord record,
+            IExecutionContext context,
+            CancellationToken ct
+        )
         {
             repository.Contexts.Add((IReactorContext)context);
             return ValueTask.FromResult(Result.Success);
@@ -163,8 +166,10 @@ public sealed class ProcessorBaseTests
     sealed class BatchReaction(ReactionRepository repository)
         : BatchReactor(repository, EventStreamPattern.ForPattern("bases", "accounts"))
     {
-        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts,
-            CancellationToken ct)
+        protected override ValueTask<Result> ReactBatchAsync(
+            IReadOnlyList<IReactorContext> contexts,
+            CancellationToken ct
+        )
         {
             repository.Contexts.AddRange(contexts);
             return ValueTask.FromResult(Result.Success);
@@ -181,8 +186,12 @@ public sealed class ProcessorBaseTests
         public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default) =>
             ValueTask.FromResult(Checkpoint);
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint expected,
-            ProjectionCheckpoint checkpoint, CancellationToken ct = default)
+        public ValueTask SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint expected,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default
+        )
         {
             if (Checkpoint != expected)
                 throw new ProjectionConcurrencyException("The reaction checkpoint changed.");
@@ -190,8 +199,11 @@ public sealed class ProcessorBaseTests
             return SaveAsync(identity, checkpoint, ct);
         }
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-            CancellationToken ct = default)
+        public ValueTask SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default
+        )
         {
             if (FailSave)
             {
@@ -207,8 +219,11 @@ public sealed class ProcessorBaseTests
     sealed class Accounts(Repository repository)
         : Projector(repository, EventStreamPattern.ForPattern("bases", "accounts"))
     {
-        protected override ValueTask<Result> ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
-            CancellationToken ct)
+        protected override ValueTask<Result> ProjectEventAsync(
+            DomainEventRecord record,
+            IProjectorContext context,
+            CancellationToken ct
+        )
         {
             repository.Add(((Deposited)record.Event).Amount);
             return ValueTask.FromResult(Result.Success);
@@ -218,11 +233,15 @@ public sealed class ProcessorBaseTests
     sealed class BatchAccounts(Repository repository)
         : BatchProjector(repository, EventStreamPattern.ForPattern("bases", "accounts"))
     {
-        protected override ValueTask<Result> ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records,
-            IProjectorContext context, CancellationToken ct)
+        protected override ValueTask<Result> ProjectBatchAsync(
+            IReadOnlyList<DomainEventRecord> records,
+            IProjectorContext context,
+            CancellationToken ct
+        )
         {
             foreach (var record in records)
                 repository.Add(((Deposited)record.Event).Amount);
+
             return ValueTask.FromResult(Result.Success);
         }
     }
@@ -237,8 +256,10 @@ public sealed class ProcessorBaseTests
         int _pending;
         public List<ulong> Commits { get; } = [];
 
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-            CancellationToken ct = default) => ValueTask.FromResult(Checkpoint);
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+            CheckpointIdentity identity,
+            CancellationToken ct = default
+        ) => ValueTask.FromResult(Checkpoint);
 
         public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
         {
@@ -257,10 +278,12 @@ public sealed class ProcessorBaseTests
             public ValueTask CommitAsync(ProjectionCheckpoint checkpoint, CancellationToken ct = default)
             {
                 ct.ThrowIfCancellationRequested();
+
                 if (repository.Fail)
                 {
                     throw new InvalidOperationException("Commit failed");
                 }
+
 
                 repository.Value += repository._pending;
                 repository.Checkpoint = checkpoint;

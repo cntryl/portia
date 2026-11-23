@@ -169,8 +169,10 @@ public sealed partial class OperationalExecutionTests
         var journal = new MemoryOperationalStore();
         var events = await EventsAsync();
         var records = new List<DomainEventRecord>();
+
         await foreach (var record in events.ReadAsync(Target.Identity.Pattern, EventCursor.Start, TestContext.Current.CancellationToken))
             records.Add(record);
+
         var interrupted = await SessionAsync(journal);
         var originalId = await interrupted.BeginAsync(records, ProjectionCheckpoint.Start, TestContext.Current.CancellationToken);
         var resumed = await SessionAsync(journal);
@@ -314,9 +316,11 @@ public sealed partial class OperationalExecutionTests
         var events = new InMemoryEventStore();
         var id = Uuid.CreateVersion4();
         DomainEvent[] changes = [new ValueChanged(1), new ValueChanged(2)];
+
         for (var i = 0; i < changes.Length; i++)
             changes[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), id, (ulong)i + 1,
                 DateTimeOffset.UtcNow));
+
         await events.AppendAsync(new EventStreamAddress("test", "operational", id.ToString()), 0, changes);
         return events;
     }
@@ -336,11 +340,15 @@ public sealed partial class OperationalExecutionTests
         public async ValueTask<Result> HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
         {
             effects.Before?.Invoke();
+
             if (effects.During is { } during)
                 await during(context);
+
             effects.Executions.Add(context.ExecutionId);
+
             if (effects.Fail && context.Trigger.Value == 2)
                 return Result.Failure(new RequestError(RequestErrorKind.Validation, "private failure"));
+
             _ = effects.Ids.Add(CreateEffectId(context, "effect"));
             return Result.Success;
         }
@@ -353,12 +361,21 @@ public sealed partial class OperationalExecutionTests
         public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default) =>
             store.LoadAsync(identity, ct);
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
-        public async ValueTask<bool> CommitAsync(OperationalProcessorState replacement, long expectedRevision,
+        public async ValueTask<bool> CommitAsync(
+            OperationalProcessorState replacement,
+            long expectedRevision,
             Guid ownerSession,
-            Guid attemptId, string? expectedCheckpoint, string? nextCheckpoint, CancellationToken ct = default)
+            Guid attemptId,
+            string? expectedCheckpoint,
+            string? nextCheckpoint,
+            CancellationToken ct = default
+        )
         {
             var result = await store.CommitAsync(replacement, expectedRevision, ownerSession, attemptId,
                 expectedCheckpoint, nextCheckpoint, ct);

@@ -41,9 +41,15 @@ public sealed class FitzScheduledRequestConsumer(
     readonly IServiceScopeFactory? _scopes;
     readonly IRequestDeserializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
-    internal FitzScheduledRequestConsumer(IScheduleClient schedule, IRequestDeserializer serializer, string route,
-        RequestTransportCatalog catalog, IServiceScopeFactory scopes, TimeProvider timeProvider,
-        ILogger<FitzScheduledRequestConsumer>? logger = null)
+    internal FitzScheduledRequestConsumer(
+        IScheduleClient schedule,
+        IRequestDeserializer serializer,
+        string route,
+        RequestTransportCatalog catalog,
+        IServiceScopeFactory scopes,
+        TimeProvider timeProvider,
+        ILogger<FitzScheduledRequestConsumer>? logger = null
+    )
         : this(schedule, serializer, route, catalog, ScopedValidatorSentinel.Instance, logger)
     {
         _scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
@@ -64,6 +70,7 @@ public sealed class FitzScheduledRequestConsumer(
             FullMode = BoundedChannelFullMode.Wait
         });
         var pump = PumpAsync(output.Writer, stop);
+
         try
         {
             await foreach (var notification in output.Reader.ReadAllAsync(ct).ConfigureAwait(false))
@@ -83,6 +90,7 @@ public sealed class FitzScheduledRequestConsumer(
         var ct = stop.Token;
         var retries = new List<Task>();
         using var retrySlots = new SemaphoreSlim(MaxDeferredRetries, MaxDeferredRetries);
+
         try
         {
             // A Fitz schedule subscription is itself a pull-based IAsyncEnumerable (as of
@@ -101,6 +109,7 @@ public sealed class FitzScheduledRequestConsumer(
                     }
 
                     var attempt = await TryValidateActorAsync(firing, ct).ConfigureAwait(false);
+
                     if (attempt.Actor is { } actor)
                     {
                         await output.WriteAsync(firing.Deliver(actor), ct).ConfigureAwait(false);
@@ -122,6 +131,7 @@ public sealed class FitzScheduledRequestConsumer(
         catch (Exception ex)
         {
             await stop.CancelAsync().ConfigureAwait(false);
+
             try
             {
                 await Task.WhenAll(retries).ConfigureAwait(false);
@@ -131,25 +141,33 @@ public sealed class FitzScheduledRequestConsumer(
                 // Pending retries only end by cancellation here; the pump's own failure is reported.
             }
 
+
             _ = output.TryComplete(ex);
         }
     }
 
-    async Task RetryAsync(ScheduledFiring firing, ChannelWriter<RequestNotification> output,
-        SemaphoreSlim retrySlots, CancellationToken ct)
+    async Task RetryAsync(
+        ScheduledFiring firing,
+        ChannelWriter<RequestNotification> output,
+        SemaphoreSlim retrySlots,
+        CancellationToken ct
+    )
     {
         try
         {
             var delaySeconds = 1;
+
             while (true)
             {
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds), _clock, ct).ConfigureAwait(false);
                 var result = await TryValidateActorAsync(firing, ct).ConfigureAwait(false);
+
                 if (result.Actor is { } actor)
                 {
                     await output.WriteAsync(firing.Deliver(actor), ct).ConfigureAwait(false);
                     return;
                 }
+
 
                 if (!result.Retry)
                 {
@@ -172,28 +190,36 @@ public sealed class FitzScheduledRequestConsumer(
             var scheduled = JsonSerializer.Deserialize(notification.Payload.Span,
                                 FitzJsonContext.Default.FitzScheduledRequestEnvelope)
                             ?? throw new InvalidOperationException("A fired schedule envelope deserialized to null.");
+
             if (scheduled.Version != 1 || string.IsNullOrWhiteSpace(scheduled.SystemSubject)
                                        || string.IsNullOrWhiteSpace(scheduled.SystemIssuer))
             {
                 throw new InvalidOperationException("A fired schedule has an invalid system identity envelope.");
             }
 
+
             var envelope = _serializer.DeserializeEnvelope(scheduled.RequestEnvelope);
+
             if (envelope.ActorToken is not null)
             {
                 throw new InvalidOperationException(
                     "A durable schedule request envelope cannot contain an actor token.");
             }
 
+
             var request = envelope.Request as IRequest
                           ?? throw new InvalidOperationException(
                               "A fired Fitz schedule entry deserialized to a result-bearing request; only no-result requests can be scheduled.");
+
             if (!_catalog.Get(request.GetType()).Transports.Contains(RequestTransportId.Schedule))
                 throw new InvalidRequestTransportException(request, RequestTransportId.Schedule);
             // The validator approves a system identity per fired route, so the request must be one that
             // declares this route; otherwise an entry could run another route's request as this principal.
+
+
             if (!DeclaresRoute(request, notification.Route))
                 throw new UndeclaredScheduleRouteException();
+
             return new ScheduledFiring(notification.Route, scheduled.SystemSubject, scheduled.SystemIssuer, request,
                 envelope);
         }
@@ -212,8 +238,10 @@ public sealed class FitzScheduledRequestConsumer(
     bool DeclaresRoute(IRequest request, string firedRoute)
     {
         const string prefix = "schedule://";
+
         if (!firedRoute.StartsWith(prefix, StringComparison.Ordinal))
             return false;
+
         var segments = firedRoute[prefix.Length..].Split('/');
         return segments.Length == 4 && string.Equals(firedRoute,
             FitzRouting.ResolveScheduleRoute(_catalog, request,
@@ -228,6 +256,7 @@ public sealed class FitzScheduledRequestConsumer(
         try
         {
             Result<ClaimsPrincipal> result;
+
             if (_scopes is null)
             {
                 result = await _actorValidator.ValidateAsync(firing.Route, firing.Subject, firing.Issuer, ct)
@@ -241,13 +270,16 @@ public sealed class FitzScheduledRequestConsumer(
                     .ConfigureAwait(false);
             }
 
+
             if (result.IsSuccess)
                 return new ValidationAttempt(result.Value, false);
+
             if (!result.Error!.IsTransient)
             {
                 RecordLost();
                 return new ValidationAttempt(null, false);
             }
+
 
             PortiaTelemetry.RecordRunnerFault(nameof(FitzScheduledRequestConsumer), RunnerFaultStage.Validation,
                 new ScheduledActorValidationException(result.Error), logger);
@@ -295,7 +327,11 @@ public sealed class FitzScheduledRequestConsumer(
         public static ScopedValidatorSentinel Instance { get; } = new();
 
         public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(
-            string route, string subject, string issuer, CancellationToken ct = default) =>
+            string route,
+            string subject,
+            string issuer,
+            CancellationToken ct = default
+        ) =>
             throw new InvalidOperationException("The hosted scheduled validator must be resolved from a scope.");
     }
 

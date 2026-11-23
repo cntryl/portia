@@ -14,14 +14,19 @@ public static class CassiePortiaBuilderExtensions
     /// <param name="connectionString">The native Cassie connection string.</param>
     /// <param name="checkpointTable">The unqualified metadata table in the application's Cassie database.</param>
     /// <returns>The same builder for further composition.</returns>
-    public static PortiaBuilder AddCassie(this PortiaBuilder builder, string connectionString,
-        string checkpointTable = "portia_projection_checkpoints")
+    public static PortiaBuilder AddCassie(
+        this PortiaBuilder builder,
+        string connectionString,
+        string checkpointTable = "portia_projection_checkpoints"
+    )
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+
         if (builder.Services.Any(static service => service.ServiceType == typeof(CassieProjectionDatabase)
                                                    || service.ServiceType == typeof(CassieDataSource)))
             throw new InvalidOperationException("Cassie projection services are already configured.");
+
         builder.Services.AddSingleton(_ => new CassieDataSource(connectionString));
         builder.Services.AddSingleton(sp =>
             new CassieProjectionDatabase(sp.GetRequiredService<CassieDataSource>(), checkpointTable));
@@ -42,7 +47,11 @@ public static class CassiePortiaBuilderExtensions
     TProjector,
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     TRepository>(
-        this PortiaBuilder builder, string name, WorkloadScope scope, Action<WorkloadOptions>? configure = null)
+        this PortiaBuilder builder,
+        string name,
+        WorkloadScope scope,
+        Action<WorkloadOptions>? configure = null
+    )
         where TProjector : Projector
         where TRepository : CassieProjectionRepository
     {

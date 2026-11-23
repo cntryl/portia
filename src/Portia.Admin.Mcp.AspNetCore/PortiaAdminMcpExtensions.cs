@@ -25,8 +25,10 @@ public static class PortiaAdminMcpExtensions
     public static PortiaBuilder AddAdminMcpHttp(this PortiaBuilder application)
     {
         ArgumentNullException.ThrowIfNull(application);
+
         if (application.Services.Any(s => s.ServiceType == typeof(AdminSurface)))
             return application;
+
         application.Services.AddAuthorization();
         application.Services.AddHttpContextAccessor();
         application.Services.AddMcpServer().WithHttpTransport(options => options.Stateless = true);
@@ -35,6 +37,7 @@ public static class PortiaAdminMcpExtensions
         {
             if (!transport.Stateless)
                 throw new InvalidOperationException("Portia Admin MCP requires stateless shared HTTP transport.");
+
             var applicationConfiguration = transport.ConfigureSessionOptions;
             transport.ConfigureSessionOptions = async (context, server, ct) =>
             {
@@ -42,6 +45,7 @@ public static class PortiaAdminMcpExtensions
                 {
                     if (applicationConfiguration is not null)
                         await applicationConfiguration(context, server, ct).ConfigureAwait(false);
+
                     return;
                 }
 
@@ -52,8 +56,10 @@ public static class PortiaAdminMcpExtensions
     }
 
     /// <summary>Maps the isolated MCP surface; authentication and host operational policies are required.</summary>
-    public static IEndpointConventionBuilder MapPortiaAdminMcp(this IEndpointRouteBuilder endpoints,
-        string pattern = "/admin/mcp")
+    public static IEndpointConventionBuilder MapPortiaAdminMcp(
+        this IEndpointRouteBuilder endpoints,
+        string pattern = "/admin/mcp"
+    )
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         ArgumentException.ThrowIfNullOrWhiteSpace(pattern);
@@ -78,8 +84,10 @@ public static class PortiaAdminMcpExtensions
     /// Maps POST /{planId}/approve and POST /{planId}/revoke outside MCP. The body is an exact
     /// operational target; hosts must exclude approval permission from delegated agent credentials.
     /// </summary>
-    public static IEndpointConventionBuilder MapPortiaRepairApprovals(this IEndpointRouteBuilder endpoints,
-        string pattern = "/admin/repairs")
+    public static IEndpointConventionBuilder MapPortiaRepairApprovals(
+        this IEndpointRouteBuilder endpoints,
+        string pattern = "/admin/repairs"
+    )
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         ArgumentException.ThrowIfNullOrWhiteSpace(pattern);
@@ -105,21 +113,27 @@ public static class PortiaAdminMcpExtensions
     {
         if (OperatorAccessFailure(context) is { } denied)
             return denied;
+
         if (RejectOrigin(context))
             return Results.StatusCode(StatusCodes.Status403Forbidden);
+
         try
         {
             var target = await context.Request.ReadFromJsonAsync(AdminJsonContext.Default.OperationalTarget,
                 context.RequestAborted).ConfigureAwait(false);
+
             if (target is null)
                 return Results.BadRequest();
+
             var operations = context.RequestServices.GetRequiredService<IPortiaOperations>();
+
             if (revoke)
             {
                 await operations.RevokeRepairAsync(context.User, target, planId, context.RequestAborted)
                     .ConfigureAwait(false);
                 return Results.NoContent();
             }
+
 
             var approval = await operations.ApproveRepairAsync(context.User, target, planId, context.RequestAborted)
                 .ConfigureAwait(false);
@@ -144,6 +158,7 @@ public static class PortiaAdminMcpExtensions
     {
         if (!context.User.Identities.Any(identity => identity.IsAuthenticated))
             return Results.StatusCode(StatusCodes.Status401Unauthorized);
+
         return SystemOperatorAuthorization.IsAdministrator(context.User,
             context.RequestServices.GetService<IConfiguration>())
             ? null
@@ -250,7 +265,9 @@ public static class PortiaAdminMcpExtensions
                                                                 """);
 
     static async ValueTask<CallToolResult> CallAsync(
-        ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call, CancellationToken ct)
+        ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call,
+        CancellationToken ct
+    )
     {
         var tool = Array.Find(Tools,
                        candidate => string.Equals(candidate.Name, call.Params.Name, StringComparison.Ordinal))
@@ -258,17 +275,22 @@ public static class PortiaAdminMcpExtensions
         var services = call.Services ?? throw new McpException("Request services unavailable.");
         var context = services.GetRequiredService<IHttpContextAccessor>().HttpContext
                       ?? throw new McpException("Authenticated HTTP request required.");
+
         try
         {
             var arguments = JsonSerializer.SerializeToElement(call.Params.Arguments,
                 AdminJsonContext.Default.IDictionaryStringJsonElement);
+
             if (!arguments.TryGetProperty("scope", out var scope)
                 || !scope.TryGetProperty("tenant", out _))
                 throw new ArgumentException("An exact tenant or global scope is required.");
+
             var input = arguments.Deserialize(AdminJsonContext.Default.AdminArguments)
                         ?? throw new ArgumentException("Arguments required.");
+
             if (input.Target is { } target && target.Scope != input.Scope)
                 throw new ArgumentException("The target and requested scope differ.");
+
             var operations = services.GetRequiredService<IPortiaOperations>();
             var actor = context.User;
             var json = await tool.Invoke(operations, actor, input, ct).ConfigureAwait(false);

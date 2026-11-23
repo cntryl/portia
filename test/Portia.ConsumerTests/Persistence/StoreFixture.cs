@@ -29,6 +29,7 @@ sealed class StoreFixture : IAsyncDisposable
     {
         await _scope.DisposeAsync();
         await _provider.DisposeAsync();
+
         if (_client is not null)
         {
             await _client.DisposeAsync();
@@ -44,6 +45,7 @@ sealed class StoreFixture : IAsyncDisposable
 
         var endpoint = new Uri(Environment.GetEnvironmentVariable("FITZ_TEST_ENDPOINT") ?? "ws://127.0.0.1:4090/ws");
         var client = new FitzClient(new ClientConfig(endpoint) { Timeout = TimeSpan.FromSeconds(10) });
+
         try
         {
             await client.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(TimeSpan.FromSeconds(15)));

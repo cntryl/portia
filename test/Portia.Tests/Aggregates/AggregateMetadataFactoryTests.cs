@@ -279,8 +279,12 @@ public sealed class AggregateMetadataFactoryTests
         return ev;
     }
 
-    static MisbehavingMetadataFactory Factory(Uuid? eventId = null, Uuid? aggregateId = null, ulong? version = null,
-        DateTimeOffset? occurredOn = null) => new(eventId, aggregateId, version, occurredOn);
+    static MisbehavingMetadataFactory Factory(
+        Uuid? eventId = null,
+        Uuid? aggregateId = null,
+        ulong? version = null,
+        DateTimeOffset? occurredOn = null
+    ) => new(eventId, aggregateId, version, occurredOn);
 
     // Raises the exact instance it is given, so a test controls what that instance already carries.
     sealed class InstanceAggregate : Aggregate

@@ -17,8 +17,10 @@ public sealed class AuditStorageContractTests
         // Arrange
         await using var fixture = await StoreFixture.CreateAsync(fitz);
         var account = new Account(Uuid.CreateVersion4());
+
         for (var index = 0; index < 1025; index++)
             account.Audit(new Declined(index.ToString(CultureInfo.InvariantCulture)));
+
         await fixture.Repository.SaveAsync(account, _saveContext, TestContext.Current.CancellationToken);
 
         // Act
@@ -29,6 +31,7 @@ public sealed class AuditStorageContractTests
         Assert.Equal(0UL, scenario.CommittedEventCount);
         Assert.Equal(0UL, account.CommittedStreamPosition);
         EventStreamAddress? session = null;
+
         await foreach (var record in fixture.Store.ReadAsync(
                            EventStreamPattern.ForPattern(account.Stream.Realm, account.Stream.Area), ct: TestContext.Current.CancellationToken))
         {
@@ -39,10 +42,13 @@ public sealed class AuditStorageContractTests
             }
         }
 
+
         Assert.NotNull(session);
         var records = new List<DomainEventRecord>();
+
         await foreach (var record in fixture.Store.ReadAsync(session, ct: TestContext.Current.CancellationToken))
             records.Add(record);
+
         Assert.Equal(1025, records.Count);
         Assert.Equal(1024UL, records[^1].ResourceOffset);
         Assert.All(records, record =>

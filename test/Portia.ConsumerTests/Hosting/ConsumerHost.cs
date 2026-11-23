@@ -26,6 +26,7 @@ static class ConsumerHost
         _ = services.AddSingleton<IEventStore, InMemoryEventStore>();
         _ = services.AddSingleton<IDomainEventReader>(provider => provider.GetRequiredService<IEventStore>());
         _ = services.AddSingleton<IProjectionCheckpointStore, InMemoryProjectionCheckpointStore>();
+
         if (scoped)
         {
             _ = services.AddScoped<IConsumerScope, ConsumerScope>();
@@ -36,6 +37,7 @@ static class ConsumerHost
             _ = services.AddSingleton<IConsumerScope, ConsumerScope>();
             _ = services.AddSingleton<IAccountRepository, AccountRepository>();
         }
+
 
         return services;
     }
@@ -134,15 +136,19 @@ static class ConsumerHost
         public void Add(Uuid aggregateId, int amount, Guid scopeId) =>
             (_batch ?? throw new InvalidOperationException("No active batch")).Add(aggregateId, amount, scopeId);
 
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-            CancellationToken ct = default)
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+            CheckpointIdentity identity,
+            CancellationToken ct = default
+        )
         {
             storage.LoadAttempts++;
+
             if (storage.FailReload)
             {
                 storage.FailReload = false;
                 throw new InvalidOperationException("Checkpoint reload failed");
             }
+
 
             return ValueTask.FromResult(
                 storage.Checkpoints.GetValueOrDefault(identity, ProjectionCheckpoint.Start));
@@ -166,13 +172,16 @@ static class ConsumerHost
         {
             foreach (var (id, amount, scopeId) in _pending)
                 effects.Record(name.ComponentName, id, amount, scopeId);
+
             storage.Checkpoints[name] = checkpoint;
+
             if (storage.FailAfterCommit)
             {
                 storage.FailAfterCommit = false;
                 storage.FailReload = true;
                 throw new InvalidOperationException("Commit completed but response failed");
             }
+
 
             return ValueTask.CompletedTask;
         }

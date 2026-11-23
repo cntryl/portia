@@ -11,8 +11,10 @@ public static class WorkloadCoordinatorConformance
     /// <param name="ct">A token that can cancel verification.</param>
     /// <returns>A task that completes when every check has passed.</returns>
     /// <exception cref="ConformanceViolationException">The coordinator violates an ownership invariant.</exception>
-    public static async ValueTask VerifyAsync(IWorkloadCoordinatorConformanceProbe probe,
-        CancellationToken ct = default)
+    public static async ValueTask VerifyAsync(
+        IWorkloadCoordinatorConformanceProbe probe,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(probe);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(probe.ConvergenceTimeout, TimeSpan.Zero);
@@ -21,8 +23,10 @@ public static class WorkloadCoordinatorConformance
         await VerifyReconciliationAsync(probe, ct).ConfigureAwait(false);
     }
 
-    static async ValueTask VerifyExclusiveOwnershipAsync(IWorkloadCoordinatorConformanceProbe probe,
-        CancellationToken ct)
+    static async ValueTask VerifyExclusiveOwnershipAsync(
+        IWorkloadCoordinatorConformanceProbe probe,
+        CancellationToken ct
+    )
     {
         await probe.ResetAsync(ct).ConfigureAwait(false);
         var identity = new WorkloadIdentity("coordinator-conformance-exclusive");
@@ -40,6 +44,7 @@ public static class WorkloadCoordinatorConformance
         IWorkloadCoordinatorConformanceWorker? second = null;
         var runs = new List<Task>(2);
         ExceptionDispatchInfo? failure = null;
+
         try
         {
             first = await probe.OpenWorkerAsync(ct).ConfigureAwait(false);
@@ -50,6 +55,7 @@ public static class WorkloadCoordinatorConformance
                 (owned, ownership) => Run(1, owned, ownership), secondLifetime.Token));
 
             int initialOwner;
+
             try
             {
                 initialOwner = await started.Task.WaitAsync(probe.ConvergenceTimeout, ct).ConfigureAwait(false);
@@ -60,12 +66,14 @@ public static class WorkloadCoordinatorConformance
                     "No worker acquired the workload within the convergence timeout.");
             }
 
+
             await Task.Delay(probe.StabilityWindow, ct).ConfigureAwait(false);
             AssertExclusive(ref maximumActive);
 
             var initialLifetime = initialOwner == 0 ? firstLifetime : secondLifetime;
             await initialLifetime.CancelAsync().ConfigureAwait(false);
             await ObserveCancellationAsync([runs[initialOwner]], probe.ConvergenceTimeout, ct).ConfigureAwait(false);
+
             try
             {
                 await workerStarts[1 - initialOwner].Task.WaitAsync(probe.ConvergenceTimeout, ct)
@@ -77,6 +85,7 @@ public static class WorkloadCoordinatorConformance
                     "The surviving worker did not take over the workload within the convergence timeout.");
             }
 
+
             await Task.Delay(probe.StabilityWindow, ct).ConfigureAwait(false);
             AssertExclusive(ref maximumActive);
         }
@@ -85,16 +94,21 @@ public static class WorkloadCoordinatorConformance
             failure = ExceptionDispatchInfo.Capture(exception);
         }
 
+
         failure = await CaptureCleanupFailureAsync(failure, async () =>
         {
             await firstLifetime.CancelAsync().ConfigureAwait(false);
             await secondLifetime.CancelAsync().ConfigureAwait(false);
             await ObserveCancellationAsync(runs, probe.ConvergenceTimeout, ct).ConfigureAwait(false);
         }).ConfigureAwait(false);
+
         if (second is not null)
             failure = await CaptureCleanupFailureAsync(failure, second.DisposeAsync).ConfigureAwait(false);
+
+
         if (first is not null)
             failure = await CaptureCleanupFailureAsync(failure, first.DisposeAsync).ConfigureAwait(false);
+
         failure?.Throw();
 
         async Task Run(int worker, WorkloadIdentity owned, CancellationToken ownership)
@@ -104,6 +118,7 @@ public static class WorkloadCoordinatorConformance
             UpdateMaximum(ref maximumActive, count);
             workerStarts[worker].TrySetResult();
             started.TrySetResult(worker);
+
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, ownership).ConfigureAwait(false);
@@ -117,6 +132,7 @@ public static class WorkloadCoordinatorConformance
         static void AssertExclusive(ref int observedMaximum)
         {
             var maximum = Volatile.Read(ref observedMaximum);
+
             if (maximum != 1)
             {
                 throw new ConformanceViolationException(
@@ -125,8 +141,10 @@ public static class WorkloadCoordinatorConformance
         }
     }
 
-    static async ValueTask VerifyReconciliationAsync(IWorkloadCoordinatorConformanceProbe probe,
-        CancellationToken ct)
+    static async ValueTask VerifyReconciliationAsync(
+        IWorkloadCoordinatorConformanceProbe probe,
+        CancellationToken ct
+    )
     {
         await probe.ResetAsync(ct).ConfigureAwait(false);
         var firstIdentity = new WorkloadIdentity("coordinator-conformance-first");
@@ -142,6 +160,7 @@ public static class WorkloadCoordinatorConformance
         IWorkloadCoordinatorConformanceWorker? second = null;
         var runs = new List<Task>(2);
         ExceptionDispatchInfo? failure = null;
+
         try
         {
             first = await probe.OpenWorkerAsync(ct).ConfigureAwait(false);
@@ -161,6 +180,7 @@ public static class WorkloadCoordinatorConformance
             }
 
             await Task.Delay(probe.StabilityWindow, ct).ConfigureAwait(false);
+
             if (starts.GetValueOrDefault(firstIdentity) != 1
                 || Signal(stopped, firstIdentity).Task.IsCompleted
                 || active.GetValueOrDefault(firstIdentity) != 1)
@@ -169,12 +189,15 @@ public static class WorkloadCoordinatorConformance
                     "Unchanged reconciliation did not retain one uninterrupted owner.");
             }
 
+
             Volatile.Write(ref snapshot, [secondIdentity]);
             await Signal(stopped, firstIdentity).Task.WaitAsync(probe.ConvergenceTimeout, ct).ConfigureAwait(false);
             await Signal(started, secondIdentity).Task.WaitAsync(probe.ConvergenceTimeout, ct).ConfigureAwait(false);
             await Task.Delay(probe.StabilityWindow, ct).ConfigureAwait(false);
+
             if (starts.GetValueOrDefault(firstIdentity) != 1 || active.GetValueOrDefault(firstIdentity) != 0)
                 throw new ConformanceViolationException("A removed workload was reacquired after revocation.");
+
             if (starts.GetValueOrDefault(secondIdentity) != 1
                 || Signal(stopped, secondIdentity).Task.IsCompleted
                 || active.GetValueOrDefault(secondIdentity) != 1)
@@ -188,18 +211,24 @@ public static class WorkloadCoordinatorConformance
             failure = ExceptionDispatchInfo.Capture(exception);
         }
 
+
         failure = await CaptureCleanupFailureAsync(failure, async () =>
         {
             await firstLifetime.CancelAsync().ConfigureAwait(false);
             await secondLifetime.CancelAsync().ConfigureAwait(false);
             await ObserveCancellationAsync(runs, probe.ConvergenceTimeout, ct).ConfigureAwait(false);
+
             if (active.Values.Any(static count => count != 0))
                 throw new ConformanceViolationException("Coordinator shutdown returned before owned work stopped.");
         }).ConfigureAwait(false);
+
         if (second is not null)
             failure = await CaptureCleanupFailureAsync(failure, second.DisposeAsync).ConfigureAwait(false);
+
+
         if (first is not null)
             failure = await CaptureCleanupFailureAsync(failure, first.DisposeAsync).ConfigureAwait(false);
+
         failure?.Throw();
 
         async Task Run(WorkloadIdentity identity, CancellationToken ownership)
@@ -207,6 +236,7 @@ public static class WorkloadCoordinatorConformance
             _ = starts.AddOrUpdate(identity, 1, static (_, count) => count + 1);
             _ = active.AddOrUpdate(identity, 1, static (_, count) => count + 1);
             Signal(started, identity).TrySetResult();
+
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, ownership).ConfigureAwait(false);
@@ -221,7 +251,8 @@ public static class WorkloadCoordinatorConformance
 
     static TaskCompletionSource Signal(
         ConcurrentDictionary<WorkloadIdentity, TaskCompletionSource> signals,
-        WorkloadIdentity identity) => signals.GetOrAdd(identity,
+        WorkloadIdentity identity
+    ) => signals.GetOrAdd(identity,
         static _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
 
     static async ValueTask ObserveCancellationAsync(IEnumerable<Task> runs, TimeSpan timeout, CancellationToken ct)
@@ -242,7 +273,8 @@ public static class WorkloadCoordinatorConformance
 
     static async ValueTask<ExceptionDispatchInfo?> CaptureCleanupFailureAsync(
         ExceptionDispatchInfo? failure,
-        Func<ValueTask> cleanup)
+        Func<ValueTask> cleanup
+    )
     {
         try
         {
@@ -263,11 +295,14 @@ public static class WorkloadCoordinatorConformance
     static void UpdateMaximum(ref int maximum, int value)
     {
         var observed = Volatile.Read(ref maximum);
+
         while (value > observed)
         {
             var previous = Interlocked.CompareExchange(ref maximum, value, observed);
+
             if (previous == observed)
                 return;
+
             observed = previous;
         }
     }

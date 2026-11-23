@@ -20,8 +20,12 @@ public interface IAggregateExecutor
     ///     The stream position changed or another append session is active. Reload and re-evaluate the
     ///     operation; Portia does not retry it automatically.
     /// </exception>
-    ValueTask<Result> ExecuteAsync<TAggregate>(TAggregate aggregate, Func<TAggregate, AggregateOutcome> operation,
-        IExecutionContext context, CancellationToken ct = default)
+    ValueTask<Result> ExecuteAsync<TAggregate>(
+        TAggregate aggregate,
+        Func<TAggregate, AggregateOutcome> operation,
+        IExecutionContext context,
+        CancellationToken ct = default
+    )
         where TAggregate : Aggregate;
 
     /// <summary>Hydrates the aggregate, runs the operation, and commits or discards what it produced.</summary>
@@ -36,7 +40,11 @@ public interface IAggregateExecutor
     ///     The stream position changed or another append session is active. Reload and re-evaluate the
     ///     operation; Portia does not retry it automatically.
     /// </exception>
-    ValueTask<Result<TOut>> ExecuteAsync<TAggregate, TOut>(TAggregate aggregate,
-        Func<TAggregate, AggregateOutcome<TOut>> operation, IExecutionContext context, CancellationToken ct = default)
+    ValueTask<Result<TOut>> ExecuteAsync<TAggregate, TOut>(
+        TAggregate aggregate,
+        Func<TAggregate, AggregateOutcome<TOut>> operation,
+        IExecutionContext context,
+        CancellationToken ct = default
+    )
         where TAggregate : Aggregate;
 }

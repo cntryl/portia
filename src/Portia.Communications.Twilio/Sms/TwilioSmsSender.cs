@@ -28,8 +28,12 @@ public sealed class TwilioSmsSender : ISmsSender
     }
 
     /// <inheritdoc />
-    public async ValueTask<SendOutcome> SendAsync(TenantId tenant, SendId id, SmsMessage message,
-        CancellationToken ct = default)
+    public async ValueTask<SendOutcome> SendAsync(
+        TenantId tenant,
+        SendId id,
+        SmsMessage message,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(message);
         _ = SendId.Require(id, nameof(id));
@@ -44,11 +48,13 @@ public sealed class TwilioSmsSender : ISmsSender
             new(account.Sender.StartsWith("MG", StringComparison.Ordinal) ? "MessagingServiceSid" : "From",
                 account.Sender),
         };
+
         if (_statusCallbackAddress is not null)
             form.Add(new("StatusCallback",
                 TwilioStatusCallbacks.Address(_statusCallbackAddress, tenantSegment, id.Value)));
 
         // A client base address, such as a local emulator, replaces Twilio's API host.
+
         var path = $"2010-04-01/Accounts/{account.AccountSid}/Messages.json";
         using var request = new HttpRequestMessage(HttpMethod.Post, _client.BaseAddress is null
             ? new Uri("https://api.twilio.com/" + path)
@@ -61,6 +67,7 @@ public sealed class TwilioSmsSender : ISmsSender
         HttpStatusCode status;
         TimeSpan? retryAfter;
         JsonDocument? body;
+
         try
         {
             using var response = await _client.SendAsync(request, ct).ConfigureAwait(false);
@@ -73,6 +80,7 @@ public sealed class TwilioSmsSender : ISmsSender
             // A timeout, a broken connection or a cancellation after dispatch: Twilio may have taken the message.
             return SendOutcome.Unknown;
         }
+
 
         using (body)
         {
@@ -93,13 +101,17 @@ public sealed class TwilioSmsSender : ISmsSender
                                      && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var number)
             ? number
             : 0;
+
         if (status == HttpStatusCode.TooManyRequests || code == 20429)
             throw new SendThrottledException(retryAfter);
+
         if (status is HttpStatusCode.Unauthorized or HttpStatusCode.NotFound || code == 20003)
             throw new InvalidOperationException(
                 $"The message was not sent: Twilio refused the account or credentials (HTTP {(int)status}, code {code}).");
+
         if ((int)status is < 400 or >= 500 || status == HttpStatusCode.RequestTimeout)
             return SendOutcome.Unknown;
+
 
         return SendOutcome.Rejected(code switch
         {
@@ -119,8 +131,10 @@ public sealed class TwilioSmsSender : ISmsSender
             await using (stream.ConfigureAwait(false))
             {
                 var document = await JsonDocument.ParseAsync(stream, default, ct).ConfigureAwait(false);
+
                 if (document.RootElement.ValueKind == JsonValueKind.Object)
                     return document;
+
                 document.Dispose();
                 return null;
             }

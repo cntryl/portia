@@ -29,5 +29,6 @@ public interface IPartitionLeaseCompetitor
         ulong ttlSecs,
         Func<CancellationToken, ValueTask> callback,
         LeaseExecutionOptions? options = null,
-        CancellationToken ct = default);
+        CancellationToken ct = default
+    );
 }

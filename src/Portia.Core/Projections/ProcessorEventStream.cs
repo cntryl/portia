@@ -6,11 +6,16 @@ sealed class ProcessorEventStream : IAsyncDisposable
     readonly IAsyncEnumerator<DomainEventRecord> _source;
     readonly CheckpointIdentity _identity;
 
-    public ProcessorEventStream(IDomainEventReader reader, CheckpointIdentity identity,
-        ProjectionCheckpoint checkpoint, CancellationToken ct)
+    public ProcessorEventStream(
+        IDomainEventReader reader,
+        CheckpointIdentity identity,
+        ProjectionCheckpoint checkpoint,
+        CancellationToken ct
+    )
     {
         _identity = identity;
         Checkpoint = checkpoint;
+
         try
         {
             _source = reader.ReadAsync(identity.Pattern, checkpoint.Cursor, ct).GetAsyncEnumerator(ct);

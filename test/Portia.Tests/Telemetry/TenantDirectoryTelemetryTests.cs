@@ -148,7 +148,9 @@ public sealed class TenantDirectoryTelemetryTests
     }
 
     static EventSourcedTenantDirectory<TenantRegistered, TenantDeregistered> CreateDirectory(
-        IDomainEventReader source, TimeProvider clock) =>
+        IDomainEventReader source,
+        TimeProvider clock
+    ) =>
         new(source, Pattern, GetTenantId, TimeSpan.FromSeconds(1), clock);
 
     static TenantId GetTenantId(DomainEvent ev) => ev switch
@@ -178,8 +180,14 @@ public sealed class TenantDirectoryTelemetryTests
         return listener;
     }
 
-    static void AssertMeasurement(IEnumerable<Measurement> measurements, string name, double value,
-        string operation, string phase, string outcome = "success")
+    static void AssertMeasurement(
+        IEnumerable<Measurement> measurements,
+        string name,
+        double value,
+        string operation,
+        string phase,
+        string outcome = "success"
+    )
     {
         Assert.Contains(measurements, measurement => measurement.Name == name && measurement.Value == value &&
                                                      HasTags(measurement, operation, phase, outcome));
@@ -199,23 +207,33 @@ public sealed class TenantDirectoryTelemetryTests
 
         public ulong? FailBeforeOffset { get; set; }
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
-            CancellationToken ct) => throw new NotSupportedException();
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset,
+            CancellationToken ct
+        ) => throw new NotSupportedException();
 
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             var fromOffset = cursor == EventCursor.Start
                 ? 0
                 : ulong.Parse(cursor.Value!, CultureInfo.InvariantCulture);
+
             foreach (var record in _records.Where(record => record.ResourceOffset >= fromOffset).ToArray())
             {
                 ct.ThrowIfCancellationRequested();
+
                 if (record.ResourceOffset == FailBeforeOffset)
                     throw new IOException("Unreadable tenant lifecycle event.");
+
                 clock.Advance(TimeSpan.FromSeconds(1));
                 yield return record;
             }
+
 
             await Task.CompletedTask;
         }

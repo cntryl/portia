@@ -25,9 +25,11 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         var route = $"kv://{realm}/portia/checkpoints";
         var aggregate = Uuid.CreateVersion4();
         DomainEvent[] source = [new ValueChanged(100), new ValueChanged(200)];
+
         for (var i = 0; i < source.Length; i++)
             source[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregate, (ulong)i + 1,
                 DateTimeOffset.UtcNow));
+
         await events.AppendAsync(new EventStreamAddress(realm, "source", aggregate.ToString()), 0, source, TestContext.Current.CancellationToken);
 
         // Act
@@ -38,6 +40,7 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         {
             var worker = provider.GetServices<IHostedService>().OfType<PortiaWorkloadService>().Single();
             await worker.StartAsync(TestContext.Current.CancellationToken);
+
             try
             {
                 var journal = provider.GetRequiredService<IOperationalStore>();
@@ -63,6 +66,7 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         {
             var worker = provider.GetServices<IHostedService>().OfType<PortiaWorkloadService>().Single();
             await worker.StartAsync(TestContext.Current.CancellationToken);
+
             try
             {
                 var operations = provider.GetRequiredService<IPortiaOperations>();
@@ -101,6 +105,7 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
                 new AccountProjector(accounts), identity.ComponentName, identity.Pattern),
             await accounts.LoadCheckpointAsync(identity, TestContext.Current.CancellationToken), ct: TestContext.Current.CancellationToken);
         var committedEffects = await ReadEffectsAsync(events, realm);
+
         foreach (var effect in committedEffects)
         {
             var model = await accounts.GetAsync(identity, effect.Event.Metadata.AggregateId.ToString(), TestContext.Current.CancellationToken);
@@ -129,15 +134,18 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
     static async Task<List<DomainEventRecord>> ReadEffectsAsync(FitzEventStore events, string realm)
     {
         var results = new List<DomainEventRecord>();
+
         await foreach (var record in events.ReadAsync(EventStreamPattern.ForPattern(realm, "accounts"),
                            EventCursor.Start, default))
             results.Add(record);
+
         return results;
     }
 
     static async Task WaitAsync(Func<Task<bool>> ready)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
         while (!await ready())
             await Task.Delay(10, timeout.Token);
     }
@@ -162,17 +170,21 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         public async ValueTask<Result> HandleAsync(IReactorContext<ValueChanged> context, CancellationToken ct)
         {
             Interlocked.Increment(ref control.Invocations);
+
             if (context.Trigger.Value == 200 && control.Fail)
                 return Result.Failure(RequestError.Validation("injected participant outage"));
+
             try
             {
                 var effect = CreateEffectId(context, "account");
                 var stream = new EventStreamAddress(context.Source.Stream.Realm, "accounts", effect.ToString());
+
                 await foreach (var existing in events.ReadAsync(stream, 0, ct))
                 {
                     Assert.Equal(context.Trigger.Value, Assert.IsType<ValueChanged>(existing.Event).Value);
                     return Result.Success;
                 }
+
 
                 var change = new ValueChanged(context.Trigger.Value);
                 change.AttachMetadata(new DomainEventMetadata(effect, effect, 1, context.StartedAt,
@@ -196,6 +208,7 @@ public sealed partial class OperationalJourneyIntegrationTests(FitzBrokerFixture
         {
             if (context.Trigger.Value == 200)
                 control.IndependentProgress.TrySetResult();
+
             return ValueTask.FromResult(Result.Success);
         }
     }

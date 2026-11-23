@@ -28,6 +28,7 @@ public sealed class FitzEventStoreProgressTests
         Assert.Equal(expected, actual);
         using var document = JsonDocument.Parse(json);
         Assert.Equal(position ?? string.Empty, document.RootElement.GetProperty("position").GetString());
+
         if (sourcePosition is null)
             Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("source_position").ValueKind);
         else
@@ -38,8 +39,11 @@ public sealed class FitzEventStoreProgressTests
     [Theory]
     [InlineData("orders", 10UL, 12UL)]
     [InlineData(null, 30UL, 32UL)]
-    public async Task ShouldObservePatternScopeWithoutDeserializingEventsGivenPatternAreaAndPosition(string? area,
-        ulong position, ulong head)
+    public async Task ShouldObservePatternScopeWithoutDeserializingEventsGivenPatternAreaAndPosition(
+        string? area,
+        ulong position,
+        ulong head
+    )
     {
         // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", area);
@@ -387,8 +391,13 @@ public sealed class FitzEventStoreProgressTests
         public List<string> MetadataRoutes { get; } = [];
         public List<ulong?> ByteBudgets { get; } = [];
 
-        public IAsyncEnumerable<StreamReadBatch> ReadAsync(string route, ulong startOffset, StreamReadMode mode,
-            StreamReadOptions? options = null, CancellationToken ct = default)
+        public IAsyncEnumerable<StreamReadBatch> ReadAsync(
+            string route,
+            ulong startOffset,
+            StreamReadMode mode,
+            StreamReadOptions? options = null,
+            CancellationToken ct = default
+        )
         {
             ct.ThrowIfCancellationRequested();
             Reads.Add((route, startOffset, options!.BatchSize));
@@ -397,8 +406,10 @@ public sealed class FitzEventStoreProgressTests
             var result = batch.Items.Count == 0 && batch.NextOffset == startOffset + 1
                 ? new StreamReadBatch([], startOffset, startOffset, batch.CaughtUp)
                 : batch;
+
             if (route.EndsWith("/*/*", StringComparison.Ordinal) && batch.Items.Count > 0 && batch.Items[^1].Record?.RealmOffset is { } realm)
                 result = new StreamReadBatch(batch.Items, startOffset, realm + 1, batch.CaughtUp);
+
             return new[] { result }.ToAsyncEnumerable();
         }
 
@@ -409,8 +420,11 @@ public sealed class FitzEventStoreProgressTests
             return Task.FromResult(metadata ?? throw new InvalidOperationException("Unexpected metadata call."));
         }
 
-        public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IStreamSession> BeginAsync(
+            string route,
+            ReadOnlyMemory<byte>? ingestMetadata = null,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
         public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) =>
             throw new NotSupportedException();

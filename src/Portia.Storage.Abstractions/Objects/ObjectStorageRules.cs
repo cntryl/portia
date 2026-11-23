@@ -34,10 +34,12 @@ static class ObjectStorageRules
     internal static string UploadKey(IObjectStorageTenantResolver resolver, TenantId tenantId, string objectKey)
     {
         var key = resolver.GetUploadKey(tenantId, Uuid.CreateVersion4());
+
         if (string.IsNullOrWhiteSpace(key) || string.Equals(key, objectKey, StringComparison.Ordinal) ||
             objectKey.StartsWith(key.TrimEnd('/') + "/", StringComparison.Ordinal))
             throw new InvalidOperationException(
                 "The application must resolve a unique upload key disjoint from the object key.");
+
         return key;
     }
 }

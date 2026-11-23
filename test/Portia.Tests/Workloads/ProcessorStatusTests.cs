@@ -24,10 +24,12 @@ public sealed class ProcessorStatusTests
         var services = Services(checkpoint);
         _ = services.AddSingleton<IDomainEventProgressReader>(progress);
         var builder = services.AddPortia().RequireAuthorization();
+
         if (reactor)
             _ = builder.AddReactor<GlobalStatusReactor>(identity.ComponentName, WorkloadScope.Global);
         else
             _ = builder.AddProjector<GlobalStatusProjector>(identity.ComponentName, WorkloadScope.Global);
+
         await using var provider = services.BuildServiceProvider();
 
         // Act
@@ -99,12 +101,14 @@ public sealed class ProcessorStatusTests
         _ = services.AddSingleton<IConfiguration>(Configuration());
         _ = services.AddSingleton<IDomainEventProgressReader>(new StatusProgressReader());
         var builder = services.AddPortia().RequireAuthorization();
+
         if (reactor)
             _ = builder.AddReactor<GlobalStatusReactor>(identity.ComponentName, WorkloadScope.Global);
         else
             _ = builder.AddProjector<GlobalStatusProjector>(identity.ComponentName, WorkloadScope.Global);
 
         // Act
+
         await using var provider = services.BuildServiceProvider();
 
         // Assert
@@ -192,8 +196,10 @@ public sealed class ProcessorStatusTests
     [Theory]
     [InlineData("different-scope", RequestErrorKind.Forbidden)]
     [InlineData(null, RequestErrorKind.Unauthorized)]
-    public async Task ShouldDenyInspectionGivenUnauthenticatedOrOutOfScopeCaller(string? actorScope,
-        RequestErrorKind error)
+    public async Task ShouldDenyInspectionGivenUnauthenticatedOrOutOfScopeCaller(
+        string? actorScope,
+        RequestErrorKind error
+    )
     {
         // Arrange
         var store = new StatusCheckpointStore();
@@ -229,10 +235,12 @@ public sealed class ProcessorStatusTests
         var services = Services(store);
         _ = services.AddSingleton<IDomainEventProgressReader>(progress);
         var builder = services.AddPortia().RequireAuthorization();
+
         if (reactor)
             _ = builder.AddReactor<GlobalStatusReactor>("component", WorkloadScope.Global);
         else
             _ = builder.AddProjector<GlobalStatusProjector>("component", WorkloadScope.Global);
+
         await using var provider = services.BuildServiceProvider();
         await using var scope = provider.CreateAsyncScope();
 
@@ -301,8 +309,11 @@ public sealed class ProcessorStatusTests
     [InlineData("global-projector", "tenant-a", RequestErrorKind.Validation)]
     [InlineData("tenant-projector", null, RequestErrorKind.Validation)]
     [InlineData("tenant-projector", "invalid/tenant", RequestErrorKind.Validation)]
-    public async Task ShouldRejectBeforeResolvingCheckpointGivenInvalidTarget(string processor, string? tenant,
-        RequestErrorKind error)
+    public async Task ShouldRejectBeforeResolvingCheckpointGivenInvalidTarget(
+        string processor,
+        string? tenant,
+        RequestErrorKind error
+    )
     {
         // Arrange
         var store = new StatusCheckpointStore();
@@ -384,8 +395,10 @@ public sealed class ProcessorStatusTests
     [InlineData(true, false)]
     [InlineData(false, true)]
     [InlineData(true, true)]
-    public async Task ShouldUseJournalOnlyForFailureEvidenceGivenAuthoritativeCheckpoint(bool staleJournal,
-        bool sourceUnavailable)
+    public async Task ShouldUseJournalOnlyForFailureEvidenceGivenAuthoritativeCheckpoint(
+        bool staleJournal,
+        bool sourceUnavailable
+    )
     {
         // Arrange
         var store = new StatusCheckpointStore();
@@ -404,8 +417,10 @@ public sealed class ProcessorStatusTests
             [], [], [], 2, completed);
         var services = Services(store);
         _ = services.AddSingleton<IOperationalStore>(new StatusJournal(state));
+
         if (sourceUnavailable)
             _ = services.AddSingleton<IDomainEventProgressReader>(new FailingStatusProgressReader());
+
         _ = services.AddPortia().AddProjector<GlobalStatusProjector>(identity.ComponentName, WorkloadScope.Global);
         await using var provider = services.BuildServiceProvider();
 
@@ -568,10 +583,12 @@ public sealed class ProcessorStatusTests
         var now = clock.GetUtcNow();
         var next = now.AddSeconds(5);
         worker.Set("retry_wait", "Handling", "Timeout", "retry_processing", next, 2);
+
         if (journal)
             worker.SetJournalWait(new OperationalJournalWait("attempt-start", nameof(IOException), now, next, 2));
 
         // Act
+
         var result = await SendAsync(provider, new GetProcessorStatus("projection"));
 
         // Assert
@@ -663,8 +680,11 @@ public sealed class ProcessorStatusTests
             : new Dictionary<string, string?> { ["PORTIA_SYSTEM_ADMIN_ROLE"] = role })
         .Build();
 
-    static async ValueTask<Result<ProcessorStatus>> SendAsync(IServiceProvider provider, GetProcessorStatus request,
-        string actorScope = "global")
+    static async ValueTask<Result<ProcessorStatus>> SendAsync(
+        IServiceProvider provider,
+        GetProcessorStatus request,
+        string actorScope = "global"
+    )
     {
         await using var scope = provider.CreateAsyncScope();
         return await scope.ServiceProvider.GetRequiredService<IRequestBus>()
@@ -688,13 +708,17 @@ public sealed class ProcessorStatusTests
         internal void Set(CheckpointIdentity identity, string cursor) =>
             _checkpoints[identity] = new ProjectionCheckpoint(new EventCursor(cursor));
 
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-            CancellationToken ct = default)
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+            CheckpointIdentity identity,
+            CancellationToken ct = default
+        )
         {
             ct.ThrowIfCancellationRequested();
             Reads.Add(identity);
+
             if (CheckpointError is { } error)
                 return ValueTask.FromException<ProjectionCheckpoint>(error);
+
             return ValueTask.FromResult(_checkpoints.GetValueOrDefault(identity));
         }
 
@@ -707,15 +731,22 @@ public sealed class ProcessorStatusTests
             throw new InvalidOperationException("Status inspection must not begin processing.");
         }
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-            CancellationToken ct = default)
+        public ValueTask SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default
+        )
         {
             Writes++;
             throw new InvalidOperationException("Status inspection must not change progress.");
         }
 
-        ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
-            ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+        ValueTask IConditionalProjectionCheckpointStore.SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint expected,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct
+        )
         {
             ct.ThrowIfCancellationRequested();
             throw new InvalidOperationException("Status inspection must not change progress.");
@@ -742,8 +773,11 @@ public sealed class ProcessorStatusTests
         internal EventStreamPattern? Pattern { get; private set; }
         internal EventCursor Position { get; private set; }
 
-        public ValueTask<EventStreamProgress> GetProgressAsync(EventStreamPattern pattern, EventCursor position,
-            CancellationToken ct = default)
+        public ValueTask<EventStreamProgress> GetProgressAsync(
+            EventStreamPattern pattern,
+            EventCursor position,
+            CancellationToken ct = default
+        )
         {
             ct.ThrowIfCancellationRequested();
             Pattern = pattern;
@@ -755,8 +789,11 @@ public sealed class ProcessorStatusTests
 
     sealed class FailingStatusProgressReader(CancellationTokenSource? cancellation = null) : IDomainEventProgressReader
     {
-        public ValueTask<EventStreamProgress> GetProgressAsync(EventStreamPattern pattern, EventCursor position,
-            CancellationToken ct = default)
+        public ValueTask<EventStreamProgress> GetProgressAsync(
+            EventStreamPattern pattern,
+            EventCursor position,
+            CancellationToken ct = default
+        )
         {
             if (cancellation is not null)
             {
@@ -770,8 +807,11 @@ public sealed class ProcessorStatusTests
 
     sealed class MismatchedStatusProgressReader : IDomainEventProgressReader
     {
-        public ValueTask<EventStreamProgress> GetProgressAsync(EventStreamPattern pattern, EventCursor position,
-            CancellationToken ct = default) => ValueTask.FromResult(new EventStreamProgress(
+        public ValueTask<EventStreamProgress> GetProgressAsync(
+            EventStreamPattern pattern,
+            EventCursor position,
+            CancellationToken ct = default
+        ) => ValueTask.FromResult(new EventStreamProgress(
             new EventCursor("unrelated-position"), new EventCursor("unrelated-head"), 0, true, DateTimeOffset.UtcNow));
     }
 
@@ -795,12 +835,18 @@ public sealed class ProcessorStatusTests
             ReadAsync(OperationalTarget target, CancellationToken ct = default) =>
             ValueTask.FromResult<OperationalProcessorState?>(target == state.Target ? state : null);
 
-        public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(OperationalScope scope,
-            CancellationToken ct = default) =>
+        public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(
+            OperationalScope scope,
+            CancellationToken ct = default
+        ) =>
             ValueTask.FromResult<IReadOnlyList<OperationalProcessorState>>([state]);
 
-        public ValueTask<bool> CompareExchangeAsync(OperationalProcessorState replacement, long expectedRevision,
-            Guid expectedOwner, CancellationToken ct = default) =>
+        public ValueTask<bool> CompareExchangeAsync(
+            OperationalProcessorState replacement,
+            long expectedRevision,
+            Guid expectedOwner,
+            CancellationToken ct = default
+        ) =>
             throw new InvalidOperationException("Status inspection must not change the journal.");
     }
 
@@ -817,12 +863,18 @@ public sealed class ProcessorStatusTests
             throw new IOException("private journal detail");
         }
 
-        public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(OperationalScope scope,
-            CancellationToken ct = default) =>
+        public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(
+            OperationalScope scope,
+            CancellationToken ct = default
+        ) =>
             throw new InvalidOperationException("Status inspection must read one exact target.");
 
-        public ValueTask<bool> CompareExchangeAsync(OperationalProcessorState replacement, long expectedRevision,
-            Guid expectedOwner, CancellationToken ct = default) =>
+        public ValueTask<bool> CompareExchangeAsync(
+            OperationalProcessorState replacement,
+            long expectedRevision,
+            Guid expectedOwner,
+            CancellationToken ct = default
+        ) =>
             throw new InvalidOperationException("Status inspection must not change the journal.");
     }
 }

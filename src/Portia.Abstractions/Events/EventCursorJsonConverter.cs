@@ -12,11 +12,16 @@ public sealed class EventCursorJsonConverter : JsonConverter<EventCursor>
     {
         if (reader.TokenType != JsonTokenType.String)
             throw new JsonException("An event cursor must be a JSON string.");
+
         var value = reader.GetString()!;
+
         if (value.Length == 0)
             return EventCursor.Start;
+
+
         if (string.IsNullOrWhiteSpace(value))
             throw new JsonException("An event cursor must not contain only whitespace.");
+
         return new EventCursor(value);
     }
 

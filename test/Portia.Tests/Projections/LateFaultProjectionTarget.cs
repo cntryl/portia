@@ -9,11 +9,13 @@ sealed class LateFaultProjectionTarget : ITestProjectionRepository
 
     public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
         CheckpointIdentity identity,
-        CancellationToken ct = default) => ValueTask.FromResult(_checkpoint);
+        CancellationToken ct = default
+    ) => ValueTask.FromResult(_checkpoint);
 
     public ValueTask<IProjectionBatch> BeginAsync(
         ProjectionBatchContext context,
-        CancellationToken ct = default) =>
+        CancellationToken ct = default
+    ) =>
         ValueTask.FromResult<IProjectionBatch>(new LateFaultProjectionBatch(this));
 
     sealed class LateFaultProjectionBatch(LateFaultProjectionTarget target) : IProjectionBatch

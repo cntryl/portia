@@ -126,26 +126,34 @@ public sealed class RequestScenario
     /// <param name="cancellationToken">Cancellation propagated through dispatch and enumeration.</param>
     /// <returns>Expectations for the observed sequence.</returns>
     /// <exception cref="ArgumentOutOfRangeException">The limit is not positive.</exception>
-    public StreamRequestExpectations<TOut> When<TOut>(IStreamRequest<TOut> request, int maxItems,
-        CancellationToken cancellationToken = default)
+    public StreamRequestExpectations<TOut> When<TOut>(
+        IStreamRequest<TOut> request,
+        int maxItems,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxItems);
         return Stream(request, maxItems, cancellationToken);
     }
 
-    StreamRequestExpectations<TOut> Stream<TOut>(IStreamRequest<TOut> request, int? maxItems,
-        CancellationToken cancellationToken)
+    StreamRequestExpectations<TOut> Stream<TOut>(
+        IStreamRequest<TOut> request,
+        int? maxItems,
+        CancellationToken cancellationToken
+    )
     {
         ArgumentNullException.ThrowIfNull(request);
         return new StreamRequestExpectations<TOut>(Definition(request, async (bus, context) =>
         {
             var items = new List<TOut>();
+
             try
             {
                 await foreach (var item in bus.DispatchStreamAsync(request, context, cancellationToken)
                                    .WithCancellation(cancellationToken).ConfigureAwait(false))
                 {
                     items.Add(item);
+
                     if (items.Count == maxItems)
                         break;
                 }
@@ -163,11 +171,14 @@ public sealed class RequestScenario
                 return (ScenarioOutcome.Conflict(), items);
             }
 
+
             return (ScenarioOutcome.From(true, null), (IReadOnlyList<TOut>)items);
         }), []);
     }
 
-    ScenarioDefinition<TPayload> Definition<TPayload>(IRequestBase request,
-        Func<IRequestBus, RequestDispatchContext, Task<(ScenarioOutcome Outcome, TPayload Payload)>> dispatch) =>
+    ScenarioDefinition<TPayload> Definition<TPayload>(
+        IRequestBase request,
+        Func<IRequestBus, RequestDispatchContext, Task<(ScenarioOutcome Outcome, TPayload Payload)>> dispatch
+    ) =>
         new(_services, _actor, _metadata, request, dispatch);
 }

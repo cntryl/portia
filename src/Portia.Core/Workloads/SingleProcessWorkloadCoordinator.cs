@@ -39,12 +39,14 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
     public async Task RunAsync(
         Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
         Func<WorkloadIdentity, CancellationToken, Task> run,
-        CancellationToken ct = default)
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(workloads);
         ArgumentNullException.ThrowIfNull(run);
 
         var owned = new Dictionary<WorkloadIdentity, OwnedWorkload>();
+
         try
         {
             while (true)
@@ -70,6 +72,7 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
                     }
 
                     var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
                     try
                     {
                         owned[identity] = new OwnedWorkload(cancellation, run(identity, cancellation.Token));
@@ -88,6 +91,7 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
         {
             // Every remaining workload is cancelled and awaited, whatever ended coordination.
             List<Exception> faults = [];
+
             try
             {
                 await ReleaseAsync(owned, [.. owned.Keys]).ConfigureAwait(false);
@@ -99,8 +103,11 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
 
             // Faults raised while shutting down on request are not a coordination failure, but a
             // fault that ends coordination keeps every other fault that ended with it.
+
+
             if (faults.Count == 0 || (failure is OperationCanceledException && ct.IsCancellationRequested))
                 throw;
+
             faults.Insert(0, failure);
             throw new AggregateException(faults);
         }
@@ -115,11 +122,14 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
         var releasing = identities.Select(identity => owned[identity]).Select(workload =>
             (Workload: workload,
                 StopRequested: !workload.Run.IsCompleted || workload.Cancellation.IsCancellationRequested)).ToArray();
+
         foreach (var identity in identities)
             _ = owned.Remove(identity);
 
+
         List<Exception> faults = [];
         List<Task> cancellations = [];
+
         foreach (var (workload, _) in releasing)
         {
             try
@@ -133,6 +143,7 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
                 faults.Add(error);
             }
         }
+
 
         foreach (var cancellation in cancellations)
         {
@@ -165,8 +176,10 @@ public sealed class SingleProcessWorkloadCoordinator : IWorkloadCoordinator
             }
         }
 
+
         if (faults.Count == 1)
             ExceptionDispatchInfo.Capture(faults[0]).Throw();
+
         if (faults.Count > 1)
             throw new AggregateException(faults);
     }

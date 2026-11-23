@@ -137,8 +137,10 @@ public sealed partial class OperationalExecutionTests
         Assert.Equal(session.State.Attempts[^1].Id, session.State.Block!.AttemptId);
     }
 
-    static async ValueTask<RepairPlan> QueueRepairAsync(PortiaOperations api,
-        System.Security.Claims.ClaimsPrincipal administrator)
+    static async ValueTask<RepairPlan> QueueRepairAsync(
+        PortiaOperations api,
+        System.Security.Claims.ClaimsPrincipal administrator
+    )
     {
         var plan = await api.PreviewRepairAsync(administrator, Target);
         _ = await api.ApproveRepairAsync(administrator, Target, plan.Id);

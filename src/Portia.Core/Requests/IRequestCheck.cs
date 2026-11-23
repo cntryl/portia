@@ -9,8 +9,12 @@ interface IRequestCheck
 
     string Role { get; }
 
-    ValueTask<Result> CheckAsync(IServiceProvider services, IRequestBase request, IRequestContext context,
-        CancellationToken ct);
+    ValueTask<Result> CheckAsync(
+        IServiceProvider services,
+        IRequestBase request,
+        IRequestContext context,
+        CancellationToken ct
+    );
 
     void Finished(long started, string outcome);
 }

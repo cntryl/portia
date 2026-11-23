@@ -43,6 +43,7 @@ public sealed class QualifiedObservations
     public async Task WaitAsync(CancellationToken ct)
     {
         _ = Interlocked.Increment(ref _waitStarted);
+
         try
         {
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
@@ -77,6 +78,7 @@ public sealed class QualifiedWaitScope(QualifiedObservations observations) : IAs
     public async ValueTask DisposeAsync()
     {
         await Task.Yield();
+
         if (Waiting)
             observations.Completed.Enqueue(new QualifiedScopeEvidence(_id, ["wait", "disposed"]));
     }
@@ -117,8 +119,11 @@ public sealed class QualifiedGuard(QualifiedScope scope) : IRequestGuard<Qualifi
 
 public sealed class QualifiedBehavior(QualifiedScope scope) : IRequestPipelineBehavior<QualifiedChange, QualifiedReply>
 {
-    public async ValueTask<Result<QualifiedReply>> HandleAsync(IRequestContext<QualifiedChange> context,
-        RequestPipelineNext<QualifiedReply> continuation, CancellationToken ct)
+    public async ValueTask<Result<QualifiedReply>> HandleAsync(
+        IRequestContext<QualifiedChange> context,
+        RequestPipelineNext<QualifiedReply> continuation,
+        CancellationToken ct
+    )
     {
         scope.Stages.Add("before");
         var result = await continuation(ct);
@@ -132,14 +137,20 @@ public sealed class QualifiedBehavior(QualifiedScope scope) : IRequestPipelineBe
 public sealed class QualifiedChangeHandler(IAggregateExecutor executor, QualifiedScope scope)
     : IRequestHandler<QualifiedChange, QualifiedReply>
 {
-    public async ValueTask<Result<QualifiedReply>> HandleAsync(IRequestContext<QualifiedChange> context,
-        CancellationToken ct)
+    public async ValueTask<Result<QualifiedReply>> HandleAsync(
+        IRequestContext<QualifiedChange> context,
+        CancellationToken ct
+    )
     {
         scope.Stages.Add("handled");
+
         if (context.Request.Mode == "conflict")
             return Result<QualifiedReply>.Failure(new RequestError(RequestErrorKind.Conflict, "Value already exists."));
+
+
         if (context.Request.Mode == "fault")
             throw new IOException("sensitive application fault");
+
         return await executor.ExecuteAsync(new QualifiedAggregate(context.Request.Tenant), aggregate =>
         {
             aggregate.Change(context.Request.Value);
@@ -155,8 +166,10 @@ public sealed class QualifiedReadHandler(
     QualifiedWaitScope scope)
     : IRequestHandler<QualifiedRead, QualifiedState>
 {
-    public async ValueTask<Result<QualifiedState>> HandleAsync(IRequestContext<QualifiedRead> context,
-        CancellationToken ct)
+    public async ValueTask<Result<QualifiedState>> HandleAsync(
+        IRequestContext<QualifiedRead> context,
+        CancellationToken ct
+    )
     {
         if (context.Request.Wait)
         {
@@ -164,15 +177,19 @@ public sealed class QualifiedReadHandler(
             await observations.WaitAsync(ct);
         }
 
+
         if (context.Request.Fail)
             throw new IOException("sensitive query fault");
+
         var values = new List<int>();
         var actors = new List<string>();
+
         await foreach (var record in store.ReadAsync(QualifiedAggregate.Address(context.Request.Tenant), ct: ct))
         {
             values.Add(((QualifiedChanged)record.Event).Value);
             actors.Add(record.Event.Metadata.Actor?.Subject ?? "missing");
         }
+
 
         return Result<QualifiedState>.Success(new QualifiedState(values.ToArray(), actors.ToArray(),
             observations.Completed.ToArray(), observations.WaitStarted, observations.WaitCanceled));

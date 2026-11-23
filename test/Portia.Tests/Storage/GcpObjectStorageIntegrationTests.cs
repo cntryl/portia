@@ -69,11 +69,13 @@ public sealed class GcpObjectStorageIntegrationTests
                         };
                     request.Headers.Host = part.UploadUri.Host;
                     using var response = await transfer.SendAsync(request, ct);
+
                     if (!response.IsSuccessStatusCode)
                     {
                         throw new InvalidDataException(
                             $"{(int)response.StatusCode} from {part.UploadUri}: {await response.Content.ReadAsStringAsync(ct)}");
                     }
+
 
                     var generation = response.Headers.TryGetValues("x-goog-generation", out var values)
                         ? values.Single()

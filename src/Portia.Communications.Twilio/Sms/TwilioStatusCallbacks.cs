@@ -16,8 +16,10 @@ public static class TwilioStatusCallbackEndpointRouteBuilderExtensions
     /// <param name="endpoints">The endpoints.</param>
     /// <param name="pattern">The route prefix, such as <c>/twilio/status</c>.</param>
     /// <returns>A builder for further endpoint conventions.</returns>
-    public static IEndpointConventionBuilder MapTwilioStatusCallbacks(this IEndpointRouteBuilder endpoints,
-        string pattern)
+    public static IEndpointConventionBuilder MapTwilioStatusCallbacks(
+        this IEndpointRouteBuilder endpoints,
+        string pattern
+    )
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         ArgumentException.ThrowIfNullOrWhiteSpace(pattern);
@@ -33,20 +35,25 @@ static class TwilioStatusCallbacks
     {
         if (address is null)
             return null;
+
+
         if (!address.IsAbsoluteUri)
             throw new ArgumentException(
                 "The status-callback address must be absolute HTTPS or HTTP on localhost, 127.0.0.1 or ::1, without a query, fragment or credentials.",
                 nameof(address));
+
         var host = address.Host.Trim('[', ']');
         var loopbackHost = host.Equals("localhost", StringComparison.OrdinalIgnoreCase)
                            || host is "127.0.0.1" or "::1";
         var loopbackHttp = address.Scheme == Uri.UriSchemeHttp && loopbackHost;
+
         if (address.Scheme != Uri.UriSchemeHttps && !loopbackHttp
                                    || address.Query.Length != 0 || address.Fragment.Length != 0 ||
                                    address.UserInfo.Length != 0)
             throw new ArgumentException(
                 "The status-callback address must be absolute HTTPS or HTTP on localhost, 127.0.0.1 or ::1, without a query, fragment or credentials.",
                 nameof(address));
+
         return address.AbsoluteUri.TrimEnd('/');
     }
 
@@ -59,12 +66,14 @@ static class TwilioStatusCallbacks
         var options = context.RequestServices.GetRequiredService<TwilioStatusCallbackOptions>();
         var tenantSegment = request.RouteValues["tenant"] as string;
         var send = request.RouteValues["send"] as string;
+
         if (options.Address is null || !SendCorrelation.TryDecodeTenant(tenantSegment, out var tenant)
                                     || !SendId.IsValid(send))
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;
             return;
         }
+
 
         if (!request.HasFormContentType)
         {
@@ -77,6 +86,7 @@ static class TwilioStatusCallbacks
         var account = await context.RequestServices.GetRequiredService<ITwilioTenantResolver>()
             .ResolveAsync(tenant, ct).ConfigureAwait(false);
         var signature = request.Headers["X-Twilio-Signature"];
+
         if (account?.AuthToken is not { Length: > 0 } token || signature.Count != 1
                                                             || !Verify(Address(options.Address, tenantSegment!, send),
                                                                 form, token, signature[0])
@@ -86,6 +96,7 @@ static class TwilioStatusCallbacks
             return;
         }
 
+
         DeliveryEventKind? kind = form["MessageStatus"].ToString() switch
         {
             "queued" or "sending" or "sent" => DeliveryEventKind.Sent,
@@ -94,6 +105,7 @@ static class TwilioStatusCallbacks
             "failed" => DeliveryEventKind.Failed,
             _ => null,
         };
+
         if (kind is { } known)
         {
             var clock = context.RequestServices.GetService<TimeProvider>() ?? TimeProvider.System;
@@ -102,6 +114,7 @@ static class TwilioStatusCallbacks
                 .ConfigureAwait(false);
         }
 
+
         context.Response.StatusCode = StatusCodes.Status204NoContent;
     }
 
@@ -109,6 +122,7 @@ static class TwilioStatusCallbacks
     static bool Verify(string url, IFormCollection form, string token, string? signature)
     {
         var text = new StringBuilder(url);
+
         foreach (var field in form.OrderBy(static field => field.Key, StringComparer.Ordinal))
         {
             foreach (var value in field.Value.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal))
@@ -117,6 +131,7 @@ static class TwilioStatusCallbacks
 
         // Twilio defines the callback signature as HMAC-SHA1; no stronger scheme is offered.
 #pragma warning disable CA5350
+
         var expected = HMACSHA1.HashData(Encoding.UTF8.GetBytes(token), Encoding.UTF8.GetBytes(text.ToString()));
 #pragma warning restore CA5350
         Span<byte> provided = stackalloc byte[HMACSHA1.HashSizeInBytes];

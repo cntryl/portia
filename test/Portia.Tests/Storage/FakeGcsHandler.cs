@@ -68,8 +68,10 @@ public sealed class FakeGcsHandler : HttpMessageHandler
     ];
 
     /// <inheritdoc />
-    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
-        CancellationToken cancellationToken)
+    protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken
+    )
     {
         var body = request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken);
         var uri = request.RequestUri!;
@@ -88,11 +90,16 @@ public sealed class FakeGcsHandler : HttpMessageHandler
         }
     }
 
-    HttpResponseMessage Route(HttpRequestMessage request, string[] segments, Dictionary<string, string> query,
-        string body)
+    HttpResponseMessage Route(
+        HttpRequestMessage request,
+        string[] segments,
+        Dictionary<string, string> query,
+        string body
+    )
     {
         // storage/v1/b/{bucket}[/o[/{name}[/compose | /rewriteTo/b/{bucket}/o/{name}]]]
         var bucket = segments[3];
+
         if (segments.Length == 4)
         {
             return BucketKeys.TryGetValue(bucket, out var defaultKey)
@@ -103,6 +110,7 @@ public sealed class FakeGcsHandler : HttpMessageHandler
                 })
                 : Error(HttpStatusCode.NotFound, "bucket");
         }
+
 
         if (segments.Length == 5)
         {
@@ -134,30 +142,40 @@ public sealed class FakeGcsHandler : HttpMessageHandler
             : Json(HttpStatusCode.OK, Describe(bucket, name, stored));
     }
 
-    HttpResponseMessage StartUpload(HttpRequestMessage request, string[] segments, Dictionary<string, string> query,
-        string body)
+    HttpResponseMessage StartUpload(
+        HttpRequestMessage request,
+        string[] segments,
+        Dictionary<string, string> query,
+        string body
+    )
     {
         // upload/storage/v1/b/{bucket}/o?uploadType=resumable (start) or ?upload_id=N (chunk)
         var bucket = segments[4];
+
         if (request.Method == HttpMethod.Post)
         {
             var name = query.GetValueOrDefault("name", string.Empty);
+
             if (string.IsNullOrWhiteSpace(body) is false)
             {
                 using var document = JsonDocument.Parse(body);
                 name = document.RootElement.TryGetProperty("name", out var named) ? named.GetString()! : name;
             }
 
+
             Dictionary<string, string>? metadata = null;
+
             if (!string.IsNullOrWhiteSpace(body))
             {
                 using var document = JsonDocument.Parse(body);
+
                 if (document.RootElement.TryGetProperty("metadata", out var custom))
                 {
                     metadata = custom.EnumerateObject().ToDictionary(static property => property.Name,
                         static property => property.Value.GetString()!, StringComparer.Ordinal);
                 }
             }
+
 
             var id = (++_generation).ToString(System.Globalization.CultureInfo.InvariantCulture);
             _uploads[id] = new PendingUpload(bucket, name, query, metadata, new MemoryStream());
@@ -168,27 +186,34 @@ public sealed class FakeGcsHandler : HttpMessageHandler
             return started;
         }
 
+
         var pending = _uploads[query["upload_id"]];
         var range = request.Content!.Headers.ContentRange;
         var bytes = request.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
         pending.Data.Write(bytes);
+
         if (range?.Length is not { } total || pending.Data.Length < total)
         {
             var more = new HttpResponseMessage((HttpStatusCode)308);
+
             if (pending.Data.Length > 0)
             {
                 more.Headers.TryAddWithoutValidation("Range", $"bytes=0-{pending.Data.Length - 1}");
             }
 
+
             return more;
         }
 
+
         BeforeRewrite?.Invoke(this);
+
         if (pending.Query.GetValueOrDefault("ifGenerationMatch") == "0" &&
             Objects.ContainsKey((pending.Bucket, pending.Name)))
         {
             return Error(HttpStatusCode.PreconditionFailed, "destination exists");
         }
+
 
         var key = pending.Query.TryGetValue("kmsKeyName", out var requested) ? requested + KeyVersion : null;
         var stored = new Stored(pending.Data.ToArray(), ++_generation, key, pending.Metadata);
@@ -203,11 +228,13 @@ public sealed class FakeGcsHandler : HttpMessageHandler
         var from = 0L;
         var to = total - 1;
         var range = request.Headers.Range?.Ranges.FirstOrDefault();
+
         if (range is not null)
         {
             from = range.From ?? 0;
             to = Math.Min(range.To ?? to, total - 1);
         }
+
 
         var response = new HttpResponseMessage(range is null ? HttpStatusCode.OK : HttpStatusCode.PartialContent)
         {

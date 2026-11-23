@@ -23,30 +23,41 @@ sealed class MemoryOperationalStore : IOperationalStore, IOperationalReactionChe
         {
             if (Unavailable)
                 throw new IOException("offline");
+
             return ValueTask.FromResult(_documents.TryGetValue(target, out var bytes)
                 ? JsonSerializer.Deserialize(bytes, FitzJsonContext.Default.OperationalProcessorState)
                 : null);
         }
     }
 
-    public async ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(OperationalScope scope,
-        CancellationToken ct = default)
+    public async ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(
+        OperationalScope scope,
+        CancellationToken ct = default
+    )
     {
         OperationalTarget[] targets;
         lock (_documents)
             targets = _documents.Keys.Where(t => t.Scope == scope).ToArray();
         var list = new List<OperationalProcessorState>();
+
         foreach (var target in targets)
             list.Add((await ReadAsync(target, ct))!);
+
         return list;
     }
 
-    public async ValueTask<bool> CompareExchangeAsync(OperationalProcessorState replacement, long expectedRevision,
-        Guid expectedOwner, CancellationToken ct = default)
+    public async ValueTask<bool> CompareExchangeAsync(
+        OperationalProcessorState replacement,
+        long expectedRevision,
+        Guid expectedOwner,
+        CancellationToken ct = default
+    )
     {
         ct.ThrowIfCancellationRequested();
+
         if (BeforeExchange is { } beforeExchange)
             await beforeExchange().ConfigureAwait(false);
+
         return Exchange(replacement, expectedRevision, expectedOwner);
     }
 
@@ -60,9 +71,12 @@ sealed class MemoryOperationalStore : IOperationalStore, IOperationalReactionChe
         {
             if (Unavailable)
                 throw new IOException("offline");
+
             var actual = Read(replacement.Target);
+
             if ((actual?.Revision ?? 0) != expectedRevision || (actual?.OwnerSession ?? Guid.Empty) != expectedOwner)
                 return false;
+
             Assert.Equal(expectedRevision + 1, replacement.Revision);
             _documents[replacement.Target] = JsonSerializer.SerializeToUtf8Bytes(replacement,
                 FitzJsonContext.Default.OperationalProcessorState);
@@ -77,8 +91,11 @@ sealed class MemoryOperationalStore : IOperationalStore, IOperationalReactionChe
             return ValueTask.FromResult(_checkpoints.GetValueOrDefault(identity));
     }
 
-    public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-        CancellationToken ct = default)
+    public ValueTask SaveAsync(
+        CheckpointIdentity identity,
+        ProjectionCheckpoint checkpoint,
+        CancellationToken ct = default
+    )
     {
         ct.ThrowIfCancellationRequested();
         lock (_documents)
@@ -86,15 +103,24 @@ sealed class MemoryOperationalStore : IOperationalStore, IOperationalReactionChe
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask<bool> CommitAsync(OperationalProcessorState replacement, long expectedRevision, Guid ownerSession,
-        Guid attemptId, string? expectedCheckpoint, string? nextCheckpoint, CancellationToken ct = default)
+    public ValueTask<bool> CommitAsync(
+        OperationalProcessorState replacement,
+        long expectedRevision,
+        Guid ownerSession,
+        Guid attemptId,
+        string? expectedCheckpoint,
+        string? nextCheckpoint,
+        CancellationToken ct = default
+    )
     {
         lock (_documents)
         {
             Assert.Equal(expectedCheckpoint, _checkpoints.GetValueOrDefault(replacement.Target.Identity).Cursor.Value);
             Assert.Equal("running", Read(replacement.Target)!.Attempts.Single(a => a.Id == attemptId).Outcome);
+
             if (!Exchange(replacement, expectedRevision, ownerSession))
                 return ValueTask.FromResult(false);
+
             _checkpoints[replacement.Target.Identity] = new ProjectionCheckpoint(nextCheckpoint is null
                 ? EventCursor.Start
                 : new EventCursor(nextCheckpoint));
@@ -111,8 +137,12 @@ sealed class TestOperationalAuthorizer : IOperationalAuthorizer
         .AddInMemoryCollection(new Dictionary<string, string?> { ["PORTIA_SYSTEM_ADMIN_ROLE"] = AdministratorRole })
         .Build();
 
-    public ValueTask<bool> AuthorizeAsync(ClaimsPrincipal actor, OperationalScope scope,
-        OperationalAccess permission, CancellationToken ct = default)
+    public ValueTask<bool> AuthorizeAsync(
+        ClaimsPrincipal actor,
+        OperationalScope scope,
+        OperationalAccess permission,
+        CancellationToken ct = default
+    )
     {
         ct.ThrowIfCancellationRequested();
         var allowed = actor.HasClaim("scope", scope.Tenant ?? "global")

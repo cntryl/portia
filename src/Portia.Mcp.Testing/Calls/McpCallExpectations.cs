@@ -31,13 +31,17 @@ public sealed class McpCallExpectations
     async Task<McpCallSnapshot> VerifyResultAsync<T>(JsonTypeInfo<T> typeInfo, Action<T> inspect)
     {
         var snapshot = await _task.ConfigureAwait(false);
+
         if (snapshot.IsError)
             throw new InvalidOperationException(
                 $"Expected a successful MCP tool result, but the call failed.{Describe(snapshot)}");
+
+
         if (snapshot.StructuredJson is not { ValueKind: JsonValueKind.Object } structured
             || !structured.TryGetProperty("result", out var result))
             throw new InvalidOperationException(
                 "The successful MCP tool result did not contain structured JSON property 'result'.");
+
         var value = result.Deserialize(typeInfo);
         inspect(value!);
         return snapshot;
@@ -46,12 +50,14 @@ public sealed class McpCallExpectations
     async Task<McpCallSnapshot> VerifyAsync(bool expectFailure, string? kind)
     {
         var snapshot = await _task.ConfigureAwait(false);
+
         if (snapshot.IsError != expectFailure)
         {
             throw new InvalidOperationException(expectFailure
                 ? $"Expected the MCP tool call to fail, but it succeeded.{Describe(snapshot)}"
                 : $"Expected the MCP tool call to succeed, but it failed.{Describe(snapshot)}");
         }
+
 
         if (kind is not null && !string.Equals(KindOf(snapshot), kind, StringComparison.Ordinal))
         {

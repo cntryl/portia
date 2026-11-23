@@ -95,16 +95,21 @@ public sealed class ReactorTests
     [InlineData("orders", null, "8a529365-b054-5bc5-8749-b327f24b8e55")]
     [InlineData("orders", "acme", "0d9152c1-6c33-5704-8297-c74eb6f552ea")]
     public void ShouldCreateDeterministicEffectIdGivenReactionIdentity(
-        string? workloadName, string? tenantValue, string expectedId)
+        string? workloadName,
+        string? tenantValue,
+        string expectedId
+    )
     {
         // Arrange
         var reactor = new TestReactor(new RecordingAggregateRepository(),
             pattern: EventStreamPattern.ForTenant("reactors"));
+
         if (workloadName is not null)
         {
             TenantId? tenant = tenantValue is null ? null : new TenantId(tenantValue);
             reactor.BindWorkload(new WorkloadIdentity(workloadName, tenant), null);
         }
+
 
         var ev = new ValueChanged(42);
         ev.AttachMetadata(new DomainEventMetadata(

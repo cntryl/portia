@@ -33,21 +33,29 @@ public static partial class ProcessorOutcomeFixture
         public Result Apply(int value)
         {
             Seen.Add(value);
+
             if (Projection)
                 _pending += value;
             else
                 Value += value;
+
             if (value != 2)
                 return Result.Success;
+
             if (Exception is not null)
                 throw Exception;
+
+
             if (ReturnDefault)
                 return default;
+
             return Error is null ? Result.Success : Result.Failure(Error);
         }
 
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-            CancellationToken ct = default)
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+            CheckpointIdentity identity,
+            CancellationToken ct = default
+        )
         {
             Loads++;
             return ValueTask.FromResult(Checkpoint);
@@ -62,18 +70,26 @@ public static partial class ProcessorOutcomeFixture
             return ValueTask.FromResult<IProjectionBatch>(new Batch(this));
         }
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-            CancellationToken ct = default)
+        public ValueTask SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default
+        )
         {
             if (Projection)
                 Value += _pending;
+
             _pending = 0;
             Checkpoint = checkpoint;
             return ValueTask.CompletedTask;
         }
 
-        ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
-            ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+        ValueTask IConditionalProjectionCheckpointStore.SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint expected,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct
+        )
         {
             ct.ThrowIfCancellationRequested();
             lock (_checkpointGate)
@@ -81,6 +97,7 @@ public static partial class ProcessorOutcomeFixture
                 if (Checkpoint != expected)
                     throw new ProjectionConcurrencyException(
                         $"Checkpoint for '{identity.ComponentName}' changed from the expected value before save.");
+
                 Checkpoint = checkpoint;
             }
 
@@ -96,8 +113,10 @@ public static partial class ProcessorOutcomeFixture
             {
                 state.Disposals++;
                 state._pending = 0;
+
                 if (state.DisposeException is not null)
                     throw state.DisposeException;
+
                 return ValueTask.CompletedTask;
             }
         }
@@ -126,6 +145,7 @@ public static partial class ProcessorOutcomeFixture
             foreach (var context in contexts)
             {
                 var result = state.Apply(context);
+
                 if (!result.IsSuccess)
                     return ValueTask.FromResult(result);
             }
@@ -157,6 +177,7 @@ public static partial class ProcessorOutcomeFixture
             foreach (var context in contexts)
             {
                 var result = state.Apply(context.Trigger.Value);
+
                 if (!result.IsSuccess)
                     return ValueTask.FromResult(result);
             }

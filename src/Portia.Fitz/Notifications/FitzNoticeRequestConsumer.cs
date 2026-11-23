@@ -56,8 +56,10 @@ public sealed class FitzNoticeRequestConsumer(
             var request = envelope.Request as IRequest
                           ?? throw new InvalidOperationException(
                               "A Fitz notice message deserialized to a result-bearing request; only no-result requests can be published over notice.");
+
             if (!_catalog.Get(request.GetType()).Transports.Contains(RequestTransportId.Notice))
                 throw new InvalidRequestTransportException(request, RequestTransportId.Notice);
+
             return new RequestNotification(request, envelope.ActorToken, envelope.Metadata,
                 new NoticeInvocation(message.Route) { MessagingSystem = "fitz" }, envelope.TraceContext,
                 Name: envelope.Name);

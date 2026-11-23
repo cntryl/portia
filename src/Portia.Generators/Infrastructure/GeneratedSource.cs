@@ -28,11 +28,13 @@ static class GeneratedSource
         var bytes = algorithm.ComputeHash(Encoding.UTF8.GetBytes(value));
         var characters = new char[bytes.Length * 2];
         const string hexadecimal = "0123456789abcdef";
+
         for (var index = 0; index < bytes.Length; index++)
         {
             characters[index * 2] = hexadecimal[bytes[index] >> 4];
             characters[index * 2 + 1] = hexadecimal[bytes[index] & 15];
         }
+
 
         return new(characters);
     }
@@ -46,8 +48,11 @@ static class GeneratedSource
         context.AddSource(hintName, SourceText.From(source, Encoding.UTF8));
     }
 
-    public static IEnumerable<(string Key, T[] Items)> Buckets<T>(IEnumerable<T> items,
-        Func<T, string> identity, CancellationToken ct)
+    public static IEnumerable<(string Key, T[] Items)> Buckets<T>(
+        IEnumerable<T> items,
+        Func<T, string> identity,
+        CancellationToken ct
+    )
     {
         var keyed = items.Select(item => (Key: identity(item), Item: item))
             .GroupBy(entry => entry.Key, StringComparer.Ordinal).Select(group => group.First())
@@ -60,20 +65,31 @@ static class GeneratedSource
         return Partition(keyed, string.Empty, ct);
     }
 
-    public static string StatementTree(GeneratedOutput context, string space, string className,
-        string method, string parameterType, string parameterName, string[] statements, string hint,
-        bool internalMethods = false)
+    public static string StatementTree(
+        GeneratedOutput context,
+        string space,
+        string className,
+        string method,
+        string parameterType,
+        string parameterName,
+        string[] statements,
+        string hint,
+        bool internalMethods = false
+    )
     {
         var leaves = Buckets(statements, statement => statement, context.CancellationToken)
             .ToDictionary(bucket => bucket.Key, bucket => bucket.Items, StringComparer.Ordinal);
         var nodes = new HashSet<string>(StringComparer.Ordinal) { string.Empty };
+
         foreach (var key in leaves.Keys)
             for (var length = 1; length <= key.Length; length++)
                 _ = nodes.Add(key.Substring(0, length));
+
         var children = nodes.Where(key => key.Length > 0)
             .GroupBy(key => key.Substring(0, key.Length - 1), StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.OrderBy(key => key, StringComparer.Ordinal).ToArray(),
                 StringComparer.Ordinal);
+
         foreach (var key in nodes.OrderBy(key => key, StringComparer.Ordinal))
         {
             context.CancellationToken.ThrowIfCancellationRequested();
@@ -82,6 +98,7 @@ static class GeneratedSource
                 .Append(internalMethods ? "    internal static void " : "    private static void ").Append(method)
                 .Append("_Bucket").Append(key)
                 .Append('(').Append(parameterType).Append(' ').Append(parameterName).AppendLine(")\n    {");
+
             if (leaves.TryGetValue(key, out var body))
             {
                 foreach (var statement in body)
@@ -94,22 +111,29 @@ static class GeneratedSource
                         .Append(parameterName).AppendLine(");");
             }
 
+
             source.AppendLine("    }").AppendLine("}");
             Add(context, hint + "." + (key.Length == 0 ? "Root" : key) + ".g.cs", source.ToString());
         }
 
+
         return method + "_Bucket";
     }
 
-    static IEnumerable<(string Key, T[] Items)> Partition<T>((string Key, string Identity, T Item)[] entries,
-        string prefix, CancellationToken ct)
+    static IEnumerable<(string Key, T[] Items)> Partition<T>(
+        (string Key, string Identity, T Item)[] entries,
+        string prefix,
+        CancellationToken ct
+    )
     {
         ct.ThrowIfCancellationRequested();
+
         if (entries.Length <= 128)
         {
             yield return (prefix, entries.Select(entry => entry.Item).ToArray());
             yield break;
         }
+
 
         foreach (var group in entries.GroupBy(entry => BucketCharacter(entry.Key, entry.Identity, prefix.Length))
                      .OrderBy(group => group.Key))

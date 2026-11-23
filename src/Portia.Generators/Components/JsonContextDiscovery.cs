@@ -40,8 +40,10 @@ static class JsonContextDiscovery
     static ImmutableArray<DiscoveredJsonContext> ReferencedJsonContexts(Compilation compilation)
     {
         var contexts = ImmutableArray.CreateBuilder<DiscoveredJsonContext>();
+
         foreach (var assembly in compilation.SourceModule.ReferencedAssemblySymbols)
             contexts.AddRange(ReferencedByAssembly.GetValue(assembly, AssemblyContexts));
+
         return contexts.ToImmutable();
     }
 
@@ -49,6 +51,7 @@ static class JsonContextDiscovery
     {
         var contexts = new List<DiscoveredJsonContext>();
         var factories = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+
         foreach (var attribute in assembly.GetAttributes())
         {
             if (attribute.AttributeClass is { } attributeType
@@ -61,6 +64,7 @@ static class JsonContextDiscovery
                     factory.GetMembers("GetMetadata").Length > 0 ? Type(factory) + ".GetMetadata" : "null"));
             }
         }
+
 
         return [.. contexts];
     }
@@ -77,11 +81,13 @@ static class JsonContextDiscovery
         public int GetHashCode(ImmutableArray<DiscoveredJsonContext> contexts)
         {
             var hash = 17;
+
             if (!contexts.IsDefault)
             {
                 foreach (var context in contexts)
                     hash = unchecked(hash * 31 + context.GetHashCode());
             }
+
 
             return hash;
         }

@@ -52,8 +52,10 @@ public sealed class InMemoryEventStoreTests
             await store.AppendAsync(stream, 0, [stale], TestContext.Current.CancellationToken));
 
         var events = new List<DomainEvent>();
+
         await foreach (var ev in store.ReadAsync(stream, ct: TestContext.Current.CancellationToken))
             events.Add(ev.Event);
+
 
         Assert.Same(first, Assert.Single(events));
     }
@@ -178,8 +180,10 @@ public sealed class InMemoryEventStoreTests
         var store = new InMemoryEventStore();
         var events = Enumerable.Range(1, count).Select(i => Committed(new ValueChanged(i), id, (ulong)i)).ToArray();
         var before = GC.GetAllocatedBytesForCurrentThread();
+
         for (var i = 0; i < events.Length; i++)
             await store.AppendAsync(stream, (ulong)i, [events[i]]);
+
 
         return GC.GetAllocatedBytesForCurrentThread() - before;
     }

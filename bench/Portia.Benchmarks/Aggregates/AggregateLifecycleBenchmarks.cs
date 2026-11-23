@@ -121,26 +121,36 @@ sealed class AggregateApplication : IDisposable
         foreach (var count in new[] { 0, 1, 8, 128 })
         {
             _store.Reset();
+
             if (!(await RunAsync(count, "commit")).IsSuccess || _store.Appends != (count == 0 ? 0 : 1) ||
                 _store.Last.Length != count)
                 throw new InvalidOperationException(
                     "Aggregate fixture did not atomically commit the requested event count.");
+
             for (var index = 0; index < count; index++)
             {
                 var ev = (LifecycleChanged)_store.Last[index];
+
                 if (ev.Value != index || ev.Metadata.AggregateVersion != (ulong)index + 1 ||
                     ev.Metadata.EventId == Uuid.Empty)
                     throw new InvalidOperationException("Aggregate fixture lost event order or identity.");
             }
 
+
             if (_store.Last.Select(ev => ev.Metadata.EventId).Distinct().Count() != count)
                 throw new InvalidOperationException("Aggregate fixture reused event IDs.");
+
+
             if (count > 0 && _store.Last.Any(ev => ev.Metadata.ExecutionId is null || ev.Metadata.CausationId is null))
                 throw new InvalidOperationException("Ordinary request execution attribution was omitted.");
+
             _store.Reset();
+
             if ((await RunAsync(count, "discard")).IsSuccess || _store.Appends != 0)
                 throw new InvalidOperationException("The operation's explicit discard/result was not respected.");
+
             _store.Reset();
+
             if (!(await RunAsync(count, "save")).IsSuccess || _store.Last.Length != count)
                 throw new InvalidOperationException("Save did not preserve the raised event count.");
         }
@@ -179,12 +189,14 @@ sealed class AggregateEmitHandler(IAggregateExecutor executor, IAggregateWriter 
     public async ValueTask<Result> HandleAsync(IRequestContext<AggregateEmit> context, CancellationToken ct)
     {
         var aggregate = AggregateApplication.NewAggregate();
+
         if (context.Request.Decision == "save")
         {
             aggregate.Change(context.Request.Count);
             await writer.SaveAsync(aggregate, context, ct);
             return Result.Success;
         }
+
 
         return await executor.ExecuteAsync(aggregate, value =>
         {
@@ -208,18 +220,30 @@ sealed class AggregateRecordingStore : IEventStore
         Appends = 0;
     }
 
-    public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
-        CancellationToken ct) => Empty(ct);
+    public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+        EventStreamAddress stream,
+        ulong fromOffset,
+        CancellationToken ct
+    ) => Empty(ct);
 
-    public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-        CancellationToken ct) => Empty(ct);
+    public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+        EventStreamPattern pattern,
+        EventCursor cursor,
+        CancellationToken ct
+    ) => Empty(ct);
 
-    public async ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,
-        IReadOnlyList<DomainEvent> events, CancellationToken ct = default)
+    public async ValueTask AppendAsync(
+        EventStreamAddress stream,
+        ulong expectedStreamPosition,
+        IReadOnlyList<DomainEvent> events,
+        CancellationToken ct = default
+    )
     {
         ct.ThrowIfCancellationRequested();
+
         if (expectedStreamPosition != 0)
             throw new EventStreamConcurrencyException("Fixture expects one fresh aggregate execution.");
+
         if (YieldPersistence)
             await Task.Yield();
         // Bounded last-append observation, never an accumulating durable-store simulation.

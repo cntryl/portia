@@ -33,11 +33,15 @@ public sealed class StartupValidationTests
         // Arrange
         var application = new JsonSerializerOptions { WriteIndented = true };
         var services = new ServiceCollection();
+
         if (registeredFirst)
             _ = services.AddSingleton(application);
+
         _ = ReferencedJsonComposition.Add(services);
+
         if (!registeredFirst)
             _ = services.AddSingleton(application);
+
         using var provider = services.BuildServiceProvider();
 
         // Act
@@ -167,7 +171,9 @@ public sealed class StartupValidationTests
 
     sealed class MissingJsonMetadataHandler : IRequestHandler<MissingJsonMetadataRequest>
     {
-        public ValueTask<Result> HandleAsync(IRequestContext<MissingJsonMetadataRequest> context,
-            CancellationToken ct) => ValueTask.FromResult(Result.Success);
+        public ValueTask<Result> HandleAsync(
+            IRequestContext<MissingJsonMetadataRequest> context,
+            CancellationToken ct
+        ) => ValueTask.FromResult(Result.Success);
     }
 }

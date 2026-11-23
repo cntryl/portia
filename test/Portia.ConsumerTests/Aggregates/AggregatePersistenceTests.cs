@@ -38,12 +38,15 @@ public sealed class AggregatePersistenceTests
         Assert.Equal(2UL, reloaded.Version);
         Assert.Equal(2UL, reloaded.CommittedStreamPosition);
         var events = new List<DomainEventRecord>();
+
         await foreach (var record in fixture.Store.ReadAsync(account.Stream, ct: TestContext.Current.CancellationToken))
             events.Add(record);
+
         Assert.Equal([0UL, 1UL], events.Select(record => record.ResourceOffset));
         Assert.All(events, record => Assert.False(record.Event.Metadata.IsAudit));
 
         var records = new List<DomainEventRecord>();
+
         await foreach (var record in fixture.Store.ReadAsync(
                            EventStreamPattern.ForPattern(account.Stream.Realm, account.Stream.Area), ct: TestContext.Current.CancellationToken))
         {
@@ -52,6 +55,7 @@ public sealed class AggregatePersistenceTests
                 records.Add(record);
             }
         }
+
 
         Assert.Equal(5, records.Count);
         var sessions = records.Where(record => record.Event.Metadata.IsAudit).GroupBy(record => record.Stream)
@@ -67,8 +71,10 @@ public sealed class AggregatePersistenceTests
         });
         var multiAuditSession = sessions.Single(session => session.Count() == 2);
         var tail = new List<DomainEventRecord>();
+
         await foreach (var record in fixture.Store.ReadAsync(multiAuditSession.Key, 1))
             tail.Add(record);
+
         Assert.Equal(1UL, Assert.Single(tail).ResourceOffset);
     }
 

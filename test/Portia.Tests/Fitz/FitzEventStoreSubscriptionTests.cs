@@ -223,11 +223,19 @@ public sealed class FitzEventStoreSubscriptionTests
                 });
         }
 
-        public IAsyncEnumerable<StreamReadBatch> ReadAsync(string route, ulong startOffset, StreamReadMode mode,
-            StreamReadOptions? options = null, CancellationToken ct = default) => throw new NotSupportedException();
+        public IAsyncEnumerable<StreamReadBatch> ReadAsync(
+            string route,
+            ulong startOffset,
+            StreamReadMode mode,
+            StreamReadOptions? options = null,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
-        public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IStreamSession> BeginAsync(
+            string route,
+            ReadOnlyMemory<byte>? ingestMetadata = null,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
         public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) =>
             throw new NotSupportedException();
@@ -259,6 +267,7 @@ public sealed class FitzEventStoreSubscriptionTests
                 {
                     if (_commits!.Writer.TryWrite(new StreamCommitEvent(Pattern.ToString(), _offset++)))
                         continue;
+
                     _ = Interlocked.Increment(ref _overflows);
                     _ = _commits.Writer.TryComplete(
                         new SubscriptionBackpressureException("The local subscription buffer is full"));
@@ -282,11 +291,19 @@ public sealed class FitzEventStoreSubscriptionTests
             return ValueTask.CompletedTask;
         }
 
-        public IAsyncEnumerable<StreamReadBatch> ReadAsync(string route, ulong startOffset, StreamReadMode mode,
-            StreamReadOptions? options = null, CancellationToken ct = default) => throw new NotSupportedException();
+        public IAsyncEnumerable<StreamReadBatch> ReadAsync(
+            string route,
+            ulong startOffset,
+            StreamReadMode mode,
+            StreamReadOptions? options = null,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
-        public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IStreamSession> BeginAsync(
+            string route,
+            ReadOnlyMemory<byte>? ingestMetadata = null,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
         public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) =>
             throw new NotSupportedException();
@@ -304,11 +321,19 @@ public sealed class FitzEventStoreSubscriptionTests
         public Task<StreamSubscription> SubscribeAsync(string pattern, CancellationToken ct = default) =>
             Task.FromResult(new StreamSubscription(pattern, Read(ct), Unsubscribe, Task.CompletedTask));
 
-        public IAsyncEnumerable<StreamReadBatch> ReadAsync(string route, ulong startOffset, StreamReadMode mode,
-            StreamReadOptions? options = null, CancellationToken ct = default) => throw new NotSupportedException();
+        public IAsyncEnumerable<StreamReadBatch> ReadAsync(
+            string route,
+            ulong startOffset,
+            StreamReadMode mode,
+            StreamReadOptions? options = null,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
-        public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IStreamSession> BeginAsync(
+            string route,
+            ReadOnlyMemory<byte>? ingestMetadata = null,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
         public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) =>
             throw new NotSupportedException();

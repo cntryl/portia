@@ -22,7 +22,8 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         Projector projector,
         ProjectionCheckpoint checkpoint,
         ProjectionRunOptions? options = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default
+    )
         => (await RunPassAsync(null, projector, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
 
     // The journaled form of a pass. Hosting supplies the workload's operational session here, so whether
@@ -32,7 +33,8 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         Projector projector,
         ProjectionCheckpoint checkpoint,
         ProjectionRunOptions? options = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default
+    )
         => (await RunPassAsync(session, projector, checkpoint, options, ct).ConfigureAwait(false)).Checkpoint;
 
     internal async ValueTask<ProjectionPassResult> RunPassAsync(
@@ -40,14 +42,17 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         Projector projector,
         ProjectionCheckpoint checkpoint,
         ProjectionRunOptions? options = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(projector);
+
         if (projector.Pattern.IsTenantTemplate)
         {
             throw new InvalidOperationException(
                 "An unbound tenant stream template cannot be run manually. Register it as a PerTenant workload.");
         }
+
 
         options ??= ProjectionRunOptions.Default;
         options.Validate();
@@ -59,6 +64,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         var processed = 0;
         var budgetExhausted = false;
         await using var source = new ProcessorEventStream(_reader, identity, checkpoint, ct);
+
         try
         {
             while (await source.MoveNextAsync().ConfigureAwait(false))
@@ -116,7 +122,8 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         List<DomainEventRecord> records,
         ProjectionCheckpoint checkpoint,
         CheckpointIdentity identity,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         var started = PortiaTelemetry.StartTimestamp();
         var count = records.Count;
@@ -129,10 +136,12 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
         var outcomeUnknown = false;
         IProjectionBatch? batch = null;
         Exception? failure = null;
+
         try
         {
             if (session is { } operations)
                 _ = await operations.BeginAsync(records, checkpoint, ct).ConfigureAwait(false);
+
             var context = new ProjectionBatchContext(identity, checkpoint);
             batch = await projector.Store.BeginAsync(context, ct).ConfigureAwait(false);
             stage = ProcessorFailureStage.Handling;
@@ -141,8 +150,10 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
             var result = await projector.ProjectAsync(records, new ProjectorContext(identity), ct)
                 .ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
+
             if (!result.IsSuccess)
                 throw new ProcessorFailureException(identity, checkpoint, stage, first, last, error: result.Error);
+
 
             stage = ProcessorFailureStage.Committing;
             var nextCheckpoint = new ProjectionCheckpoint(last.NextCursor);
@@ -170,6 +181,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
             failure = diagnostic;
         }
 
+
         try
         {
             if (batch is not null)
@@ -196,6 +208,7 @@ public sealed class ProjectorRunner(IDomainEventReader reader)
             if (session is { } operations && !(failure is OperationCanceledException && ct.IsCancellationRequested))
                 await operations.RecordFailureAsync(failure, committed ? confirmed : null, ct, outcomeUnknown)
                     .ConfigureAwait(false);
+
             ExceptionDispatchInfo.Capture(failure).Throw();
         }
 

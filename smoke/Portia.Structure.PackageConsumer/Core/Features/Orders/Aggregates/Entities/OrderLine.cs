@@ -17,7 +17,10 @@ public sealed class OrderLine(Uuid id)
     public void ApplyQuantity(int quantity)
     {
         if (!CanChangeQuantity(quantity))
+        {
             throw new ArgumentOutOfRangeException(nameof(quantity));
+        }
+
         Quantity = quantity;
     }
 }

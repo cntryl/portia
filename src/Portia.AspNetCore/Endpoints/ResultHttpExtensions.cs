@@ -39,15 +39,23 @@ public static class ResultHttpExtensions
 
     /// <summary>Maps a generated create endpoint's result using its resolved location.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public static IResult ToCreatedHttpResult<T>(this Result<T> result, JsonSerializerOptions options,
-        Func<object?, string> locationResolver, HttpContext context)
+    public static IResult ToCreatedHttpResult<T>(
+        this Result<T> result,
+        JsonSerializerOptions options,
+        Func<object?, string> locationResolver,
+        HttpContext context
+    )
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(locationResolver);
+
         if (!result.IsSuccess)
             return ToProblem(result.Error);
+
+
         if (result.Value is not IPortiaCreateOutcome outcome)
             throw new InvalidOperationException("A successful Created response requires a non-null create outcome.");
+
         var includePayload = context.GetEndpoint()?.Metadata.GetMetadata<PortiaCreatedLocation>()?.IncludePayload == true;
         var payloadTypeInfo = includePayload ? outcome.PayloadTypeInfo(options) : null;
         var status = outcome.Kind switch
@@ -68,6 +76,7 @@ public static class ResultHttpExtensions
         {
             context.Response.StatusCode = status;
             context.Response.Headers.Location = location;
+
             if (payloadTypeInfo is not null)
             {
                 context.Response.ContentType = "application/json; charset=utf-8";
@@ -94,6 +103,7 @@ public static class ResultHttpExtensions
                 _ => StatusCodes.Status500InternalServerError
             };
             httpContext.Response.Headers[TransientHeaderName] = error.IsTransient ? "true" : "false";
+
             if (error.Kind == RequestErrorKind.Unauthorized)
             {
                 httpContext.Response.Headers.WWWAuthenticate = "Bearer";

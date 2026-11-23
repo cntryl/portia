@@ -7,8 +7,10 @@ static class TestJson
 {
     public static JsonSerializerOptions Options() => new(PortiaTestJsonContext.Default.Options);
 
-    public static JsonDomainEventSerializer DomainSerializer(DomainEventTypeCatalog catalog,
-        IEnumerable<IJsonDomainEventUpcaster>? upcasters = null) => new(catalog, upcasters, Options());
+    public static JsonDomainEventSerializer DomainSerializer(
+        DomainEventTypeCatalog catalog,
+        IEnumerable<IJsonDomainEventUpcaster>? upcasters = null
+    ) => new(catalog, upcasters, Options());
 
     public static JsonRequestSerializer Serializer(params Type[] types) => new(
         types.Select((type, index) => new RequestTransportRegistration(type, [RequestTransportId.Callable],

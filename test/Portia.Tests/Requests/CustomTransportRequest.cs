@@ -13,6 +13,8 @@ public sealed record CustomTransportRequest : IRequest, ICustomAdapterRequest;
 public sealed class CustomTransportRequestHandler : IRequestHandler<CustomTransportRequest>
 {
     /// <inheritdoc />
-    public ValueTask<Result> HandleAsync(IRequestContext<CustomTransportRequest> context,
-        CancellationToken ct) => ValueTask.FromResult(Result.Success);
+    public ValueTask<Result> HandleAsync(
+        IRequestContext<CustomTransportRequest> context,
+        CancellationToken ct
+    ) => ValueTask.FromResult(Result.Success);
 }

@@ -26,8 +26,10 @@ public sealed class AwsMailEventIngester(IDeliveryEventReceiver receiver)
     public async ValueTask<bool> IngestAsync(string json, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(json);
+
         if (Parse(json) is not { } deliveryEvent)
             return false;
+
         await _receiver.ReceiveAsync(deliveryEvent, ct).ConfigureAwait(false);
         return true;
     }
@@ -38,14 +40,17 @@ public sealed class AwsMailEventIngester(IDeliveryEventReceiver receiver)
         {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
+
             if (Text(root, "Type") is not null)
             {
                 // An SNS envelope; only a notification carries an SES event.
                 if (Text(root, "Type") != "Notification" || Text(root, "Message") is not { } message)
                     return null;
+
                 using var inner = JsonDocument.Parse(message);
                 return Read(inner.RootElement);
             }
+
 
             return Read(root.ValueKind == JsonValueKind.Object && root.TryGetProperty("detail", out var detail)
                 ? detail
@@ -78,8 +83,10 @@ public sealed class AwsMailEventIngester(IDeliveryEventReceiver receiver)
             "Rendering Failure" => (DeliveryEventKind.Failed, "failure"),
             _ => null,
         };
+
         if (mapped is not { } known)
             return null;
+
 
         var occurredAt = sesEvent.TryGetProperty(known.Detail, out var detail) && Timestamp(detail) is { } specific
             ? specific

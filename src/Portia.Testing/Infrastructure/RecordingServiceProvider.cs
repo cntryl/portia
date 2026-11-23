@@ -19,8 +19,10 @@ sealed class RecordingServiceProvider(IServiceProvider inner) : IServiceProvider
     public object? GetService(Type serviceType)
     {
         var service = inner.GetService(serviceType);
+
         if (service is not null)
             Record(serviceType);
+
         return service;
     }
 

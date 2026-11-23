@@ -113,8 +113,11 @@ public sealed class ServerSentEventTests : IAsyncDisposable
 
     // A source may register its own cancellation callback, and one that throws must not keep the
     // stream from waiting for the source to stop.
-    static async IAsyncEnumerable<string> IdleAfterFirstItem(StrongBox<bool> stopped, bool throwingCallback,
-        [EnumeratorCancellation] CancellationToken ct = default)
+    static async IAsyncEnumerable<string> IdleAfterFirstItem(
+        StrongBox<bool> stopped,
+        bool throwingCallback,
+        [EnumeratorCancellation] CancellationToken ct = default
+    )
     {
         try
         {
@@ -137,13 +140,17 @@ public sealed class ServerSentEventTests : IAsyncDisposable
         using var reader = new StreamReader(stream);
         var buffer = new char[256];
         var text = new StringBuilder();
+
         while (!text.ToString().Contains(marker, StringComparison.Ordinal))
         {
             var read = await reader.ReadAsync(buffer.AsMemory(), deadline.Token);
+
             if (read == 0)
                 break;
+
             _ = text.Append(buffer, 0, read);
         }
+
 
         return text.ToString();
     }
@@ -169,8 +176,10 @@ public sealed class ServerSentEventTests : IAsyncDisposable
     {
         int _writes;
 
-        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer,
-            CancellationToken cancellationToken = default) =>
+        public override ValueTask WriteAsync(
+            ReadOnlyMemory<byte> buffer,
+            CancellationToken cancellationToken = default
+        ) =>
             ++_writes > 1
                 ? ValueTask.FromException(new IOException("The connection was reset."))
                 : base.WriteAsync(buffer, cancellationToken);

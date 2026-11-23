@@ -51,12 +51,14 @@ public sealed class RequestGuardQueueTests
         public ValueTask<Result> GuardAsync(IRequestContext<RetryCommand> context, CancellationToken ct)
         {
             state.Guards.Add((_id, scope.Id));
+
             if (state.Guards.Count == 1)
             {
                 state.Calls.Add("guard-failure");
                 return ValueTask.FromResult(Result.Failure(new RequestError(RequestErrorKind.Conflict,
                     "The read model is not ready yet.", true)));
             }
+
 
             state.Calls.Add("guard-success");
             return ValueTask.FromResult(Result.Success);

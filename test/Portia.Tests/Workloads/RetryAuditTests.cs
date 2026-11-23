@@ -97,10 +97,16 @@ public sealed class RetryAuditTests
         public void Bind(IServiceProvider services, WorkloadIdentity identity, string? componentName) { }
         public EventStreamPattern Pattern(IServiceProvider services) => Source;
         public void Validate(IServiceProvider services, string componentName) { }
-        public ValueTask<ProjectionCheckpoint> LoadCheckpoint(IServiceProvider services, ProjectionRunOptions options,
-            CancellationToken ct) => ValueTask.FromResult(ProjectionCheckpoint.Start);
-        public ValueTask<ProjectionPassResult> RunPass(IServiceProvider services, ProjectionRunOptions options,
-            CancellationToken ct)
+        public ValueTask<ProjectionCheckpoint> LoadCheckpoint(
+            IServiceProvider services,
+            ProjectionRunOptions options,
+            CancellationToken ct
+        ) => ValueTask.FromResult(ProjectionCheckpoint.Start);
+        public ValueTask<ProjectionPassResult> RunPass(
+            IServiceProvider services,
+            ProjectionRunOptions options,
+            CancellationToken ct
+        )
         {
             _ = services.GetRequiredService<FailingScopeService>();
             return error is null

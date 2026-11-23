@@ -71,8 +71,11 @@ public sealed class TwilioStatusCallbackTests
     [InlineData("wrong-token", AccountSid, true)]
     [InlineData(AuthToken, "ACotheraccount", true)]
     [InlineData(AuthToken, AccountSid, false)]
-    public async Task ShouldRefuseAndRecordNothingGivenInvalidSignature(string signingToken, string accountSid,
-        bool sendSignature)
+    public async Task ShouldRefuseAndRecordNothingGivenInvalidSignature(
+        string signingToken,
+        string accountSid,
+        bool sendSignature
+    )
     {
         // Arrange
         var receiver = new RecordingReceiver();
@@ -147,8 +150,10 @@ public sealed class TwilioStatusCallbackTests
     static HttpRequestMessage Request(string path, Dictionary<string, string> form, string? signature)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, path) { Content = new FormUrlEncodedContent(form) };
+
         if (signature is not null)
             request.Headers.Add("X-Twilio-Signature", signature);
+
         return request;
     }
 
@@ -156,9 +161,11 @@ public sealed class TwilioStatusCallbackTests
     static string Sign(string url, Dictionary<string, string> form, string token)
     {
         var text = new StringBuilder(url);
+
         foreach (var (key, value) in form.OrderBy(pair => pair.Key, StringComparer.Ordinal))
             _ = text.Append(key).Append(value);
 #pragma warning disable CA5350 // Twilio defines the callback signature as HMAC-SHA1.
+
         return Convert.ToBase64String(HMACSHA1.HashData(Encoding.UTF8.GetBytes(token),
             Encoding.UTF8.GetBytes(text.ToString())));
 #pragma warning restore CA5350
@@ -218,6 +225,7 @@ public sealed class TwilioStatusCallbackTests
         {
             if (Failure is not null)
                 return ValueTask.FromException(Failure);
+
             Events.Add(deliveryEvent);
             return ValueTask.CompletedTask;
         }

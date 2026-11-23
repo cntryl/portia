@@ -13,8 +13,13 @@ public static class RequestSenderContextExtensions
     /// <param name="actorToken">The actor credential to validate at delivery.</param>
     /// <param name="options">Publication delay and lifetime.</param>
     /// <returns>A task representing provider acceptance.</returns>
-    public static ValueTask EnqueueWithOptionsAsync<TRequest>(this IRequestQueuePublisher sender, TRequest request,
-        RequestRouteValues routeValues, string? actorToken, RequestQueueOptions options)
+    public static ValueTask EnqueueWithOptionsAsync<TRequest>(
+        this IRequestQueuePublisher sender,
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        RequestQueueOptions options
+    )
         where TRequest : IRequest, IQueuable
         => sender.EnqueueWithOptionsAsync(request, routeValues, actorToken, options, CancellationToken.None);
 
@@ -33,8 +38,14 @@ public static class RequestSenderContextExtensions
     /// <param name="parent">The execution this request inherits correlation and causation from.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the enqueue.</returns>
-    public static ValueTask EnqueueAsync<TRequest>(this IRequestQueuePublisher sender, TRequest request,
-        RequestRouteValues routeValues, string? actorToken, IExecutionContext parent, CancellationToken ct = default)
+    public static ValueTask EnqueueAsync<TRequest>(
+        this IRequestQueuePublisher sender,
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        IExecutionContext parent,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, IQueuable
         => sender.EnqueueAsync(request, routeValues, actorToken, ChildMetadata(request, parent), ct);
 
@@ -48,9 +59,15 @@ public static class RequestSenderContextExtensions
     /// <param name="options">Publication delay and lifetime.</param>
     /// <param name="ct">Cancels publication.</param>
     /// <returns>A task representing provider acceptance.</returns>
-    public static ValueTask EnqueueWithOptionsAsync<TRequest>(this IRequestQueuePublisher sender, TRequest request,
-        RequestRouteValues routeValues, string? actorToken, IExecutionContext parent, RequestQueueOptions options,
-        CancellationToken ct = default)
+    public static ValueTask EnqueueWithOptionsAsync<TRequest>(
+        this IRequestQueuePublisher sender,
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        IExecutionContext parent,
+        RequestQueueOptions options,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, IQueuable
         => sender.EnqueueWithOptionsAsync(request, routeValues, actorToken, ChildMetadata(request, parent), options,
             ct);
@@ -70,8 +87,14 @@ public static class RequestSenderContextExtensions
     /// <param name="parent">The execution this request inherits correlation and causation from.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of handling the request.</returns>
-    public static ValueTask<Result> SendAsync<TRequest>(this IRemoteRequestSender sender, TRequest request,
-        RequestRouteValues routeValues, string? actorToken, IExecutionContext parent, CancellationToken ct = default)
+    public static ValueTask<Result> SendAsync<TRequest>(
+        this IRemoteRequestSender sender,
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        IExecutionContext parent,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ICallable
         => sender.SendAsync(request, routeValues, actorToken, ChildMetadata(request, parent), ct);
 
@@ -91,8 +114,14 @@ public static class RequestSenderContextExtensions
     /// <param name="parent">The execution this request inherits correlation and causation from.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of handling the request.</returns>
-    public static ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(this IRemoteRequestSender sender, TRequest request,
-        RequestRouteValues routeValues, string? actorToken, IExecutionContext parent, CancellationToken ct = default)
+    public static ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(
+        this IRemoteRequestSender sender,
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        IExecutionContext parent,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest<TOut>, ICallable
         => sender.SendAsync<TRequest, TOut>(request, routeValues, actorToken, ChildMetadata(request, parent), ct);
 
@@ -105,9 +134,14 @@ public static class RequestSenderContextExtensions
     /// <param name="parent">The execution this request inherits correlation and causation from.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The completed result or a transport-aware outcome.</returns>
-    public static ValueTask<RemoteRequestOutcome> SendWithOutcomeAsync<TRequest>(this IRemoteRequestSender sender,
-        TRequest request, RequestRouteValues routeValues, string? actorToken, IExecutionContext parent,
-        CancellationToken ct = default)
+    public static ValueTask<RemoteRequestOutcome> SendWithOutcomeAsync<TRequest>(
+        this IRemoteRequestSender sender,
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        IExecutionContext parent,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ICallable
         => sender.SendWithOutcomeAsync(request, routeValues, actorToken, ChildMetadata(request, parent), ct);
 
@@ -122,8 +156,13 @@ public static class RequestSenderContextExtensions
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The completed result or a transport-aware outcome.</returns>
     public static ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(
-        this IRemoteRequestSender sender, TRequest request, RequestRouteValues routeValues, string? actorToken,
-        IExecutionContext parent, CancellationToken ct = default)
+        this IRemoteRequestSender sender,
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        IExecutionContext parent,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest<TOut>, ICallable
         => sender.SendWithOutcomeAsync<TRequest, TOut>(request, routeValues, actorToken,
             ChildMetadata(request, parent), ct);
@@ -143,8 +182,14 @@ public static class RequestSenderContextExtensions
     /// <param name="parent">The execution this request inherits correlation and causation from.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the publish.</returns>
-    public static ValueTask PublishAsync<TRequest>(this INoticeRequestSender sender, TRequest request,
-        RequestRouteValues routeValues, string? actorToken, IExecutionContext parent, CancellationToken ct = default)
+    public static ValueTask PublishAsync<TRequest>(
+        this INoticeRequestSender sender,
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        IExecutionContext parent,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, INotifiable
         => sender.PublishAsync(request, routeValues, actorToken, ChildMetadata(request, parent), ct);
 
@@ -164,9 +209,15 @@ public static class RequestSenderContextExtensions
     /// <param name="parent">The execution this request inherits correlation and causation from.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>An identity that can later cancel the schedule.</returns>
-    public static ValueTask<string> ScheduleAsync<TRequest>(this IRequestScheduler sender, TRequest request,
-        RequestScheduleSpec spec, RequestRouteValues routeValues, ClaimsPrincipal actor, IExecutionContext parent,
-        CancellationToken ct = default)
+    public static ValueTask<string> ScheduleAsync<TRequest>(
+        this IRequestScheduler sender,
+        TRequest request,
+        RequestScheduleSpec spec,
+        RequestRouteValues routeValues,
+        ClaimsPrincipal actor,
+        IExecutionContext parent,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ISchedulable
         => sender.ScheduleAsync(request, spec, routeValues, actor, ChildMetadata(request, parent), ct);
 

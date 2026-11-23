@@ -33,7 +33,8 @@ public static class RequestDispatch
         IRequestBus bus,
         IRequest request,
         RequestDelivery delivery,
-        CancellationToken ct = default) => SendAsync(actorValidator, bus, request, delivery, null, ct);
+        CancellationToken ct = default
+    ) => SendAsync(actorValidator, bus, request, delivery, null, ct);
 
     internal static async ValueTask<RequestDispatchOutcome> SendAsync(
         IRequestActorValidator actorValidator,
@@ -41,7 +42,8 @@ public static class RequestDispatch
         IRequest request,
         RequestDelivery delivery,
         Func<Result, CancellationToken, ValueTask>? complete,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         ArgumentNullException.ThrowIfNull(actorValidator);
         ArgumentNullException.ThrowIfNull(bus);
@@ -56,30 +58,42 @@ public static class RequestDispatch
     // Delivery runners own this existing activity through disposition and cleanup logging.
     // Public dispatch still owns and disposes its own process, with no additional spans.
     internal static async ValueTask<RequestDispatchOutcome> SendInProcessAsync(
-        IRequestActorValidator actorValidator, IRequestBus bus, IRequest request, RequestDelivery delivery,
-        Activity? process, CancellationToken ct, Func<Result, CancellationToken, ValueTask>? complete = null)
+        IRequestActorValidator actorValidator,
+        IRequestBus bus,
+        IRequest request,
+        RequestDelivery delivery,
+        Activity? process,
+        CancellationToken ct,
+        Func<Result, CancellationToken, ValueTask>? complete = null
+    )
     {
         try
         {
             var actorResult = await actorValidator.ValidateAsync(delivery.ActorToken, ct).ConfigureAwait(false);
+
             if (!actorResult.IsSuccess)
             {
                 var rejected = Result.Failure(actorResult.Error);
+
                 if (complete is not null)
                 {
                     await complete(rejected, ct).ConfigureAwait(false);
                 }
 
+
                 PortiaTelemetry.RecordOutcome(process, false, rejected.Error);
                 return new RequestDispatchOutcome(rejected, false);
             }
 
+
             var outcome = await bus.DispatchAsync(request, Context(Actor(actorResult, actorValidator), delivery), ct)
                 .ConfigureAwait(false);
+
             if (complete is not null)
             {
                 await complete(outcome, ct).ConfigureAwait(false);
             }
+
 
             PortiaTelemetry.RecordOutcome(process, outcome.IsSuccess, outcome.Error);
             return new RequestDispatchOutcome(outcome, true);
@@ -113,7 +127,8 @@ public static class RequestDispatch
         IRequestBus bus,
         IRequest<TOut> request,
         RequestDelivery delivery,
-        CancellationToken ct = default) => SendAsync(actorValidator, bus, request, delivery, null, ct);
+        CancellationToken ct = default
+    ) => SendAsync(actorValidator, bus, request, delivery, null, ct);
 
     internal static async ValueTask<RequestDispatchOutcome<TOut>> SendAsync<TOut>(
         IRequestActorValidator actorValidator,
@@ -121,7 +136,8 @@ public static class RequestDispatch
         IRequest<TOut> request,
         RequestDelivery delivery,
         Func<Result<TOut>, CancellationToken, ValueTask>? complete,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         ArgumentNullException.ThrowIfNull(actorValidator);
         ArgumentNullException.ThrowIfNull(bus);
@@ -129,27 +145,34 @@ public static class RequestDispatch
         ArgumentNullException.ThrowIfNull(delivery);
 
         using var process = StartProcess(delivery);
+
         try
         {
             var actorResult = await actorValidator.ValidateAsync(delivery.ActorToken, ct).ConfigureAwait(false);
+
             if (!actorResult.IsSuccess)
             {
                 var rejected = Result<TOut>.Failure(actorResult.Error);
+
                 if (complete is not null)
                 {
                     await complete(rejected, ct).ConfigureAwait(false);
                 }
 
+
                 PortiaTelemetry.RecordOutcome(process, false, rejected.Error);
                 return new RequestDispatchOutcome<TOut>(rejected, false);
             }
 
+
             var outcome = await bus.DispatchAsync(request, Context(Actor(actorResult, actorValidator), delivery), ct)
                 .ConfigureAwait(false);
+
             if (complete is not null)
             {
                 await complete(outcome, ct).ConfigureAwait(false);
             }
+
 
             PortiaTelemetry.RecordOutcome(process, outcome.IsSuccess, outcome.Error);
             return new RequestDispatchOutcome<TOut>(outcome, true);
@@ -176,7 +199,9 @@ public static class RequestDispatch
     // Result<T>.Success(null) is representable. The validator's contract does promise a principal
     // here, so an implementation that breaks it gets a named failure instead of a null reference
     // surfacing later inside dispatch.
-    static ClaimsPrincipal Actor(Result<ClaimsPrincipal> validated,
-        IRequestActorValidator validator) => validated.Value ?? throw new InvalidOperationException(
+    static ClaimsPrincipal Actor(
+        Result<ClaimsPrincipal> validated,
+        IRequestActorValidator validator
+    ) => validated.Value ?? throw new InvalidOperationException(
         $"Portia actor validator '{validator.GetType().FullName}' returned a successful result with no principal.");
 }

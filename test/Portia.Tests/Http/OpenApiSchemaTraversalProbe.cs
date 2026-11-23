@@ -18,7 +18,9 @@ sealed record OpenApiTenantCollectionRequest(OpenApiTenantCollections Payload)
 sealed class OpenApiTenantCollectionHandler : IRequestHandler<OpenApiTenantCollectionRequest, OpenApiTenantCollections>
 {
     public ValueTask<Result<OpenApiTenantCollections>> HandleAsync(
-        IRequestContext<OpenApiTenantCollectionRequest> context, CancellationToken ct) =>
+        IRequestContext<OpenApiTenantCollectionRequest> context,
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult<Result<OpenApiTenantCollections>>(context.Request.Payload);
 }
 
@@ -29,12 +31,18 @@ sealed record OpenApiTraversalItem(string ItemId, OpenApiTraversalItem? Next = n
 
 sealed class OpenApiTraversalCollectionConverter : JsonConverter<OpenApiTraversalCollection>
 {
-    public override OpenApiTraversalCollection Read(ref Utf8JsonReader reader, Type typeToConvert,
-        JsonSerializerOptions options) => new(JsonSerializer.Deserialize(ref reader,
+    public override OpenApiTraversalCollection Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options
+    ) => new(JsonSerializer.Deserialize(ref reader,
         options.GetTypeInfo<OpenApiTraversalItem[]>())!);
 
-    public override void Write(Utf8JsonWriter writer, OpenApiTraversalCollection value,
-        JsonSerializerOptions options) =>
+    public override void Write(
+        Utf8JsonWriter writer,
+        OpenApiTraversalCollection value,
+        JsonSerializerOptions options
+    ) =>
         JsonSerializer.Serialize(writer, value.Values,
             options.GetTypeInfo<OpenApiTraversalItem[]>());
 }
@@ -48,7 +56,9 @@ sealed class OpenApiDictionaryTraversalHandler
     : IRequestHandler<OpenApiDictionaryTraversalRequest, Dictionary<string, OpenApiTraversalCollection>>
 {
     public ValueTask<Result<Dictionary<string, OpenApiTraversalCollection>>> HandleAsync(
-        IRequestContext<OpenApiDictionaryTraversalRequest> context, CancellationToken ct) =>
+        IRequestContext<OpenApiDictionaryTraversalRequest> context,
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult(Result<Dictionary<string, OpenApiTraversalCollection>>.Success(context.Request.Payload));
 }
 
@@ -74,7 +84,9 @@ sealed class
     OpenApiPolymorphicTraversalHandler : IRequestHandler<OpenApiPolymorphicTraversalRequest, OpenApiTraversalVariant>
 {
     public ValueTask<Result<OpenApiTraversalVariant>> HandleAsync(
-        IRequestContext<OpenApiPolymorphicTraversalRequest> context, CancellationToken ct) =>
+        IRequestContext<OpenApiPolymorphicTraversalRequest> context,
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult(Result<OpenApiTraversalVariant>.Success(context.Request.Payload));
 }
 
@@ -83,8 +95,11 @@ readonly record struct OpenApiTraversalCount(long Value);
 
 sealed class OpenApiTraversalCountConverter : JsonConverter<OpenApiTraversalCount>
 {
-    public override OpenApiTraversalCount Read(ref Utf8JsonReader reader, Type typeToConvert,
-        JsonSerializerOptions options) => new(reader.GetInt64());
+    public override OpenApiTraversalCount Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options
+    ) => new(reader.GetInt64());
 
     public override void Write(Utf8JsonWriter writer, OpenApiTraversalCount value, JsonSerializerOptions options) =>
         writer.WriteNumberValue(value.Value);
@@ -100,7 +115,9 @@ sealed record OpenApiNullableTraversalRequest(OpenApiTraversalCounts Payload)
 sealed class OpenApiNullableTraversalHandler : IRequestHandler<OpenApiNullableTraversalRequest, OpenApiTraversalCounts>
 {
     public ValueTask<Result<OpenApiTraversalCounts>> HandleAsync(
-        IRequestContext<OpenApiNullableTraversalRequest> context, CancellationToken ct) =>
+        IRequestContext<OpenApiNullableTraversalRequest> context,
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult(Result<OpenApiTraversalCounts>.Success(context.Request.Payload));
 }
 
@@ -109,8 +126,11 @@ sealed record OpenApiRecursiveArray(OpenApiRecursiveArray?[] Children);
 
 sealed class OpenApiRecursiveArrayConverter : JsonConverter<OpenApiRecursiveArray>
 {
-    public override OpenApiRecursiveArray Read(ref Utf8JsonReader reader, Type typeToConvert,
-        JsonSerializerOptions options) => new(JsonSerializer.Deserialize(ref reader,
+    public override OpenApiRecursiveArray Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options
+    ) => new(JsonSerializer.Deserialize(ref reader,
         options.GetTypeInfo<OpenApiRecursiveArray?[]>())!);
 
     public override void Write(Utf8JsonWriter writer, OpenApiRecursiveArray value, JsonSerializerOptions options) =>
@@ -128,7 +148,9 @@ sealed record OpenApiRecursiveTraversalRequest(OpenApiRecursiveArrayEnvelope Pay
 sealed class OpenApiRecursiveTraversalHandler : IRequestHandler<OpenApiRecursiveTraversalRequest, OpenApiRecursiveArray>
 {
     public ValueTask<Result<OpenApiRecursiveArray>> HandleAsync(
-        IRequestContext<OpenApiRecursiveTraversalRequest> context, CancellationToken ct) =>
+        IRequestContext<OpenApiRecursiveTraversalRequest> context,
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult(Result<OpenApiRecursiveArray>.Success(context.Request.Payload.Tree!));
 }
 
@@ -146,7 +168,9 @@ sealed class OpenApiCollectionNullabilityHandler
     : IRequestHandler<OpenApiCollectionNullabilityRequest, OpenApiMappedCollectionNullability>
 {
     public ValueTask<Result<OpenApiMappedCollectionNullability>> HandleAsync(
-        IRequestContext<OpenApiCollectionNullabilityRequest> context, CancellationToken ct) =>
+        IRequestContext<OpenApiCollectionNullabilityRequest> context,
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult(Result<OpenApiMappedCollectionNullability>.Success(context.Request.Payload));
 }
 

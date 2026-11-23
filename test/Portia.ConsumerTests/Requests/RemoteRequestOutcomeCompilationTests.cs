@@ -105,6 +105,7 @@ public sealed class RemoteRequestOutcomeCompilationTests
                        """;
         var directory = Path.Combine(Path.GetTempPath(), "portia-outcome-consumer-" + Guid.NewGuid().ToString("N"));
         _ = Directory.CreateDirectory(directory);
+
         try
         {
             var sourcePath = Path.Combine(directory, "Consumer.cs");
@@ -159,8 +160,10 @@ public sealed class RemoteRequestOutcomeCompilationTests
         };
         startInfo.Environment["DOTNET_CLI_UI_LANGUAGE"] = "en-US";
         startInfo.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
+
         foreach (var argument in arguments)
             startInfo.ArgumentList.Add(argument);
+
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         return await Process.RunAndCaptureTextAsync(startInfo, timeout.Token);
     }

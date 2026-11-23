@@ -33,8 +33,10 @@ public sealed class WorkloadSupervisionTests
         // Assert
         var observedFailure = Assert.IsType<IOException>(failure);
         Assert.Same(coordinator.Failure, observedFailure);
+
         if (throwsOnCancel)
             Assert.IsType<AggregateException>(observedFailure.Data["Portia.CleanupException"]);
+
         Assert.False(finishedWhileCleanupPending,
             "The hosted workload service finished before observing its tenant manager cleanup.");
     }
@@ -43,8 +45,11 @@ public sealed class WorkloadSupervisionTests
     {
         internal IOException Failure { get; } = new("coordinator failed");
 
-        public async Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-            Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default)
+        public async Task RunAsync(
+            Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
+            Func<WorkloadIdentity, CancellationToken, Task> run,
+            CancellationToken ct = default
+        )
         {
             await directory.Started.Task;
             throw Failure;

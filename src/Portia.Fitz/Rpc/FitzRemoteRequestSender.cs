@@ -37,14 +37,23 @@ public sealed class FitzRemoteRequestSender(
     readonly IRpcClient _rpc = rpc ?? throw new ArgumentNullException(nameof(rpc));
 
     /// <inheritdoc />
-    public ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
-        CancellationToken ct = default)
+    public ValueTask<Result> SendAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ICallable
         => SendAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <inheritdoc />
-    public async ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues,
-        string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+    public async ValueTask<Result> SendAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        RequestMetadata metadata,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ICallable
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -54,6 +63,7 @@ public sealed class FitzRemoteRequestSender(
         using var activity = PortiaTelemetry.StartSend(requestName, "rpc", "fitz");
         var started = PortiaTelemetry.StartTimestamp();
         var outcome = "success";
+
         try
         {
             var route = FitzRouting.ResolveRpcRoute(_catalog, request, routeValues);
@@ -84,14 +94,23 @@ public sealed class FitzRemoteRequestSender(
     }
 
     /// <inheritdoc />
-    public ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues,
-        string? actorToken, CancellationToken ct = default)
+    public ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest<TOut>, ICallable
         => SendAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <inheritdoc />
-    public async ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues,
-        string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+    public async ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        RequestMetadata metadata,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest<TOut>, ICallable
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -101,6 +120,7 @@ public sealed class FitzRemoteRequestSender(
         using var activity = PortiaTelemetry.StartSend(requestName, "rpc", "fitz");
         var started = PortiaTelemetry.StartTimestamp();
         var outcome = "success";
+
         try
         {
             var route = FitzRouting.ResolveRpcRoute(_catalog, request, routeValues);
@@ -133,14 +153,23 @@ public sealed class FitzRemoteRequestSender(
 
 #pragma warning disable RS0026 // The public methods intentionally mirror the sender's convenience and metadata overloads.
     /// <inheritdoc />
-    public ValueTask<RemoteRequestOutcome> SendWithOutcomeAsync<TRequest>(TRequest request,
-        RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+    public ValueTask<RemoteRequestOutcome> SendWithOutcomeAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ICallable
         => SendWithOutcomeAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
     /// <inheritdoc />
-    public async ValueTask<RemoteRequestOutcome> SendWithOutcomeAsync<TRequest>(TRequest request,
-        RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+    public async ValueTask<RemoteRequestOutcome> SendWithOutcomeAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        RequestMetadata metadata,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ICallable
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -151,6 +180,7 @@ public sealed class FitzRemoteRequestSender(
         using var activity = PortiaTelemetry.StartSend(requestName, "rpc", "fitz");
         var started = PortiaTelemetry.StartTimestamp();
         var outcome = "success";
+
         try
         {
             if (ct.IsCancellationRequested)
@@ -164,15 +194,19 @@ public sealed class FitzRemoteRequestSender(
             var body = _requestSerializer.Serialize(request, actorToken, metadata,
                 PortiaTelemetry.CaptureTraceContext());
             var call = await CallWithOutcomeAsync(route, body, ct).ConfigureAwait(false);
+
             if (call.Response is not { } response)
             {
                 outcome = call.Exception is OperationCanceledException ? "canceled" : "fault";
+
                 if (call.Exception is OperationCanceledException)
                     PortiaTelemetry.RecordCanceled(activity);
                 else if (call.Exception is { } exception)
                     PortiaTelemetry.RecordFault(activity, exception);
+
                 return CreateOutcome(call.Outcome!.Value);
             }
+
 
             var result = _outcomeDeserializer.DeserializeOutcome(response.Body);
             outcome = PortiaTelemetry.Outcome(result.IsSuccess, result.Error);
@@ -192,15 +226,24 @@ public sealed class FitzRemoteRequestSender(
     }
 
     /// <inheritdoc />
-    public ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(TRequest request,
-        RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+    public ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest<TOut>, ICallable
         => SendWithOutcomeAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.FromRequest(request),
             ct);
 
     /// <inheritdoc />
-    public async ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(TRequest request,
-        RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+    public async ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        RequestMetadata metadata,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest<TOut>, ICallable
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -211,6 +254,7 @@ public sealed class FitzRemoteRequestSender(
         using var activity = PortiaTelemetry.StartSend(requestName, "rpc", "fitz");
         var started = PortiaTelemetry.StartTimestamp();
         var outcome = "success";
+
         try
         {
             if (ct.IsCancellationRequested)
@@ -224,15 +268,19 @@ public sealed class FitzRemoteRequestSender(
             var body = _requestSerializer.Serialize(request, actorToken, metadata,
                 PortiaTelemetry.CaptureTraceContext());
             var call = await CallWithOutcomeAsync(route, body, ct).ConfigureAwait(false);
+
             if (call.Response is not { } response)
             {
                 outcome = call.Exception is OperationCanceledException ? "canceled" : "fault";
+
                 if (call.Exception is OperationCanceledException)
                     PortiaTelemetry.RecordCanceled(activity);
                 else if (call.Exception is { } exception)
                     PortiaTelemetry.RecordFault(activity, exception);
+
                 return CreateOutcome<TOut>(call.Outcome!.Value);
             }
+
 
             var result = _outcomeDeserializer.DeserializeResult<TOut>(response.Body);
             outcome = PortiaTelemetry.Outcome(result.IsSuccess, result.Error);
@@ -252,8 +300,11 @@ public sealed class FitzRemoteRequestSender(
     }
 #pragma warning restore RS0026
 
-    async ValueTask<FitzRpcCallOutcome> CallWithOutcomeAsync(string route, ReadOnlyMemory<byte> body,
-        CancellationToken ct)
+    async ValueTask<FitzRpcCallOutcome> CallWithOutcomeAsync(
+        string route,
+        ReadOnlyMemory<byte> body,
+        CancellationToken ct
+    )
     {
         var call = _rpc.CallStreamingAsync(route, body, ct);
         RpcResponseFrame? lastFrame = null;

@@ -2,9 +2,18 @@ namespace Cntryl.Portia;
 
 sealed class RequestTransportComponent : IEquatable<RequestTransportComponent>
 {
-    public RequestTransportComponent(string typeName, IReadOnlyList<string> transports, string realm, string area,
-        string resource, string operation, int discriminatorVersion, string discriminatorName, string? resultType,
-        string? resultRuntimeType)
+    public RequestTransportComponent(
+        string typeName,
+        IReadOnlyList<string> transports,
+        string realm,
+        string area,
+        string resource,
+        string operation,
+        int discriminatorVersion,
+        string discriminatorName,
+        string? resultType,
+        string? resultRuntimeType
+    )
     {
         TypeName = typeName;
         Transports = transports.ToArray();
@@ -45,8 +54,10 @@ sealed class RequestTransportComponent : IEquatable<RequestTransportComponent>
     public override int GetHashCode()
     {
         var hash = StringComparer.Ordinal.GetHashCode(TypeName);
+
         foreach (var transport in Transports)
             hash = unchecked((hash * 397) ^ StringComparer.Ordinal.GetHashCode(transport));
+
         hash = unchecked((hash * 397) ^ StringComparer.Ordinal.GetHashCode(Realm));
         hash = unchecked((hash * 397) ^ StringComparer.Ordinal.GetHashCode(Area));
         hash = unchecked((hash * 397) ^ StringComparer.Ordinal.GetHashCode(Resource));

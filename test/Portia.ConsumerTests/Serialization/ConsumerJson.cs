@@ -15,15 +15,22 @@ static class ConsumerJson
 
     public static JsonSerializerOptions Options() => new(PortiaConsumerJsonContext.Default.Options);
 
-    public static JsonDomainEventSerializer DomainSerializer(DomainEventTypeCatalog catalog,
-        IEnumerable<IJsonDomainEventUpcaster>? upcasters = null) => new(catalog, upcasters, Options());
+    public static JsonDomainEventSerializer DomainSerializer(
+        DomainEventTypeCatalog catalog,
+        IEnumerable<IJsonDomainEventUpcaster>? upcasters = null
+    ) => new(catalog, upcasters, Options());
 
     public static RequestTransportCatalog Catalog() => new(Registrations);
 
     public static JsonRequestSerializer CreateSerializer() => new(Registrations, Options());
 
-    static RequestTransportRegistration Registration<TRequest>(string realm, string area, string resource,
-        string operation, string discriminator) where TRequest : IRequestBase => new(typeof(TRequest),
+    static RequestTransportRegistration Registration<TRequest>(
+        string realm,
+        string area,
+        string resource,
+        string operation,
+        string discriminator
+    ) where TRequest : IRequestBase => new(typeof(TRequest),
         [RequestTransportId.Callable, RequestTransportId.Queue, RequestTransportId.Notice, RequestTransportId.Schedule],
         new RequestRouteAttribute(realm, area, resource, operation), new DiscriminatorAttribute(discriminator));
 }

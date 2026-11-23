@@ -69,8 +69,11 @@ public sealed class JsonContextIncrementalTests
     static CSharpParseOptions Options() => new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
         [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
 
-    static CSharpCompilation Compilation(CSharpParseOptions options, SyntaxTree unrelated,
-        MetadataReference reference) =>
+    static CSharpCompilation Compilation(
+        CSharpParseOptions options,
+        SyntaxTree unrelated,
+        MetadataReference reference
+    ) =>
         CSharpCompilation.Create("ContextIncremental",
             [CSharpSyntaxTree.ParseText(Composition, options, "Composition.cs"), unrelated],
             ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)

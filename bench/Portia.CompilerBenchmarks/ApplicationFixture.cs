@@ -41,6 +41,7 @@ sealed class ApplicationFixture(Dictionary<string, CSharpCompilation> inputs)
                 + space + ";\n" + body, CompilerHost.ParseOptions, "/benchmark/Bench." + role + "/" + path,
                 Encoding.UTF8));
         }
+
         for (var i = 0; i < size.Requests; i++)
         {
             var feature = "Feature" + i % features;
@@ -59,9 +60,11 @@ sealed class ApplicationFixture(Dictionary<string, CSharpCompilation> inputs)
                 }
                 """);
         }
+
         for (var i = 0; i < size.Events; i++)
             Add("Common", $"Features/Feature{i % features}/Events/Changed{i}.cs",
                 $"[Discriminator(\"feature{i % features}.changed_{i}\", 1)] public sealed record Changed{i}(int Value) : DomainEvent;");
+
         for (var i = 0; i < size.Processors; i++)
         {
             var feature = "Feature" + i % features;
@@ -75,27 +78,38 @@ sealed class ApplicationFixture(Dictionary<string, CSharpCompilation> inputs)
                 { public ValueTask<Result> HandleAsync(IReactorContext<{{contract}}> context, CancellationToken ct) => ValueTask.FromResult(Result.Success); }
                 """);
         }
+
         for (var i = 0; i < size.Unrelated; i++)
             Add("Common", $"Features/Feature{i % features}/Models/Unrelated{i}.cs",
                 $"public sealed record Unrelated{i}(int Value);");
+
         for (var i = 0; i < size.Contexts; i++)
         {
             var context = new StringBuilder("[PortiaJsonContext]\n");
+
             for (var j = i; j < size.Requests; j += size.Contexts)
                 context.AppendLine(CultureInfo.InvariantCulture,
                     $"[System.Text.Json.Serialization.JsonSerializable(typeof(Bench.Common.Features.Feature{j % features}.Commands.Change{j}))]");
+
+
             for (var j = i; j < size.Events; j += size.Contexts)
                 context.AppendLine(CultureInfo.InvariantCulture,
                     $"[System.Text.Json.Serialization.JsonSerializable(typeof(Bench.Common.Features.Feature{j % features}.Events.Changed{j}))]");
+
             context.AppendLine(CultureInfo.InvariantCulture,
                 $"public sealed partial class ContractsJsonContext{i} : System.Text.Json.Serialization.JsonSerializerContext;");
             Add("Common", $"ContractsJsonContext{i}.cs", context.ToString());
         }
+
+
         for (var i = 0; i < features; i++)
         {
             var registration = new StringBuilder($"public static class Feature{i}PortiaExtensions {{ public static PortiaBuilder AddFeature{i}(this PortiaBuilder builder) {{\n");
+
             for (var j = i; j < size.Requests; j += features)
                 registration.AppendLine(CultureInfo.InvariantCulture, $"builder.AddRequestHandler<Handlers.Change{j}Handler>();");
+
+
             for (var j = i; j < size.Processors; j += features)
             {
                 registration.AppendLine(CultureInfo.InvariantCulture,
@@ -103,19 +117,25 @@ sealed class ApplicationFixture(Dictionary<string, CSharpCompilation> inputs)
                 registration.AppendLine(CultureInfo.InvariantCulture,
                     $"builder.AddReactor<Reactors.Reaction{j}>(\"reaction{j}\", WorkloadScope.Global);");
             }
+
             Add("Core", $"Features/Feature{i}/Feature{i}PortiaExtensions.cs", registration.AppendLine("return builder; } }").ToString());
         }
+
         var endpoints = new StringBuilder("public static class Endpoints { public static void Map(Microsoft.AspNetCore.Routing.IEndpointRouteBuilder app) {\n");
+
         for (var i = 0; i < size.Mappings; i++)
         {
             var request = i % size.Requests;
             endpoints.AppendLine(CultureInfo.InvariantCulture,
                 $"app.MapPortiaPost<Bench.Common.Features.Feature{request % features}.Commands.Change{request}>(\"/change{i}\");");
         }
+
         Add("Api", "Endpoints.cs", endpoints.AppendLine("} }").ToString());
         var composition = new StringBuilder("public static class Composition { public static void Add(Microsoft.Extensions.DependencyInjection.IServiceCollection services) { var builder = services.AddPortia();\n");
+
         for (var i = 0; i < features; i++)
             composition.AppendLine(CultureInfo.InvariantCulture, $"Bench.Core.Features.Feature{i}.Feature{i}PortiaExtensions.AddFeature{i}(builder);");
+
         Add("Worker", "Composition.cs", composition.AppendLine("} }").ToString());
         return new ApplicationFixture(Roles.ToDictionary(role => role,
             role => CSharpCompilation.Create("Bench." + role, files[role], References(role), CompilerHost.CompilationOptions),
@@ -125,10 +145,12 @@ sealed class ApplicationFixture(Dictionary<string, CSharpCompilation> inputs)
     static IEnumerable<MetadataReference> References(string role) => CompilerHost.References.Where(reference =>
     {
         var name = Path.GetFileNameWithoutExtension(reference.Display!);
+
         if (name.StartsWith("Portia.", StringComparison.Ordinal))
             return role == "Common" ? name == "Portia.Abstractions" :
                 name is "Portia.Abstractions" or "Portia.Core" or "Portia.DependencyInjection"
                 || role is "Api" or "Worker" && name == "Portia.AspNetCore";
+
         return name.StartsWith("System.", StringComparison.Ordinal) || name.StartsWith("Microsoft.", StringComparison.Ordinal)
             || name is "System" or "mscorlib" or "netstandard" or "WindowsBase";
     });
@@ -137,6 +159,7 @@ sealed class ApplicationFixture(Dictionary<string, CSharpCompilation> inputs)
     {
         if (edit == "unchanged")
             return this;
+
         var (role, file, from, to) = edit switch
         {
             "body" => ("Core", "Change0Handler.cs", "=> 1;", "=> 2;"),
@@ -151,8 +174,10 @@ sealed class ApplicationFixture(Dictionary<string, CSharpCompilation> inputs)
         var tree = compilation.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("/" + file, StringComparison.Ordinal));
         var text = tree.GetText();
         var start = text.ToString().IndexOf(from, StringComparison.Ordinal);
+
         if (start < 0)
             throw new InvalidOperationException("Application edit did not find its target.");
+
         result[role] = compilation.ReplaceSyntaxTree(tree, tree.WithChangedText(text.WithChanges(new TextChange(new TextSpan(start, from.Length), to))));
         return new ApplicationFixture(result);
     }
@@ -160,6 +185,7 @@ sealed class ApplicationFixture(Dictionary<string, CSharpCompilation> inputs)
     public ApplicationBuild Build(ApplicationBuild? previous = null, CancellationToken ct = default)
     {
         var results = new List<ApplicationProjectResult>();
+
         foreach (var role in Roles)
         {
             ct.ThrowIfCancellationRequested();
@@ -178,12 +204,14 @@ sealed class ApplicationFixture(Dictionary<string, CSharpCompilation> inputs)
             results.Add(new ApplicationProjectResult(role, user, input, output, driver,
                 prior is not null && ReferenceEquals(output, prior.Output) ? prior.Reference : output.ToMetadataReference()));
         }
+
         return new ApplicationBuild(results.ToArray());
     }
 
     public static async Task<Diagnostic[]> AnalyzeAsync(ApplicationBuild build, CancellationToken ct = default)
     {
         var diagnostics = new List<Diagnostic>();
+
         foreach (var project in build.Projects)
         {
             var options = new CompilationWithAnalyzersOptions(new AnalyzerOptions([], new FixtureOptions(project.Role)),
@@ -192,6 +220,7 @@ sealed class ApplicationFixture(Dictionary<string, CSharpCompilation> inputs)
             diagnostics.AddRange(await project.Output.WithAnalyzers([.. CompilerHost.CreateAnalyzers()], options)
                 .GetAnalyzerDiagnosticsAsync(ct).ConfigureAwait(false));
         }
+
         return diagnostics.ToArray();
     }
 }

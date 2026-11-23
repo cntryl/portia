@@ -69,11 +69,14 @@ public sealed class ScenarioObservationAnalyzer : DiagnosticAnalyzer
                 } => body,
             _ => null
         };
+
         while (discarded is ParenthesizedExpressionSyntax parenthesized)
             discarded = parenthesized.Expression;
+
         var expression = discarded is InvocationExpressionSyntax invocation && MayBeScenario(invocation)
             ? invocation
             : null;
+
         if (expression is null
             || context.SemanticModel.GetTypeInfo(expression, context.CancellationToken).Type is not INamedTypeSymbol
                 type
@@ -83,6 +86,7 @@ public sealed class ScenarioObservationAnalyzer : DiagnosticAnalyzer
         {
             return null;
         }
+
 
         return (expression.GetLocation(), type.Name);
     }

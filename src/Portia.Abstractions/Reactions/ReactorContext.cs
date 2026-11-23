@@ -21,6 +21,7 @@ public sealed class ReactorContext<TEvent> : IReactorContext<TEvent>
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(execution);
+
         if (!ReferenceEquals(ev, source.Event) || execution.CauseId != source.Event.Metadata.EventId)
         {
             throw new ArgumentException("Reaction context must refer to its actual triggering event.", nameof(source));
@@ -28,6 +29,7 @@ public sealed class ReactorContext<TEvent> : IReactorContext<TEvent>
 
         // Portia's own execution already holds a private snapshot; reading it avoids copying the
         // principal once per event only to inspect it.
+
         if (!RequestActor.IsSystem(execution is ReactionExecutionContext reaction
                 ? reaction.ActorSnapshot
                 : execution.Actor))

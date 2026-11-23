@@ -46,6 +46,7 @@ static partial class Program
             new Claim(ClaimTypes.Role, "qualification-operators")
         ], "qualification"));
         var previousOwner = mode == "crash" ? Guid.Parse(args[2]) : Guid.Empty;
+
         if (mode == "crash")
         {
             var prior = await operations.InspectProcessorAsync(actor, Target);
@@ -53,7 +54,9 @@ static partial class Program
                 "Expected the previous owner's durable block before starting replacement workers.");
         }
 
+
         await host.StartAsync();
+
         if (mode is "blocked" or "crash")
         {
             // The durable block can be visible before this process acquires the workload. A repair
@@ -61,6 +64,7 @@ static partial class Program
             await UntilAsync(async () =>
                 (await operations.InspectProcessorAsync(actor, Target)) is { Block: not null } state
                 && (mode != "crash" || state.OwnerSession != previousOwner));
+
             if (mode == "blocked")
                 await File.WriteAllTextAsync(signal!, "durable block");
             else
@@ -69,6 +73,7 @@ static partial class Program
                 _ = await operations.ApproveRepairAsync(actor, Target, plan.Id);
                 _ = await operations.ExecuteRepairAsync(actor, Target, plan.Id);
             }
+
 
             await Task.Delay(Timeout.InfiniteTimeSpan);
         }
@@ -83,12 +88,14 @@ static partial class Program
         else
             throw new ArgumentException("Unknown qualification mode.");
 
+
         await host.StopAsync();
     }
 
     static async Task UntilAsync(Func<Task<bool>> ready)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(40));
+
         while (!await ready())
             await Task.Delay(20, deadline.Token);
     }
@@ -114,15 +121,18 @@ static partial class Program
         {
             if (control.Mode == "blocked" && context.Trigger.Value == 2)
                 return Result.Failure(RequestError.Validation("qualification failure"));
+
             var id = CreateEffectId(context, "effect");
             var stream = new EventStreamAddress(Realm, "effects", id.ToString());
             var exists = false;
+
             await foreach (var existing in events.ReadAsync(stream, 0, ct))
             {
                 Require(((Changed)existing.Event).Value == context.Trigger.Value,
                     "Stable effect identity changed content.");
                 exists = true;
             }
+
 
             if (!exists)
             {
@@ -143,9 +153,12 @@ static partial class Program
 
     sealed class Policy : IOperationalAuthorizer
     {
-        public ValueTask<bool> AuthorizeAsync(ClaimsPrincipal actor, OperationalScope scope,
+        public ValueTask<bool> AuthorizeAsync(
+            ClaimsPrincipal actor,
+            OperationalScope scope,
             OperationalAccess permission,
-            CancellationToken ct = default) =>
+            CancellationToken ct = default
+        ) =>
             ValueTask.FromResult(scope == OperationalScope.Global && actor.Identity?.IsAuthenticated == true);
     }
 }

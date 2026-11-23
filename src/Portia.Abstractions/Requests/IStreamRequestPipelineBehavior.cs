@@ -13,6 +13,9 @@ public interface IStreamRequestPipelineBehavior<in TRequest, TOut> where TReques
     /// </param>
     /// <param name="ct">A token that can cancel enumeration.</param>
     /// <returns>The values yielded to the caller, whether produced here or by the continuation.</returns>
-    IAsyncEnumerable<TOut> HandleAsync(IRequestContext<TRequest> context, StreamRequestPipelineNext<TOut> continuation,
-        CancellationToken ct);
+    IAsyncEnumerable<TOut> HandleAsync(
+        IRequestContext<TRequest> context,
+        StreamRequestPipelineNext<TOut> continuation,
+        CancellationToken ct
+    );
 }

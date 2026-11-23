@@ -119,8 +119,10 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
             // Every rule concerns a type that derives from or implements something. A partial part without a
             // base list may still belong to one, so it is analyzed too.
             var node = (TypeDeclarationSyntax)syntaxContext.Node;
+
             if (node.BaseList is null && !node.Modifiers.Any(SyntaxKind.PartialKeyword))
                 return;
+
             foreach (var finding in Analyze(node, syntaxContext.SemanticModel, syntaxContext.CancellationToken))
             {
                 syntaxContext.ReportDiagnostic(Diagnostic.Create(Descriptor(finding.Kind), finding.Location,
@@ -133,6 +135,7 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
     {
         if (semanticModel.GetDeclaredSymbol(node, ct) is not { IsAbstract: false } symbol)
             return [];
+
         var findings = new List<Finding>();
         var parameters = DeclaredParameters(symbol, node);
         ReportProjectorEffects(findings, symbol, parameters);
@@ -160,8 +163,10 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         var guard = symbol.AllInterfaces.Any(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Guard));
         var authorizer =
             symbol.AllInterfaces.Any(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Authorizer));
+
         if (!guard && !authorizer)
             return;
+
         foreach (var parameter in Parameters(parameters, PreflightForbiddenTypes).Concat(parameters
                      .Where(parameter => parameter.Type is INamedTypeSymbol named
                                          && IsAny(named, ProjectionContracts))))
@@ -173,9 +178,11 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
                     : Matches(parameter.Type, ProjectionContracts)
                         ? "inject an application-owned query interface that exposes only the read this preflight needs"
                         : "move the effect into the request handler";
+
             if (guard)
                 findings.Add(Finding.Create(Kind.GuardEffect, Location(parameter), symbol.Name, Display(parameter),
                     remedy));
+
             if (authorizer)
                 findings.Add(Finding.Create(Kind.AuthorizerEffect, Location(parameter), symbol.Name, Display(parameter),
                     remedy));
@@ -187,18 +194,21 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol symbol,
         TypeDeclarationSyntax node,
         SemanticModel semanticModel,
-        IParameterSymbol[] parameters)
+        IParameterSymbol[] parameters
+    )
     {
         if (!IsPortiaComponent(symbol))
             return;
         // PORTIA102 already reports every locator an aggregate takes.
         var aggregate = DerivesFrom(symbol, "Cntryl.Portia.Aggregate");
+
         foreach (var parameter in aggregate ? [] : Parameters(parameters, LocatorTypes))
         {
             findings.Add(Finding.Create(Kind.ServiceLocation, Location(parameter), symbol.Name, Display(parameter)));
         }
 
         // Only ActivatorUtilities' own method names are bound; every other call in the component is skipped.
+
         foreach (var invocation in node.DescendantNodes().OfType<InvocationExpressionSyntax>()
                      .Where(candidate => IsActivatorUtilitiesName(candidate)
                                          && candidate.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault()
@@ -227,6 +237,7 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
     {
         if (!DerivesFrom(symbol, "Cntryl.Portia.Aggregate"))
             return;
+
         foreach (var parameter in Parameters(parameters, AggregateForbiddenTypes))
         {
             findings.Add(Finding.Create(Kind.AggregateService, Location(parameter), symbol.Name, Display(parameter)));
@@ -238,7 +249,8 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol symbol,
         TypeDeclarationSyntax node,
         SemanticModel semanticModel,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         // Type lookups search every referenced assembly, so they wait until this declaration is known to be a
         // handler that catches something.
@@ -252,16 +264,20 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         var exceptionType = compilation.GetTypeByMetadataName("System.Exception");
         var resultType = compilation.GetTypeByMetadataName("Cntryl.Portia.Result");
         var genericResultType = compilation.GetTypeByMetadataName("Cntryl.Portia.Result`1");
+
         if (exceptionType is null || resultType is null || genericResultType is null)
             return;
 
+
         var implementations = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+
         foreach (var handler in symbol.AllInterfaces.Where(iface =>
                      PortiaComponentRoles.Is(iface, PortiaComponentRoles.Handler)))
         {
             foreach (var contractMethod in handler.GetMembers("HandleAsync").OfType<IMethodSymbol>())
             {
                 var implementation = symbol.FindImplementationForInterfaceMember(contractMethod);
+
                 if (implementation is IMethodSymbol { IsAbstract: false } method &&
                     SymbolEqualityComparer.Default.Equals(method.ContainingType, symbol))
                 {
@@ -269,6 +285,7 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
                 }
             }
         }
+
 
         foreach (var implementation in implementations.OfType<IMethodSymbol>())
         {
@@ -344,7 +361,8 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         static bool IsResultFailure(
             IMethodSymbol? method,
             INamedTypeSymbol result,
-            INamedTypeSymbol genericResult)
+            INamedTypeSymbol genericResult
+        )
         {
             if (method is not { Name: "Failure", IsStatic: true })
                 return false;

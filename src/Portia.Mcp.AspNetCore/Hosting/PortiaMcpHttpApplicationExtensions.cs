@@ -11,13 +11,17 @@ public static class PortiaMcpHttpApplicationExtensions
     /// <param name="application">The shared Portia application.</param>
     /// <param name="configure">Optional HTTP transport configuration applied after Portia's stateless default. The transport must remain stateless.</param>
     /// <returns>The same application builder for chaining.</returns>
-    public static PortiaBuilder AddMcpHttp(this PortiaBuilder application,
-        Action<HttpServerTransportOptions>? configure = null)
+    public static PortiaBuilder AddMcpHttp(
+        this PortiaBuilder application,
+        Action<HttpServerTransportOptions>? configure = null
+    )
     {
         ArgumentNullException.ThrowIfNull(application);
+
         if (!PortiaMcpApplicationExtensions.HasDeclarations(application.Services))
             throw new InvalidOperationException(
                 "AddMcpHttp requires at least one MCP declaration.");
+
         application.Services.AddAuthorization();
         var server = application.Services.AddMcpServer()
             .WithHttpTransport(options =>

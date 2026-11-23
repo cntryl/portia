@@ -62,6 +62,7 @@ public sealed class LinkedDeliveryRootTests
                    new RequestTraceContext(Parent)))
         {
             Assert.Equal(sampleRoot, process?.Recorded == true);
+
             if (process is not null)
                 Assert.Equal(default, process.ParentSpanId);
         }
@@ -82,8 +83,10 @@ public sealed class LinkedDeliveryRootTests
     [InlineData("schedule", "valid")]
     [InlineData("schedule", "absent")]
     [InlineData("schedule", "invalid")]
-    public async Task ShouldCreateIndependentLinkedRootsAndRestoreAmbientGivenTransportAndPropagation(string transport,
-        string propagation)
+    public async Task ShouldCreateIndependentLinkedRootsAndRestoreAmbientGivenTransportAndPropagation(
+        string transport,
+        string propagation
+    )
     {
         // Arrange
         using var listener = new ActivityListener
@@ -120,6 +123,7 @@ public sealed class LinkedDeliveryRootTests
                 Assert.Equal(default, process.ParentSpanId);
                 Assert.Null(process.Parent);
                 Assert.True(traces.Add(process.TraceId));
+
                 if (propagation == "valid")
                 {
                     var link = Assert.Single(process.Links).Context;
@@ -128,6 +132,7 @@ public sealed class LinkedDeliveryRootTests
                 }
                 else
                     Assert.Empty(process.Links);
+
 
                 await Task.Yield();
                 Assert.Same(process, Activity.Current);

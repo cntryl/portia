@@ -27,8 +27,10 @@ public sealed class PartialProcessorCodeFixProvider : CodeFixProvider
     {
         var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
         var declaration = root?.FindNode(context.Span).FirstAncestorOrSelf<ClassDeclarationSyntax>();
+
         if (declaration is null)
             return;
+
 
         foreach (var diagnostic in context.Diagnostics)
         {
@@ -37,10 +39,13 @@ public sealed class PartialProcessorCodeFixProvider : CodeFixProvider
                 // PORTIA015 has several causes; only the one the generator marks is repaired here.
                 if (!diagnostic.Properties.ContainsKey("PartialContainers"))
                     continue;
+
                 var containers = declaration.Ancestors().OfType<TypeDeclarationSyntax>()
                     .Where(container => !container.Modifiers.Any(SyntaxKind.PartialKeyword)).ToArray();
+
                 if (containers.Length == 0)
                     continue;
+
                 context.RegisterCodeFix(CodeAction.Create("Make enclosing types partial",
                         ct => AddPartialAsync(context.Document, containers, ct), "Portia.MakeContainersPartial"),
                     diagnostic);
@@ -54,9 +59,11 @@ public sealed class PartialProcessorCodeFixProvider : CodeFixProvider
         }
     }
 
-    static async Task<Document> AddPartialAsync(Document document,
+    static async Task<Document> AddPartialAsync(
+        Document document,
         IReadOnlyCollection<TypeDeclarationSyntax> declarations,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken
+    )
     {
         var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
         return document.WithSyntaxRoot(root!.ReplaceNodes(declarations, (_, current) => WithPartial(current)));
@@ -67,12 +74,14 @@ public sealed class PartialProcessorCodeFixProvider : CodeFixProvider
     {
         var partial = SyntaxFactory.Token(SyntaxKind.PartialKeyword).WithTrailingTrivia(SyntaxFactory.Space);
         var replacement = declaration;
+
         if (declaration.Modifiers.Count == 0)
         {
             partial = partial.WithLeadingTrivia(declaration.Keyword.LeadingTrivia);
             replacement = declaration.ReplaceToken(declaration.Keyword,
                 declaration.Keyword.WithLeadingTrivia(default(SyntaxTriviaList)));
         }
+
 
         return replacement.WithModifiers(replacement.Modifiers.Add(partial));
     }

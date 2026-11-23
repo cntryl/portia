@@ -17,11 +17,13 @@ sealed class RequestNotificationRunnerHostedService(
     {
         if (validations is not null)
             await validations.WaitForEndpointValidationsAsync(stoppingToken).ConfigureAwait(false);
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 await _runner.RunAsync(stoppingToken).ConfigureAwait(false);
+
                 if (!stoppingToken.IsCancellationRequested)
                 {
                     PortiaTelemetry.RecordRunnerFault(nameof(RequestNotificationRunner), RunnerFaultStage.Notification,
@@ -39,6 +41,7 @@ sealed class RequestNotificationRunnerHostedService(
             }
 
             PortiaTelemetry.RecordWorkerRestart(nameof(RequestNotificationRunner), "notification");
+
             try
             {
                 await Task.Delay(TimeSpan.FromSeconds(1), _clock, stoppingToken).ConfigureAwait(false);

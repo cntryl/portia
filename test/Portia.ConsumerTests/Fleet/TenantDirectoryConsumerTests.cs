@@ -126,15 +126,19 @@ public sealed class TenantDirectoryConsumerTests
         // Assert
         Assert.True(await first.MoveNextAsync());
         Assert.Equal(TenantLifecycleChangeKind.Added, first.Current.Kind);
+
         if (interveningSnapshot)
         {
             await SeedAsync(store, id, 1, new Deactivated("acme"));
+
             await foreach (var _ in directory.GetActiveTenantsAsync(cancellation.Token))
             {
             }
         }
 
+
         var move = second.MoveNextAsync().AsTask();
+
         try
         {
             Assert.True(await move.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
@@ -145,6 +149,7 @@ public sealed class TenantDirectoryConsumerTests
         finally
         {
             cancellation.Cancel();
+
             try
             {
                 _ = await move;
@@ -175,6 +180,7 @@ public sealed class TenantDirectoryConsumerTests
         Assert.True(await watch.MoveNextAsync());
         Assert.Equal(new TenantLifecycleChange(TenantLifecycleChangeKind.Added, new TenantId("acme")), watch.Current);
         var next = watch.MoveNextAsync().AsTask();
+
         try
         {
             _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
@@ -187,6 +193,7 @@ public sealed class TenantDirectoryConsumerTests
         finally
         {
             cancellation.Cancel();
+
             try
             {
                 _ = await next;
@@ -197,8 +204,10 @@ public sealed class TenantDirectoryConsumerTests
         }
     }
 
-    internal static EventSourcedTenantDirectory<Activated, Deactivated> CreateDirectory(IEventStore store,
-        TimeProvider? clock = null) =>
+    internal static EventSourcedTenantDirectory<Activated, Deactivated> CreateDirectory(
+        IEventStore store,
+        TimeProvider? clock = null
+    ) =>
         new(store, EventStreamPattern.ForPattern("consumer", "tenants"), ev => ev switch
         {
             Activated added => new TenantId(added.Name),

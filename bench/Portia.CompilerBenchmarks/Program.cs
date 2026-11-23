@@ -12,6 +12,7 @@ static class Program
             input.Cancel = true;
             cancellation.Cancel();
         };
+
         try
         {
             if (args.Length == 0 || args[0] is "help" or "--help")
@@ -24,16 +25,20 @@ static class Program
             var options = Parse(args.Skip(1).ToArray());
             var corpus = Get(options, "corpus", "core");
             var all = CaseSpec.All(corpus);
+
             if (args[0] == "list")
             {
                 foreach (var spec in all)
                     Console.WriteLine(spec.Id);
+
                 return 0;
             }
+
 
             var selected = Get(options, "case", args[0] == "verify" ? "all" : args[0] == "first-load" ? (corpus == "accounts" ? "accounts/api/cold" : "applications/all/full") : corpus == "accounts" ? "accounts/api/body" : "generators/all/body");
             var cases = selected == "all" ? all : [all.Single(spec => spec.Id == selected)];
             var size = Get(options, "size", corpus == "accounts" ? "captured" : "minimal");
+
             if (corpus == "accounts")
             {
                 if (size != "captured")
@@ -41,8 +46,10 @@ static class Program
             }
             else
                 _ = FixtureSize.Named(size);
+
             var samples = Number(options, "samples", args[0] is "worker" or "first-load" ? 1 : 10, 1, 1000);
             var warmup = Number(options, "warmup", args[0] == "first-load" ? 0 : 1, 0, 10);
+
             switch (args[0])
             {
                 case "cancellation":
@@ -131,6 +138,7 @@ static class Program
             new HashSet<string>(
                 ["case", "size", "output", "pairs", "samples", "warmup", "seconds", "baseline", "candidate", "root", "corpus", "edits", "delay-ms", "completion-ack"],
                 StringComparer.Ordinal);
+
         for (var i = 0; i < args.Length; i += 2)
         {
             if (!args[i].StartsWith("--", StringComparison.Ordinal) || !allowed.Contains(args[i][2..]) ||
@@ -138,6 +146,7 @@ static class Program
                 || !values.TryAdd(args[i][2..], args[i + 1]))
                 throw new ArgumentException("Unknown, duplicate or incomplete option: " + args[i]);
         }
+
 
         return values;
     }

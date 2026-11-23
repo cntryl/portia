@@ -29,10 +29,12 @@ public sealed class SingleProcessWorkloadCancellationTests
             callback = token.Register(() =>
             {
                 callbackRan.TrySetResult();
+
                 if (throwOnCancellation)
                     throw new InvalidOperationException("application cancellation callback failed");
             });
             started.TrySetResult();
+
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, token);
@@ -65,6 +67,7 @@ public sealed class SingleProcessWorkloadCancellationTests
             {
                 releaseCleanup.TrySetResult();
                 await cleanupFinished.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
                 try
                 {
                     await lifetime.CancelAsync();
@@ -110,8 +113,10 @@ public sealed class SingleProcessWorkloadCancellationTests
             if (identity.Name == "faulting")
                 callback = token.Register(static () =>
                     throw new InvalidOperationException("cancellation callback failed"));
+
             if (Interlocked.Increment(ref starts) == 2)
                 started.TrySetResult();
+
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, token);
@@ -149,6 +154,7 @@ public sealed class SingleProcessWorkloadCancellationTests
             try
             {
                 releaseCleanup.TrySetResult();
+
                 try
                 {
                     await lifetime.CancelAsync();
@@ -157,6 +163,7 @@ public sealed class SingleProcessWorkloadCancellationTests
                                                            failure.Message == "cancellation callback failed"))
                 {
                 }
+
 
                 try
                 {

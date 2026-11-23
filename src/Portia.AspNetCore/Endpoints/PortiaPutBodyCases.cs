@@ -14,21 +14,36 @@ namespace Cntryl.Portia;
 public static class PortiaPutBodyExtensions
 {
     /// <summary>Maps a PUT whose typed cases all return 204 on success.</summary>
-    public static PortiaPutBodyCases MapPortiaPutByBody(this IEndpointRouteBuilder app, string pattern,
-        string operationId, string selector, params string[] queryMembers) =>
+    public static PortiaPutBodyCases MapPortiaPutByBody(
+        this IEndpointRouteBuilder app,
+        string pattern,
+        string operationId,
+        string selector,
+        params string[] queryMembers
+    ) =>
         new(app, pattern, operationId, selector, queryMembers);
 
     /// <summary>Maps a PUT whose typed cases all return the same JSON result on success.</summary>
-    public static PortiaPutBodyCases<TOut> MapPortiaPutByBody<TOut>(this IEndpointRouteBuilder app, string pattern,
-        string operationId, string selector, params string[] queryMembers) =>
+    public static PortiaPutBodyCases<TOut> MapPortiaPutByBody<TOut>(
+        this IEndpointRouteBuilder app,
+        string pattern,
+        string operationId,
+        string selector,
+        params string[] queryMembers
+    ) =>
         new(app, pattern, operationId, selector, queryMembers);
 }
 
 /// <summary>Declares cases for a PUT endpoint returning 204.</summary>
 public sealed class PortiaPutBodyCases : PortiaPutBodyCasesBase
 {
-    internal PortiaPutBodyCases(IEndpointRouteBuilder app, string pattern, string operationId, string selector,
-        string[] queryMembers) : base(app, pattern, operationId, selector, queryMembers, null)
+    internal PortiaPutBodyCases(
+        IEndpointRouteBuilder app,
+        string pattern,
+        string operationId,
+        string selector,
+        string[] queryMembers
+    ) : base(app, pattern, operationId, selector, queryMembers, null)
     {
     }
 
@@ -40,8 +55,13 @@ public sealed class PortiaPutBodyCases : PortiaPutBodyCasesBase
 /// <summary>Declares cases for a PUT endpoint returning a common JSON result.</summary>
 public sealed class PortiaPutBodyCases<TOut> : PortiaPutBodyCasesBase
 {
-    internal PortiaPutBodyCases(IEndpointRouteBuilder app, string pattern, string operationId, string selector,
-        string[] queryMembers) : base(app, pattern, operationId, selector, queryMembers, typeof(TOut))
+    internal PortiaPutBodyCases(
+        IEndpointRouteBuilder app,
+        string pattern,
+        string operationId,
+        string selector,
+        string[] queryMembers
+    ) : base(app, pattern, operationId, selector, queryMembers, typeof(TOut))
     {
     }
 
@@ -60,8 +80,14 @@ public abstract class PortiaPutBodyCasesBase : IEndpointConventionBuilder
     readonly string[] _queryMembers;
     bool _sealed;
 
-    private protected PortiaPutBodyCasesBase(IEndpointRouteBuilder app, string pattern, string operationId,
-        string selector, string[] queryMembers, Type? resultType)
+    private protected PortiaPutBodyCasesBase(
+        IEndpointRouteBuilder app,
+        string pattern,
+        string operationId,
+        string selector,
+        string[] queryMembers,
+        Type? resultType
+    )
     {
         PortiaHttpBinding.RequireHttpServices(app);
         ArgumentException.ThrowIfNullOrWhiteSpace(operationId);
@@ -77,6 +103,7 @@ public abstract class PortiaPutBodyCasesBase : IEndpointConventionBuilder
         {
             if (_cases.Count == 0)
                 throw new InvalidOperationException("MapPortiaPutByBody requires at least one typed case.");
+
             _sealed = true;
             var first = _cases.Values.First();
             endpoint.Metadata.Add(new PortiaPutBodyOperation(_selector, [.. _cases.Values]));
@@ -105,25 +132,34 @@ public abstract class PortiaPutBodyCasesBase : IEndpointConventionBuilder
         var sources = PortiaHttpMemberSources.Resolve(typeof(TRequest), members, _queryMembers,
             new Dictionary<string, string>(), _app.ServiceProvider.GetRequiredService<IOptions<PortiaHttpOptions>>()
                 .Value.HeaderBindings);
+
         if (hasConditional)
             PortiaHttpBinding.ValidateRequiredWhen<TRequest>(_app, members, sources, hasCustomBinder: false);
+
         return sources;
     }
 
     /// <summary>Registers the generated binder and input contract for one case.</summary>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public void AddGeneratedCase<TRequest>(string value, PortiaOpenApiParameter[] parameters,
-        PortiaHttpMemberSources sources, bool resultIsNullable,
-        Func<HttpContext, IRequestBus, JsonElement, CancellationToken, Task<IResult>> handle)
+    public void AddGeneratedCase<TRequest>(
+        string value,
+        PortiaOpenApiParameter[] parameters,
+        PortiaHttpMemberSources sources,
+        bool resultIsNullable,
+        Func<HttpContext, IRequestBus, JsonElement, CancellationToken, Task<IResult>> handle
+    )
     {
         if (_sealed)
             throw new InvalidOperationException("Register typed cases before building the endpoint.");
+
         ArgumentNullException.ThrowIfNull(value);
         var type = typeof(TRequest);
         var options = _app.ServiceProvider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
         var registration = _app.ServiceProvider.GetRequiredService<RequestRegistry>().Handler(type);
+
         if (registration.Permission is not null && registration.StaticPermission is null)
             throw new InvalidOperationException("Typed PUT cases require static permission declarations. Use an authorizer for contextual checks.");
+
 
         for (var i = 0; i < parameters.Length; i++)
         {
@@ -131,10 +167,12 @@ public abstract class PortiaPutBodyCasesBase : IEndpointConventionBuilder
             var name = parameter.WireName ?? options.PropertyNamingPolicy?.ConvertName(parameter.ClrName) ??
                        parameter.ClrName;
             var comparison = SelectorComparison(options);
+
             if (parameter.Source == "body")
             {
                 var binding = PortiaHttpBinding.ResolveBodyMember(options, type, parameter.Type, i,
                     parameter.ClrName, name);
+
                 if (string.Equals(binding.Name, _selector, comparison) &&
                     (binding.Name != _selector || parameter.Type != typeof(string) || !binding.Input ||
                      sources.Query(i) || sources.Header(i) is not null ||
@@ -146,6 +184,7 @@ public abstract class PortiaPutBodyCasesBase : IEndpointConventionBuilder
                 throw new InvalidOperationException($"Typed PUT selector '{_selector}' must bind only from JSON.");
             }
 
+
             if (sources.Header(i) is { } header)
                 parameter = parameter with { Source = "header", WireName = header };
             else if (sources.Query(i))
@@ -154,14 +193,17 @@ public abstract class PortiaPutBodyCasesBase : IEndpointConventionBuilder
             parameters[i] = parameter;
         }
 
+
         if (_cases.Values.FirstOrDefault() is { } first)
         {
             var common = TransportMembers(first.Parameters).ToArray();
             var incoming = TransportMembers(parameters).ToArray();
+
             if (first.ResultIsNullable != resultIsNullable || !common.SequenceEqual(incoming) ||
                 common.Any(parameter => !JsonNode.DeepEquals(Facts(first.RequestType, parameter), Facts(type, parameter))))
                 throw new InvalidOperationException("Typed PUT cases must share the same path, query, header and response contract.");
         }
+
         if (!_cases.TryAdd(value, new PutBodyCase(value, type, parameters, registration.StaticPermission,
                 resultIsNullable, handle)))
             throw new InvalidOperationException($"Typed PUT selector value '{value}' was registered twice.");
@@ -169,12 +211,16 @@ public abstract class PortiaPutBodyCasesBase : IEndpointConventionBuilder
         JsonNode? Facts(Type request, PortiaOpenApiParameter parameter)
         {
             var member = PortiaJsonDescriptions.MemberMetadata(options, request, parameter.ClrName);
+
             if (member is null || member.Rules.Count == 0)
                 return null;
+
             var schema = new PortiaOpenApiJsonSchemaExporter(options, null, null, null, true)
                 .Export(parameter.Type, parameter.IsNullable);
+
             if (schema is JsonObject obj)
                 PortiaJsonConstraints.Apply(obj, member, options);
+
             return schema;
         }
 
@@ -197,8 +243,10 @@ public abstract class PortiaPutBodyCasesBase : IEndpointConventionBuilder
             var options = PortiaHttpBinding.GetJsonOptions(http);
             using var body = await ReadBodyAsync(http, ct).ConfigureAwait(false);
             var value = ReadSelector(body.RootElement, SelectorComparison(options));
+
             if (!_cases.TryGetValue(value, out var selected))
                 throw new BadHttpRequestException($"Unknown value for typed PUT selector '{_selector}'.");
+
             var bus = http.RequestServices.GetRequiredService<IRequestBus>();
             var result = await selected.Handle(http, bus, body.RootElement, ct).ConfigureAwait(false);
             await result.ExecuteAsync(http).ConfigureAwait(false);
@@ -244,14 +292,19 @@ public abstract class PortiaPutBodyCasesBase : IEndpointConventionBuilder
     string ReadSelector(JsonElement body, StringComparison comparison)
     {
         string? value = null;
+
         if (body.ValueKind != JsonValueKind.Object)
             throw new BadHttpRequestException("Expected a JSON object.");
+
         foreach (var property in body.EnumerateObject())
         {
             if (!string.Equals(property.Name, _selector, comparison))
                 continue;
+
+
             if (value is not null || property.Value.ValueKind != JsonValueKind.String)
                 throw new BadHttpRequestException($"Typed PUT selector '{_selector}' must be one string value.");
+
             value = property.Value.GetString();
         }
 

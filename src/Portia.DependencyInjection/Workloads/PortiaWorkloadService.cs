@@ -48,6 +48,7 @@ sealed class PortiaWorkloadService(
         {
             if (_starting is null || _starting.IsFaulted || _starting.IsCanceled)
                 _starting = ValidateStartupAsync(cancellationToken);
+
             return _starting;
         }
     }
@@ -60,12 +61,15 @@ sealed class PortiaWorkloadService(
         }
 
         Require(typeof(IDomainEventReader));
+
         if (_registrations.Any(item => item.Scope == WorkloadScope.PerTenant))
         {
             Require(typeof(ITenantDirectory));
         }
 
+
         IWorkloadCoordinator[] coordinators = [.. workloadCoordinators];
+
         if (coordinators.Length != 1)
         {
             throw new InvalidOperationException(
@@ -74,6 +78,7 @@ sealed class PortiaWorkloadService(
                 $"or call {nameof(PortiaBuilder.UseSingleProcessWorkloads)}() when exactly one worker replica runs.");
         }
 
+
         _coordinator = coordinators[0];
 
         if (operationalStore is not null)
@@ -81,9 +86,11 @@ sealed class PortiaWorkloadService(
             if (operationalOptions is null || topology is null || !available.IsService(typeof(OperationalExecution)))
                 throw new InvalidOperationException(
                     "Operational workers require the complete operations registration from their infrastructure builder.");
+
             operationalOptions.Validate();
             await using var operationalScope = scopes.CreateAsyncScope();
             var checkpoints = operationalScope.ServiceProvider.GetServices<IProjectionCheckpointStore>().ToArray();
+
             if (checkpoints.Length != 1 || !ReferenceEquals(checkpoints[0],
                     operationalScope.ServiceProvider.GetService<IOperationalReactionCheckpointStore>()))
                 throw new InvalidOperationException(
@@ -102,6 +109,7 @@ sealed class PortiaWorkloadService(
             var valid = registration.Scope == WorkloadScope.PerTenant
                 ? pattern.IsTenantTemplate
                 : !pattern.IsTenantTemplate;
+
             if (!valid)
             {
                 var expected = registration.Scope == WorkloadScope.PerTenant
@@ -111,6 +119,7 @@ sealed class PortiaWorkloadService(
                     $"Workload '{registration.Name}' uses scope '{registration.Scope}' but pattern '{pattern}'. " +
                     $"Use {expected} for this scope.");
             }
+
 
             registration.Descriptor.Validate(scope.ServiceProvider, registration.Name);
         }
@@ -141,14 +150,17 @@ sealed class PortiaWorkloadService(
     {
         if (validations is not null)
             await validations.WaitForEndpointValidationsAsync(stoppingToken).ConfigureAwait(false);
+
         if (_registrations.Length == 0)
         {
             return;
         }
 
         var active = new ConcurrentDictionary<WorkloadIdentity, WorkloadRegistration>();
+
         foreach (var registration in _registrations.Where(item => item.Scope == WorkloadScope.Global))
             active[new WorkloadIdentity(registration.Name)] = registration;
+
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         var perTenant = _registrations.Where(item => item.Scope == WorkloadScope.PerTenant).ToArray();
         var tenants = perTenant.Length == 0
@@ -164,8 +176,10 @@ sealed class PortiaWorkloadService(
                 async (tenant, ct) =>
                 {
                     var identities = perTenant.Select(item => new WorkloadIdentity(item.Name, tenant)).ToArray();
+
                     for (var i = 0; i < identities.Length; i++)
                         active[identities[i]] = perTenant[i];
+
                     try
                     {
                         await Task.Delay(Timeout.InfiniteTimeSpan, ct).ConfigureAwait(false);
@@ -189,6 +203,7 @@ sealed class PortiaWorkloadService(
 
         _ = await Task.WhenAny(tenants, coordinator).ConfigureAwait(false);
         Exception? cancellationFailure = null;
+
         try
         {
             await lifetime.CancelAsync().ConfigureAwait(false);
@@ -202,8 +217,10 @@ sealed class PortiaWorkloadService(
 
         // Cancelling application callbacks may fail. The hosted lifetime still includes every
         // participant's asynchronous cleanup, and the participant's original fault stays primary.
+
         var completion = Task.WhenAll(tenants, coordinator);
         Exception? failure = null;
+
         try
         {
             await completion.ConfigureAwait(false);
@@ -214,15 +231,18 @@ sealed class PortiaWorkloadService(
         catch (Exception exception)
         {
             failure = exception;
+
             foreach (var secondary in completion.Exception?.InnerExceptions ?? [])
                 if (!ReferenceEquals(exception, secondary))
                     ProcessorFailureException.RecordCleanup(exception, secondary);
         }
 
+
         if (failure is not null)
         {
             if (cancellationFailure is not null)
                 ProcessorFailureException.RecordCleanup(failure, cancellationFailure);
+
             ExceptionDispatchInfo.Capture(failure).Throw();
         }
 
@@ -250,10 +270,12 @@ sealed class PortiaWorkloadService(
         var statusTask = Task.CompletedTask;
         EventStreamPattern? boundPattern = null;
         Exception? failure = null;
+
         try
         {
             if (statusLifetime is not null)
                 statusTask = MaintainStatusRpcAsync(registration, identity, statusLifetime.Token);
+
             while (!ct.IsCancellationRequested)
             {
                 var failed = false;
@@ -266,6 +288,7 @@ sealed class PortiaWorkloadService(
                 ProjectionCheckpoint? startingCheckpoint = null;
                 var skipPass = false;
                 AsyncServiceScope? scope = null;
+
                 try
                 {
                     observation?.Set("loading", "checkpoint", next: "load_progress");
@@ -274,10 +297,13 @@ sealed class PortiaWorkloadService(
                     provider.GetRequiredService<WorkloadContext>().Initialize(identity, registration.Name);
                     registration.Descriptor.Bind(provider, identity, registration.Name);
                     passPattern = registration.Descriptor.Pattern(provider);
+
                     if (boundPattern is not null && passPattern != boundPattern)
                         throw new InvalidOperationException(
                             $"Workload '{identity.Name}' ({registration.Scope}) changed its event-stream pattern from area '{boundPattern.Area ?? "*"}' to area '{passPattern.Area ?? "*"}' across dependency-injection scopes.");
+
                     boundPattern = passPattern;
+
                     if (subscription is null)
                     {
                         // A failed subscription is retried with the same backoff as a failed pass, so a
@@ -286,12 +312,14 @@ sealed class PortiaWorkloadService(
                         {
                             subscription = await TrySubscribeAsync(notifier, passPattern, _logger, ct)
                                 .ConfigureAwait(false);
+
                             if (subscription is null)
                                 resubscribeAt = _clock.GetUtcNow() + GetFailureDelay(registration, ++subscribeFailures);
                             else
                                 subscribeFailures = 0;
                         }
                     }
+
 
                     if (operationalStore is not null)
                     {
@@ -308,12 +336,15 @@ sealed class PortiaWorkloadService(
                                     registration.MaximumFailureDelay.Ticks), null, ct).ConfigureAwait(false);
                             operationalSession = session;
                         }
+
                         operationalSession!.BeginPass();
                         var checkpoint = await registration.Descriptor.LoadCheckpoint(provider, processing, ct)
                             .ConfigureAwait(false);
                         startingCheckpoint = checkpoint;
+
                         if (!await operationalSession.PrepareAsync(checkpoint, ct).ConfigureAwait(false))
                             skipPass = true;
+
 
                         if (!skipPass)
                         {
@@ -322,6 +353,7 @@ sealed class PortiaWorkloadService(
                             consecutiveFailures = operationalSession.State.ConsecutiveFailures;
                         }
                     }
+
                     if (!skipPass)
                     {
                         observation?.Set("processing", "pass", next: "continue_processing");
@@ -350,11 +382,13 @@ sealed class PortiaWorkloadService(
                     }
                 }
 
+
                 if (passFailure is OperationCanceledException && ct.IsCancellationRequested)
                 {
                     if (scopeCleanupFailure is not null)
                         PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Cleanup,
                             scopeCleanupFailure, _logger);
+
                     break;
                 }
 
@@ -365,6 +399,7 @@ sealed class PortiaWorkloadService(
                             failures: operationalSession.State.ConsecutiveFailures);
                     else
                         observation?.Set("blocked", next: "wait_for_repair");
+
                     try
                     {
                         await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false);
@@ -383,6 +418,7 @@ sealed class PortiaWorkloadService(
                     {
                         if (operationalSession is not null)
                             await operationalSession.PassSucceededAsync(ct).ConfigureAwait(false);
+
                         consecutiveFailures = 0;
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
@@ -392,21 +428,26 @@ sealed class PortiaWorkloadService(
                 }
 
                 ProjectionCheckpoint? confirmedCleanupCheckpoint = null;
+
                 if (passFailure is null && scopeCleanupFailure is not null)
                 {
                     if (!skipPass && startingCheckpoint is { } start && pass.Checkpoint != start)
                         confirmedCleanupCheckpoint = pass.Checkpoint;
+
                     passFailure = new ProcessorFailureException(
                         new CheckpointIdentity(identity.Name, passPattern!, processing.RebuildId),
                         confirmedCleanupCheckpoint,
                         ProcessorFailureStage.Disposing, innerException: scopeCleanupFailure);
                 }
 
+
                 if (passFailure is not null)
                 {
                     failed = true;
+
                     if (scopeCleanupFailure is not null && !ReferenceEquals(passFailure.InnerException, scopeCleanupFailure))
                         ProcessorFailureException.RecordCleanup(passFailure, scopeCleanupFailure);
+
                     if (operationalSession is not null)
                     {
                         await operationalSession.RecordFailureAsync(passFailure,
@@ -418,10 +459,12 @@ sealed class PortiaWorkloadService(
 
                     PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Workload, passFailure,
                         _logger);
+
                     if (IsTerminal(passFailure, consecutiveFailures, registration, operationalSession))
                     {
                         terminalFailure = new WorkloadFailureException(identity, consecutiveFailures, passFailure);
                     }
+
 
                     var reason = passFailure switch
                     {
@@ -432,6 +475,7 @@ sealed class PortiaWorkloadService(
                     };
                     var stage = passFailure is ProcessorFailureException processorFailure
                         ? processorFailure.Stage.ToString() : "Pass";
+
                     if (terminalFailure is null)
                         observation?.Set("retry_wait", stage, reason, "retry_processing",
                             _clock.GetUtcNow() + GetFailureDelay(registration, consecutiveFailures), consecutiveFailures);
@@ -439,6 +483,7 @@ sealed class PortiaWorkloadService(
                         observation?.Set("blocked", stage, reason,
                             operationalSession is null ? "inspect_and_restart_worker" : "preview_and_approve_repair",
                             failures: consecutiveFailures);
+
 
                     if (_logger is not null)
                     {
@@ -462,6 +507,7 @@ sealed class PortiaWorkloadService(
                 {
                     if (operationalSession is null)
                         throw terminalFailure;
+
                     await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false);
                     continue;
                 }
@@ -482,6 +528,7 @@ sealed class PortiaWorkloadService(
                 }
 
                 observation?.Set("idle", next: "wait_for_source");
+
                 if (subscription is null)
                 {
                     try
@@ -500,8 +547,10 @@ sealed class PortiaWorkloadService(
                 // use, so it is scheduled on the same clock. CreateLinkedTokenSource takes no
                 // TimeProvider, so the deadline is its own source and the linked one only combines
                 // it with the stopping token.
+
                 using var deadline = new CancellationTokenSource(registration.PollInterval, _clock);
                 using var backstop = CancellationTokenSource.CreateLinkedTokenSource(ct, deadline.Token);
+
                 try
                 {
                     await subscription.WaitAsync(backstop.Token).ConfigureAwait(false);
@@ -521,6 +570,7 @@ sealed class PortiaWorkloadService(
                     PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Notification, ex,
                         _logger);
                     await ReleaseSubscriptionAsync().ConfigureAwait(false);
+
                     try
                     {
                         await Task.Delay(registration.PollInterval, _clock, ct).ConfigureAwait(false);
@@ -551,6 +601,7 @@ sealed class PortiaWorkloadService(
                     {
                         if (failure is not null)
                             ProcessorFailureException.RecordCleanup(failure, exception);
+
                         PortiaTelemetry.RecordRunnerFault(nameof(IProcessorStatusRpcRegistrar),
                             RunnerFaultStage.Cleanup,
                             exception, _logger);
@@ -575,14 +626,17 @@ sealed class PortiaWorkloadService(
                 {
                     if (observation is not null)
                         processorRuntime!.End(identity, observation);
+
                     PortiaTelemetry.RecordWorkload(registration.Name, telemetryScope, false, _logger);
                 }
             }
         }
 
+
         void ObserveJournalWait(OperationalJournalWait? wait)
         {
             observation?.SetJournalWait(wait);
+
             if (_logger is not null)
             {
                 if (wait is not null && journalWait is null)
@@ -593,6 +647,7 @@ sealed class PortiaWorkloadService(
                         _clock.GetUtcNow() - previous.Since, previous.Failures, null);
             }
 
+
             journalWait = wait;
         }
 
@@ -600,8 +655,10 @@ sealed class PortiaWorkloadService(
         {
             var owned = subscription;
             subscription = null;
+
             if (owned is null)
                 return;
+
             try
             {
                 await owned.DisposeAsync().ConfigureAwait(false);
@@ -610,6 +667,7 @@ sealed class PortiaWorkloadService(
             {
                 if (failure is not null)
                     ProcessorFailureException.RecordCleanup(failure, exception);
+
                 PortiaTelemetry.RecordRunnerFault(nameof(PortiaWorkloadService), RunnerFaultStage.Cleanup, exception,
                     _logger);
             }
@@ -622,7 +680,8 @@ sealed class PortiaWorkloadService(
             IDomainEventNotifier notifier,
             EventStreamPattern pattern,
             ILogger? logger,
-            CancellationToken token)
+            CancellationToken token
+        )
         {
             try
             {
@@ -637,16 +696,21 @@ sealed class PortiaWorkloadService(
         }
     }
 
-    async Task MaintainStatusRpcAsync(WorkloadRegistration registration, WorkloadIdentity identity,
-        CancellationToken ct)
+    async Task MaintainStatusRpcAsync(
+        WorkloadRegistration registration,
+        WorkloadIdentity identity,
+        CancellationToken ct
+    )
     {
         IAsyncDisposable? endpoint = null;
         var failures = 0;
+
         try
         {
             while (endpoint is null)
             {
                 ct.ThrowIfCancellationRequested();
+
                 try
                 {
                     endpoint = await statusRpc!.RegisterAsync(identity, ct).ConfigureAwait(false)
@@ -691,8 +755,12 @@ sealed class PortiaWorkloadService(
 
     // Retrying ends when the failure is permanent, when the attempt budget is spent, or when the journal has
     // blocked the processor on the attempt that just failed.
-    static bool IsTerminal(Exception failure, int consecutiveFailures, WorkloadRegistration registration,
-        OperationalSession? session) =>
+    static bool IsTerminal(
+        Exception failure,
+        int consecutiveFailures,
+        WorkloadRegistration registration,
+        OperationalSession? session
+    ) =>
         failure is ProcessorFailureException { IsTransient: false }
         || consecutiveFailures >= registration.FailureAttemptLimit
         || session is { State.Block: { } block } && session.State.Attempts[^1].Id == block.AttemptId;

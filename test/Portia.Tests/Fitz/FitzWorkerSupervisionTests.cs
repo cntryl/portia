@@ -55,6 +55,7 @@ public sealed class FitzWorkerSupervisionTests
         {
             fail.TrySetResult();
             releaseCleanup.TrySetResult();
+
             try
             {
                 await run.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
@@ -87,6 +88,7 @@ public sealed class FitzWorkerSupervisionTests
                 // The outer test owns registration so listener cleanup cannot unregister that callback.
                 callback = token.Register(() =>
                     throw new InvalidOperationException("listener cancellation callback failed"));
+
                 try
                 {
                     await Task.Delay(Timeout.InfiniteTimeSpan, token);
