@@ -65,7 +65,10 @@ public sealed class OpenAccountHandler(IAccountCommandRepository accounts, IAcco
     : IRequestHandler<OpenAccount, PortiaCreateOutcome<AccountCreated>>
 {
     /// <inheritdoc />
-    public ValueTask<Result<PortiaCreateOutcome<AccountCreated>>> HandleAsync(IRequestContext<OpenAccount> context, CancellationToken ct)
+    public ValueTask<Result<PortiaCreateOutcome<AccountCreated>>> HandleAsync(
+        IRequestContext<OpenAccount> context,
+        CancellationToken ct
+    )
     {
         lifecycle.Record("handler.open");
         return accounts.OpenAsync(context.Request, context, ct);
@@ -77,7 +80,10 @@ public sealed class DepositFundsHandler(IAccountCommandRepository accounts, IAcc
     : IRequestHandler<DepositFunds>
 {
     /// <inheritdoc />
-    public ValueTask<Result> HandleAsync(IRequestContext<DepositFunds> context, CancellationToken ct)
+    public ValueTask<Result> HandleAsync(
+        IRequestContext<DepositFunds> context,
+        CancellationToken ct
+    )
     {
         lifecycle.Record("handler.deposit");
         return accounts.DepositAsync(context.Request, context, ct);
@@ -88,8 +94,10 @@ public sealed class DepositFundsHandler(IAccountCommandRepository accounts, IAcc
 public sealed class GetAccountHandler(IAccountReadRepository accounts) : IRequestHandler<GetAccount, AccountReadModel>
 {
     /// <inheritdoc />
-    public async ValueTask<Result<AccountReadModel>> HandleAsync(IRequestContext<GetAccount> context,
-        CancellationToken ct)
+    public async ValueTask<Result<AccountReadModel>> HandleAsync(
+        IRequestContext<GetAccount> context,
+        CancellationToken ct
+    )
     {
         var account = await accounts.GetAsync(context.Request.Tenant, context.Request.AccountId, ct)
             .ConfigureAwait(false);

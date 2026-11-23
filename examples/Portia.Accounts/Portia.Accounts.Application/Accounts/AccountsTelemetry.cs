@@ -8,8 +8,11 @@ public static class AccountsTelemetry
     /// <param name="serviceName">The stable OpenTelemetry service name.</param>
     /// <param name="configureTracing">Optional host-specific tracing instrumentation.</param>
     /// <returns>The same services collection.</returns>
-    public static IServiceCollection AddAccountsTelemetry(this IServiceCollection services, string serviceName,
-        Action<TracerProviderBuilder>? configureTracing = null)
+    public static IServiceCollection AddAccountsTelemetry(
+        this IServiceCollection services,
+        string serviceName,
+        Action<TracerProviderBuilder>? configureTracing = null
+    )
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);

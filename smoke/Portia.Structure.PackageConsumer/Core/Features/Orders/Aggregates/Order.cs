@@ -54,7 +54,10 @@ public sealed class Order : Aggregate
     void Apply(OrderLineQuantityChanged ev)
     {
         if (!_lines.TryGetValue(ev.LineId, out var line))
+        {
             _lines.Add(ev.LineId, line = new OrderLine(ev.LineId));
+        }
+
         line.ApplyQuantity(ev.Quantity);
     }
 }

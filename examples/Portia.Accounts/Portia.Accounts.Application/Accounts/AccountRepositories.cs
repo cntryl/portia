@@ -78,7 +78,11 @@ public sealed class AccountRepository : FitzKvProjectionStore, IAccountReadRepos
     }
 
     /// <summary>Reads the committed account in the specified live or candidate projection.</summary>
-    public async ValueTask<AccountReadModel?> GetAsync(CheckpointIdentity identity, Uuid accountId, CancellationToken ct)
+    public async ValueTask<AccountReadModel?> GetAsync(
+        CheckpointIdentity identity,
+        Uuid accountId,
+        CancellationToken ct
+    )
     {
         await using var transaction = await BeginReadAsync(identity, ct).ConfigureAwait(false);
         return await ReadAsync(transaction, accountId, ct).ConfigureAwait(false);
@@ -94,8 +98,11 @@ public sealed class AccountRepository : FitzKvProjectionStore, IAccountReadRepos
             JsonSerializer.SerializeToUtf8Bytes(account, AccountsJsonContext.Default.AccountReadModel), ct)
             .ConfigureAwait(false);
 
-    static async ValueTask<AccountReadModel?> ReadAsync(IKvTransaction transaction, Uuid accountId,
-        CancellationToken ct)
+    static async ValueTask<AccountReadModel?> ReadAsync(
+        IKvTransaction transaction,
+        Uuid accountId,
+        CancellationToken ct
+    )
     {
         var value = await transaction.GetAsync(Key(accountId), ct).ConfigureAwait(false);
         return value is KvFound { Value: var bytes }

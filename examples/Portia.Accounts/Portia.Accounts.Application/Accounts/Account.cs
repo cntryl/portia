@@ -42,9 +42,14 @@ public sealed class Account : Aggregate
     public Result Open(long initialBalanceCents)
     {
         if (IsOpen)
+        {
             return RequestError.Conflict("The account is already open.");
+        }
+
         if (initialBalanceCents < 0)
+        {
             return RequestError.Validation("The opening balance cannot be negative.");
+        }
 
         RaiseEvent(new AccountOpened(initialBalanceCents));
         return Result.Success;
@@ -56,11 +61,19 @@ public sealed class Account : Aggregate
     public Result Deposit(long amountCents)
     {
         if (!IsOpen)
+        {
             return RequestError.NotFound("The account is not open.");
+        }
+
         if (amountCents <= 0)
+        {
             return RequestError.Validation("The deposit must be positive.");
+        }
+
         if (amountCents > long.MaxValue - BalanceCents)
+        {
             return RequestError.Validation("The deposit exceeds the supported balance.");
+        }
 
         RaiseEvent(new FundsDeposited(amountCents));
         return Result.Success;
