@@ -153,3 +153,4 @@ Cntryl.Portia.FitzRequestQueuePublisher.EnqueueWithOptionsAsync<TRequest>(TReque
 Cntryl.Portia.FitzKvProjectionStore.BeginReadAsync(Cntryl.Portia.CheckpointIdentity! identity, System.Threading.CancellationToken ct) -> System.Threading.Tasks.ValueTask<Cntryl.Fitz.IKvTransaction!>
 Cntryl.Portia.Testing.InMemoryRpcClient.CallStreamingAsync(string! route, System.ReadOnlyMemory<byte> body, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> Cntryl.Fitz.RpcCall!
 Cntryl.Portia.Testing.InMemoryRpcClient.CallStreamingAsync(string! route, System.ReadOnlyMemory<byte> body, System.TimeSpan? timeout, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> Cntryl.Fitz.RpcCall!
+Cntryl.Portia.PortiaFitzBuilder.AddProcessorStatusReader() -> Cntryl.Portia.PortiaFitzBuilder!

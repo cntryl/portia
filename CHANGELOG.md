@@ -4,6 +4,22 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.14.10
+
+### Added
+
+- Processor status reports attempt history, retry timing, checkpoint observations, ownership evidence, and the next recovery action.
+- Operational journal retries report their wait boundaries and preserve ambiguous commit outcomes for reconciliation.
+
+### Changed
+
+- Reactors require checkpoint stores with atomic compare-and-advance, preventing stale writers from replacing newer checkpoints.
+
+### Fixed
+
+- Processor retry budgets include failures during dependency-scope cleanup.
+- Status requests retain partial evidence when an owner probe times out or loses ownership.
+
 ## 0.14.9
 
 ### Added
