@@ -27,8 +27,10 @@ sealed record ContractMetadataRequest : IRequest<ContractMetadataModel>, ICallab
 
 sealed class ContractMetadataHandler : IRequestHandler<ContractMetadataRequest, ContractMetadataModel>
 {
-    public ValueTask<Result<ContractMetadataModel>> HandleAsync(IRequestContext<ContractMetadataRequest> context,
-        CancellationToken ct) =>
+    public ValueTask<Result<ContractMetadataModel>> HandleAsync(
+        IRequestContext<ContractMetadataRequest> context,
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult(Result<ContractMetadataModel>.Success(new("Title", 5, ["one"], "AB", "hi@example.com",
             "https://example.com")));
 }
@@ -37,7 +39,9 @@ sealed record ContractMetadataInputRequest(ContractMetadataModel Payload) : IReq
 
 sealed class ContractMetadataInputHandler : IRequestHandler<ContractMetadataInputRequest, ContractMetadataModel>
 {
-    public ValueTask<Result<ContractMetadataModel>> HandleAsync(IRequestContext<ContractMetadataInputRequest> context,
-        CancellationToken ct) =>
+    public ValueTask<Result<ContractMetadataModel>> HandleAsync(
+        IRequestContext<ContractMetadataInputRequest> context,
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult(Result<ContractMetadataModel>.Success(context.Request.Payload));
 }

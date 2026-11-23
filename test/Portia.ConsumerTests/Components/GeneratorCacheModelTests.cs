@@ -293,7 +293,8 @@ public sealed class GeneratorCacheModelTests
         IIncrementalGenerator generator,
         string trackingName,
         string body,
-        bool moveLocation = false)
+        bool moveLocation = false
+    )
     {
         const string pragma = "#pragma warning disable PORTIA020";
         var comment = "//" + new string(' ', pragma.Length - 2);
@@ -325,7 +326,8 @@ public sealed class GeneratorCacheModelTests
     static void AssertModifiedAfterUnrelatedPragmaEdit(
         IIncrementalGenerator generator,
         string trackingName,
-        string body)
+        string body
+    )
     {
         const string pragma = "#pragma warning disable PORTIA020";
         var comment = "//" + new string(' ', pragma.Length - 2);

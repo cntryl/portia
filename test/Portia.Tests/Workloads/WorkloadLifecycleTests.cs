@@ -24,6 +24,7 @@ public sealed class WorkloadLifecycleTests
         // Assert
         var terminal = Assert.IsType<WorkloadFailureException>(failure);
         Assert.Same(original, terminal.InnerException);
+
         if (cleanupFails)
             Assert.Same(notifier.CleanupFailure, terminal.Data["Portia.CleanupException"]);
     }
@@ -76,6 +77,7 @@ public sealed class WorkloadLifecycleTests
         {
             if (Interlocked.Increment(ref passes) == 2)
                 processedAgain.TrySetResult();
+
             return ValueTask.FromResult(default(ProjectionPassResult));
         });
         var notifier = new RecoveringNotifier();
@@ -107,8 +109,10 @@ public sealed class WorkloadLifecycleTests
         internal int Subscriptions { get; private set; }
         internal int FailedDisposals { get; private set; }
 
-        public ValueTask<IDomainEventSubscription> SubscribeAsync(EventStreamPattern pattern,
-            CancellationToken ct = default)
+        public ValueTask<IDomainEventSubscription> SubscribeAsync(
+            EventStreamPattern pattern,
+            CancellationToken ct = default
+        )
             => ValueTask.FromResult<IDomainEventSubscription>(++Subscriptions == 1
                 ? new FailedSubscription(this)
                 : new HealthySubscription());

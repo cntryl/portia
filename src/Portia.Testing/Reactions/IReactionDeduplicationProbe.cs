@@ -16,8 +16,11 @@ public interface IReactionDeduplicationProbe
     /// <param name="effect">The effect to run at most once for that event.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns><see langword="true" /> when the effect ran, <see langword="false" /> for a duplicate.</returns>
-    ValueTask<bool> ExecuteAsync(Uuid eventId, Func<CancellationToken, ValueTask> effect,
-        CancellationToken ct = default);
+    ValueTask<bool> ExecuteAsync(
+        Uuid eventId,
+        Func<CancellationToken, ValueTask> effect,
+        CancellationToken ct = default
+    );
 
     /// <summary>Closes and reopens the durable implementation without clearing its state.</summary>
     /// <param name="ct">A token that can cancel the operation.</param>

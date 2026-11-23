@@ -155,11 +155,15 @@ public sealed class FitzKvProjectionOverlapTests
         bool _failed;
         internal FakeKvClient Inner { get; } = new();
 
-        public Task<IKvTransaction> BeginAsync(string route, KvMode mode = KvMode.ReadWrite,
-            CancellationToken cancellationToken = default)
+        public Task<IKvTransaction> BeginAsync(
+            string route,
+            KvMode mode = KvMode.ReadWrite,
+            CancellationToken cancellationToken = default
+        )
         {
             if (_failed)
                 return Inner.BeginAsync(route, mode, cancellationToken);
+
             _failed = true;
             return Task.FromException<IKvTransaction>(new IOException("begin failed"));
         }
@@ -195,10 +199,14 @@ public sealed class FitzKvProjectionOverlapTests
         internal TaskCompletionSource ReleaseFirst { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal TaskCompletionSource ReleaseSecond { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public async Task<IKvTransaction> BeginAsync(string route, KvMode mode = KvMode.ReadWrite,
-            CancellationToken cancellationToken = default)
+        public async Task<IKvTransaction> BeginAsync(
+            string route,
+            KvMode mode = KvMode.ReadWrite,
+            CancellationToken cancellationToken = default
+        )
         {
             var transaction = await Inner.BeginAsync(route, mode, cancellationToken);
+
             if (Interlocked.Increment(ref _begins) == 1)
             {
                 FirstArrived.TrySetResult();
@@ -209,6 +217,7 @@ public sealed class FitzKvProjectionOverlapTests
                 BothArrived.TrySetResult();
                 await ReleaseSecond.Task.WaitAsync(cancellationToken);
             }
+
 
             return transaction;
         }

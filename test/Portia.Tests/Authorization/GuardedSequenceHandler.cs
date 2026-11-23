@@ -8,7 +8,8 @@ sealed class GuardedSequenceHandler : IStreamRequestHandler<GuardedSequence, int
 
     public async IAsyncEnumerable<int> HandleAsync(
         IRequestContext<GuardedSequence> context,
-        [EnumeratorCancellation] CancellationToken ct)
+        [EnumeratorCancellation] CancellationToken ct
+    )
     {
         WasInvoked = true;
         yield return 1;

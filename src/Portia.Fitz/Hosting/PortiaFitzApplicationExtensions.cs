@@ -32,19 +32,25 @@ public static class PortiaFitzApplicationExtensions
     /// <param name="configure">Selects which workers run and how the fleet is composed.</param>
     /// <returns>The same composition root, for chaining.</returns>
     /// <exception cref="ArgumentException">A configured value is missing or out of range.</exception>
-    public static PortiaBuilder AddFitz(this PortiaBuilder application, IConfiguration configuration,
-        Action<PortiaFitzBuilder> configure)
+    public static PortiaBuilder AddFitz(
+        this PortiaBuilder application,
+        IConfiguration configuration,
+        Action<PortiaFitzBuilder> configure
+    )
     {
         ArgumentNullException.ThrowIfNull(configuration);
         var endpoint = configuration["Endpoint"];
+
         if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) || uri.Scheme is not ("ws" or "wss"))
         {
             throw new ArgumentException("Fitz:Endpoint must be an absolute ws:// or wss:// URI.",
                 nameof(configuration));
         }
 
+
         var token = configuration["Token"];
         var timeout = TimeSpan.FromSeconds(15);
+
         if (configuration["StartupTimeoutSeconds"] is { } text)
         {
             if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var seconds)
@@ -56,6 +62,7 @@ public static class PortiaFitzApplicationExtensions
 
             timeout = TimeSpan.FromSeconds(seconds);
         }
+
 
         var settings = new ClientConfig(uri) { TokenProvider = token is null ? null : _ => ValueTask.FromResult(token) };
         return Register(application, builder =>
@@ -86,7 +93,8 @@ public static class PortiaFitzApplicationExtensions
     public static PortiaBuilder AddFitz(
         this PortiaBuilder application,
         ClientConfig configuration,
-        TimeSpan? startupTimeout = null) =>
+        TimeSpan? startupTimeout = null
+    ) =>
         application.AddFitz(configuration, static _ => { }, startupTimeout);
 
     /// <summary>Configures an owned client with optional worker selection or fleet membership.</summary>
@@ -98,8 +106,12 @@ public static class PortiaFitzApplicationExtensions
     ///     <see langword="null" /> for 15 seconds.
     /// </param>
     /// <returns>The same composition root, for chaining.</returns>
-    public static PortiaBuilder AddFitz(this PortiaBuilder application, ClientConfig configuration,
-        Action<PortiaFitzBuilder> configure, TimeSpan? startupTimeout = null)
+    public static PortiaBuilder AddFitz(
+        this PortiaBuilder application,
+        ClientConfig configuration,
+        Action<PortiaFitzBuilder> configure,
+        TimeSpan? startupTimeout = null
+    )
     {
         ArgumentNullException.ThrowIfNull(configuration);
         var timeout = startupTimeout ?? TimeSpan.FromSeconds(15);
@@ -121,16 +133,23 @@ public static class PortiaFitzApplicationExtensions
     /// <param name="client">The caller-owned client; Portia does not dispose it.</param>
     /// <param name="configure">Selects which workers run and how the fleet is composed.</param>
     /// <returns>The same composition root, for chaining.</returns>
-    public static PortiaBuilder UseFitzClient(this PortiaBuilder application, FitzClient client,
-        Action<PortiaFitzBuilder> configure)
+    public static PortiaBuilder UseFitzClient(
+        this PortiaBuilder application,
+        FitzClient client,
+        Action<PortiaFitzBuilder> configure
+    )
     {
         ArgumentNullException.ThrowIfNull(client);
         return Register(application, configure, _ => new FitzApplicationConnection(client, false, TimeSpan.Zero),
             client);
     }
 
-    static PortiaBuilder Register(PortiaBuilder application, Action<PortiaFitzBuilder> configure,
-        Func<IServiceProvider, FitzApplicationConnection> connection, object identity)
+    static PortiaBuilder Register(
+        PortiaBuilder application,
+        Action<PortiaFitzBuilder> configure,
+        Func<IServiceProvider, FitzApplicationConnection> connection,
+        object identity
+    )
     {
         ArgumentNullException.ThrowIfNull(application);
         ArgumentNullException.ThrowIfNull(configure);

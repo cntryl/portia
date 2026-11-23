@@ -20,7 +20,8 @@ public sealed class EventStreamPatternTests
         string realm,
         string? area,
         string? resource,
-        string expected)
+        string expected
+    )
     {
         // Arrange
         // Act

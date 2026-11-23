@@ -593,8 +593,12 @@ public sealed class JsonMetadataCodeFixTests
         Assert.DoesNotContain("namespace System", text, StringComparison.Ordinal);
     }
 
-    static async Task<(IReadOnlyList<CodeAction> Actions, Solution Solution)> FixAsync(string source, string typeName,
-        bool expectDiagnostic = true, string projectName = "JsonMetadataFix")
+    static async Task<(IReadOnlyList<CodeAction> Actions, Solution Solution)> FixAsync(
+        string source,
+        string typeName,
+        bool expectDiagnostic = true,
+        string projectName = "JsonMetadataFix"
+    )
     {
         using var workspace = new AdhocWorkspace();
         var document = AddProject(workspace, source, projectName);
@@ -603,10 +607,12 @@ public sealed class JsonMetadataCodeFixTests
                            && item.Properties.TryGetValue("TypeName", out var name)
                            && name?.Replace("global::", string.Empty) == typeName)
             .ToArray();
+
         if (!expectDiagnostic && candidates.Length == 0)
         {
             return ([], document.Project.Solution);
         }
+
 
         var diagnostic = Assert.Single(candidates);
         var actions = new List<CodeAction>();
@@ -627,10 +633,12 @@ public sealed class JsonMetadataCodeFixTests
     static int CountOccurrences(string text, string value)
     {
         var count = 0;
+
         for (var index = text.IndexOf(value, StringComparison.Ordinal);
              index >= 0;
              index = text.IndexOf(value, index + value.Length, StringComparison.Ordinal))
             count++;
+
         return count;
     }
 
@@ -645,18 +653,25 @@ public sealed class JsonMetadataCodeFixTests
     static async Task<string> AllDocumentsTextAsync(Solution solution)
     {
         var texts = new List<string>();
+
         foreach (var document in solution.Projects.Single().Documents)
             texts.Add((await document.GetTextAsync()).ToString());
+
         return string.Join(Environment.NewLine, texts);
     }
 
-    static Document AddProject(AdhocWorkspace workspace, string source,
-        IReadOnlyList<(string Name, string Text)> parts)
+    static Document AddProject(
+        AdhocWorkspace workspace,
+        string source,
+        IReadOnlyList<(string Name, string Text)> parts
+    )
     {
         var document = AddProject(workspace, source);
         var solution = document.Project.Solution;
+
         foreach (var (name, text) in parts)
             solution = solution.AddDocument(DocumentId.CreateNewId(document.Project.Id), name, SourceText.From(text));
+
         return solution.GetDocument(document.Id)!;
     }
 
@@ -682,13 +697,19 @@ public sealed class JsonMetadataCodeFixTests
     sealed class TestDiagnosticProvider(IReadOnlyCollection<Diagnostic> diagnostics)
         : FixAllContext.DiagnosticProvider
     {
-        public override Task<IEnumerable<Diagnostic>> GetDocumentDiagnosticsAsync(Document document,
-            CancellationToken cancellationToken) => Task.FromResult(diagnostics.AsEnumerable());
+        public override Task<IEnumerable<Diagnostic>> GetDocumentDiagnosticsAsync(
+            Document document,
+            CancellationToken cancellationToken
+        ) => Task.FromResult(diagnostics.AsEnumerable());
 
-        public override Task<IEnumerable<Diagnostic>> GetProjectDiagnosticsAsync(Project project,
-            CancellationToken cancellationToken) => Task.FromResult(Enumerable.Empty<Diagnostic>());
+        public override Task<IEnumerable<Diagnostic>> GetProjectDiagnosticsAsync(
+            Project project,
+            CancellationToken cancellationToken
+        ) => Task.FromResult(Enumerable.Empty<Diagnostic>());
 
-        public override Task<IEnumerable<Diagnostic>> GetAllDiagnosticsAsync(Project project,
-            CancellationToken cancellationToken) => Task.FromResult(diagnostics.AsEnumerable());
+        public override Task<IEnumerable<Diagnostic>> GetAllDiagnosticsAsync(
+            Project project,
+            CancellationToken cancellationToken
+        ) => Task.FromResult(diagnostics.AsEnumerable());
     }
 }

@@ -28,28 +28,35 @@ sealed class QualificationTelemetry(string directory)
         var logger = services.GetRequiredService<LoggerProvider>();
         Directory.CreateDirectory(directory);
         using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(100));
+
         while (await timer.WaitForNextTickAsync(ct))
         {
             if (!tracer.ForceFlush() || !meter.ForceFlush() || !logger.ForceFlush())
                 throw new InvalidOperationException("Qualification exporter could not flush.");
+
             await WriteAsync("spans.tsv", _activities.Select(activity => string.Join('\t', activity.OperationName,
                 activity.TraceId, activity.SpanId, activity.ParentSpanId, activity.GetTagItem("portia.outcome"),
                 activity.GetTagItem("portia.transport.name"))), ct);
             await WriteAsync("logs.tsv", _logs.Where(log => log.EventId.Id == 1002).Select(log =>
                 string.Join('\t', log.EventId.Id, log.TraceId, log.SpanId, log.Exception?.GetType().FullName)), ct);
             var measurements = new List<string>();
+
             foreach (var metric in _metrics)
                 foreach (ref readonly var point in metric.GetMetricPoints())
                 {
                     if (metric.Name is not ("portia.request.duration" or "portia.worker.failure"))
                         continue;
+
                     var count = metric.Name == "portia.request.duration" ? point.GetHistogramCount() : point.GetSumLong();
                     var tags = new List<string>();
+
                     foreach (var tag in point.Tags)
                         tags.Add(tag.Key + "=" + tag.Value);
+
                     measurements.Add(string.Join('\t', metric.Name, count.ToString(CultureInfo.InvariantCulture),
                         string.Join(',', tags)));
                 }
+
 
             await WriteAsync("metrics.tsv", measurements, ct);
         }

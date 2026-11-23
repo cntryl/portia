@@ -8,15 +8,19 @@ namespace Cntryl.Portia.Testing;
 
 static class ScenarioEngine
 {
-    internal static async Task<TPayload> RunAsync<TPayload>(ScenarioDefinition<TPayload> definition,
-        IReadOnlyList<Func<ScenarioObservation, TPayload, string?>> expectations)
+    internal static async Task<TPayload> RunAsync<TPayload>(
+        ScenarioDefinition<TPayload> definition,
+        IReadOnlyList<Func<ScenarioObservation, TPayload, string?>> expectations
+    )
     {
         var (observation, payload) = await ObserveAsync(definition).ConfigureAwait(false);
         var failures = expectations.Select(expectation => expectation(observation, payload))
             .OfType<string>()
             .ToArray();
+
         if (failures.Length == 0)
             return payload;
+
         throw new ScenarioExpectationException(
             $"Request scenario for '{observation.RequestType.Name}' did not meet {failures.Length} expectation(s):"
             + string.Concat(failures.Select(failure => $"{Environment.NewLine}  - {failure}"))
@@ -64,12 +68,18 @@ static class ScenarioEngine
             RequestGuardException => guards.Length != 0,
             _ => false
         };
+
         if (!settled)
             ExceptionDispatchInfo.Throw(outcome.Cause!);
     }
 
-    static LifecycleEntry? Classify(Type type, Type handler, HashSet<Type> authorizers, Type[] guards,
-        HashSet<Type> behaviors) =>
+    static LifecycleEntry? Classify(
+        Type type,
+        Type handler,
+        HashSet<Type> authorizers,
+        Type[] guards,
+        HashSet<Type> behaviors
+    ) =>
         type == handler ? new LifecycleEntry(type, LifecyclePhase.Handler)
         : authorizers.Contains(type) ? new LifecycleEntry(type, LifecyclePhase.Authorizer)
         : Array.IndexOf(guards, type) >= 0 ? new LifecycleEntry(type, LifecyclePhase.Guard)

@@ -14,8 +14,11 @@ sealed record HostCounters(long Timestamp, DateTimeOffset Utc, ulong TotalCpu, u
         {
             if (OperatingSystem.IsMacOS())
                 return Mac();
+
+
             if (OperatingSystem.IsLinux())
                 return Linux();
+
             return Missing("Host counters support macOS and Linux.");
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidOperationException
@@ -32,12 +35,16 @@ sealed record HostCounters(long Timestamp, DateTimeOffset Utc, ulong TotalCpu, u
     {
         var cpu = new NativeMac.CpuLoad();
         uint count = 4;
+
         if (NativeMac.HostStatistics(NativeMac.Host.Value, 3, ref cpu, ref count) != 0 || count != 4)
             throw new InvalidOperationException("Could not read host CPU counters.");
+
         var swap = new NativeMac.SwapUsage();
         var length = (nuint)Marshal.SizeOf<NativeMac.SwapUsage>();
+
         if (NativeMac.ReadSwap("vm.swapusage", ref swap, ref length, 0, 0) != 0)
             throw new InvalidOperationException("Could not read swap usage.");
+
         var info = NativeMac.ProcessInfo.Value;
         return new HostCounters(Stopwatch.GetTimestamp(), DateTimeOffset.UtcNow,
             (ulong)cpu.User + cpu.System + cpu.Idle + cpu.Nice, cpu.Idle,
@@ -56,21 +63,28 @@ sealed record HostCounters(long Timestamp, DateTimeOffset Utc, ulong TotalCpu, u
             .ToDictionary(parts => parts[0].TrimEnd(':'), parts => long.Parse(parts[1], CultureInfo.InvariantCulture) * 1024,
                 StringComparer.Ordinal);
         var throttled = 0L;
+
         if (File.Exists("/sys/fs/cgroup/cpu.stat"))
         {
             var row = File.ReadLines("/sys/fs/cgroup/cpu.stat").FirstOrDefault(line => line.StartsWith("throttled_usec ", StringComparison.Ordinal));
+
             if (row is not null)
                 throttled = long.Parse(row.AsSpan("throttled_usec ".Length), CultureInfo.InvariantCulture);
         }
         // Linux temperature/throttle sources vary by host. Unknown thermal state cannot qualify a timing run.
+
         return new HostCounters(Stopwatch.GetTimestamp(), DateTimeOffset.UtcNow, cpu.Aggregate(0UL, (sum, value) => sum + value),
             cpu[3] + cpu[4], lines.Count(line => line.Length > 3 && line.StartsWith("cpu", StringComparison.Ordinal) && char.IsDigit(line[3])),
             memory["SwapTotal"] - memory["SwapFree"], memory["MemAvailable"] >= memory["MemTotal"] / 10 ? 1 : 2,
             null, false, throttled, true, null);
     }
 
-    public static HostInterval Interval(HostCounters before, HostCounters after, double workerCpuMilliseconds,
-        double controllerCpuMilliseconds)
+    public static HostInterval Interval(
+        HostCounters before,
+        HostCounters after,
+        double workerCpuMilliseconds,
+        double controllerCpuMilliseconds
+    )
     {
         var valid = before.Supported && after.Supported && before.Processors == after.Processors
             && after.TotalCpu > before.TotalCpu && after.IdleCpu >= before.IdleCpu;

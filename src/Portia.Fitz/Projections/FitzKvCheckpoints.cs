@@ -60,7 +60,11 @@ static class FitzKvCheckpoints
     ///     when nothing has been saved yet.
     /// </summary>
     public static async ValueTask<ProjectionCheckpoint> LoadAsync(
-        IKvClient client, string route, CheckpointIdentity identity, CancellationToken ct)
+        IKvClient client,
+        string route,
+        CheckpointIdentity identity,
+        CancellationToken ct
+    )
     {
         await using var tx = await BeginAsync(client, route, KvMode.ReadOnly, "Checkpoint", identity, ct)
             .ConfigureAwait(false);
@@ -77,8 +81,14 @@ static class FitzKvCheckpoints
     ///     anything — that has to reach the caller as the same retryable failure a commit conflict does,
     ///     or a hosted component sees an untranslated broker exception and never reloads its checkpoint.
     /// </summary>
-    public static async Task<IKvTransaction> BeginAsync(IKvClient client, string route, KvMode mode,
-        string subject, CheckpointIdentity identity, CancellationToken ct)
+    public static async Task<IKvTransaction> BeginAsync(
+        IKvClient client,
+        string route,
+        KvMode mode,
+        string subject,
+        CheckpointIdentity identity,
+        CancellationToken ct
+    )
     {
         try
         {
@@ -135,8 +145,11 @@ static class FitzKvCheckpoints
     ///     component and stream area but not the pattern: a per-tenant pattern's realm is the tenant,
     ///     and this message reaches error logs and trace exception events.
     /// </summary>
-    public static ProjectionConcurrencyException Conflict(string subject, CheckpointIdentity identity,
-        Exception cause) =>
+    public static ProjectionConcurrencyException Conflict(
+        string subject,
+        CheckpointIdentity identity,
+        Exception cause
+    ) =>
         new($"{subject} for '{identity.ComponentName}' in stream area '{identity.Pattern.Area ?? "*"}' conflicted "
             + "with a concurrent writer; reload the authoritative checkpoint before retrying.", cause);
 

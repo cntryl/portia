@@ -27,6 +27,7 @@ public static class PortiaStreamResults
         public async Task ExecuteAsync(HttpContext httpContext)
         {
             ArgumentNullException.ThrowIfNull(httpContext);
+
             try
             {
                 await WriteAsync(httpContext).ConfigureAwait(false);
@@ -57,30 +58,40 @@ public static class PortiaStreamResults
         // advanced twice concurrently. For the same reason the enumerator cannot be disposed while
         // that move is still running, so a failed comment stops the source and waits for the move
         // to finish before the failure surfaces; the source's own cleanup then runs on disposal.
-        static async ValueTask<bool> NextAsync(IAsyncEnumerator<T> iterator, CancellationTokenSource source,
-            HttpResponse response, TimeSpan? keepAlive, CancellationToken ct)
+        static async ValueTask<bool> NextAsync(
+            IAsyncEnumerator<T> iterator,
+            CancellationTokenSource source,
+            HttpResponse response,
+            TimeSpan? keepAlive,
+            CancellationToken ct
+        )
         {
             // An item that is already available needs no keep-alive, and a busy stream is the case
             // that must stay cheap, so nothing is allocated until the source actually waits.
             var move = iterator.MoveNextAsync();
+
             if (keepAlive is not { } interval || move.IsCompleted)
             {
                 return await move.ConfigureAwait(false);
             }
 
+
             var pending = move.AsTask();
+
             try
             {
                 while (true)
                 {
                     using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     var elapsed = Task.Delay(interval, idle.Token);
+
                     if (await Task.WhenAny(pending, elapsed).ConfigureAwait(false) == pending)
                     {
                         // The losing delay is cancelled rather than left to fire later.
                         idle.Cancel();
                         return await pending.ConfigureAwait(false);
                     }
+
 
                     await response.WriteAsync(":\n\n", ct).ConfigureAwait(false);
                     await response.Body.FlushAsync(ct).ConfigureAwait(false);
@@ -116,23 +127,27 @@ public static class PortiaStreamResults
 
             // Only indices cross the awaits; a span cannot be held across one.
             var start = 0;
+
             while (start <= data.Length)
             {
                 var next = data.AsSpan(start).IndexOfAny('\n', '\r');
                 var length = next < 0 ? data.Length - start : next;
                 await response.WriteAsync(string.Concat("data: ", data.AsSpan(start, length), "\n"), ct)
                     .ConfigureAwait(false);
+
                 if (next < 0)
                 {
                     break;
                 }
 
                 // A \r\n pair is one break, not two.
+
                 var breakAt = start + next;
                 start = breakAt + (data[breakAt] == '\r' && breakAt + 1 < data.Length && data[breakAt + 1] == '\n'
                     ? 2
                     : 1);
             }
+
 
             await response.WriteAsync("\n", ct).ConfigureAwait(false);
         }
@@ -157,6 +172,7 @@ public static class PortiaStreamResults
             var hasItem = await pending.ConfigureAwait(false);
             var response = context.Response;
             response.ContentType = sse ? "text/event-stream" : "application/json; charset=utf-8";
+
             if (sse)
             {
                 response.Headers.CacheControl = "no-cache, no-store";
@@ -166,7 +182,9 @@ public static class PortiaStreamResults
                 await response.WriteAsync("[", ct).ConfigureAwait(false);
             }
 
+
             var first = true;
+
             while (hasItem)
             {
                 if (sse)
@@ -193,6 +211,7 @@ public static class PortiaStreamResults
                 await response.Body.FlushAsync(ct).ConfigureAwait(false);
                 hasItem = await NextAsync(iterator, sourceLifetime, response, keepAlive, ct).ConfigureAwait(false);
             }
+
 
             if (!sse)
             {

@@ -9,10 +9,12 @@ public sealed record ObjectDigest
     public ObjectDigest(string sha256, long length)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sha256);
+
         if (sha256.Length != 64 || !sha256.All(Uri.IsHexDigit))
         {
             throw new ArgumentException("SHA-256 must contain exactly 64 hexadecimal characters.", nameof(sha256));
         }
+
 
         if (length < 0 || length > ObjectStorageLimits.MaximumObjectLength)
         {

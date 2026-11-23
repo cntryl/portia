@@ -28,8 +28,11 @@ public sealed class McpLifecycleQualificationTests
     [InlineData("tool", "2025-11-25", true)]
     [InlineData("resource", "2025-11-25", true)]
     [InlineData("prompt", "2025-11-25", true)]
-    public async Task ShouldCancelHandlerGivenMinimalSdkStdioHost(string primitive, string revision,
-        bool explicitNotification)
+    public async Task ShouldCancelHandlerGivenMinimalSdkStdioHost(
+        string primitive,
+        string revision,
+        bool explicitNotification
+    )
     {
         // Arrange
         // A failure bound only: the waits below poll conditions that become true, and a cold child on a
@@ -62,6 +65,7 @@ public sealed class McpLifecycleQualificationTests
 
         // Assert
         _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await operation);
+
         if (explicitNotification)
             await client.SendMessageAsync(new JsonRpcNotification
             {
@@ -69,6 +73,7 @@ public sealed class McpLifecycleQualificationTests
                 Params = new System.Text.Json.Nodes.JsonObject
                 { ["requestId"] = long.Parse(request[1], System.Globalization.CultureInfo.InvariantCulture) }
             }, timeout.Token);
+
         await PollAsync("disposed");
         // Scope disposal can finish before the canceled handler records its marker.
         await PollAsync("canceled");
@@ -166,8 +171,13 @@ public sealed class McpLifecycleQualificationTests
     [InlineData("stdio", "tool", false, true, "2026-07-28")]
     [InlineData("stdio", "resource", false, true, "2026-07-28")]
     [InlineData("stdio", "prompt", false, true, "2026-07-28")]
-    public async Task ShouldPropagateCancellationAndSanitizeDeadlinesGivenEitherTransport(string transportName,
-        string primitive, bool deadline, bool explicitNotification, string revision)
+    public async Task ShouldPropagateCancellationAndSanitizeDeadlinesGivenEitherTransport(
+        string transportName,
+        string primitive,
+        bool deadline,
+        bool explicitNotification,
+        string revision
+    )
     {
         // Arrange
         // The only time bound: every wait below polls a condition that becomes true, so a loaded
@@ -193,8 +203,10 @@ public sealed class McpLifecycleQualificationTests
                     options.Required("tenant");
                 })
             .AddMcpHttp();
+
         if (deadline)
             _ = application.ConfigureMcpLimits(limits => limits.OperationDeadline = TimeSpan.FromMilliseconds(250));
+
         await using var app = builder.Build();
         app.Use((context, next) =>
         {
@@ -221,6 +233,7 @@ public sealed class McpLifecycleQualificationTests
         if (deadline)
         {
             var error = await Record.ExceptionAsync(async () => await operation);
+
             if (primitive != "tool")
             {
                 Assert.NotNull(error);
@@ -233,6 +246,7 @@ public sealed class McpLifecycleQualificationTests
         {
             await cancellation.CancelAsync();
             _ = await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await operation);
+
             if (explicitNotification)
             {
                 var method = primitive == "tool" ? RequestMethods.ToolsCall :
@@ -261,23 +275,28 @@ public sealed class McpLifecycleQualificationTests
         Assert.Empty(state.Values);
         Assert.Equal(1, state.WaitStarted);
         Assert.Equal(1, state.WaitCanceled);
+
         if (transportName == "stdio")
         {
             // The client cannot tell a fault from a request the short deadline expired before dispatch,
             // so only the cases without a deadline exercise the fault path.
             if (!deadline)
                 await InvokeFaultAsync();
+
             await PollAsync(() => Task.FromResult(HasExportedEvidence()));
             var spans = File.ReadAllLines(Path.Combine(evidence, "spans.tsv")).Select(line => line.Split('\t'))
                 .ToArray();
             var logs = File.ReadAllLines(Path.Combine(evidence, "logs.tsv")).Select(line => line.Split('\t')).ToArray();
             var executes = spans.Where(span => span[0] == PortiaTelemetry.ExecuteActivityName).ToArray();
             Assert.Contains(executes, execute => execute[4] == "canceled");
+
             foreach (var execute in executes)
                 Assert.Contains(spans, process => process[0] == PortiaTelemetry.ProcessActivityName
                                                   && process[1] == execute[1] && process[2] == execute[3]);
+
             Assert.Equal(executes.Length,
                 executes.Select(execute => execute[3]).Distinct(StringComparer.Ordinal).Count());
+
             if (deadline)
                 // An expired deadline is sanitized, never reported as a runner fault.
                 Assert.Empty(logs);
@@ -293,6 +312,7 @@ public sealed class McpLifecycleQualificationTests
             }
         }
 
+
         static bool IsWaitRequest(string parameters)
         {
             using var parsed = JsonDocument.Parse(parameters);
@@ -307,13 +327,16 @@ public sealed class McpLifecycleQualificationTests
                 { Endpoint = new Uri("http://localhost/mcp") }, app.GetTestClient()),
                     new McpClientOptions { ProtocolVersion = revision }, loggerFactory: protocolLogs,
                     cancellationToken: token);
+
             var configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
             var host = Path.GetFullPath(
                 $"../../../../../smoke/Portia.McpStdioHost/bin/{configuration}/net11.0/Portia.McpStdioHost.dll",
                 AppContext.BaseDirectory);
             var arguments = new List<string> { host, "--qualification", "--evidence-dir", evidence };
+
             if (deadline)
                 arguments.Add("--short-deadline");
+
             return await McpClient.CreateAsync(new StdioClientTransport(new StdioClientTransportOptions
             {
                 Command = "dotnet",
@@ -332,8 +355,10 @@ public sealed class McpLifecycleQualificationTests
             {
                 var attempt = InvokeWaitAsync(cancellation.Token);
                 await PollAsync(async () => (deadline && attempt.IsCompleted) || (await StateAsync()).WaitStarted == 1);
+
                 if ((await StateAsync()).WaitStarted == 1)
                     return attempt;
+
                 _ = await Record.ExceptionAsync(async () => await attempt);
             }
         }
@@ -380,12 +405,14 @@ public sealed class McpLifecycleQualificationTests
             // return an error result; that read is retried rather than mistaken for missing state.
             var result = await client.CallToolAsync("qualification.read", new Dictionary<string, object?>
             { ["tenant"] = QualifiedObservations.Tenant }, cancellationToken: token);
+
             while (deadline && result.IsError == true)
             {
                 await Task.Delay(20, token);
                 result = await client.CallToolAsync("qualification.read", new Dictionary<string, object?>
                 { ["tenant"] = QualifiedObservations.Tenant }, cancellationToken: token);
             }
+
 
             var json = app.Services.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
             return (QualifiedState)result.StructuredContent!.Value.GetProperty("result")
@@ -410,8 +437,10 @@ public sealed class McpLifecycleQualificationTests
         bool HasExportedEvidence()
         {
             var paths = EvidenceFiles.Select(name => Path.Combine(evidence, name)).ToArray();
+
             if (paths.Any(path => !File.Exists(path)))
                 return false;
+
             var spans = File.ReadAllLines(paths[0]).Select(line => line.Split('\t')).ToArray();
             var metrics = File.ReadAllLines(paths[1]);
             var logs = File.ReadAllLines(paths[2]).Select(line => line.Split('\t')).ToArray();
@@ -442,8 +471,13 @@ file sealed class ProtocolEvidenceLogger(string directory) : ILoggerProvider
         public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
         public bool IsEnabled(LogLevel level) => true;
 
-        public void Log<TState>(LogLevel level, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter)
+        public void Log<TState>(
+            LogLevel level,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter
+        )
         {
             lock (owner._gate)
                 File.AppendAllText(Path.Combine(owner.Directory, "client.log"),

@@ -6,9 +6,18 @@ namespace Cntryl.Portia.Testing;
 /// <summary>An immutable copy of one advertised MCP tool.</summary>
 public sealed class McpToolSnapshot
 {
-    McpToolSnapshot(string name, string? title, string? description, JsonElement inputSchema,
-        JsonElement? outputSchema, bool? readOnly, bool? destructive, bool? idempotent, bool? openWorld,
-        JsonElement? metadata)
+    McpToolSnapshot(
+        string name,
+        string? title,
+        string? description,
+        JsonElement inputSchema,
+        JsonElement? outputSchema,
+        bool? readOnly,
+        bool? destructive,
+        bool? idempotent,
+        bool? openWorld,
+        JsonElement? metadata
+    )
     {
         Name = name;
         Title = title;

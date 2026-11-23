@@ -25,11 +25,13 @@ public sealed class McpToolListExpectations
         // Duplicates in the server's list are kept, so a tool advertised twice fails an exact match.
         var actual = snapshots.Select(tool => tool.Name).Order(StringComparer.Ordinal).ToArray();
         var wanted = expected.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+
         if (!actual.SequenceEqual(wanted, StringComparer.Ordinal))
         {
             throw new InvalidOperationException(
                 $"Expected MCP tools [{string.Join(", ", wanted)}], but found [{string.Join(", ", actual)}].");
         }
+
 
         return snapshots;
     }

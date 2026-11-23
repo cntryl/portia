@@ -12,8 +12,10 @@ public sealed class RequestExpectations
     readonly Func<ScenarioObservation, Result, string?>[] _expectations;
     readonly Lazy<Task<Result>> _run;
 
-    internal RequestExpectations(ScenarioDefinition<Result> definition,
-        Func<ScenarioObservation, Result, string?>[] expectations)
+    internal RequestExpectations(
+        ScenarioDefinition<Result> definition,
+        Func<ScenarioObservation, Result, string?>[] expectations
+    )
     {
         _definition = definition;
         _expectations = expectations;

@@ -29,12 +29,14 @@ public sealed class TenantWorkloadConsumerTests
         var worker = Assert.Single(provider.GetServices<IHostedService>());
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         using var cancellation = new CancellationTokenSource();
+
         try
         {
             await worker.StartAsync(TestContext.Current.CancellationToken);
             await effects.WaitForAsync("tenant:acme");
             Assert.Equal(TimeSpan.FromSeconds(1), await clock.WaitForDelayAsync(cancellation.Token));
             Assert.True(Assert.Single(effects.Scopes).Value);
+
             if (!removeDuringBackoff)
             {
                 clock.Advance(TimeSpan.FromSeconds(1));
@@ -44,6 +46,7 @@ public sealed class TenantWorkloadConsumerTests
                 Assert.Equal(2, effects.Items.Count);
                 Assert.Equal(2, effects.Items.Select(item => item.ScopeId).Distinct().Count());
             }
+
 
             await directory.PublishAsync(TenantLifecycleChangeKind.Removed);
             clock.Advance(TimeSpan.FromDays(1));
@@ -56,6 +59,7 @@ public sealed class TenantWorkloadConsumerTests
             await worker.StopAsync(TestContext.Current.CancellationToken);
             (worker as IDisposable)?.Dispose();
         }
+
 
         Assert.All(effects.Scopes.Values, Assert.True);
     }
@@ -84,10 +88,12 @@ public sealed class TenantWorkloadConsumerTests
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
         var store = provider.GetRequiredService<IEventStore>();
         var id = Uuid.CreateVersion4();
+
         try
         {
             foreach (var worker in workers)
                 await worker.StartAsync(TestContext.Current.CancellationToken);
+
             _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
             _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
             await TenantDirectoryConsumerTests.SeedAsync(store, id, 0,
@@ -101,8 +107,10 @@ public sealed class TenantWorkloadConsumerTests
                 new TenantDirectoryConsumerTests.Deactivated("globex"));
             clock.Advance(TimeSpan.FromSeconds(1));
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
             while (effects.Scopes.Values.Any(disposed => !disposed))
                 await Task.Delay(10, timeout.Token);
+
             Assert.All(effects.Scopes.Values, Assert.True);
             Assert.Equal(2, effects.Items.Count);
         }
@@ -114,6 +122,7 @@ public sealed class TenantWorkloadConsumerTests
                 (worker as IDisposable)?.Dispose();
             }
         }
+
 
         Assert.All(effects.Scopes.Values, Assert.True);
     }
@@ -140,10 +149,12 @@ public sealed class TenantWorkloadConsumerTests
         {
             var attempt = state.NextAttempt();
             effects.Record("tenant:" + tenantId.Value, default, attempt, scope.Id);
+
             if (state.FailFirst && attempt == 1)
             {
                 throw new IOException("Tenant workload failed");
             }
+
 
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
         }

@@ -8,8 +8,10 @@ sealed partial class BenchmarkCase
         var initial = fixture.Compilation();
         var input = spec.Operation == "body" ? AccountsFixture.Edit(initial) : initial;
         var driver = fixture.Driver();
+
         if (spec.Operation == "body")
             driver = driver.RunGenerators(initial, ct);
+
         var current = driver;
         return new BenchmarkCase(() =>
         {

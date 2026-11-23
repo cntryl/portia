@@ -14,24 +14,32 @@ public static class PortiaMcpEndpointRouteBuilderExtensions
     /// <param name="endpoints">The endpoint route builder.</param>
     /// <param name="pattern">The Streamable HTTP route prefix.</param>
     /// <returns>A builder for applying standard ASP.NET Core endpoint conventions.</returns>
-    public static IEndpointConventionBuilder MapPortiaMcp(this IEndpointRouteBuilder endpoints,
-        string pattern = "/mcp")
+    public static IEndpointConventionBuilder MapPortiaMcp(
+        this IEndpointRouteBuilder endpoints,
+        string pattern = "/mcp"
+    )
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         ArgumentException.ThrowIfNullOrWhiteSpace(pattern);
+
         if (endpoints.ServiceProvider.GetService<PortiaMcpHttpMarker>() is null)
             throw new InvalidOperationException(
                 "MapPortiaMcp requires AddMcpHttp() in the shared Portia application composition.");
+
         _ = endpoints.ServiceProvider.GetRequiredService<IOptions<HttpServerTransportOptions>>().Value;
+
         if (!endpoints.ServiceProvider.GetServices<McpToolRegistration>().Any()
             && !endpoints.ServiceProvider.GetServices<McpResourceEntry>().Any()
             && !endpoints.ServiceProvider.GetServices<McpPromptEntry>().Any())
             throw new InvalidOperationException(
                 "MapPortiaMcp requires at least one MCP declaration.");
+
         var maximum = endpoints.ServiceProvider.GetService<IOptions<PortiaHttpOptions>>()?.Value.MaxJsonBodyBytes
                       ?? PortiaHttpOptions.DefaultMaxJsonBodyBytes;
+
         if (maximum <= 0)
             throw new InvalidOperationException($"{nameof(PortiaHttpOptions.MaxJsonBodyBytes)} must be positive.");
+
         var builder = endpoints.MapMcp(pattern).WithMetadata(new McpRequestSizeLimit(maximum))
             .RequireAuthorization();
         // The MCP endpoints share Portia's cross-origin rule, which refuses a request another browser origin
@@ -42,6 +50,7 @@ public static class PortiaMcpEndpointRouteBuilderExtensions
         {
             if (endpoint.RequestDelegate is not { } next)
                 return;
+
             endpoint.RequestDelegate = context => PortiaHttpBinding.RejectCrossOrigin(context) is { } rejection
                 ? rejection.ExecuteAsync(context)
                 : PortiaMcpHttpMarker.InvokeAsync(() => next(context));

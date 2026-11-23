@@ -12,9 +12,11 @@ sealed class GeneratedApplicationTopology(
         workloads.Select(w =>
         {
             var component = w.ComponentType.FullName ?? w.ComponentType.Name;
+
             if (w.Descriptor is ReactorRegistration { TypedSubscription: { } subscription })
                 return new ProcessorTopology(w.Name, component, w.Descriptor.Kind, w.Scope.ToString(),
                     [subscription], "typed dispatch; opaque dependencies unknown");
+
 
             if (w.Descriptor is ProjectorRegistration { Subscriptions: { } subscriptions })
                 return new ProcessorTopology(w.Name, component, w.Descriptor.Kind, w.Scope.ToString(),

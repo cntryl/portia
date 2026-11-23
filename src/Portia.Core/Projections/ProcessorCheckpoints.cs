@@ -2,8 +2,11 @@ namespace Cntryl.Portia;
 
 static class ProcessorCheckpoints
 {
-    public static async ValueTask<ProjectionCheckpoint> LoadAsync(IProjectionStore store,
-        CheckpointIdentity identity, CancellationToken ct)
+    public static async ValueTask<ProjectionCheckpoint> LoadAsync(
+        IProjectionStore store,
+        CheckpointIdentity identity,
+        CancellationToken ct
+    )
     {
         try
         {
@@ -20,8 +23,11 @@ static class ProcessorCheckpoints
         }
     }
 
-    public static async ValueTask<ProjectionCheckpoint> LoadAsync(IProjectionCheckpointStore store,
-        CheckpointIdentity identity, CancellationToken ct)
+    public static async ValueTask<ProjectionCheckpoint> LoadAsync(
+        IProjectionCheckpointStore store,
+        CheckpointIdentity identity,
+        CancellationToken ct
+    )
     {
         try
         {

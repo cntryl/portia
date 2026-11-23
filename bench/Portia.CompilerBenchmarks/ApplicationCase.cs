@@ -23,22 +23,30 @@ sealed partial class BenchmarkCase
             var run = current ?? throw new InvalidOperationException("Application request did not complete.");
             var incomplete = spec.Operation == "incomplete";
             var allDiagnostics = await ApplicationFixture.AnalyzeAsync(run, ct).ConfigureAwait(false);
+
             if (allDiagnostics.Any(diagnostic => diagnostic.Id == "AD0001")
                 || (!incomplete && allDiagnostics.Length != 0))
                 throw new InvalidOperationException(string.Join("\n", allDiagnostics.Select(diagnostic => diagnostic.ToString())));
+
             if (incomplete && !diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error))
                 throw new InvalidOperationException("Incomplete edit failed to produce its compiler error.");
+
             foreach (var project in run.Projects)
                 CompilerHost.CheckRun(project.Driver, project.Input, compile: !incomplete);
+
             var sources = run.Sources();
             var clean = edited.Build(ct: ct).Sources();
             Verification.Changes(clean, sources, []);
+
             if (before is not null && spec.Operation is "unchanged" or "body" or "incomplete")
                 Verification.Changes(before.Sources(), sources, []);
+
+
             if (before is not null && spec.Operation is "metadata" or "reference"
                 && before.Sources().OrderBy(pair => pair.Key, StringComparer.Ordinal)
                     .SequenceEqual(sources.OrderBy(pair => pair.Key, StringComparer.Ordinal)))
                 throw new InvalidOperationException("Cross-project edit did not invalidate generated output.");
+
             return Snapshot(sources, diagnostics.Length,
                 "valid Common/Core/Api/Worker graph; compilation references; STJ enabled; "
                 + (spec.Operation is "full" or "analyze" ? "whole-graph diagnostics" : "changed-document syntax/semantic diagnostics")

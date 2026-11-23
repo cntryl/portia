@@ -27,19 +27,24 @@ sealed class ScenarioHistory
     void AddCore(string? resource, DomainEvent[] events)
     {
         ArgumentNullException.ThrowIfNull(events);
+
         foreach (var ev in events)
         {
             ArgumentNullException.ThrowIfNull(ev);
+
             if (ev.AttachedMetadata is null)
             {
                 // The empty key is the scenario's default aggregate; a resource segment is never empty.
                 var key = resource ?? "";
+
                 if (!_aggregates.TryGetValue(key, out var aggregate))
                     aggregate = (Uuid.CreateVersion4(), 0);
+
                 aggregate.Version++;
                 _aggregates[key] = aggregate;
                 _ = DomainEventSeed.Attach(ev, aggregate.AggregateId, aggregate.Version);
             }
+
 
             _events.Add((ev, resource));
         }
@@ -52,6 +57,7 @@ sealed class ScenarioHistory
     {
         var store = new InMemoryEventStore();
         var positions = new Dictionary<EventStreamAddress, ulong>();
+
         foreach (var (ev, resource) in _events)
         {
             if (resource is not null && pattern.Resource is not null
@@ -67,6 +73,7 @@ sealed class ScenarioHistory
             await store.AppendAsync(stream, position, [ev], ct).ConfigureAwait(false);
             positions[stream] = position + 1;
         }
+
 
         return store;
     }

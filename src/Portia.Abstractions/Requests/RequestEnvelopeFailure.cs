@@ -6,8 +6,11 @@ static class RequestEnvelopeFailure
 {
     static readonly ConditionalWeakTable<Exception, Classification> Kinds = [];
 
-    public static InvalidOperationException Create(RequestEnvelopeFailureKind kind, string message,
-        Exception? innerException = null)
+    public static InvalidOperationException Create(
+        RequestEnvelopeFailureKind kind,
+        string message,
+        Exception? innerException = null
+    )
     {
         var exception = new InvalidOperationException(message, innerException);
         Kinds.Add(exception, new Classification(kind));

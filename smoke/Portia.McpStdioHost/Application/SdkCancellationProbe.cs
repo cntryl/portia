@@ -54,8 +54,11 @@ static class SdkCancellationProbe
         }
     }
 
-    internal static async Task WaitForCancellationAsync(string directory,
-        Func<CancellationToken, Task> publishStarted, CancellationToken ct)
+    internal static async Task WaitForCancellationAsync(
+        string directory,
+        Func<CancellationToken, Task> publishStarted,
+        CancellationToken ct
+    )
     {
         try
         {

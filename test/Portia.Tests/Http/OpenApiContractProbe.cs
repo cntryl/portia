@@ -23,8 +23,10 @@ sealed record OpenApiContractRequest(OpenApiContractNode Payload) : IRequest<Ope
 
 sealed class OpenApiContractHandler : IRequestHandler<OpenApiContractRequest, OpenApiContractNode>
 {
-    public ValueTask<Result<OpenApiContractNode>> HandleAsync(IRequestContext<OpenApiContractRequest> context,
-        CancellationToken ct) =>
+    public ValueTask<Result<OpenApiContractNode>> HandleAsync(
+        IRequestContext<OpenApiContractRequest> context,
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult(Result<OpenApiContractNode>.Success(context.Request.Payload));
 }
 
@@ -34,8 +36,10 @@ sealed record OpenApiContractStream : IStreamRequest<OpenApiContractNode>, ICall
 
 sealed class OpenApiContractStreamHandler : IStreamRequestHandler<OpenApiContractStream, OpenApiContractNode>
 {
-    public async IAsyncEnumerable<OpenApiContractNode> HandleAsync(IRequestContext<OpenApiContractStream> context,
-        [EnumeratorCancellation] CancellationToken ct)
+    public async IAsyncEnumerable<OpenApiContractNode> HandleAsync(
+        IRequestContext<OpenApiContractStream> context,
+        [EnumeratorCancellation] CancellationToken ct
+    )
     {
         yield return new OpenApiContractNode("stream", "explicit", DayOfWeek.Monday, new HttpMoney("USD", 42),
             Uuid.CreateVersion4(), null);

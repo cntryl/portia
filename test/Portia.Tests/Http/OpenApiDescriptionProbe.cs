@@ -14,8 +14,10 @@ sealed record OpenApiDescribedRequest(int Limit, OpenApiDescribedNode Payload)
 
 sealed class OpenApiDescribedHandler : IRequestHandler<OpenApiDescribedRequest, OpenApiDescribedNode>
 {
-    public ValueTask<Result<OpenApiDescribedNode>> HandleAsync(IRequestContext<OpenApiDescribedRequest> context,
-        CancellationToken ct) => ValueTask.FromResult(Result<OpenApiDescribedNode>.Success(context.Request.Payload));
+    public ValueTask<Result<OpenApiDescribedNode>> HandleAsync(
+        IRequestContext<OpenApiDescribedRequest> context,
+        CancellationToken ct
+    ) => ValueTask.FromResult(Result<OpenApiDescribedNode>.Success(context.Request.Payload));
 }
 
 [Discriminator("test.openapi.descriptions.other")]
@@ -25,8 +27,10 @@ sealed record OpenApiOtherDescribedRequest(int Limit, OpenApiDescribedNode Paylo
 
 sealed class OpenApiOtherDescribedHandler : IRequestHandler<OpenApiOtherDescribedRequest, OpenApiDescribedNode>
 {
-    public ValueTask<Result<OpenApiDescribedNode>> HandleAsync(IRequestContext<OpenApiOtherDescribedRequest> context,
-        CancellationToken ct) => ValueTask.FromResult(Result<OpenApiDescribedNode>.Success(context.Request.Payload));
+    public ValueTask<Result<OpenApiDescribedNode>> HandleAsync(
+        IRequestContext<OpenApiOtherDescribedRequest> context,
+        CancellationToken ct
+    ) => ValueTask.FromResult(Result<OpenApiDescribedNode>.Success(context.Request.Payload));
 }
 
 [System.ComponentModel.Description("Attributed node.")]
@@ -46,8 +50,10 @@ sealed record OpenApiAnnotatedRequest(
 
 sealed class OpenApiAnnotatedHandler : IRequestHandler<OpenApiAnnotatedRequest, OpenApiAnnotatedNode>
 {
-    public ValueTask<Result<OpenApiAnnotatedNode>> HandleAsync(IRequestContext<OpenApiAnnotatedRequest> context,
-        CancellationToken ct) => ValueTask.FromResult(Result<OpenApiAnnotatedNode>.Success(context.Request.Payload));
+    public ValueTask<Result<OpenApiAnnotatedNode>> HandleAsync(
+        IRequestContext<OpenApiAnnotatedRequest> context,
+        CancellationToken ct
+    ) => ValueTask.FromResult(Result<OpenApiAnnotatedNode>.Success(context.Request.Payload));
 }
 
 [System.ComponentModel.DisplayName("A titled view")]
@@ -65,6 +71,8 @@ sealed record OpenApiTitleRequest : IRequest<OpenApiTitleView>, ICallable;
 
 sealed class OpenApiTitleHandler : IRequestHandler<OpenApiTitleRequest, OpenApiTitleView>
 {
-    public ValueTask<Result<OpenApiTitleView>> HandleAsync(IRequestContext<OpenApiTitleRequest> context,
-        CancellationToken ct) => ValueTask.FromResult(Result<OpenApiTitleView>.Success(new OpenApiTitleView("label")));
+    public ValueTask<Result<OpenApiTitleView>> HandleAsync(
+        IRequestContext<OpenApiTitleRequest> context,
+        CancellationToken ct
+    ) => ValueTask.FromResult(Result<OpenApiTitleView>.Success(new OpenApiTitleView("label")));
 }

@@ -204,6 +204,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
                 {
                     if (!result.IsSuccess)
                         return null;
+
                     http.Response.Cookies.Append("session", result.Value,
                         new CookieOptions { HttpOnly = true, Secure = true });
                     http.Response.Headers["X-Signed-In"] = result.Value;
@@ -452,8 +453,10 @@ public sealed class HttpBindingTests : IAsyncDisposable
             _ => JsonContent.Create(new { name = "gear", quantity = 1, active = true })
         };
         using var request = WithHeaders(HttpMethod.Post, uri, content, ("Dry-Run", "true"));
+
         if (duplicate == "repeated")
             request.Headers.Add("Dry-Run", "false");
+
         var control = await client.SendAsync(WithHeaders(HttpMethod.Post, $"/widgets/{Uuid.CreateVersion4()}",
             JsonContent.Create(new { name = "gear", quantity = 1, active = true }), ("Dry-Run", "true")), TestContext.Current.CancellationToken);
 
@@ -949,12 +952,18 @@ public sealed class HttpBindingTests : IAsyncDisposable
     static void BindTenantHeader(IServiceCollection services) =>
         services.Configure<PortiaHttpOptions>(http => http.FromHeader<IHttpTenantScoped>(x => x.Tenant, "Tenant-Id"));
 
-    static HttpRequestMessage WithHeaders(HttpMethod method, string uri, HttpContent? content,
-        params (string Name, string Value)[] headers)
+    static HttpRequestMessage WithHeaders(
+        HttpMethod method,
+        string uri,
+        HttpContent? content,
+        params (string Name, string Value)[] headers
+    )
     {
         var request = new HttpRequestMessage(method, uri) { Content = content };
+
         foreach (var (name, value) in headers)
             request.Headers.Add(name, value);
+
         return request;
     }
 
@@ -1010,6 +1019,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
             {
                 if (!result.IsSuccess)
                     return result.Error.Kind == RequestErrorKind.Forbidden ? Results.Redirect("/login") : null;
+
                 http.Response.Cookies.Delete("session");
                 return null;
             })));
@@ -1263,8 +1273,11 @@ public sealed class HttpBindingTests : IAsyncDisposable
     [InlineData(16L, false, 8L)]
     [InlineData(4L, false, 4L)]
     [InlineData(16L, true, 16L)]
-    public void ShouldRespectServerBodyLimitGivenStricterOrReadOnlyLimit(long? serverMaximum, bool readOnly,
-        long expected)
+    public void ShouldRespectServerBodyLimitGivenStricterOrReadOnlyLimit(
+        long? serverMaximum,
+        bool readOnly,
+        long expected
+    )
     {
         // Arrange
         using var services = new ServiceCollection()
@@ -1318,6 +1331,7 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         // Assert
         var configuration = Assert.IsType<PortiaEndpointConfiguration<HttpOptionalBody, string>>(captured);
+
         foreach (var mutation in new Action[]
                  {
                      () => configuration.OnBind(_ => new HttpOptionalBody()),
@@ -2166,12 +2180,14 @@ public sealed class HttpBindingTests : IAsyncDisposable
             Content = JsonContent.Create(new { })
         };
         request.Headers.Add("Prefer", "respond-async");
+
         if (cookieIdentity)
             request.Headers.Add("X-Debug-Permission", "http:other");
         else
             _ = request.Headers.TryAddWithoutValidation("Authorization", "Basic secret");
 
         // Act
+
         var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         // Assert
@@ -2205,8 +2221,10 @@ public sealed class HttpBindingTests : IAsyncDisposable
         Assert.Empty(publisher.Enqueued);
     }
 
-    async Task<HttpClient> StartAsync(Action<IEndpointRouteBuilder> map,
-        Action<IServiceCollection>? configureServices = null)
+    async Task<HttpClient> StartAsync(
+        Action<IEndpointRouteBuilder> map,
+        Action<IServiceCollection>? configureServices = null
+    )
     {
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
@@ -2254,8 +2272,13 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         public bool IsEnabled(LogLevel logLevel) => true;
 
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter) => Levels.Enqueue(logLevel);
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter
+        ) => Levels.Enqueue(logLevel);
 
         public void Dispose()
         {
@@ -2264,8 +2287,11 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
     sealed class DebugHeaderPermissionEvaluator : IPermissionEvaluator
     {
-        public ValueTask<Result> EvaluateAsync(ClaimsPrincipal actor, string permission,
-            CancellationToken ct = default) =>
+        public ValueTask<Result> EvaluateAsync(
+            ClaimsPrincipal actor,
+            string permission,
+            CancellationToken ct = default
+        ) =>
             ValueTask.FromResult(actor.HasClaim("permission", permission)
                 ? Result.Success
                 : Result.Failure(new RequestError(RequestErrorKind.Forbidden, $"Missing permission '{permission}'.")));
@@ -2277,8 +2303,13 @@ public sealed class HttpBindingTests : IAsyncDisposable
         public List<string?> ActorTokens { get; } = [];
         public List<RequestMetadata> Metadata { get; } = [];
 
-        public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
-            RequestMetadata metadata, CancellationToken ct = default)
+        public ValueTask EnqueueAsync<TRequest>(
+            TRequest request,
+            RequestRouteValues routeValues,
+            string? actorToken,
+            RequestMetadata metadata,
+            CancellationToken ct = default
+        )
             where TRequest : IRequest, IQueuable
         {
             Enqueued.Add(request);
@@ -2328,12 +2359,18 @@ public sealed class HttpBindingTests : IAsyncDisposable
 
         public override int Read(byte[] buffer, int offset, int count) => Receive(inner.Read(buffer, offset, count));
 
-        public override async ValueTask<int> ReadAsync(Memory<byte> buffer,
-            CancellationToken cancellationToken = default) =>
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default
+        ) =>
             Receive(await inner.ReadAsync(buffer, cancellationToken));
 
-        public override Task<int> ReadAsync(byte[] buffer, int offset, int count,
-            CancellationToken cancellationToken) =>
+        public override Task<int> ReadAsync(
+            byte[] buffer,
+            int offset,
+            int count,
+            CancellationToken cancellationToken
+        ) =>
             ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
 
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();

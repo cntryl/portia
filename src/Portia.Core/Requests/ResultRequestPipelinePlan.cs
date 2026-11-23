@@ -6,8 +6,10 @@ sealed class ResultRequestPipelinePlan<TOut>
     readonly (IRequestBehaviorInvocation<TOut> Invocation, Type Owner)[] _behaviors;
     readonly RequestGuardRegistration[] _guards;
 
-    internal ResultRequestPipelinePlan(IEnumerable<RequestPipelineBehaviorRegistration> registrations,
-        RequestGuardRegistration[] guards)
+    internal ResultRequestPipelinePlan(
+        IEnumerable<RequestPipelineBehaviorRegistration> registrations,
+        RequestGuardRegistration[] guards
+    )
     {
         _behaviors = registrations.Reverse()
             .Where(registration => registration is IRequestBehaviorInvocation<TOut>)
@@ -18,23 +20,30 @@ sealed class ResultRequestPipelinePlan<TOut>
 
     internal bool IsEmpty => _behaviors.Length == 0 && _guards.Length == 0;
 
-    internal ValueTask<Result<TOut>> InvokeAsync(IServiceProvider services,
-        RequestHandlerRegistration registration, IRequest<TOut> request, IRequestContext context,
-        CancellationToken ct)
+    internal ValueTask<Result<TOut>> InvokeAsync(
+        IServiceProvider services,
+        RequestHandlerRegistration registration,
+        IRequest<TOut> request,
+        IRequestContext context,
+        CancellationToken ct
+    )
     {
         var frame = new RequestPipelineFrame<IRequest<TOut>>(this, services, registration, request, context,
             _behaviors.Length);
         var prior = Current.Value;
         Current.Value = frame;
+
         try
         {
             var pending = InvokeAtAsync(frame, 0, ct);
+
             if (pending.IsCompletedSuccessfully)
             {
                 var result = pending.Result;
                 frame.Complete();
                 return ValueTask.FromResult(result);
             }
+
 
             return AwaitInvocationAsync(pending, frame, prior);
         }
@@ -49,8 +58,11 @@ sealed class ResultRequestPipelinePlan<TOut>
         }
     }
 
-    static async ValueTask<Result<TOut>> AwaitInvocationAsync(ValueTask<Result<TOut>> pending,
-        RequestPipelineFrame<IRequest<TOut>> frame, RequestPipelineFrame<IRequest<TOut>>? prior)
+    static async ValueTask<Result<TOut>> AwaitInvocationAsync(
+        ValueTask<Result<TOut>> pending,
+        RequestPipelineFrame<IRequest<TOut>> frame,
+        RequestPipelineFrame<IRequest<TOut>>? prior
+    )
     {
         try
         {
@@ -70,12 +82,16 @@ sealed class ResultRequestPipelinePlan<TOut>
     {
         if (!ReferenceEquals(Current.Value, frame))
             throw new InvalidOperationException(PipelineContinuationContract.SingleUseMessage);
+
         frame.Use(position);
         return InvokeAtAsync(frame, position + 1, ct);
     }
 
-    ValueTask<Result<TOut>> InvokeAtAsync(RequestPipelineFrame<IRequest<TOut>> frame, int position,
-        CancellationToken ct)
+    ValueTask<Result<TOut>> InvokeAtAsync(
+        RequestPipelineFrame<IRequest<TOut>> frame,
+        int position,
+        CancellationToken ct
+    )
     {
         if (position == _behaviors.Length)
         {
@@ -89,26 +105,35 @@ sealed class ResultRequestPipelinePlan<TOut>
         return InvokeBehaviorAsync(frame, position, ct);
     }
 
-    async ValueTask<Result<TOut>> InvokeGuardedHandlerAsync(RequestPipelineFrame<IRequest<TOut>> frame,
-        CancellationToken ct)
+    async ValueTask<Result<TOut>> InvokeGuardedHandlerAsync(
+        RequestPipelineFrame<IRequest<TOut>> frame,
+        CancellationToken ct
+    )
     {
         var guarded = await RequestCheckRunner.RunAsync(frame.Services, _guards, frame.Request, frame.Context, ct)
             .ConfigureAwait(false);
+
         if (!guarded.IsSuccess)
             return Result<TOut>.Failure(guarded.Error);
+
         return await ValidateAsync(((IRequestInvocation<TOut>)frame.Registration)
             .InvokeAsync(frame.Services, frame.Request, frame.Context, ct), frame.Registration.HandlerType,
             "request handler").ConfigureAwait(false);
     }
 
-    ValueTask<Result<TOut>> InvokeBehaviorAsync(RequestPipelineFrame<IRequest<TOut>> frame, int position,
-        CancellationToken ct)
+    ValueTask<Result<TOut>> InvokeBehaviorAsync(
+        RequestPipelineFrame<IRequest<TOut>> frame,
+        int position,
+        CancellationToken ct
+    )
     {
         var behavior = _behaviors[position];
+
         try
         {
             var pending = behavior.Invocation.InvokeAsync(frame.Services, frame.Request, frame.Context,
                 CreateContinuation(frame, position), ct);
+
             if (pending.IsCompletedSuccessfully)
             {
                 var result = pending.Result;
@@ -116,6 +141,7 @@ sealed class ResultRequestPipelinePlan<TOut>
                 frame.Close(position);
                 return ValueTask.FromResult(result);
             }
+
 
             return AwaitBehaviorAsync(pending, frame, position, behavior.Owner);
         }
@@ -126,8 +152,12 @@ sealed class ResultRequestPipelinePlan<TOut>
         }
     }
 
-    static async ValueTask<Result<TOut>> AwaitBehaviorAsync(ValueTask<Result<TOut>> pending,
-        RequestPipelineFrame<IRequest<TOut>> frame, int position, Type owner)
+    static async ValueTask<Result<TOut>> AwaitBehaviorAsync(
+        ValueTask<Result<TOut>> pending,
+        RequestPipelineFrame<IRequest<TOut>> frame,
+        int position,
+        Type owner
+    )
     {
         try
         {
@@ -145,13 +175,17 @@ sealed class ResultRequestPipelinePlan<TOut>
     {
         if (!pending.IsCompletedSuccessfully)
             return AwaitValidationAsync(pending, owner, role);
+
         var result = pending.Result;
         RequestResults.Validate(result, owner, role);
         return ValueTask.FromResult(result);
     }
 
-    static async ValueTask<Result<TOut>> AwaitValidationAsync(ValueTask<Result<TOut>> pending, Type owner,
-        string role)
+    static async ValueTask<Result<TOut>> AwaitValidationAsync(
+        ValueTask<Result<TOut>> pending,
+        Type owner,
+        string role
+    )
     {
         var result = await pending.ConfigureAwait(false);
         RequestResults.Validate(result, owner, role);

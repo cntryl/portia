@@ -202,15 +202,21 @@ public sealed class SystemOperatorAccessTests
             return ValueTask.FromResult<OperationalProcessorState?>(null);
         }
 
-        public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(OperationalScope scope,
-            CancellationToken ct = default)
+        public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(
+            OperationalScope scope,
+            CancellationToken ct = default
+        )
         {
             Reads++;
             return ValueTask.FromResult<IReadOnlyList<OperationalProcessorState>>([]);
         }
 
-        public ValueTask<bool> CompareExchangeAsync(OperationalProcessorState replacement, long expectedRevision,
-            Guid expectedOwner, CancellationToken ct = default)
+        public ValueTask<bool> CompareExchangeAsync(
+            OperationalProcessorState replacement,
+            long expectedRevision,
+            Guid expectedOwner,
+            CancellationToken ct = default
+        )
         {
             Writes++;
             return ValueTask.FromResult(false);
@@ -230,7 +236,11 @@ public sealed class SystemOperatorAccessTests
 
     sealed class PermissivePolicy : IOperationalAuthorizer
     {
-        public ValueTask<bool> AuthorizeAsync(ClaimsPrincipal actor, OperationalScope scope,
-            OperationalAccess permission, CancellationToken ct = default) => ValueTask.FromResult(true);
+        public ValueTask<bool> AuthorizeAsync(
+            ClaimsPrincipal actor,
+            OperationalScope scope,
+            OperationalAccess permission,
+            CancellationToken ct = default
+        ) => ValueTask.FromResult(true);
     }
 }

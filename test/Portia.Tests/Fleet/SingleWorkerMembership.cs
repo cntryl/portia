@@ -2,8 +2,11 @@ namespace Cntryl.Portia;
 
 sealed class SingleWorkerMembership : IFleetMembership
 {
-    public Task RunAsync(FleetRunOptions options, Func<ILeaseInventoryObserver, CancellationToken, Task> callback,
-        CancellationToken ct = default)
+    public Task RunAsync(
+        FleetRunOptions options,
+        Func<ILeaseInventoryObserver, CancellationToken, Task> callback,
+        CancellationToken ct = default
+    )
         => callback(new Observer(options), ct);
 
     public static FleetRunOptions Options(TimeSpan ttl) =>

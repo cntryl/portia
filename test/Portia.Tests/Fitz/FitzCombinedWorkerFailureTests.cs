@@ -34,8 +34,10 @@ public sealed class FitzCombinedWorkerFailureTests(FitzBrokerFixture broker)
         _ = application.AddGeneratedRequest(descriptor);
         var configuration = new PortiaFitzBuilder(application, client);
         _ = configuration.AddQueueWorkers();
+
         if (withHealthyNoticeListener)
             _ = configuration.AddNoticeWorkers();
+
         await using var provider = services.BuildServiceProvider();
         await using var connection = new FitzApplicationConnection(client, false, TimeSpan.FromSeconds(5));
         var worker = new FitzApplicationWorkers(connection, configuration,
@@ -61,6 +63,7 @@ public sealed class FitzCombinedWorkerFailureTests(FitzBrokerFixture broker)
         finally
         {
             using var shutdown = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
             try
             {
                 await worker.StopAsync(shutdown.Token);
@@ -68,6 +71,7 @@ public sealed class FitzCombinedWorkerFailureTests(FitzBrokerFixture broker)
             catch (TerminalHandlerFailureException)
             {
             }
+
 
             worker.Dispose();
         }

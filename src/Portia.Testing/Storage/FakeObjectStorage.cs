@@ -22,8 +22,11 @@ public sealed class FakeObjectStorage : IObjectStorage
     }
 
     /// <summary>Starts an isolated upload for the supplied tenant and content digest.</summary>
-    public ValueTask<ObjectUploadSession> CreateUploadAsync(TenantId tenantId, ObjectDigest expected,
-        CancellationToken ct = default)
+    public ValueTask<ObjectUploadSession> CreateUploadAsync(
+        TenantId tenantId,
+        ObjectDigest expected,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(expected);
         ct.ThrowIfCancellationRequested();
@@ -38,14 +41,20 @@ public sealed class FakeObjectStorage : IObjectStorage
     }
 
     /// <summary>Returns an in-memory upload destination.</summary>
-    public ValueTask<ObjectUploadPart> SignPartAsync(ObjectUploadSession session, int partNumber, TimeSpan lifetime,
-        CancellationToken ct = default)
+    public ValueTask<ObjectUploadPart> SignPartAsync(
+        ObjectUploadSession session,
+        int partNumber,
+        TimeSpan lifetime,
+        CancellationToken ct = default
+    )
     {
         ct.ThrowIfCancellationRequested();
+
         if (partNumber is < 1 or > 10_000)
         {
             throw new ArgumentOutOfRangeException(nameof(partNumber));
         }
+
 
         if (lifetime <= TimeSpan.Zero || lifetime > ObjectStorageLimits.MaximumDownloadLifetime)
         {
@@ -63,15 +72,21 @@ public sealed class FakeObjectStorage : IObjectStorage
     }
 
     /// <summary>Accepts the bytes addressed by a previously signed fake part.</summary>
-    public async ValueTask<ObjectPartReceipt> AcceptPartAsync(ObjectUploadSession session, int partNumber,
-        Stream contents, CancellationToken ct = default)
+    public async ValueTask<ObjectPartReceipt> AcceptPartAsync(
+        ObjectUploadSession session,
+        int partNumber,
+        Stream contents,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(contents);
         ct.ThrowIfCancellationRequested();
+
         if (partNumber is < 1 or > 10_000)
         {
             throw new ArgumentOutOfRangeException(nameof(partNumber));
         }
+
 
         lock (_sync)
         {
@@ -80,13 +95,16 @@ public sealed class FakeObjectStorage : IObjectStorage
 
         using var memory = new MemoryStream();
         var buffer = new byte[64 * 1024];
+
         while (true)
         {
             var read = await contents.ReadAsync(buffer, ct).ConfigureAwait(false);
+
             if (read == 0)
             {
                 break;
             }
+
 
             if (memory.Length + read > ObjectStorageLimits.MaximumObjectLength)
             {
@@ -95,6 +113,7 @@ public sealed class FakeObjectStorage : IObjectStorage
 
             await memory.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
         }
+
 
         ct.ThrowIfCancellationRequested();
         var receipt = Guid.NewGuid().ToString("N");
@@ -109,8 +128,11 @@ public sealed class FakeObjectStorage : IObjectStorage
     }
 
     /// <inheritdoc />
-    public ValueTask CompleteUploadAsync(ObjectUploadSession session, IReadOnlyList<ObjectPartReceipt> parts,
-        CancellationToken ct = default)
+    public ValueTask CompleteUploadAsync(
+        ObjectUploadSession session,
+        IReadOnlyList<ObjectPartReceipt> parts,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(parts);
@@ -118,6 +140,7 @@ public sealed class FakeObjectStorage : IObjectStorage
         lock (_sync)
         {
             PruneCompletedUploads();
+
             if (_completedUploads.TryGetValue(session.Token, out var completed))
             {
                 if (completed.ExpiresAt <= DateTimeOffset.UtcNow)
@@ -147,6 +170,7 @@ public sealed class FakeObjectStorage : IObjectStorage
                 return ValueTask.CompletedTask;
             }
 
+
             var upload = GetUpload(session);
             EnsureActive(upload);
 
@@ -162,6 +186,7 @@ public sealed class FakeObjectStorage : IObjectStorage
             }
 
             var ordered = parts.OrderBy(static part => part.PartNumber).ToArray();
+
             for (var index = 0; index < ordered.Length - 1; index++)
             {
                 if (upload.Parts[ordered[index].PartNumber].Content.Length <
@@ -171,30 +196,38 @@ public sealed class FakeObjectStorage : IObjectStorage
                 }
             }
 
+
             try
             {
                 using var output = new MemoryStream();
+
                 foreach (var part in ordered)
                 {
                     var bytes = upload.Parts[part.PartNumber].Content;
+
                     if (output.Length + bytes.LongLength > ObjectStorageLimits.MaximumObjectLength ||
                         output.Length + bytes.LongLength > upload.Expected.Length)
                     {
                         throw new InvalidDataException("Uploaded object exceeds its declared or maximum length.");
                     }
 
+
                     output.Write(bytes);
                 }
 
+
                 var content = output.ToArray();
                 var digest = Convert.ToHexString(SHA256.HashData(content)).ToLowerInvariant();
+
                 if (content.LongLength != upload.Expected.Length || digest != upload.Expected.Sha256)
                 {
                     throw new InvalidDataException(
                         "Uploaded object length or SHA-256 does not match the declared content.");
                 }
 
+
                 var tenantObjects = GetObjects(upload.TenantId);
+
                 if (tenantObjects.TryGetValue(digest, out var existing))
                 {
                     if (existing.LongLength != content.LongLength ||
@@ -208,6 +241,7 @@ public sealed class FakeObjectStorage : IObjectStorage
                 {
                     tenantObjects.Add(digest, content);
                 }
+
 
                 _completedUploads.Add(session.Token, new CompletedUpload(upload.TenantId, upload.Expected,
                     upload.ExpiresAt,
@@ -251,8 +285,12 @@ public sealed class FakeObjectStorage : IObjectStorage
     }
 
     /// <inheritdoc />
-    public async ValueTask<ObjectDownload> CreateDownloadAsync(TenantId tenantId, ObjectDigest expected,
-        TimeSpan lifetime, CancellationToken ct = default)
+    public async ValueTask<ObjectDownload> CreateDownloadAsync(
+        TenantId tenantId,
+        ObjectDigest expected,
+        TimeSpan lifetime,
+        CancellationToken ct = default
+    )
     {
         if (lifetime <= TimeSpan.Zero || lifetime > ObjectStorageLimits.MaximumDownloadLifetime)
         {
@@ -333,10 +371,12 @@ public sealed class FakeObjectStorage : IObjectStorage
     void PruneCompletedUploads()
     {
         var now = DateTimeOffset.UtcNow;
+
         if (now < _nextCompletedPrune)
         {
             return;
         }
+
 
         foreach (var token in _completedUploads.Where(pair => pair.Value.ExpiresAt <= now)
                      .Select(static pair => pair.Key).ToArray())

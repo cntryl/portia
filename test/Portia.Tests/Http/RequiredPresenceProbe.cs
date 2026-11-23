@@ -13,8 +13,10 @@ sealed record RequiredHeaderPresenceRequest([property: Required] string? Region 
 
 sealed class RequiredHeaderPresenceHandler : IRequestHandler<RequiredHeaderPresenceRequest, string>
 {
-    public ValueTask<Result<string>> HandleAsync(IRequestContext<RequiredHeaderPresenceRequest> context,
-        CancellationToken ct) =>
+    public ValueTask<Result<string>> HandleAsync(
+        IRequestContext<RequiredHeaderPresenceRequest> context,
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult(Result<string>.Success(context.Request.Region!));
 }
 

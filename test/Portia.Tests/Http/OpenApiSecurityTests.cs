@@ -26,6 +26,7 @@ public sealed class OpenApiSecurityTests
             foreach (var name in (string[])["a", "b", "c"])
                 options.OpenApi.SecuritySchemes.Add(name,
                     new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
+
             _ = options.OpenApi.SecurityPolicy("either", new Dictionary<string, string[]> { ["a"] = [] },
                 new Dictionary<string, string[]> { ["b"] = [] });
             _ = options.OpenApi.SecurityFor<ContractMetadataRequest>("c");
@@ -64,6 +65,7 @@ public sealed class OpenApiSecurityTests
         {
             _ = options.OpenApi.SecurityPolicy("a", "a");
             _ = options.OpenApi.SecurityPolicy("b", "b");
+
             foreach (var name in (string[])["a", "b"])
                 options.OpenApi.SecuritySchemes.Add(name,
                     new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
@@ -96,6 +98,7 @@ public sealed class OpenApiSecurityTests
         {
             _ = options.OpenApi.SecurityPolicy("composite",
                 new Dictionary<string, string[]> { ["a"] = [], ["b"] = [] });
+
             foreach (var name in (string[])["a", "b"])
                 options.OpenApi.SecuritySchemes.Add(name,
                     new OpenApiSecurityScheme { Type = SecuritySchemeType.Http, Scheme = "bearer" });
@@ -138,8 +141,10 @@ public sealed class OpenApiSecurityTests
         await using var app = builder.Build();
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
         var endpoint = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/default-policy");
+
         if (!fallback)
             _ = endpoint.RequireAuthorization();
+
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act
@@ -305,6 +310,7 @@ public sealed class OpenApiSecurityTests
         _ = builder.Services.AddAuthorization(options =>
         {
             var policy = new AuthorizationPolicyBuilder().RequireAssertion(_ => true).Build();
+
             if (fallback)
                 options.FallbackPolicy = policy;
             else
@@ -320,8 +326,10 @@ public sealed class OpenApiSecurityTests
         await using var app = builder.Build();
         _ = app.MapGroup("").AllowAnonymous().MapPortiaOpenApi();
         var endpoint = app.MapPortiaGet<ContractMetadataRequest, ContractMetadataModel>("/custom-policy");
+
         if (!fallback)
             _ = endpoint.RequireAuthorization();
+
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         // Act

@@ -39,9 +39,11 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         var account = Uuid.CreateVersion4();
         var identity = Identity(realm);
         DomainEvent[] changes = [new ValueChanged(500), new ValueIncremented(125)];
+
         for (var i = 0; i < changes.Length; i++)
             changes[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), account, (ulong)i + 1,
                 DateTimeOffset.UtcNow));
+
         await events.AppendAsync(new EventStreamAddress(realm, "accounts", account.ToString()), 0, changes, TestContext.Current.CancellationToken);
 
         // Act
@@ -103,9 +105,11 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         var identity = Identity("cassie-hosted-" + Uuid.CreateVersion4());
         var account = Uuid.CreateVersion4();
         DomainEvent[] changes = [new ValueChanged(500), new ValueIncremented(125)];
+
         for (var i = 0; i < changes.Length; i++)
             changes[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), account, (ulong)i + 1,
                 DateTimeOffset.UtcNow));
+
         await events.AppendAsync(new EventStreamAddress(identity.Pattern.Realm, "accounts", account.ToString()), 0,
             changes, TestContext.Current.CancellationToken);
         var error = RequestError.Conflict("injected handler failure", transient);
@@ -134,9 +138,11 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
 
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+
         try
         {
             await worker.StartAsync(TestContext.Current.CancellationToken);
+
             if (transient)
             {
                 await committed.Task.WaitAsync(TimeSpan.FromSeconds(15), TestContext.Current.CancellationToken);
@@ -154,9 +160,11 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
                 Assert.Equal(1, failures.Attempts);
             }
 
+
             await using var queryScope = provider.CreateAsyncScope();
             var repository = queryScope.ServiceProvider.GetRequiredService<AccountRepository>();
             var checkpoint = await repository.LoadCheckpointAsync(identity, TestContext.Current.CancellationToken);
+
             if (transient)
             {
                 Assert.NotEqual(ProjectionCheckpoint.Start, checkpoint);
@@ -179,6 +187,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         {
             if (worker.ExecuteTask is { IsCompleted: false })
                 await worker.StopAsync(TestContext.Current.CancellationToken);
+
             worker.Dispose();
         }
     }
@@ -216,6 +225,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
                 {
                     if (hosted is IHostedLifecycleService lifecycle)
                         await lifecycle.StartingAsync(TestContext.Current.CancellationToken);
+
                     await hosted.StartAsync(TestContext.Current.CancellationToken);
                 }
             });
@@ -352,8 +362,10 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
         readonly Action? _onCommitted = onCommitted;
         public IProjectionStore Store => this;
 
-        async ValueTask<IProjectionBatch> IProjectionStore.BeginAsync(ProjectionBatchContext context,
-            CancellationToken ct)
+        async ValueTask<IProjectionBatch> IProjectionStore.BeginAsync(
+            ProjectionBatchContext context,
+            CancellationToken ct
+        )
             => new ObservedBatch(await base.BeginAsync(context, ct), this);
 
         public async ValueTask AddAsync(string accountId, long amount, CancellationToken ct)
@@ -365,8 +377,11 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
             _ = await command.ExecuteNonQueryAsync(ct);
         }
 
-        public async ValueTask<AccountReadModel?> GetAsync(CheckpointIdentity identity, string accountId,
-            CancellationToken ct = default)
+        public async ValueTask<AccountReadModel?> GetAsync(
+            CheckpointIdentity identity,
+            string accountId,
+            CancellationToken ct = default
+        )
         {
             await using var read = await OpenReadAsync(ct);
             await using var command =
@@ -424,6 +439,7 @@ public sealed partial class CassieProjectionIntegrationTests(FitzBrokerFixture b
             {
                 if (repository._failCommit)
                     throw new IOException("Injected before commit.");
+
                 await batch.CommitAsync(checkpoint, ct);
                 repository._onCommitted?.Invoke();
             }

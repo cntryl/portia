@@ -9,10 +9,12 @@ public sealed record WorkloadIdentity
     public WorkloadIdentity(string name, TenantId? tenant = null)
     {
         _ = IdentityText.Require(name, nameof(name));
+
         if (tenant is { } value)
         {
             _ = EventStreamPattern.ForPattern(value.Value);
         }
+
 
         Name = name;
         Tenant = tenant;

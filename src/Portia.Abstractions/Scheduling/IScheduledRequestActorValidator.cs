@@ -12,5 +12,9 @@ public interface IScheduledRequestActorValidator
     /// <param name="ct">A token that can cancel validation.</param>
     /// <returns>The approved principal, or a bounded failure when the assertion is rejected.</returns>
     ValueTask<Result<ClaimsPrincipal>> ValidateAsync(
-        string route, string subject, string issuer, CancellationToken ct = default);
+        string route,
+        string subject,
+        string issuer,
+        CancellationToken ct = default
+    );
 }

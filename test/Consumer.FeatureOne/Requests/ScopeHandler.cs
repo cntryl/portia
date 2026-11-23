@@ -9,10 +9,12 @@ public sealed class ScopeHandler(IRequestBus bus, IConsumerScope scope, IConsume
     {
         effects.Record("delivery", context.Request.Id, context.Request.Behavior, scope.Id);
         _ = await bus.SendAsync(new NestedScopeRequest(context.Request.Id), new ClaimsPrincipal(), ct);
+
         if (context.Request.Behavior == 1)
         {
             throw new InvalidOperationException("Consumer failure");
         }
+
 
         if (context.Request.Behavior == 2)
         {

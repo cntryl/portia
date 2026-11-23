@@ -126,8 +126,10 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
         + "BeginAsync and the returned batch's commit or disposal, so it shares the checkpoint's transaction.");
 
     /// <inheritdoc />
-    public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-        CancellationToken ct = default)
+    public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+        CheckpointIdentity identity,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(identity);
         EnsureOwnProjector(identity);
@@ -149,6 +151,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
         }
 
         IKvTransaction? transaction = null;
+
         try
         {
             transaction = await FitzKvCheckpoints
@@ -161,12 +164,14 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
             var current = checkpoint is KvFound { Value: var checkpointBytes }
                 ? new ProjectionCheckpoint(FitzKvCheckpoints.Decode(checkpointBytes.Span))
                 : ProjectionCheckpoint.Start;
+
             if (current != context.Checkpoint)
             {
                 throw new ProjectionConcurrencyException(
                     $"Projection batch for '{context.Identity.ComponentName}' started from stale checkpoint "
                     + $"'{context.Checkpoint.Cursor}'; authoritative checkpoint is '{current.Cursor}'.");
             }
+
 
             return new Batch(this, transaction, context.Identity);
         }
@@ -178,6 +183,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
             if (transaction is not null)
             {
                 await FitzKvCheckpoints.RollbackAsync(transaction).ConfigureAwait(false);
+
                 try
                 {
                     await transaction.DisposeAsync().ConfigureAwait(false);
@@ -203,6 +209,7 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
     void EnsureServes(string componentName)
     {
         _ = IdentityText.Require(componentName, nameof(componentName));
+
         if (!string.Equals(componentName, _componentName, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
@@ -222,7 +229,9 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
         {
             if (_done || Volatile.Read(ref _disposed) != 0)
                 throw new InvalidOperationException("This projection batch has already finished.");
+
             var tx = transaction;
+
             try
             {
                 await tx.PutAsync(FitzKvCheckpoints.Key(identity), FitzKvCheckpoints.Encode(checkpoint.Cursor), ct)
@@ -250,12 +259,15 @@ public abstract class FitzKvProjectionStore(IKvClient client, string route, stri
                 return;
 
             var tx = transaction;
+
             if (ReferenceEquals(store._open, tx))
                 store._open = null;
+
             try
             {
                 if (!_done)
                     await FitzKvCheckpoints.RollbackAsync(tx).ConfigureAwait(false);
+
                 await tx.DisposeAsync().ConfigureAwait(false);
             }
             finally

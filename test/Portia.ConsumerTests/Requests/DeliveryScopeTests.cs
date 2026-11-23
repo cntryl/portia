@@ -22,6 +22,7 @@ public sealed class DeliveryScopeTests
         _ = services.AddAccounts();
         _ = services.AddScoped<IRequestActorValidator, ScopeValidator>();
         _ = services.AddScoped<IQueuedRequestTerminalHandler, TestTerminalHandler>();
+
         if (notification)
         {
             _ = services.AddSingleton<IRequestNotificationConsumer>(new Notifications(requests));
@@ -34,11 +35,13 @@ public sealed class DeliveryScopeTests
         }
 
         // Act
+
         await using var provider = ConsumerHost.Build(services);
 
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         var effects = provider.GetRequiredService<ConsumerHost.Effects>();
+
         try
         {
             await worker.StartAsync(TestContext.Current.CancellationToken);
@@ -50,14 +53,17 @@ public sealed class DeliveryScopeTests
             (worker as IDisposable)?.Dispose();
         }
 
+
         var deliveries = effects.Items.Where(item => item.Component == "delivery").ToArray();
         Assert.Equal(4, deliveries.Select(item => item.ScopeId).Distinct().Count());
+
         foreach (var delivery in deliveries)
         {
             Assert.Equal(delivery.ScopeId, Assert.Single(effects.Items,
                 item => item.Component == "nested" && item.AggregateId == delivery.AggregateId).ScopeId);
             Assert.Contains(effects.Items, item => item.Component == "validator" && item.ScopeId == delivery.ScopeId);
         }
+
 
         Assert.All(effects.Scopes.Values, Assert.True);
     }

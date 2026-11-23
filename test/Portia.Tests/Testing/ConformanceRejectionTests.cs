@@ -254,8 +254,10 @@ public sealed class ConformanceRejectionTests
     [InlineData(DeduplicationDefect.LosesConcurrentRace, "concurrent duplicate")]
     [InlineData(DeduplicationDefect.ForgetsAfterReopen, "after the implementation reopened")]
     [InlineData(DeduplicationDefect.LosesSynchronousRace, "concurrent duplicate")]
-    public async Task ShouldRejectDeduplicationProbeGivenOneBrokenGuarantee(DeduplicationDefect defect,
-        string expected)
+    public async Task ShouldRejectDeduplicationProbeGivenOneBrokenGuarantee(
+        DeduplicationDefect defect,
+        string expected
+    )
     {
         // Arrange
         var probe = new DefectiveDeduplicationProbe(defect);
@@ -296,8 +298,10 @@ public sealed class ConformanceRejectionTests
     [Theory]
     [InlineData(null, "conformance")]
     [InlineData("rebuild-1", "different-component")]
-    public async Task ShouldRejectProjectionProbeGivenMismatchedLiveAndRebuildIdentities(string? rebuildId,
-        string component)
+    public async Task ShouldRejectProjectionProbeGivenMismatchedLiveAndRebuildIdentities(
+        string? rebuildId,
+        string component
+    )
     {
         // Arrange
         var probe = new MismatchedIdentityProbe(rebuildId, component);
@@ -444,8 +448,11 @@ public sealed class ConformanceRejectionTests
         ConcurrentDictionary<EventStreamAddress, byte> written,
         string? metadataMember) : IEventStore
     {
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
-            [EnumeratorCancellation] CancellationToken ct = default)
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset = 0,
+            [EnumeratorCancellation] CancellationToken ct = default
+        )
         {
             if (defect == StoreDefect.ReturnsRecordsForAbsentStream)
             {
@@ -454,9 +461,11 @@ public sealed class ConformanceRejectionTests
             }
 
             var records = new List<DomainEventRecord>();
+
             await foreach (var record in inner.ReadAsync(stream,
                                defect == StoreDefect.IgnoresFromOffset ? 0 : fromOffset, ct))
                 records.Add(record);
+
 
             if (defect == StoreDefect.DropsAppendedRecords && records.Count > 0)
             {
@@ -485,15 +494,20 @@ public sealed class ConformanceRejectionTests
             }
         }
 
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            [EnumeratorCancellation] CancellationToken ct = default)
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            [EnumeratorCancellation] CancellationToken ct = default
+        )
         {
             var records = new List<DomainEventRecord>();
             var read = defect == StoreDefect.PatternReadIgnoresArea
                 ? EventStreamPattern.ForPattern(pattern.Realm)
                 : pattern;
+
             await foreach (var record in inner.ReadAsync(read, cursor, ct))
                 records.Add(record);
+
 
             if (defect == StoreDefect.PatternReadIgnoresRealm)
             {
@@ -554,6 +568,7 @@ public sealed class ConformanceRejectionTests
             if (!corruptPayload && defect is not (StoreDefect.CorruptsPayload or StoreDefect.SubstitutesType
                     or StoreDefect.RewritesMetadata))
                 return record;
+
             DomainEvent replacement = defect == StoreDefect.SubstitutesType
                 ? new ValueChanged(0)
                 : new ConformanceEvent(defect == StoreDefect.RewritesMetadata
@@ -583,34 +598,48 @@ public sealed class ConformanceRejectionTests
             return record with { Event = replacement };
         }
 
-        public async ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,
-            IReadOnlyList<DomainEvent> events, CancellationToken ct = default)
+        public async ValueTask AppendAsync(
+            EventStreamAddress stream,
+            ulong expectedStreamPosition,
+            IReadOnlyList<DomainEvent> events,
+            CancellationToken ct = default
+        )
         {
             _ = written.TryAdd(stream, 0);
+
             if (defect == StoreDefect.AcceptsAppendAheadOfStream)
             {
                 var actual = 0UL;
+
                 await foreach (var _ in inner.ReadAsync(stream, 0, ct))
                     actual++;
+
                 await inner.AppendAsync(stream, Math.Min(expectedStreamPosition, actual), events, ct);
                 return;
             }
 
+
             if (defect == StoreDefect.LosesConcurrentAppendRace)
             {
                 var observed = 0UL;
+
                 await foreach (var _ in inner.ReadAsync(stream, 0, ct))
                     observed++;
+
+
                 if (observed != expectedStreamPosition)
                     throw new EventStreamConcurrencyException("stale append");
+
                 await Task.Delay(50, ct);
                 // Appends at whatever the end is by now, retrying past other racers, as a store that never
                 // re-checks would.
                 while (true)
                 {
                     var actual = 0UL;
+
                     await foreach (var _ in inner.ReadAsync(stream, 0, ct))
                         actual++;
+
                     try
                     {
                         await inner.AppendAsync(stream, actual, events, ct);
@@ -625,8 +654,10 @@ public sealed class ConformanceRejectionTests
             if (defect == StoreDefect.AcceptsStaleAppend)
             {
                 var actual = 0UL;
+
                 await foreach (var _ in inner.ReadAsync(stream, 0, ct))
                     actual++;
+
                 await inner.AppendAsync(stream, actual, events, ct);
                 return;
             }
@@ -642,8 +673,10 @@ public sealed class ConformanceRejectionTests
             catch (EventStreamConcurrencyException) when (defect == StoreDefect.WritesDespiteConflict)
             {
                 var actual = 0UL;
+
                 await foreach (var _ in inner.ReadAsync(stream, 0, ct))
                     actual++;
+
                 await inner.AppendAsync(stream, actual, events, ct);
                 throw;
             }
@@ -678,8 +711,11 @@ public sealed class ConformanceRejectionTests
             return ValueTask.CompletedTask;
         }
 
-        public async ValueTask<bool> ExecuteAsync(Uuid eventId, Func<CancellationToken, ValueTask> effect,
-            CancellationToken ct = default)
+        public async ValueTask<bool> ExecuteAsync(
+            Uuid eventId,
+            Func<CancellationToken, ValueTask> effect,
+            CancellationToken ct = default
+        )
         {
             if (defect == DeduplicationDefect.ReportsFirstAsDuplicate)
             {
@@ -688,18 +724,22 @@ public sealed class ConformanceRejectionTests
 
             var seen = defect == DeduplicationDefect.ForgetsAfterReopen ? _session : _durable;
             bool first;
+
             if (defect == DeduplicationDefect.LosesConcurrentRace)
             {
                 _sequentialEventId ??= eventId;
                 var already = seen.ContainsKey(eventId);
+
                 if (eventId != _sequentialEventId)
                 {
                     // Hold the first two concurrent readers until both have observed the empty slot.
                     // This injects the check-then-act defect deterministically even on a saturated runner.
                     if (Interlocked.Increment(ref _concurrentReaderCount) == 2)
                         _concurrentReaders.TrySetResult();
+
                     await _concurrentReaders.Task.WaitAsync(ct);
                 }
+
 
                 first = !already;
                 seen[eventId] = 0;
@@ -708,14 +748,17 @@ public sealed class ConformanceRejectionTests
             {
                 _sequentialEventId ??= eventId;
                 var already = seen.ContainsKey(eventId);
+
                 if (eventId != _sequentialEventId)
                 {
                     // Blocks instead of yielding: callers started one after another never overlap, so only an
                     // attempt that already runs on its own thread meets a second one here.
                     if (Interlocked.Increment(ref _concurrentReaderCount) == 2)
                         _concurrentReaders.TrySetResult();
+
                     _ = _concurrentReaders.Task.Wait(TimeSpan.FromSeconds(1), ct);
                 }
+
 
                 first = !already;
                 seen[eventId] = 0;
@@ -724,6 +767,7 @@ public sealed class ConformanceRejectionTests
             {
                 first = defect == DeduplicationDefect.ExecutesSequentialDuplicate || seen.TryAdd(eventId, 0);
             }
+
 
             if (!first)
             {
@@ -801,38 +845,49 @@ public sealed class ConformanceRejectionTests
             readonly ShapedProjectionProbe _probe = probe;
             Batch? _batch;
 
-            public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-                CancellationToken ct = default) =>
+            public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+                CheckpointIdentity identity,
+                CancellationToken ct = default
+            ) =>
                 ValueTask.FromResult(_probe.CheckpointOf(identity));
 
-            public async ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context,
-                CancellationToken ct = default)
+            public async ValueTask<IProjectionBatch> BeginAsync(
+                ProjectionBatchContext context,
+                CancellationToken ct = default
+            )
             {
                 var overlapping = _probe.Shape == ProjectionStoreShape.ChecksCheckpointOnlyAtBegin &&
                                   _probe._winnerStaged;
+
                 if (overlapping)
                     await Task.Delay(_probe.StaleOpenDelay, ct);
+
                 var locked = false;
+
                 if (_probe.Shape == ProjectionStoreShape.LocksAtBegin)
                 {
                     await _probe._writer.WaitAsync(ct);
                     locked = true;
                 }
 
+
                 if (_probe.Shape != ProjectionStoreShape.DiscardsWinner
                     && _probe.CheckpointOf(context.Identity) != context.Checkpoint)
                 {
                     if (locked)
                         _ = _probe._writer.Release();
+
                     throw new ProjectionConcurrencyException("stale checkpoint");
                 }
 
                 _batch = new Batch(this, context, locked);
+
                 if (overlapping)
                 {
                     _probe._winnerStaged = false;
                     _ = _probe._overlappingBatchOpened.TrySetResult();
                 }
+
 
                 return _batch;
             }
@@ -842,8 +897,10 @@ public sealed class ConformanceRejectionTests
             public ValueTask StageValueAsync(string value, CancellationToken ct = default)
             {
                 _batch!.Value = value;
+
                 if (_probe.Shape == ProjectionStoreShape.ChecksCheckpointOnlyAtBegin && value == "winner")
                     _probe._winnerStaged = true;
+
                 return ValueTask.CompletedTask;
             }
 
@@ -879,6 +936,7 @@ public sealed class ConformanceRejectionTests
                         if (session._probe.Shape == ProjectionStoreShape.ChecksCheckpointOnlyAtBegin &&
                             Value == "winner")
                             await session._probe._overlappingBatchOpened.Task.WaitAsync(ct);
+
                         Commit(checkpoint);
                     }
                     finally
@@ -906,6 +964,7 @@ public sealed class ConformanceRejectionTests
                     {
                         var key = probe.Key(context.Identity);
                         var current = probe._states.GetValueOrDefault(key);
+
                         if (probe.Shape != ProjectionStoreShape.ChecksCheckpointOnlyAtBegin
                             && current.Checkpoint != context.Checkpoint)
                         {
@@ -917,6 +976,7 @@ public sealed class ConformanceRejectionTests
 
                             throw new ProjectionConcurrencyException("stale checkpoint");
                         }
+
 
                         probe._states[key] = (Value, checkpoint);
                     }

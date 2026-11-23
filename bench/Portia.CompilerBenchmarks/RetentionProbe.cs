@@ -13,11 +13,16 @@ static class RetentionProbe
 {
     sealed record State(ApplicationFixture Fixture, ApplicationBuild Graph);
 
-    public static async Task<RetentionReport> RunAsync(string size, int edits, Action<RetentionCheckpoint>? checkpoint = null,
-        CancellationToken ct = default)
+    public static async Task<RetentionReport> RunAsync(
+        string size,
+        int edits,
+        Action<RetentionCheckpoint>? checkpoint = null,
+        CancellationToken ct = default
+    )
     {
         if (edits is < 2 or > 1000)
             throw new ArgumentOutOfRangeException(nameof(edits));
+
         var before = HostCounters.Capture();
         var state = Start(size);
         var expected = state.Graph.Sources();
@@ -27,6 +32,7 @@ static class RetentionProbe
         var requests = new List<double>();
         var points = new HashSet<int> { Math.Min(100, edits), Math.Min(500, edits), edits };
         var completed = 0;
+
         try
         {
             for (var i = 0; i < edits; i++)
@@ -36,11 +42,15 @@ static class RetentionProbe
                 state = Advance(state, i, retired, ct);
                 var diagnostics = await BenchmarkCase.AnalyzeDocumentAsync(state.Graph, "body", ct).ConfigureAwait(false);
                 requests.Add(Stopwatch.GetElapsedTime(start).TotalMilliseconds);
+
                 if (diagnostics.Length != 0)
                     throw new InvalidOperationException(string.Join("\n", diagnostics.Select(diagnostic => diagnostic.ToString())));
+
                 completed++;
+
                 if (!points.Contains(completed))
                     continue;
+
                 var row = Memory(completed, retired);
                 memory.Add(row);
                 checkpoint?.Invoke(row);
@@ -52,9 +62,12 @@ static class RetentionProbe
                 before, HostCounters.Capture(), "Session interrupted; completed checkpoints retained; no retention verdict.",
                 Campaign.Identity(), state.Fixture.Identity);
         }
+
         Verification.Changes(expected, state.Graph.Sources(), []);
+
         foreach (var project in state.Graph.Projects)
             CompilerHost.CheckRun(project.Driver, project.Input);
+
         var warm = memory.First(row => row.Edits == Math.Min(100, edits));
         var allowance = Math.Max((long)(warm.ManagedBytes * .10), 8L * 1024 * 1024);
         var last = memory[^1];

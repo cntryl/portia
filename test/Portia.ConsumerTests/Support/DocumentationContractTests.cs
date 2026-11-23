@@ -61,15 +61,19 @@ public sealed partial class DocumentationContractTests
         foreach (var relative in Maintained)
         {
             var source = File.ReadAllText(Path.Combine(Root, relative));
+
             foreach (Match match in MarkdownLink().Matches(source))
             {
                 var target = match.Groups[1].Value;
+
                 if (target.StartsWith("http", StringComparison.OrdinalIgnoreCase) || target.StartsWith('#'))
                 {
                     continue;
                 }
 
+
                 var path = target.Split('#')[0];
+
                 if (!File.Exists(Path.GetFullPath(path, Path.GetDirectoryName(Path.Combine(Root, relative))!)))
                 {
                     missing.Add($"{relative} links to missing file '{target}'.");

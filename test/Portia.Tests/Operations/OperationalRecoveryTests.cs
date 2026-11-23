@@ -115,8 +115,10 @@ public sealed class OperationalRecoveryTests
     [Theory]
     [InlineData(true, "resumed")]
     [InlineData(false, "failed")]
-    public async Task ShouldReportTheNextPassOutcomeGivenResumeAfterSourceReadFailure(bool sourceRecovers,
-        string expectedStatus)
+    public async Task ShouldReportTheNextPassOutcomeGivenResumeAfterSourceReadFailure(
+        bool sourceRecovers,
+        string expectedStatus
+    )
     {
         // Arrange
         var store = new MemoryOperationalStore();
@@ -133,6 +135,7 @@ public sealed class OperationalRecoveryTests
         // Act
         var mayResume = await session.PrepareAsync(checkpoint, TestContext.Current.CancellationToken);
         var claimed = await operations.VerifyRepairAsync(actor, Target, plan.Id, TestContext.Current.CancellationToken);
+
         if (sourceRecovers)
         {
             session.EnsureRecoveryCompleted(checkpoint);
@@ -140,6 +143,7 @@ public sealed class OperationalRecoveryTests
         }
         else
             await session.RecordFailureAsync(failure, null, TestContext.Current.CancellationToken);
+
         var settled = await operations.VerifyRepairAsync(actor, Target, plan.Id, TestContext.Current.CancellationToken);
 
         // Assert
@@ -238,10 +242,12 @@ public sealed class OperationalRecoveryTests
         var actor = TestOperationalAuthorizer.AdministratorActor(true);
         var plan = await operations.PreviewRepairAsync(actor, Target, TestContext.Current.CancellationToken);
         _ = await operations.ApproveRepairAsync(actor, Target, plan.Id, TestContext.Current.CancellationToken);
+
         if (change == "expired")
             clock.Advance(TimeSpan.FromMinutes(5));
 
         // Act
+
         if (change == "revoked")
             await operations.RevokeRepairAsync(actor, Target, plan.Id, TestContext.Current.CancellationToken);
 
@@ -256,12 +262,14 @@ public sealed class OperationalRecoveryTests
             }, state.Revision, state.OwnerSession, TestContext.Current.CancellationToken));
         }
 
+
         if (change == "revoked")
             _ = await Assert.ThrowsAsync<UnauthorizedAccessException>(async () =>
                 await operations.ExecuteRepairAsync(actor, Target, plan.Id, TestContext.Current.CancellationToken));
         else
             _ = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
                 await operations.ExecuteRepairAsync(actor, Target, plan.Id, TestContext.Current.CancellationToken));
+
         Assert.Empty((await store.ReadAsync(Target, TestContext.Current.CancellationToken))!.Repairs);
     }
 

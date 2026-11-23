@@ -67,6 +67,7 @@ public abstract class Projector : IProjector
     {
         if (!WorkloadComponentBinding.TryBind(ref _boundIdentity, identity, componentName, "Projector", GetType()))
             return;
+
         if (componentName is not null)
         {
             Name = componentName;
@@ -78,8 +79,11 @@ public abstract class Projector : IProjector
         }
     }
 
-    internal ValueTask<Result> ProjectAsync(IReadOnlyList<DomainEventRecord> records, IProjectorContext context,
-        CancellationToken ct)
+    internal ValueTask<Result> ProjectAsync(
+        IReadOnlyList<DomainEventRecord> records,
+        IProjectorContext context,
+        CancellationToken ct
+    )
         => ProjectBatchAsync(records, context, ct);
 
     /// <summary>Dispatches one event. Generated typed handlers skip unrelated event types.</summary>
@@ -87,8 +91,11 @@ public abstract class Projector : IProjector
     /// <param name="context">The projector context for the current batch.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task that completes once the event has been projected.</returns>
-    protected virtual ValueTask<Result> ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
-        CancellationToken ct)
+    protected virtual ValueTask<Result> ProjectEventAsync(
+        DomainEventRecord record,
+        IProjectorContext context,
+        CancellationToken ct
+    )
         => ValueTask.FromResult(Result.Success);
 
     /// <summary>Dispatches the current unit of work in source order.</summary>
@@ -96,12 +103,16 @@ public abstract class Projector : IProjector
     /// <param name="context">The projector context for the current batch.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task that completes once every event has been projected.</returns>
-    protected virtual async ValueTask<Result> ProjectBatchAsync(IReadOnlyList<DomainEventRecord> records,
-        IProjectorContext context, CancellationToken ct)
+    protected virtual async ValueTask<Result> ProjectBatchAsync(
+        IReadOnlyList<DomainEventRecord> records,
+        IProjectorContext context,
+        CancellationToken ct
+    )
     {
         foreach (var record in records)
         {
             var result = await ProjectEventAsync(record, context, ct).ConfigureAwait(false);
+
             if (!result.IsSuccess)
                 return result;
         }

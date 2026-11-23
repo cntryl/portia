@@ -22,10 +22,12 @@ public sealed class CompilerCalibrationStatisticsTests
     {
         // Arrange
         var workers = Workers(10);
+
         for (var i = 1; i < workers.Length; i += 2)
             workers[i] = workers[i] with { Report = workers[i].Report! with { HarnessHash = "changed" } };
 
         // Act
+
         var error = Record.Exception(() => Campaign.Compare(workers));
 
         // Assert
@@ -200,6 +202,7 @@ public sealed class CompilerCalibrationStatisticsTests
         // Assert
         Assert.Equal(supported, first.Supported);
         Assert.Equal(supported, second.Supported);
+
         if (supported)
         {
             Assert.True(first.TotalCpu > 0, first.Error);

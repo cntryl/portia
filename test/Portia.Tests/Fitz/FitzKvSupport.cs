@@ -36,14 +36,19 @@ sealed class FakeKvClient : IKvClient
     /// </summary>
     internal HashSet<string> WriteLocks { get; } = [with(StringComparer.Ordinal)];
 
-    public Task<IKvTransaction> BeginAsync(string route, KvMode mode = KvMode.ReadWrite,
-        CancellationToken cancellationToken = default)
+    public Task<IKvTransaction> BeginAsync(
+        string route,
+        KvMode mode = KvMode.ReadWrite,
+        CancellationToken cancellationToken = default
+    )
     {
         cancellationToken.ThrowIfCancellationRequested();
+
         if (mode == KvMode.ReadWrite && !WriteLocks.Add(route))
             return Task.FromException<IKvTransaction>(new KvException(
                 $"'{route}' is locked by another read-write transaction.", "TX_CONFLICT",
                 domainCode: FitzErrorCodes.KvIsolationConflict));
+
 
         var transaction = new FakeKvTransaction(this, route, mode);
         Transactions.Add(transaction);
@@ -111,8 +116,11 @@ sealed class FakeKvTransaction(FakeKvClient client, string route, KvMode mode)
         return Task.CompletedTask;
     }
 
-    public Task DeleteRangeAsync(ReadOnlyMemory<byte> startKey, ReadOnlyMemory<byte> endKey,
-        CancellationToken ct = default) => throw new NotSupportedException();
+    public Task DeleteRangeAsync(
+        ReadOnlyMemory<byte> startKey,
+        ReadOnlyMemory<byte> endKey,
+        CancellationToken ct = default
+    ) => throw new NotSupportedException();
 
     public Task<KvScanResult> ScanAsync(KvScanQuery query, CancellationToken ct = default) =>
         throw new NotSupportedException();
@@ -121,13 +129,17 @@ sealed class FakeKvTransaction(FakeKvClient client, string route, KvMode mode)
     {
         Durability = durability;
         Commits++;
+
         if (client.CommitFailure is { } failure)
         {
             return Task.FromException(failure);
         }
 
+
+
         foreach (var (key, value) in _staged)
             client.Committed[key] = value;
+
         _staged.Clear();
         return Task.CompletedTask;
     }
@@ -143,8 +155,10 @@ sealed class FakeKvTransaction(FakeKvClient client, string route, KvMode mode)
     public ValueTask DisposeAsync()
     {
         Disposals++;
+
         if (mode == KvMode.ReadWrite)
             _ = client.WriteLocks.Remove(route);
+
         return client.DisposeFailure is { } failure
             ? ValueTask.FromException(failure)
             : ValueTask.CompletedTask;

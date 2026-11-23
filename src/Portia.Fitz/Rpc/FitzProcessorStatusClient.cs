@@ -3,8 +3,12 @@ namespace Cntryl.Portia;
 sealed class FitzProcessorStatusClient(IRemoteRequestSender sender, Func<string> application, TimeProvider? clock = null)
     : IProcessorStatusClient
 {
-    public async ValueTask<Result<ProcessorStatus>> GetAsync(string processor, TenantId? tenant = null,
-        string? actorToken = null, CancellationToken ct = default)
+    public async ValueTask<Result<ProcessorStatus>> GetAsync(
+        string processor,
+        TenantId? tenant = null,
+        string? actorToken = null,
+        CancellationToken ct = default
+    )
     {
         var workload = new WorkloadIdentity(processor, tenant);
         var request = new GetProcessorStatus(processor, tenant?.Value);
@@ -12,6 +16,7 @@ sealed class FitzProcessorStatusClient(IRemoteRequestSender sender, Func<string>
         using var timeout = new CancellationTokenSource(ProcessorStatusTimeouts.OwnerResponse,
             clock ?? TimeProvider.System);
         using var ownerDeadline = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
+
         try
         {
             return await sender.SendAsync<GetProcessorStatus, ProcessorStatus>(request,
@@ -31,6 +36,7 @@ sealed class FitzProcessorStatusClient(IRemoteRequestSender sender, Func<string>
             FitzErrorCodes.RpcBackpressure or FitzErrorCodes.RpcTimeout)
         {
         }
+
 
         ct.ThrowIfCancellationRequested();
         return await sender.SendAsync<GetProcessorStatus, ProcessorStatus>(request,

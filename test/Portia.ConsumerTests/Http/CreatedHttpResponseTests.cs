@@ -235,6 +235,7 @@ public sealed class CreatedHttpResponseTests
         var responses = document.RootElement.GetProperty("paths").GetProperty("/accounts").GetProperty("post")
             .GetProperty("responses");
         Assert.Equal(2, responses.EnumerateObject().Count(response => response.Name.StartsWith('2')));
+
         foreach (var code in new[] { "200", "201" })
         {
             var response = responses.GetProperty(code);
@@ -312,6 +313,7 @@ public sealed class CreatedHttpResponseTests
         using var document = JsonDocument.Parse(body);
         var responses = document.RootElement.GetProperty("paths").GetProperty("/accounts").GetProperty("post")
             .GetProperty("responses");
+
         foreach (var code in new[] { "200", "201" })
         {
             var type = responses.GetProperty(code).GetProperty("content").GetProperty("application/json")
@@ -380,17 +382,20 @@ public sealed class CreatedHttpResponseTests
         Assert.Equal("New account.", response201.GetProperty("description").GetString());
         Assert.Equal("Previously created account.", response200.GetProperty("description").GetString());
         var payloadSchema = response201.GetProperty("content").GetProperty("application/json").GetProperty("schema");
+
         if (payloadSchema.TryGetProperty("$ref", out var schemaRef))
         {
             var schemaName = schemaRef.GetString()!.Split('/').Last();
             payloadSchema = document.RootElement.GetProperty("components").GetProperty("schemas").GetProperty(schemaName);
         }
+
         Assert.Equal("object", payloadSchema.GetProperty("type").GetString());
         Assert.True(payloadSchema.GetProperty("properties").TryGetProperty("name", out _));
         Assert.True(response201.GetProperty("content").GetProperty("application/json").GetProperty("examples")
             .TryGetProperty("created", out _));
         Assert.True(response200.GetProperty("content").GetProperty("application/json").GetProperty("examples")
             .TryGetProperty("repeat", out _));
+
         foreach (var response in new[] { response201, response200 })
         {
             Assert.Equal("string", response.GetProperty("headers").GetProperty("Location").GetProperty("schema")
@@ -398,6 +403,7 @@ public sealed class CreatedHttpResponseTests
             Assert.Equal("uri-reference", response.GetProperty("headers").GetProperty("Location").GetProperty("schema")
                 .GetProperty("format").GetString());
         }
+
         Assert.DoesNotContain("PortiaCreateOutcome", body, StringComparison.Ordinal);
     }
 
@@ -445,7 +451,9 @@ public sealed class CreatedHttpResponseTests
         {
             if (!schema.Value.TryGetProperty("properties", out var componentProperties))
                 continue;
+
             Assert.False(componentProperties.TryGetProperty("thingId", out _), schema.Name);
+
             if (schema.Value.TryGetProperty("required", out var componentRequired))
             {
                 var componentPropertyNames = componentProperties.EnumerateObject()

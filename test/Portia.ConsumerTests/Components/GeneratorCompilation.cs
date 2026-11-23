@@ -30,8 +30,11 @@ static class GeneratorCompilation
     public static IReadOnlyList<Diagnostic> Diagnostics(string source, params IIncrementalGenerator[] generators)
         => Diagnostics(source, [], generators);
 
-    public static IReadOnlyList<Diagnostic> Diagnostics(string source,
-        IReadOnlyCollection<MetadataReference> additionalReferences, params IIncrementalGenerator[] generators)
+    public static IReadOnlyList<Diagnostic> Diagnostics(
+        string source,
+        IReadOnlyCollection<MetadataReference> additionalReferences,
+        params IIncrementalGenerator[] generators
+    )
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
@@ -56,8 +59,11 @@ static class GeneratorCompilation
 
     // Analyzers report through the compiler's analyzer driver, which is also what applies their severity
     // configuration and pragma suppressions.
-    public static IReadOnlyList<Diagnostic> Diagnostics(string source,
-        IReadOnlyCollection<MetadataReference> additionalReferences, params DiagnosticAnalyzer[] analyzers)
+    public static IReadOnlyList<Diagnostic> Diagnostics(
+        string source,
+        IReadOnlyCollection<MetadataReference> additionalReferences,
+        params DiagnosticAnalyzer[] analyzers
+    )
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
@@ -73,12 +79,17 @@ static class GeneratorCompilation
         return compilation.WithAnalyzers([.. analyzers]).GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
     }
 
-    public static IReadOnlyList<Diagnostic> OutputDiagnostics(string source,
-        params IIncrementalGenerator[] generators)
+    public static IReadOnlyList<Diagnostic> OutputDiagnostics(
+        string source,
+        params IIncrementalGenerator[] generators
+    )
         => OutputDiagnostics(source, [], generators);
 
-    public static IReadOnlyList<Diagnostic> OutputDiagnostics(string source,
-        IReadOnlyCollection<MetadataReference> additionalReferences, params IIncrementalGenerator[] generators)
+    public static IReadOnlyList<Diagnostic> OutputDiagnostics(
+        string source,
+        IReadOnlyCollection<MetadataReference> additionalReferences,
+        params IIncrementalGenerator[] generators
+    )
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
@@ -102,8 +113,11 @@ static class GeneratorCompilation
     public static Assembly Compile(string source, params IIncrementalGenerator[] generators)
         => Compile(source, null, generators);
 
-    public static Assembly CompileSuppressing(string source, string diagnosticId,
-        params IIncrementalGenerator[] generators)
+    public static Assembly CompileSuppressing(
+        string source,
+        string diagnosticId,
+        params IIncrementalGenerator[] generators
+    )
         => Compile(source, diagnosticId, generators);
 
     static Assembly Compile(string source, string? suppressedDiagnostic, params IIncrementalGenerator[] generators)
@@ -116,11 +130,13 @@ static class GeneratorCompilation
             .Select(path => MetadataReference.CreateFromFile(path));
         var options = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
             nullableContextOptions: NullableContextOptions.Enable);
+
         if (suppressedDiagnostic is not null)
         {
             options = options.WithSpecificDiagnosticOptions(
                 options.SpecificDiagnosticOptions.SetItem(suppressedDiagnostic, ReportDiagnostic.Suppress));
         }
+
 
         var compilation = CSharpCompilation.Create(
             "Consumer_" + Guid.NewGuid().ToString("N"),
@@ -146,7 +162,8 @@ static class GeneratorCompilation
     public static string GeneratedSource(
         string source,
         IReadOnlyCollection<MetadataReference> additionalReferences,
-        params IIncrementalGenerator[] generators)
+        params IIncrementalGenerator[] generators
+    )
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
@@ -171,8 +188,11 @@ static class GeneratorCompilation
     public static MetadataReference Reference(string source, params IIncrementalGenerator[] generators) =>
         ReferenceNamed("Reference_" + Guid.NewGuid().ToString("N"), source, generators);
 
-    public static MetadataReference ReferenceNamed(string assemblyName, string source,
-        params IIncrementalGenerator[] generators)
+    public static MetadataReference ReferenceNamed(
+        string assemblyName,
+        string source,
+        params IIncrementalGenerator[] generators
+    )
     {
         var parseOptions = new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
             [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
@@ -186,6 +206,7 @@ static class GeneratorCompilation
             [CSharpSyntaxTree.ParseText(source, parseOptions, "ReferenceScenario.cs")],
             references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
         if (generators.Length != 0)
         {
             GeneratorDriver driver = CSharpGeneratorDriver.Create(
@@ -194,6 +215,7 @@ static class GeneratorCompilation
             Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
             compilation = (CSharpCompilation)generated;
         }
+
 
         using var stream = new MemoryStream();
         var result = compilation.Emit(stream);

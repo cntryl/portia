@@ -37,6 +37,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
         {
             if (!child.HasExited)
                 child.Kill(entireProcessTree: true);
+
             await child.WaitForExitAsync();
             child.Dispose();
         }
@@ -56,9 +57,11 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
             var events = Events(client);
             var aggregate = Uuid.CreateVersion4();
             DomainEvent[] source = [new ValueChanged(1), new ValueChanged(2)];
+
             for (var i = 0; i < source.Length; i++)
                 source[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), aggregate, (ulong)i + 1,
                     DateTimeOffset.UtcNow));
+
             await events.AppendAsync(new EventStreamAddress("portia-durability", "source", aggregate.ToString()), 0,
                 source, TestContext.Current.CancellationToken);
         }
@@ -141,20 +144,25 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
         start.ArgumentList.Add(assembly);
         start.ArgumentList.Add(mode);
         start.ArgumentList.Add(signal);
+
         if (previousOwner is { } owner)
             start.ArgumentList.Add(owner.ToString());
+
         start.Environment["FITZ_TEST_ENDPOINT"] = _endpoint.ToString();
         var child = Process.Start(start)!;
         _children.Add(child);
         var output = child.StandardOutput.ReadToEndAsync();
         var error = child.StandardError.ReadToEndAsync();
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(40));
+
         while (!File.Exists(signal))
         {
             if (child.HasExited)
                 Assert.Fail($"Worker exited before {mode}: {await output}\n{await error}");
+
             await Task.Delay(20, deadline.Token);
         }
+
 
         return child;
     }
@@ -188,6 +196,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(StorageLeaseSeconds + 20));
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
         var ready = new UriBuilder(_endpoint) { Scheme = "http", Port = _endpoint.Port, Path = "/readyz" }.Uri;
+
         try
         {
             while (true)
@@ -195,6 +204,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
                 try
                 {
                     using var response = await http.GetAsync(ready, deadline.Token);
+
                     if (response.IsSuccessStatusCode)
                         return;
                 }
@@ -219,6 +229,7 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
     async Task<FitzClient> ConnectAsync()
     {
         var client = new FitzClient(new ClientConfig(_endpoint));
+
         try
         {
             await client.ConnectWhenReadyAsync(new ConnectWhenReadyOptions(TimeSpan.FromSeconds(20)));
@@ -240,9 +251,11 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
     static async Task<List<DomainEventRecord>> ReadAsync(FitzEventStore events, string area)
     {
         var records = new List<DomainEventRecord>();
+
         await foreach (var record in events.ReadAsync(EventStreamPattern.ForPattern("portia-durability", area),
                            EventCursor.Start, default))
             records.Add(record);
+
         return records;
     }
 
@@ -250,8 +263,10 @@ public sealed class OperationalDurabilityIntegrationTests : IAsyncLifetime
     {
         var start = new ProcessStartInfo("docker")
         { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+
         foreach (var argument in arguments)
             start.ArgumentList.Add(argument);
+
         using var process = Process.Start(start)!;
         var output = process.StandardOutput.ReadToEndAsync();
         var error = process.StandardError.ReadToEndAsync();

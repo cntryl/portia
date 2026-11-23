@@ -47,26 +47,31 @@ public sealed class QueueRunner(
             var deliveryOutcome = RequestDeliveryOutcome.Fault;
             Activity? process = null;
             var dispositionStarted = false;
+
             try
             {
                 await using var scope = await _scopeFactory.CreateAsync(ct).ConfigureAwait(false);
                 ValidateScope(scope);
+
                 if (scope.Options.TerminalAttempt is > 0 && !queued.SupportsDurableAttempts)
                 {
                     throw new QueueConfigurationException(
                         "QueueRunnerOptions.TerminalAttempt requires a transport with a durable delivery-attempt count.");
                 }
 
+
                 try
                 {
                     if (!ct.IsCancellationRequested && queued.ReservationCancellation.IsCancellationRequested)
                         continue;
+
                     RequestInvocation invocation;
                     IRequest request;
                     RequestMetadata metadata;
                     RequestTraceContext? traceContext;
                     string? actorToken;
                     string? wireName;
+
                     try
                     {
                         invocation = queued.Invocation;
@@ -84,6 +89,7 @@ public sealed class QueueRunner(
                         transport = safeInvocation.TransportName;
                         process = PortiaTelemetry.StartProcess(requestName, safeInvocation, null);
                         RequestMetadata? safeMetadata = null;
+
                         try
                         {
                             safeMetadata = queued.Metadata;
@@ -92,6 +98,7 @@ public sealed class QueueRunner(
                         {
                             // The transport mismatch remains the primary terminal reason.
                         }
+
 
                         dispositionStarted = true;
                         deliveryOutcome = await HandleTerminalAsync(scope, queued, null, mismatch,
@@ -111,6 +118,7 @@ public sealed class QueueRunner(
                             .ConfigureAwait(false);
                         continue;
                     }
+
 
                     using var delivery =
                         CancellationTokenSource.CreateLinkedTokenSource(ct, queued.ReservationCancellation);
@@ -185,6 +193,7 @@ public sealed class QueueRunner(
                     {
                         if (dispositionStarted)
                             throw;
+
                         dispositionStarted = true;
                         deliveryOutcome = await HandleTerminalAsync(scope, queued, null, mismatch,
                                 QueuedRequestTerminalReason.InvalidTransport, requestName, ct, mismatch.Request)
@@ -195,13 +204,16 @@ public sealed class QueueRunner(
                     // Cancellation that came from the lost reservation is the transport's to report; any
                     // other failure is still this delivery's own.
                     var reservationLost = queued.ReservationCancellation.IsCancellationRequested;
+
                     if (!reservationLost || ex is not OperationCanceledException)
                     {
                         if (process?.GetTagItem("portia.outcome") is not "fault")
                             PortiaTelemetry.RecordFault(process, ex);
+
                         PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, ex, _logger,
                             recordException: false);
                     }
+
 
                     if (reservationLost)
                         continue;
@@ -237,6 +249,7 @@ public sealed class QueueRunner(
             {
                 if (process?.GetTagItem("portia.outcome") is not "fault")
                     PortiaTelemetry.RecordFault(process, ex);
+
                 throw;
             }
             finally
@@ -273,17 +286,24 @@ public sealed class QueueRunner(
         }
     }
 
-    async ValueTask<RequestDeliveryOutcome> HandleReadFailureAsync(IQueueDeliveryScope scope,
-        IQueuedRequest queued, Exception exception, string requestName, RequestInvocation invocation,
-        CancellationToken ct)
+    async ValueTask<RequestDeliveryOutcome> HandleReadFailureAsync(
+        IQueueDeliveryScope scope,
+        IQueuedRequest queued,
+        Exception exception,
+        string requestName,
+        RequestInvocation invocation,
+        CancellationToken ct
+    )
     {
         if (!ct.IsCancellationRequested && queued.ReservationCancellation.IsCancellationRequested)
             return RequestDeliveryOutcome.Fault;
+
         var permanent = exception is JsonException ||
                         RequestEnvelopeFailure.GetKind(exception) is RequestEnvelopeFailureKind.Permanent;
         var terminal = permanent
             ? QueuedRequestTerminalReason.DeserializationFailure
             : QueuedRequestTerminalReason.RetryLimitReached;
+
         if (permanent || IsRetryLimitReached(scope, queued))
         {
             if (!permanent && RequestEnvelopeFailure.GetKind(exception) is null)
@@ -296,18 +316,29 @@ public sealed class QueueRunner(
                 .ConfigureAwait(false);
         }
 
+
         PortiaTelemetry.RecordRunnerFault(nameof(QueueRunner), RunnerFaultStage.Execution, exception, _logger);
         await ReleaseAsync(scope, queued, ct).ConfigureAwait(false);
         return RequestDeliveryOutcome.Abandoned;
     }
 
-    async ValueTask<RequestDeliveryOutcome> HandleTerminalAsync(IQueueDeliveryScope scope, IQueuedRequest queued,
-        RequestError? error, Exception? exception, QueuedRequestTerminalReason reason, string requestName,
-        CancellationToken ct, IRequest? request = null, RequestMetadata? metadata = null,
-        RequestInvocation? invocation = null, bool readQueuedFields = true)
+    async ValueTask<RequestDeliveryOutcome> HandleTerminalAsync(
+        IQueueDeliveryScope scope,
+        IQueuedRequest queued,
+        RequestError? error,
+        Exception? exception,
+        QueuedRequestTerminalReason reason,
+        string requestName,
+        CancellationToken ct,
+        IRequest? request = null,
+        RequestMetadata? metadata = null,
+        RequestInvocation? invocation = null,
+        bool readQueuedFields = true
+    )
     {
         if (!ct.IsCancellationRequested && queued.ReservationCancellation.IsCancellationRequested)
             return RequestDeliveryOutcome.Fault;
+
         if (scope.TerminalHandler is { } terminalHandler)
         {
             try

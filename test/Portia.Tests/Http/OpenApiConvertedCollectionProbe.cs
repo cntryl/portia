@@ -12,8 +12,11 @@ sealed record OpenApiSelectionSchema(string ItemId, long Revision, OpenApiSelect
 
 sealed class OpenApiSelectionListConverter : JsonConverter<OpenApiSelectionList>
 {
-    public override OpenApiSelectionList Read(ref Utf8JsonReader reader, Type typeToConvert,
-        JsonSerializerOptions options) => new(JsonSerializer.Deserialize(ref reader,
+    public override OpenApiSelectionList Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options
+    ) => new(JsonSerializer.Deserialize(ref reader,
         options.GetTypeInfo<OpenApiSelection[]>())!);
 
     public override void Write(Utf8JsonWriter writer, OpenApiSelectionList value, JsonSerializerOptions options) =>
@@ -28,20 +31,28 @@ sealed record OpenApiRootSelectionRequest(OpenApiSelection[] Values) : IRequest<
 
 sealed class OpenApiRootSelectionRequestConverter : JsonConverter<OpenApiRootSelectionRequest>
 {
-    public override OpenApiRootSelectionRequest Read(ref Utf8JsonReader reader, Type typeToConvert,
-        JsonSerializerOptions options) => new(JsonSerializer.Deserialize(ref reader,
+    public override OpenApiRootSelectionRequest Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options
+    ) => new(JsonSerializer.Deserialize(ref reader,
         options.GetTypeInfo<OpenApiSelection[]>())!);
 
-    public override void Write(Utf8JsonWriter writer, OpenApiRootSelectionRequest value,
-        JsonSerializerOptions options) =>
+    public override void Write(
+        Utf8JsonWriter writer,
+        OpenApiRootSelectionRequest value,
+        JsonSerializerOptions options
+    ) =>
         JsonSerializer.Serialize(writer, value.Values,
             options.GetTypeInfo<OpenApiSelection[]>());
 }
 
 sealed class OpenApiRootSelectionHandler : IRequestHandler<OpenApiRootSelectionRequest, OpenApiSelectionList?>
 {
-    public ValueTask<Result<OpenApiSelectionList?>> HandleAsync(IRequestContext<OpenApiRootSelectionRequest> context,
-        CancellationToken ct)
+    public ValueTask<Result<OpenApiSelectionList?>> HandleAsync(
+        IRequestContext<OpenApiRootSelectionRequest> context,
+        CancellationToken ct
+    )
     {
         var result = context.Request.Values.Length == 0
             ? null
@@ -58,8 +69,10 @@ sealed record OpenApiConvertedRequest(OpenApiSelectionEnvelope Payload) : IReque
 
 sealed class OpenApiConvertedHandler : IRequestHandler<OpenApiConvertedRequest, OpenApiSelectionList>
 {
-    public ValueTask<Result<OpenApiSelectionList>> HandleAsync(IRequestContext<OpenApiConvertedRequest> context,
-        CancellationToken ct) =>
+    public ValueTask<Result<OpenApiSelectionList>> HandleAsync(
+        IRequestContext<OpenApiConvertedRequest> context,
+        CancellationToken ct
+    ) =>
         ValueTask.FromResult(Result<OpenApiSelectionList>.Success(context.Request.Payload.Items));
 }
 

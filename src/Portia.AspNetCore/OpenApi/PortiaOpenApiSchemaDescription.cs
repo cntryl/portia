@@ -17,8 +17,10 @@ public sealed class PortiaOpenApiSchemaDescription<T>
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
         var name = PortiaOpenApiMemberSelector.Name(member);
+
         if (!_properties.TryAdd(name, description))
             throw new InvalidOperationException($"OpenAPI property '{typeof(T)}.{name}' is described more than once.");
+
         return this;
     }
 

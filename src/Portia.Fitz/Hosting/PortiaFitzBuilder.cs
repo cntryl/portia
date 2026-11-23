@@ -34,12 +34,14 @@ public sealed class PortiaFitzBuilder
     public PortiaFitzBuilder UseOperations(string checkpointBaseRoute, Action<OperationalOptions>? configure = null)
     {
         var route = FitzKvCheckpoints.Route(checkpointBaseRoute, nameof(checkpointBaseRoute));
+
         if (_checkpointRoute is not null || _operations
                                          || _application.Services.Any(s =>
                                              s.ServiceType == typeof(IProjectionCheckpointStore)
                                              || s.ServiceType == typeof(IOperationalStore)))
             throw new InvalidOperationException(
                 "Operations conflicts with an existing checkpoint or operational registration.");
+
         var options = new OperationalOptions();
         configure?.Invoke(options);
         options.Validate();
@@ -88,6 +90,7 @@ public sealed class PortiaFitzBuilder
     {
         if (!_capabilities.Add("events"))
             return this;
+
         var services = _application.Services;
         services.TryAddSingleton<IEventStore>(provider => new FitzEventStore(
             provider.GetRequiredService<FitzApplicationConnection>().Client.Stream,
@@ -112,11 +115,14 @@ public sealed class PortiaFitzBuilder
     {
         if (!_capabilities.Add("kv"))
             return this;
+
+
         if (_borrowedClient is { } borrowed)
             _application.Services.TryAddSingleton<IKvClient>(borrowed.Kv);
         else
             _application.Services.TryAddSingleton<IKvClient>(provider =>
                 provider.GetRequiredService<FitzApplicationConnection>().Client.Kv);
+
         return this;
     }
 
@@ -130,11 +136,14 @@ public sealed class PortiaFitzBuilder
     {
         if (!_capabilities.Add("stream"))
             return this;
+
+
         if (_borrowedClient is { } borrowed)
             _application.Services.TryAddSingleton<IStreamClient>(borrowed.Stream);
         else
             _application.Services.TryAddSingleton<IStreamClient>(provider =>
                 provider.GetRequiredService<FitzApplicationConnection>().Client.Stream);
+
         return this;
     }
 
@@ -143,14 +152,17 @@ public sealed class PortiaFitzBuilder
     {
         if (!_capabilities.Add("clients"))
             return this;
+
         _ = _application.AddProcessorStatus();
         var services = _application.Services;
         AddSerializers(services);
+
         if (_borrowedClient is { } borrowed)
             services.TryAddSingleton<IScheduleClient>(borrowed.Schedule);
         else
             services.TryAddSingleton<IScheduleClient>(provider =>
                 provider.GetRequiredService<FitzApplicationConnection>().Client.Schedule);
+
         services.TryAddSingleton<IRemoteRequestSender>(provider => new FitzRemoteRequestSender(
             provider.GetRequiredService<FitzApplicationConnection>().Client.Rpc,
             provider.GetRequiredService<IRequestSerializer>(),
@@ -217,8 +229,10 @@ public sealed class PortiaFitzBuilder
     {
         ArgumentNullException.ThrowIfNull(options);
         options.Validate([]);
+
         if (Fleet is not null && Fleet != options)
             throw new InvalidOperationException("This application has conflicting Fitz fleet configurations.");
+
         Fleet = options;
         return this;
     }
@@ -233,9 +247,12 @@ public sealed class PortiaFitzBuilder
         if (!FleetRunOptions.IsSegment(applicationName))
             throw new ArgumentException("A processor status application name must be an exact route segment.",
                 nameof(applicationName));
+
         var value = $"lease://{applicationName}/portia-members/*";
+
         if (_processorStatusNamespace is not null && _processorStatusNamespace != value)
             throw new InvalidOperationException("This application has conflicting processor status namespaces.");
+
         _processorStatusNamespace = value;
         return this;
     }
@@ -289,8 +306,10 @@ public sealed class PortiaFitzBuilder
     {
         if (_operations)
             throw new InvalidOperationException("Independent checkpoint registrations cannot coexist with operations.");
+
         var validated = FitzKvCheckpoints.Route(route, nameof(route));
         _ = FitzKvCheckpoints.RequireDurability(durability);
+
         if (_checkpointRoute is not null)
         {
             if (!string.Equals(_checkpointRoute, validated, StringComparison.Ordinal))
@@ -298,11 +317,15 @@ public sealed class PortiaFitzBuilder
                     $"This application has conflicting Fitz KV checkpoint routes ('{_checkpointRoute}' and "
                     + $"'{validated}'). Reactor progress must resolve to one route, or a restart reads its "
                     + "checkpoints from a route that never received them and every reaction replays from zero.");
+
+
             if (_checkpointDurability != durability)
                 throw new InvalidOperationException(
                     $"This application has conflicting Fitz KV checkpoint durability settings ('{_checkpointDurability}' and '{durability}').");
+
             return this;
         }
+
 
         _checkpointRoute = validated;
         _checkpointDurability = durability;
@@ -333,16 +356,21 @@ public sealed class PortiaFitzBuilder
     {
         var validated = FitzKvCheckpoints.Route(route, nameof(route));
         _ = FitzKvCheckpoints.RequireDurability(durability);
+
         if (_tenantSnapshotRoute is not null)
         {
             if (!string.Equals(_tenantSnapshotRoute, validated, StringComparison.Ordinal))
                 throw new InvalidOperationException(
                     $"This application has conflicting Fitz KV tenant snapshot routes ('{_tenantSnapshotRoute}' and '{validated}').");
+
+
             if (_tenantSnapshotDurability != durability)
                 throw new InvalidOperationException(
                     $"This application has conflicting Fitz KV tenant snapshot durability settings ('{_tenantSnapshotDurability}' and '{durability}').");
+
             return this;
         }
+
 
         _tenantSnapshotRoute = validated;
         _tenantSnapshotDurability = durability;
@@ -381,11 +409,13 @@ public sealed class PortiaFitzBuilder
         ValidateRequiredWorkers();
         var workers = new List<FitzWorkerDefinition>();
         var keys = new HashSet<string>(StringComparer.Ordinal);
+
         if (_workerTransports.Contains(RequestTransportId.Callable) &&
             SelectedRequests(RequestTransportId.Callable).Any())
             AddWorker(new FitzRpcWorkerDefinition());
         // Each transport supplies the definition it wants built, so a new worker kind is a new
         // record and a line here rather than another arm in a switch over stringly-typed kinds.
+
         AddTransport(RequestTransportId.Queue, FitzQueueWorkerDefinition.For);
         AddTransport(RequestTransportId.Notice, FitzNoticeWorkerDefinition.For);
         AddTransport(RequestTransportId.Schedule, FitzScheduleWorkerDefinition.For);

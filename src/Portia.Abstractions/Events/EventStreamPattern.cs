@@ -54,7 +54,8 @@ public sealed record EventStreamPattern
     public static EventStreamPattern ForPattern(
         string realm,
         string? area = null,
-        string? resource = null)
+        string? resource = null
+    )
     {
         if (string.Equals(realm, TenantTemplateRealm, StringComparison.Ordinal))
         {

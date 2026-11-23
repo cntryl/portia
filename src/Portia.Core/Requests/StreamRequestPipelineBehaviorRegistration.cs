@@ -13,9 +13,13 @@ TBehavior, TOut>(int order)
     where TRequest : IStreamRequest<TOut>
     where TBehavior : class, IStreamRequestPipelineBehavior<TRequest, TOut>
 {
-    IAsyncEnumerable<TOut> IStreamRequestBehaviorInvocation<TOut>.Invoke(IServiceProvider services,
-        IStreamRequest<TOut> request, IRequestContext context, StreamRequestPipelineNext<TOut> continuation,
-        CancellationToken ct)
+    IAsyncEnumerable<TOut> IStreamRequestBehaviorInvocation<TOut>.Invoke(
+        IServiceProvider services,
+        IStreamRequest<TOut> request,
+        IRequestContext context,
+        StreamRequestPipelineNext<TOut> continuation,
+        CancellationToken ct
+    )
         => services.GetRequiredService<TBehavior>()
             .HandleAsync((IRequestContext<TRequest>)context, continuation, ct);
 

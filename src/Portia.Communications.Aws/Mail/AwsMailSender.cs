@@ -22,23 +22,32 @@ public sealed class AwsMailSender : IMailSender
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _tenantResolver = tenantResolver ?? throw new ArgumentNullException(nameof(tenantResolver));
+
         if (client.Config.MaxErrorRetry != 0)
             throw new InvalidOperationException(
                 "The SES client must be configured with MaxErrorRetry = 0; an SDK retry could send a message twice.");
     }
 
     /// <inheritdoc />
-    public async ValueTask<SendOutcome> SendAsync(TenantId tenant, SendId id, MailMessage message,
-        CancellationToken ct = default)
+    public async ValueTask<SendOutcome> SendAsync(
+        TenantId tenant,
+        SendId id,
+        MailMessage message,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(message);
         _ = SendId.Require(id, nameof(id));
         var tenantTag = SendCorrelation.EncodeTenant(tenant);
+
         if (tenantTag.Length > MaximumTagValueLength)
             throw new InvalidOperationException("The tenant ID is too long to correlate SES delivery events.");
+
         var identity = await _tenantResolver.ResolveAsync(tenant, ct).ConfigureAwait(false);
+
         if (string.IsNullOrWhiteSpace(identity?.FromAddress))
             throw new InvalidOperationException("The tenant has no SES from address.");
+
 
         var request = new SendEmailRequest
         {
@@ -70,6 +79,7 @@ public sealed class AwsMailSender : IMailSender
         };
 
         ct.ThrowIfCancellationRequested();
+
         try
         {
             var response = await _client.SendEmailAsync(request, ct).ConfigureAwait(false);

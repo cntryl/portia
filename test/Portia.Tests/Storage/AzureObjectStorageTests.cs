@@ -770,8 +770,10 @@ public sealed class AzureObjectStorageTests
         public override AccessToken GetToken(TokenRequestContext requestContext, CancellationToken cancellationToken) =>
             new("token", DateTimeOffset.UtcNow.AddHours(1));
 
-        public override ValueTask<AccessToken> GetTokenAsync(TokenRequestContext requestContext,
-            CancellationToken cancellationToken) =>
+        public override ValueTask<AccessToken> GetTokenAsync(
+            TokenRequestContext requestContext,
+            CancellationToken cancellationToken
+        ) =>
             ValueTask.FromResult(GetToken(requestContext, cancellationToken));
     }
 
@@ -870,16 +872,20 @@ public sealed class AzureObjectStorageTests
                 HttpUtility.ParseQueryString(part.UploadUri.Query)["blockid"]!);
         }
 
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,
-            CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        )
         {
             var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var header in request.Headers.Concat(request.Content?.Headers ??
                                                           Enumerable
                                                               .Empty<KeyValuePair<string, IEnumerable<string>>>()))
             {
                 headers[header.Key] = string.Join(",", header.Value);
             }
+
 
             var body = request.Content is null ? [] : await request.Content.ReadAsByteArrayAsync(cancellationToken);
             var uri = request.RequestUri!;
@@ -892,17 +898,23 @@ public sealed class AzureObjectStorageTests
             }
         }
 
-        HttpResponseMessage Handle(HttpMethod method, string path,
+        HttpResponseMessage Handle(
+            HttpMethod method,
+            string path,
             System.Collections.Specialized.NameValueCollection query,
-            Dictionary<string, string> headers, byte[] body)
+            Dictionary<string, string> headers,
+            byte[] body
+        )
         {
             var comp = query["comp"];
+
             if (method == HttpMethod.Post && comp == "userdelegationkey")
             {
                 return DenyDelegationKey
                     ? Error(HttpStatusCode.Forbidden, "AuthorizationPermissionMismatch")
                     : DelegationKey(body);
             }
+
 
             if (method == HttpMethod.Put && comp == "block")
             {
@@ -917,10 +929,12 @@ public sealed class AzureObjectStorageTests
             {
                 _blobs.TryGetValue(path, out var blob);
                 _uncommitted.TryGetValue(path, out var pending);
+
                 if (blob is null && (pending is null || pending.Count == 0))
                 {
                     return Error(HttpStatusCode.NotFound, "BlobNotFound");
                 }
+
 
                 return Xml(HttpStatusCode.OK, new XElement("BlockList",
                     new XElement("CommittedBlocks", (blob?.Blocks ?? []).Select(block =>
@@ -936,13 +950,16 @@ public sealed class AzureObjectStorageTests
                 var ids = XDocument.Parse(Encoding.UTF8.GetString(body).TrimStart('\uFEFF')).Root!.Elements()
                     .Select(static e => e.Value).ToArray();
                 _blobs.TryGetValue(path, out var current);
+
                 if (current is not null && headers.TryGetValue("If-None-Match", out var condition) && condition == "*")
                 {
                     return Error(HttpStatusCode.PreconditionFailed, "ConditionNotMet");
                 }
 
+
                 _uncommitted.TryGetValue(path, out var pending);
                 var resolved = new List<KeyValuePair<string, byte[]>>();
+
                 foreach (var id in ids)
                 {
                     if (pending is not null && pending.TryGetValue(id, out var bytes))
@@ -958,6 +975,7 @@ public sealed class AzureObjectStorageTests
                         return Error(HttpStatusCode.BadRequest, "InvalidBlockList");
                     }
                 }
+
 
                 _uncommitted.Remove(path);
                 var meta = headers.Where(static h => h.Key.StartsWith("x-ms-meta-", StringComparison.OrdinalIgnoreCase))
@@ -984,10 +1002,12 @@ public sealed class AzureObjectStorageTests
                 }
 
                 var sourcePath = Uri.UnescapeDataString(new Uri(copySource).AbsolutePath);
+
                 if (!_blobs.TryGetValue(sourcePath, out var source))
                 {
                     return Error(HttpStatusCode.NotFound, "CannotVerifyCopySource");
                 }
+
 
                 if (headers.TryGetValue("x-ms-source-if-match", out var match) && match != source.ETag)
                 {
@@ -1024,10 +1044,12 @@ public sealed class AzureObjectStorageTests
                 response.Content.Headers.ContentLength = blob.Content.Length;
                 response.Content.Headers.LastModified = DateTimeOffset.UtcNow;
                 response.Headers.Add("x-ms-blob-type", "BlockBlob");
+
                 foreach (var meta in blob.Metadata)
                 {
                     response.Headers.Add("x-ms-meta-" + meta.Key, meta.Value);
                 }
+
 
                 if (method == HttpMethod.Head)
                 {

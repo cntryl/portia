@@ -25,6 +25,7 @@ public sealed class AwsObjectStorageIntegrationTests
         var storage = host.GetRequiredService<IObjectStorage>();
         using var transfer = new HttpClient();
         await client.PutBucketAsync(new PutBucketRequest { BucketName = bucket }, TestContext.Current.CancellationToken);
+
         try
         {
             // Act
@@ -284,14 +285,21 @@ public sealed class AwsObjectStorageIntegrationTests
         return services.BuildServiceProvider();
     }
 
-    static async Task UploadAsync(IObjectStorage storage, TenantId tenant, ObjectDigest digest, byte[] content,
-        HttpClient transfer)
+    static async Task UploadAsync(
+        IObjectStorage storage,
+        TenantId tenant,
+        ObjectDigest digest,
+        byte[] content,
+        HttpClient transfer
+    )
     {
         var session = await storage.CreateUploadAsync(tenant, digest);
         var parts = new List<ObjectPartReceipt>();
+
         try
         {
             var partLength = ObjectStorageLimits.MinimumNonfinalPartLength;
+
             for (var offset = 0; offset < content.Length; offset += partLength)
             {
                 var number = parts.Count + 1;
@@ -313,6 +321,7 @@ public sealed class AwsObjectStorageIntegrationTests
             await storage.AbortUploadAsync(session);
             throw;
         }
+
 
         await storage.CompleteUploadAsync(session, parts);
     }

@@ -8,15 +8,22 @@ sealed class StreamRequestPipelinePlan<TOut>
     readonly IStreamRequestBehaviorInvocation<TOut>[] _behaviors;
     readonly RequestGuardRegistration[] _guards;
 
-    internal StreamRequestPipelinePlan(IEnumerable<RequestPipelineBehaviorRegistration> registrations,
-        RequestGuardRegistration[] guards)
+    internal StreamRequestPipelinePlan(
+        IEnumerable<RequestPipelineBehaviorRegistration> registrations,
+        RequestGuardRegistration[] guards
+    )
     {
         _guards = guards;
         _behaviors = registrations.OfType<IStreamRequestBehaviorInvocation<TOut>>().Reverse().ToArray();
     }
 
-    internal IAsyncEnumerable<TOut> Invoke(IServiceProvider services, RequestHandlerRegistration registration,
-        IStreamRequest<TOut> request, IRequestContext context, CancellationToken ct) =>
+    internal IAsyncEnumerable<TOut> Invoke(
+        IServiceProvider services,
+        RequestHandlerRegistration registration,
+        IStreamRequest<TOut> request,
+        IRequestContext context,
+        CancellationToken ct
+    ) =>
         new FrameBoundEnumerable(this,
             new RequestPipelineFrame<IStreamRequest<TOut>>(this, services, registration, request, context,
                 _behaviors.Length), ct);
@@ -25,17 +32,24 @@ sealed class StreamRequestPipelinePlan<TOut>
         CreateContinuation(RequestPipelineFrame<IStreamRequest<TOut>> frame, int position) =>
         token => Continue(frame, position, token);
 
-    IAsyncEnumerable<TOut> Continue(RequestPipelineFrame<IStreamRequest<TOut>> frame, int position,
-        CancellationToken ct)
+    IAsyncEnumerable<TOut> Continue(
+        RequestPipelineFrame<IStreamRequest<TOut>> frame,
+        int position,
+        CancellationToken ct
+    )
     {
         if (!ReferenceEquals(Current.Value, frame))
             throw new InvalidOperationException(PipelineContinuationContract.SingleUseMessage);
+
         frame.Use(position);
         return InvokeAt(frame, position + 1, ct);
     }
 
-    IAsyncEnumerable<TOut> InvokeAt(RequestPipelineFrame<IStreamRequest<TOut>> frame, int position,
-        CancellationToken ct) =>
+    IAsyncEnumerable<TOut> InvokeAt(
+        RequestPipelineFrame<IStreamRequest<TOut>> frame,
+        int position,
+        CancellationToken ct
+    ) =>
         position == _behaviors.Length
             ? _guards.Length == 0
                 ? ((IStreamRequestInvocation<TOut>)frame.Registration)
@@ -45,21 +59,28 @@ sealed class StreamRequestPipelinePlan<TOut>
 
     // Guards sit innermost, exactly as for unary requests: behaviors wrap them, and a failure ends
     // the stream before the handler runs or any item is produced.
-    async IAsyncEnumerable<TOut> EnumerateGuardedHandler(RequestPipelineFrame<IStreamRequest<TOut>> frame,
-        [EnumeratorCancellation] CancellationToken ct)
+    async IAsyncEnumerable<TOut> EnumerateGuardedHandler(
+        RequestPipelineFrame<IStreamRequest<TOut>> frame,
+        [EnumeratorCancellation] CancellationToken ct
+    )
     {
         var guarded = await RequestCheckRunner.RunAsync(frame.Services, _guards, frame.Request, frame.Context, ct)
             .ConfigureAwait(false);
+
         if (!guarded.IsSuccess)
             throw new RequestGuardException(guarded.Error);
+
         await foreach (var item in ((IStreamRequestInvocation<TOut>)frame.Registration)
                        .Invoke(frame.Services, frame.Request, frame.Context, ct).WithCancellation(ct)
                        .ConfigureAwait(false))
             yield return item;
     }
 
-    async IAsyncEnumerable<TOut> EnumerateBehavior(RequestPipelineFrame<IStreamRequest<TOut>> frame, int position,
-        [EnumeratorCancellation] CancellationToken ct)
+    async IAsyncEnumerable<TOut> EnumerateBehavior(
+        RequestPipelineFrame<IStreamRequest<TOut>> frame,
+        int position,
+        [EnumeratorCancellation] CancellationToken ct
+    )
     {
         try
         {
@@ -77,8 +98,10 @@ sealed class StreamRequestPipelinePlan<TOut>
         }
     }
 
-    async IAsyncEnumerable<TOut> Enumerate(RequestPipelineFrame<IStreamRequest<TOut>> frame,
-        [EnumeratorCancellation] CancellationToken ct)
+    async IAsyncEnumerable<TOut> Enumerate(
+        RequestPipelineFrame<IStreamRequest<TOut>> frame,
+        [EnumeratorCancellation] CancellationToken ct
+    )
     {
         try
         {
@@ -116,6 +139,7 @@ sealed class StreamRequestPipelinePlan<TOut>
         {
             var prior = StreamRequestPipelinePlan<TOut>.Current.Value;
             StreamRequestPipelinePlan<TOut>.Current.Value = frame;
+
             try
             {
                 return action();

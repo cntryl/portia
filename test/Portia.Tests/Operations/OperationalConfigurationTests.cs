@@ -34,6 +34,7 @@ public sealed class OperationalConfigurationTests
         services.AddPortia().UseFitzClient(client, fitz =>
         {
             configured = fitz;
+
             if (operationsFirst)
                 fitz.UseOperations("kv://test/state/progress");
             else

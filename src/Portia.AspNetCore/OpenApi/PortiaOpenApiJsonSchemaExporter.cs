@@ -20,8 +20,12 @@ sealed class PortiaOpenApiJsonSchemaExporter(
 
     public JsonNode Export(Type type, bool rootIsNullable = false) => Export(type, [], rootIsNullable);
 
-    JsonNode Export(Type type, string[] prefix, bool rootIsNullable = false,
-        bool? rootCollectionElementIsNullable = null) =>
+    JsonNode Export(
+        Type type,
+        string[] prefix,
+        bool rootIsNullable = false,
+        bool? rootCollectionElementIsNullable = null
+    ) =>
         PortiaJsonSchemaProjection.For(options, options, input).GetTypeInfo(type).GetJsonSchemaAsNode(
             new JsonSchemaExporterOptions
             {
@@ -32,22 +36,27 @@ sealed class PortiaOpenApiJsonSchemaExporter(
                         : context.BaseTypeInfo is not null ? context.TypeInfo.Type
                         : context.PropertyInfo?.PropertyType ?? context.TypeInfo.Type;
                     var normalized = Normalize(schema, contractType);
+
                     if (normalized is JsonObject reference && reference["$ref"] is JsonValue value &&
                         value.TryGetValue<string>(out var target) && target.StartsWith('#'))
                         reference["$ref"] = Pointer(prefix) + target[1..];
+
 
                     var declaredNullable = context.Path.IsEmpty && prefix.Length == 0
                         ? rootIsNullable
                         : IsNullable(contractType, context.PropertyInfo, path);
                     var mapped = Map(normalized, contractType, path, context.PropertyInfo, declaredNullable);
                     var result = mapped ?? normalized;
+
                     if (mapped is null)
                     {
                         CompleteChildren(result, context.TypeInfo, path,
                             context.Path.IsEmpty ? rootCollectionElementIsNullable : null);
+
                         if (context.Path.IsEmpty && prefix.Length == 0)
                             result = ApplyAnnotations(result, normalized, declaredNullable);
                     }
+
 
                     Describe(result, contractType, context.PropertyInfo);
                     _ = _processed.Add(result);
@@ -55,17 +64,23 @@ sealed class PortiaOpenApiJsonSchemaExporter(
                 }
             });
 
-    void CompleteChildren(JsonNode schema, JsonTypeInfo typeInfo, string[] path,
-        bool? collectionElementIsNullable = null)
+    void CompleteChildren(
+        JsonNode schema,
+        JsonTypeInfo typeInfo,
+        string[] path,
+        bool? collectionElementIsNullable = null
+    )
     {
         if (schema is not JsonObject obj || obj.ContainsKey("$ref"))
             return;
+
         var keyword = typeInfo.Kind switch
         {
             JsonTypeInfoKind.Dictionary => "additionalProperties",
             JsonTypeInfoKind.Enumerable => "items",
             _ => null
         };
+
         if (keyword is not null && typeInfo.ElementType is { } elementType)
         {
             var original = obj[keyword];
@@ -80,6 +95,7 @@ sealed class PortiaOpenApiJsonSchemaExporter(
                 ? ApplyAnnotations(child.DeepClone(), child, elementNullable)
                 : (mapped = Map(normalized, elementType, childPath, null, elementNullable)) ??
                   ApplyAnnotations(normalized, child, elementNullable);
+
             if (original is not null || mapped is not null || declaredElementNullable.HasValue || elementNullable ||
                 elementType == typeof(Uuid) || elementType == typeof(Uuid?) ||
                 elementType == typeof(TenantId) || elementType == typeof(TenantId?) ||
@@ -90,20 +106,27 @@ sealed class PortiaOpenApiJsonSchemaExporter(
                 _ = _processed.Add(completed);
             }
 
+
             return;
         }
 
+
+
         if (typeInfo.Kind != JsonTypeInfoKind.Object)
             return;
+
         PortiaJsonDescriptions.CompleteRequired(schema, typeInfo, options, input);
         descriptions?.ValidateProperties(typeInfo,
             (obj["properties"] as JsonObject)?.Select(property => property.Key) ?? []);
+
         if (obj["properties"] is not JsonObject properties)
             return;
+
         foreach (var property in typeInfo.Properties)
         {
             if (properties[property.Name] is not { } original || _processed.Contains(original))
                 continue;
+
             string[] childPath = [.. path, "properties", property.Name];
             var normalized = Normalize(original, property.PropertyType);
             var result = Map(normalized, property.PropertyType, childPath, property,
@@ -127,6 +150,7 @@ sealed class PortiaOpenApiJsonSchemaExporter(
     {
         if (schema is not JsonObject obj)
             return;
+
         PortiaJsonDescriptions.ApplyFacts(obj, options, contractType, property);
         PortiaJsonDescriptions.ApplyExamples(obj, options, contractType, input);
         var description = (property is not null
@@ -135,6 +159,7 @@ sealed class PortiaOpenApiJsonSchemaExporter(
                               : null)
                           ?? descriptions?.Schema(contractType, options) ??
                           PortiaJsonDescriptions.Type(options, contractType);
+
         if (description is not null)
             obj["description"] = description;
     }
@@ -143,11 +168,13 @@ sealed class PortiaOpenApiJsonSchemaExporter(
     {
         var mappingType = contractType;
         var representation = schemaType?.Invoke(mappingType);
+
         if (representation is null && Nullable.GetUnderlyingType(contractType) is { } underlying)
         {
             mappingType = underlying;
             representation = schemaType?.Invoke(mappingType);
         }
+
 
         if (representation is null || representation == mappingType)
             return null;
@@ -158,14 +185,18 @@ sealed class PortiaOpenApiJsonSchemaExporter(
             : schemaCollectionElementIsNullable?.Invoke(mappingType, representationElementType);
 
         var pointer = Pointer(path);
+
         if (_activeMappings.TryGetValue(mappingType, out var existing))
         {
             if (existing == pointer)
                 throw new InvalidOperationException($"Cyclic OpenAPI schema type mapping for '{mappingType}'.");
+
             return ApplyAnnotations(new JsonObject { ["$ref"] = existing }, original, nullable);
         }
 
+
         _activeMappings.Add(mappingType, pointer);
+
         try
         {
             return ApplyAnnotations(Export(representation, path,
@@ -218,9 +249,12 @@ sealed class PortiaOpenApiJsonSchemaExporter(
     {
         if (Nullable.GetUnderlyingType(contractType) is not null)
             return true;
+
+
         if (property is not null && property.PropertyType == contractType && path.Length >= 2 &&
             path[^2] == "properties" && string.Equals(path[^1], property.Name, StringComparison.Ordinal))
             return input ? property.IsSetNullable : property.IsGetNullable;
+
         return false;
     }
 
@@ -228,13 +262,16 @@ sealed class PortiaOpenApiJsonSchemaExporter(
     {
         if (mapped is not JsonObject result)
             return mapped;
+
         if (result["type"] is { } mappedType)
         {
             var names = mappedType is JsonArray types
                 ? types.Select(item => item!.GetValue<string>()).Where(name => name != "null").ToList()
                 : [mappedType.GetValue<string>()];
+
             if (nullable)
                 names.Add("null");
+
             result["type"] = names.Count == 1
                 ? JsonValue.Create(names[0])
                 : new JsonArray(names.Select(name => (JsonNode?)JsonValue.Create(name)).ToArray());
@@ -250,8 +287,10 @@ sealed class PortiaOpenApiJsonSchemaExporter(
                 };
         }
 
+
         if (original is JsonObject originalObject && originalObject.ContainsKey("default"))
             result["default"] = originalObject["default"]?.DeepClone();
+
         return result;
     }
 

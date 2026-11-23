@@ -104,8 +104,10 @@ public sealed class QueueRunnerTests
         // Arrange
         using var busHost = TestRequestBus.Create();
         using var reservation = new CancellationTokenSource();
+
         if (lost)
             reservation.Cancel();
+
         var queued = new FakeQueuedRequest(new ChangeValue(1), throwOnAcknowledge: !lost,
             reservation: reservation.Token);
         var runner = new QueueRunner(new FakeQueueConsumer([queued]), RequestDeliveryScopes.FixedQueue(
@@ -187,6 +189,7 @@ public sealed class QueueRunnerTests
         var terminal = mode is "terminal" or "terminal-ack";
         capture.AssertCorrelated(terminal ? 1005 : 1002,
             terminal ? LogLevel.Warning : LogLevel.Error, 2);
+
         if (ambient)
             Assert.All(
                 capture.Activities.Where(activity => activity.OperationName == PortiaTelemetry.ProcessActivityName),
@@ -1117,8 +1120,15 @@ public sealed class QueueRunnerTests
     /// <summary>B1-B12: Queue read failures preserve disposition, continuation, telemetry, and ownership invariants.</summary>
     [Theory]
     [MemberData(nameof(QueueReadFailureCases))]
-    public async Task ShouldApplyQueueReadFailurePolicyGivenMatrixCell(string cellId, string failureKind,
-        uint? terminalAttempt, uint attempt, bool terminal, bool faultLogged, bool throwInvocation)
+    public async Task ShouldApplyQueueReadFailurePolicyGivenMatrixCell(
+        string cellId,
+        string failureKind,
+        uint? terminalAttempt,
+        uint attempt,
+        bool terminal,
+        bool faultLogged,
+        bool throwInvocation
+    )
     {
         // Arrange
         using var busHost = TestRequestBus.Create(new ChangeValueHandler());
@@ -1158,9 +1168,11 @@ public sealed class QueueRunnerTests
         Assert.Equal(expectedFault ? 1 : 0, logger.Entries.Count(entry => entry.EventId.Id == 1002));
         Assert.Equal(terminal ? 1 : 0, logger.Entries.Count(entry => entry.Level == LogLevel.Warning));
         Assert.Equal(terminal ? 1 : 0, logger.Entries.Count(entry => entry.EventId.Id == 1005));
+
         if (expectedFault)
         {
             var recorded = Assert.Single(logger.Entries, entry => entry.EventId.Id == 1002).Exception;
+
             if (throwInvocation)
                 Assert.Equal("Invocation is unavailable.", recorded?.Message);
             else
@@ -1288,6 +1300,7 @@ public sealed class QueueRunnerTests
             [EnumeratorCancellation] CancellationToken ct = default)
         {
             EnumerationCount++;
+
             foreach (var item in items)
             {
                 ct.ThrowIfCancellationRequested();
@@ -1460,22 +1473,34 @@ public sealed class QueueRunnerTests
         public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>
             inner.CreateContext(actor, metadata);
 
-        public ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
-            CancellationToken ct = default) => inner.AuthorizeAsync(request, context, ct);
+        public ValueTask<Result> AuthorizeAsync(
+            IRequestBase request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        ) => inner.AuthorizeAsync(request, context, ct);
 
-        public async ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context,
-            CancellationToken ct = default)
+        public async ValueTask<Result> DispatchAsync(
+            IRequest request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        )
         {
             var result = await inner.DispatchAsync(request, context, ct);
             dispatched();
             return result;
         }
 
-        public ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context,
-            CancellationToken ct = default) => inner.DispatchAsync(request, context, ct);
+        public ValueTask<Result<TOut>> DispatchAsync<TOut>(
+            IRequest<TOut> request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        ) => inner.DispatchAsync(request, context, ct);
 
-        public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request,
-            RequestDispatchContext context, CancellationToken ct = default) =>
+        public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(
+            IStreamRequest<TOut> request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        ) =>
             inner.DispatchStreamAsync(request, context, ct);
     }
 
@@ -1488,8 +1513,13 @@ public sealed class QueueRunnerTests
 
         public bool IsEnabled(LogLevel logLevel) => true;
 
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter) =>
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter
+        ) =>
             Entries.Add((logLevel, eventId, formatter(state, exception), exception));
     }
 }

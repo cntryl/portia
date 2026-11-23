@@ -130,11 +130,15 @@ public sealed class McpResourceOptions<TOut> : McpEntryOptions
     void SetMediaType(string mimeType)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(mimeType);
+
         if (mimeType.Length > 128 || mimeType.Any(character => character < 0x21 || character > 0x7e))
             throw new ArgumentException("MIME type must be printable ASCII and at most 128 characters.",
                 nameof(mimeType));
+
+
         if (MediaType is not null)
             throw new InvalidOperationException("Choose one resource projection.");
+
         MediaType = mimeType;
     }
 }
@@ -160,10 +164,14 @@ public sealed class McpPromptOptions : McpEntryOptions
     void Add(string name, bool required, string? description)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
         if (description is not null)
             ArgumentException.ThrowIfNullOrWhiteSpace(description);
+
+
         if (!Arguments.TryAdd(name, required))
             throw new ArgumentException("Duplicate prompt argument.", nameof(name));
+
         ArgumentDescriptions.Add(name, description);
     }
 }
@@ -206,36 +214,54 @@ abstract class McpResourceEntry(Type requestType, McpEntryOptions options, strin
     internal bool IsTemplate => Template.Contains('{', StringComparison.Ordinal);
     internal abstract string MimeType { get; }
 
-    internal abstract ValueTask<ReadResourceResult> ReadAsync(IReadOnlyDictionary<string, string> values,
-        string uri, IServiceProvider services, ClaimsPrincipal actor, JsonSerializerOptions json, CancellationToken ct);
+    internal abstract ValueTask<ReadResourceResult> ReadAsync(
+        IReadOnlyDictionary<string, string> values,
+        string uri,
+        IServiceProvider services,
+        ClaimsPrincipal actor,
+        JsonSerializerOptions json,
+        CancellationToken ct
+    );
 
-    internal bool MatchValidatedSegments(string[] candidateSegments,
-        [NotNullWhen(true)] out Dictionary<string, string>? values)
+    internal bool MatchValidatedSegments(
+        string[] candidateSegments,
+        [NotNullWhen(true)] out Dictionary<string, string>? values
+    )
     {
         values = null;
+
         if (candidateSegments.Length != _templateSegments.Length)
             return false;
+
 
         for (var i = 0; i < _templateSegments.Length; i++)
         {
             var pattern = _templateSegments[i];
+
             if (pattern.Length > 2 && pattern[0] == '{' && pattern[^1] == '}')
                 continue;
+
             if (!string.Equals(pattern, candidateSegments[i], StringComparison.Ordinal))
                 return false;
         }
 
         var captures = new Dictionary<string, string>(StringComparer.Ordinal);
+
         for (var i = 0; i < _templateSegments.Length; i++)
         {
             var pattern = _templateSegments[i];
+
             if (pattern.Length <= 2 || pattern[0] != '{' || pattern[^1] != '}')
                 continue;
+
             var decoded = Uri.UnescapeDataString(candidateSegments[i]);
+
             if (decoded.Length == 0 || decoded is "." or "..")
                 return false;
+
             captures.Add(pattern[1..^1], decoded);
         }
+
 
         values = captures;
         return true;
@@ -251,17 +277,26 @@ sealed class McpResourceEntry<TRequest, TOut>(
 {
     internal override string MimeType => options.MediaType!;
 
-    internal override async ValueTask<ReadResourceResult> ReadAsync(IReadOnlyDictionary<string, string> values,
-        string uri, IServiceProvider services, ClaimsPrincipal actor, JsonSerializerOptions json, CancellationToken ct)
+    internal override async ValueTask<ReadResourceResult> ReadAsync(
+        IReadOnlyDictionary<string, string> values,
+        string uri,
+        IServiceProvider services,
+        ClaimsPrincipal actor,
+        JsonSerializerOptions json,
+        CancellationToken ct
+    )
     {
         var request = bind(values);
         var bus = services.GetRequiredService<IRequestBus>();
         var result = await bus.DispatchAsync(request,
             new RequestDispatchContext(actor, new McpResourceInvocation(Template),
                 timeProvider: services.GetService<TimeProvider>()), ct).ConfigureAwait(false);
+
         if (!result.IsSuccess)
             throw new McpRequestFailureException(result.Error);
+
         ResourceContents content;
+
         if (options.Binary is { } binary)
             content = BlobResourceContents.FromBytes(binary(result.Value), uri, MimeType);
         else
@@ -271,6 +306,7 @@ sealed class McpResourceEntry<TRequest, TOut>(
                 : JsonSerializer.Serialize(result.Value, json.GetTypeInfo<TOut>());
             content = new TextResourceContents { Uri = uri, MimeType = MimeType, Text = text };
         }
+
 
         return new ReadResourceResult
         {
@@ -289,8 +325,12 @@ abstract class McpPromptEntry(Type requestType, McpPromptOptions options, string
     internal string? Description => PromptOptions.Description;
     internal McpPromptOptions PromptOptions { get; } = options;
 
-    internal abstract ValueTask<GetPromptResult> GetAsync(IReadOnlyDictionary<string, string> values,
-        IServiceProvider services, ClaimsPrincipal actor, CancellationToken ct);
+    internal abstract ValueTask<GetPromptResult> GetAsync(
+        IReadOnlyDictionary<string, string> values,
+        IServiceProvider services,
+        ClaimsPrincipal actor,
+        CancellationToken ct
+    );
 }
 
 sealed class McpPromptEntry<TRequest, TOut>(
@@ -301,22 +341,32 @@ sealed class McpPromptEntry<TRequest, TOut>(
     : McpPromptEntry(typeof(TRequest), options, name)
     where TRequest : IRequest<TOut>, ICallable
 {
-    internal override async ValueTask<GetPromptResult> GetAsync(IReadOnlyDictionary<string, string> values,
-        IServiceProvider services, ClaimsPrincipal actor, CancellationToken ct)
+    internal override async ValueTask<GetPromptResult> GetAsync(
+        IReadOnlyDictionary<string, string> values,
+        IServiceProvider services,
+        ClaimsPrincipal actor,
+        CancellationToken ct
+    )
     {
         var request = bind(values);
         var result = await services.GetRequiredService<IRequestBus>().DispatchAsync(request,
             new RequestDispatchContext(actor, new McpPromptInvocation(Name),
                 timeProvider: services.GetService<TimeProvider>()), ct).ConfigureAwait(false);
+
         if (!result.IsSuccess)
             throw new McpRequestFailureException(result.Error);
+
         var messages = render(result.Value);
+
         if (messages.Count > services.GetRequiredService<McpLimits>().MaxPromptMessages)
             throw new McpRequestFailureException(
                 new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
+
+
         if (messages.Any(message => message.Role is not ("user" or "assistant") || message.Text is null))
             throw new McpRequestFailureException(
                 new RequestError(RequestErrorKind.Validation, "Prompt unavailable."));
+
         return new GetPromptResult
         {
             Messages = messages.Select(message => new PromptMessage
@@ -340,11 +390,13 @@ sealed class McpPrimitiveCatalog
     internal void AddResource(McpResourceEntry entry)
     {
         Resources.Add(entry);
+
         if (entry.IsTemplate)
         {
             ResourceTemplates.Add(entry);
             return;
         }
+
 
         FixedResourcesInOrder.Add(entry);
         FixedResourcesByUri.Add(entry.Template, entry);
@@ -363,18 +415,24 @@ static class McpUri
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(template);
         var authorityEnd = template.IndexOf('/', template.IndexOf("://", StringComparison.Ordinal) + 3);
+
         if (template.Contains('{', StringComparison.Ordinal) &&
             (authorityEnd < 0 || template[..authorityEnd].Contains('{', StringComparison.Ordinal)))
             throw new ArgumentException("Resource placeholders must be path segments.", nameof(template));
+
+
         if (!TryValidate(
                 template.Replace("{", "x", StringComparison.Ordinal).Replace("}", "", StringComparison.Ordinal)))
             throw new ArgumentException("Resource URI template must be an absolute URI without query or fragment.",
                 nameof(template));
+
         var names = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var segment in template.Split('/'))
         {
             if (!segment.Contains('{', StringComparison.Ordinal) && !segment.Contains('}', StringComparison.Ordinal))
                 continue;
+
             if (segment.Length < 3 || segment[0] != '{' || segment[^1] != '}'
                 || !names.Add(segment[1..^1]) || !segment[1..^1].All(c => char.IsAsciiLetterOrDigit(c) || c == '_'))
                 throw new ArgumentException("Resource placeholders must be unique whole path segments.",
@@ -388,10 +446,13 @@ static class McpUri
                                                                   || uri.Contains('#', StringComparison.Ordinal) ||
                                                                   uri.Contains('%') && !ValidEscapes(uri))
             return false;
+
         var pathStart = uri.IndexOf('/', uri.IndexOf("://", StringComparison.Ordinal) + 3);
+
         if (pathStart >= 0 && uri[pathStart..].Split('/').Any(segment => segment is "." or "..")
             || parsed.UserInfo.Length != 0)
             return false;
+
         return !Uri.UnescapeDataString(uri).Contains('\uFFFD', StringComparison.Ordinal);
     }
 
@@ -401,11 +462,16 @@ static class McpUri
         {
             if (uri[i] != '%')
                 continue;
+
+
             if (i + 2 >= uri.Length || !Uri.IsHexDigit(uri[i + 1]) || !Uri.IsHexDigit(uri[i + 2]))
                 return false;
+
             var value = Convert.ToByte(uri.Substring(i + 1, 2), 16);
+
             if (value is 0x2f or 0x5c or 0x2e or 0x25)
                 return false;
+
             i += 2;
         }
 

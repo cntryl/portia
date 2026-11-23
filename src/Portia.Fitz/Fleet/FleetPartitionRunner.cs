@@ -39,9 +39,12 @@ public sealed partial class FleetPartitionRunner(
     /// <param name="options">Membership, timing, and optional stable worker identity.</param>
     /// <param name="ct">Cancels the run.</param>
     /// <returns>The complete lifetime, including observation of all revoked work.</returns>
-    public Task RunAsync(IReadOnlyCollection<string> partitions,
+    public Task RunAsync(
+        IReadOnlyCollection<string> partitions,
         Func<string, CancellationToken, Task> onPartitionAcquired,
-        FleetRunOptions options, CancellationToken ct = default)
+        FleetRunOptions options,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(onPartitionAcquired);
@@ -56,9 +59,12 @@ public sealed partial class FleetPartitionRunner(
     /// <param name="options">Membership, timing, and optional stable worker identity.</param>
     /// <param name="ct">Cancels the run.</param>
     /// <returns>The complete lifetime, including observation of all revoked work.</returns>
-    public Task RunAsync(Func<IReadOnlyCollection<string>> partitions,
+    public Task RunAsync(
+        Func<IReadOnlyCollection<string>> partitions,
         Func<string, CancellationToken, Task> onPartitionAcquired,
-        FleetRunOptions options, CancellationToken ct = default)
+        FleetRunOptions options,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(partitions);
         ArgumentNullException.ThrowIfNull(onPartitionAcquired);
@@ -68,19 +74,25 @@ public sealed partial class FleetPartitionRunner(
             options with { WorkerId = options.WorkerId ?? Guid.NewGuid().ToString("D") }, ct);
     }
 
-    async Task RunMembershipAsync(Func<IReadOnlyCollection<string>> partitions,
+    async Task RunMembershipAsync(
+        Func<IReadOnlyCollection<string>> partitions,
         Func<string, CancellationToken, Task> callback,
-        FleetRunOptions options, CancellationToken ct)
+        FleetRunOptions options,
+        CancellationToken ct
+    )
     {
         var attempt = 0;
+
         while (!ct.IsCancellationRequested)
         {
             var session = new MembershipSession();
+
             try
             {
                 await _membership.RunAsync(options, (observer, membershipCt) =>
                         ReconcileAsync(partitions, callback, options, observer, session, membershipCt), ct)
                     .ConfigureAwait(false);
+
                 if (!ct.IsCancellationRequested)
                 {
                     Fault(RunnerFaultStage.Acquisition);
@@ -105,7 +117,9 @@ public sealed partial class FleetPartitionRunner(
 
             // A session that saw this worker in a ready inventory made progress, so the next retry
             // starts short again rather than inheriting the backoff an earlier outage had grown.
+
             attempt = session.WasReady ? 1 : NextAttempt(attempt);
+
             if (!await BackoffAsync(attempt, ct).ConfigureAwait(false))
             {
                 break;
@@ -113,15 +127,21 @@ public sealed partial class FleetPartitionRunner(
         }
     }
 
-    async Task ReconcileAsync(Func<IReadOnlyCollection<string>> partitions,
+    async Task ReconcileAsync(
+        Func<IReadOnlyCollection<string>> partitions,
         Func<string, CancellationToken, Task> callback,
-        FleetRunOptions options, ILeaseInventoryObserver observer, MembershipSession session, CancellationToken ct)
+        FleetRunOptions options,
+        ILeaseInventoryObserver observer,
+        MembershipSession session,
+        CancellationToken ct
+    )
     {
         var active = new Dictionary<string, PartitionRun>(StringComparer.Ordinal);
         var assignments = new FleetAssignmentCache();
         var prefix = options.MembershipSelector[..^1];
         var unavailable = false;
         Exception? terminal = null;
+
         try
         {
             while (!ct.IsCancellationRequested)
@@ -131,10 +151,12 @@ public sealed partial class FleetPartitionRunner(
                 var workers = snapshot.Keys.Where(route => route.StartsWith(prefix, StringComparison.Ordinal))
                     .Select(route => route[prefix.Length..]).Where(FleetRunOptions.IsSegment).ToArray();
                 ready &= observer.IsReady && workers.Contains(options.WorkerId, StringComparer.Ordinal);
+
                 if (!ready && !unavailable)
                 {
                     Fault(RunnerFaultStage.Acquisition);
                 }
+
 
                 unavailable = !ready;
                 session.WasReady |= ready;
@@ -146,13 +168,16 @@ public sealed partial class FleetPartitionRunner(
                 var revoked = active.Keys.Where(partition => !assigned.Contains(partition)).ToArray();
                 await ObserveAsync([.. revoked.Select(partition => (partition, active[partition]))],
                     options.PartitionStopTimeout).ConfigureAwait(false);
+
                 foreach (var partition in revoked)
                 {
                     _ = active.Remove(partition);
                     PortiaTelemetry.RecordFleetAssignment(options.WorkerId!, partition, false, _logger);
                 }
 
+
                 ct.ThrowIfCancellationRequested();
+
                 foreach (var partition in assigned)
                 {
                     if (active.ContainsKey(partition))
@@ -166,8 +191,11 @@ public sealed partial class FleetPartitionRunner(
                     PortiaTelemetry.RecordFleetAssignment(options.WorkerId!, partition, true, _logger);
                 }
 
+
+
                 foreach (var run in active.Values.Where(run => run.Execution.IsCompleted))
                     await run.Execution.ConfigureAwait(false);
+
                 await Task.Delay(options.ReconciliationInterval, _clock, ct).ConfigureAwait(false);
             }
         }
@@ -175,6 +203,7 @@ public sealed partial class FleetPartitionRunner(
         {
             terminal = ex;
         }
+
 
         try
         {
@@ -196,16 +225,22 @@ public sealed partial class FleetPartitionRunner(
             ExceptionDispatchInfo.Capture(terminal).Throw();
     }
 
-    async Task CompeteAsync(string partition, Func<string, CancellationToken, Task> callback,
-        ulong ttl, CancellationToken ct)
+    async Task CompeteAsync(
+        string partition,
+        Func<string, CancellationToken, Task> callback,
+        ulong ttl,
+        CancellationToken ct
+    )
     {
         var attempt = 0;
         // Portia owns the retry loop. A server-side queued acquisition can monopolize Fitz's
         // single acquisition lane and prevent the other assigned partitions from competing.
         var execution = new LeaseExecutionOptions();
+
         while (!ct.IsCancellationRequested)
         {
             var acquired = false;
+
             try
             {
                 await _leases.WithLeaseAsync(partition, ttl, leaseCt =>
@@ -229,7 +264,9 @@ public sealed partial class FleetPartitionRunner(
 
             // Holding the lease means the cycle made progress, so the next retry starts short
             // again rather than inheriting the backoff an earlier outage had grown.
+
             attempt = acquired ? 1 : NextAttempt(attempt);
+
             if (!await BackoffAsync(attempt, ct).ConfigureAwait(false))
             {
                 break;
@@ -250,6 +287,7 @@ public sealed partial class FleetPartitionRunner(
         // overflow it cannot end up shifting by a negative exponent and computing a negative delay.
         var ceiling = Math.Min(InitialRetryBackoff.Ticks * (1L << (attempt - 1)), MaximumRetryBackoff.Ticks);
         var delay = TimeSpan.FromTicks(ceiling / 2 + Random.Shared.NextInt64(ceiling / 2));
+
         try
         {
             await Task.Delay(delay, _clock, ct).ConfigureAwait(false);
@@ -276,12 +314,15 @@ public sealed partial class FleetPartitionRunner(
     async Task ObserveAsync((string Partition, PartitionRun Run)[] runs, TimeSpan timeout)
     {
         runs = [.. runs.Where(item => !item.Run.ObservationClaimed)];
+
         if (runs.Length == 0)
         {
             return;
         }
 
+
         (string Partition, PartitionRun Run)[] timedOut = [];
+
         try
         {
             await Task.WhenAll(runs.Select(item => item.Run.StopAsync())).WaitAsync(timeout, _clock).ConfigureAwait(false);
@@ -296,12 +337,15 @@ public sealed partial class FleetPartitionRunner(
             // cleanup remain isolated and reported through the existing runner-fault contract.
         }
 
+
         WorkloadFailureException? terminal = null;
+
         foreach (var (_, run) in runs)
         {
             if (run.TryClaimObservation())
             {
                 WorkloadFailureException? failure;
+
                 if (run.StopAsync().IsCompleted)
                     failure = await ObserveCompletedAsync(run).ConfigureAwait(false);
                 else
@@ -311,6 +355,7 @@ public sealed partial class FleetPartitionRunner(
                     _ = ObserveLateAsync(run);
                 }
 
+
                 if (terminal is null)
                     terminal = failure;
                 else if (failure is not null && !ReferenceEquals(terminal, failure))
@@ -318,20 +363,25 @@ public sealed partial class FleetPartitionRunner(
             }
         }
 
+
         FleetPartitionTerminationTimeoutException? timeoutFailure = null;
+
         if (timedOut.Length != 0)
         {
             timeoutFailure = new FleetPartitionTerminationTimeoutException(
                 [.. timedOut.Select(item => item.Partition)], timeout);
             PortiaTelemetry.RecordRunnerFault(nameof(FleetPartitionRunner), RunnerFaultStage.Cleanup, timeoutFailure);
+
             if (_logger is not null)
                 LogPartitionTerminationTimeout(_logger, timeoutFailure);
         }
+
 
         if (terminal is not null)
         {
             if (timeoutFailure is not null)
                 ProcessorFailureException.RecordCleanup(terminal, timeoutFailure);
+
             ExceptionDispatchInfo.Capture(terminal).Throw();
         }
 
@@ -388,8 +438,11 @@ public sealed partial class FleetPartitionRunner(
         Task? _stopping;
         int _observationClaimed;
 
-        public PartitionRun(Func<CancellationToken, Task> execute, Func<CancellationTokenSource, Task> cancel,
-            CancellationToken membership)
+        public PartitionRun(
+            Func<CancellationToken, Task> execute,
+            Func<CancellationTokenSource, Task> cancel,
+            CancellationToken membership
+        )
         {
             // Subscribe before scheduling work. Host shutdown and revocation must join the
             // same cancellation, including callbacks that outlive the workload.

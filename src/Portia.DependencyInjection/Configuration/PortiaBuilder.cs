@@ -47,19 +47,27 @@ public sealed class PortiaBuilder
     /// <param name="summary">An optional human-readable summary.</param>
     /// <param name="use">The contract directions illustrated by the example.</param>
     /// <returns>This builder, for chaining.</returns>
-    public PortiaBuilder AddExample<T>(string name, T value, string? summary = null,
-        PortiaContractUse use = PortiaContractUse.Both)
+    public PortiaBuilder AddExample<T>(
+        string name,
+        T value,
+        string? summary = null,
+        PortiaContractUse use = PortiaContractUse.Both
+    )
         where T : notnull
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(value);
+
         if (use is PortiaContractUse.None || (use & ~PortiaContractUse.Both) != 0)
             throw new ArgumentOutOfRangeException(nameof(use));
+
         if (_contracts is not null)
             throw new InvalidOperationException("Contract metadata is already composed.");
+
         if (_examples.Any(example => example.Type == typeof(T) && example.Name == name && (example.Use & use) != 0))
             throw new InvalidOperationException(
                 $"Contract example '{name}' for '{typeof(T)}' is registered more than once.");
+
         _examples.Add(new PortiaContractExample(typeof(T), name, value, summary, use));
         _json.AddRoot(typeof(T));
         return this;
@@ -70,13 +78,17 @@ public sealed class PortiaBuilder
     /// <param name="metadata">Optional compile-time metadata for the context contracts.</param>
     /// <returns>This builder, for chaining.</returns>
     [EditorBrowsable(EditorBrowsableState.Never)]
-    public PortiaBuilder AddGeneratedJsonContext(Func<JsonSerializerOptions, JsonSerializerContext> factory,
-        Func<Type, PortiaContractMetadata?>? metadata = null)
+    public PortiaBuilder AddGeneratedJsonContext(
+        Func<JsonSerializerOptions, JsonSerializerContext> factory,
+        Func<Type, PortiaContractMetadata?>? metadata = null
+    )
     {
         ArgumentNullException.ThrowIfNull(factory);
         _json.AddContext(factory);
+
         if (metadata is not null)
             AddGeneratedContractMetadata(metadata);
+
         return this;
     }
 
@@ -93,6 +105,7 @@ public sealed class PortiaBuilder
         {
             if (!_generatedRegistrations.Add(identity))
                 return this;
+
             try
             {
                 register(this);
@@ -114,8 +127,10 @@ public sealed class PortiaBuilder
     public PortiaBuilder AddGeneratedContractMetadata(Func<Type, PortiaContractMetadata?> provider)
     {
         ArgumentNullException.ThrowIfNull(provider);
+
         if (_contracts is not null)
             throw new InvalidOperationException("Contract metadata cannot change after application composition.");
+
         _metadataProviders.Add(provider);
         return this;
     }
@@ -169,6 +184,7 @@ public sealed class PortiaBuilder
     public PortiaBuilder AddGeneratedHandler(RequestHandlerRegistration registration)
     {
         ArgumentNullException.ThrowIfNull(registration);
+
         if (_catalog.HandlerRequests.TryGetValue(registration.RequestType, out var owner))
         {
             // One handler can serve several requests, so the same registration arriving twice is
@@ -178,6 +194,7 @@ public sealed class PortiaBuilder
                 : throw new InvalidOperationException(
                     $"Request '{registration.RequestType}' has conflicting handlers.");
         }
+
 
         _catalog.HandlerRequests[registration.RequestType] = registration.HandlerType;
 
@@ -197,13 +214,16 @@ public sealed class PortiaBuilder
     public PortiaBuilder AddGeneratedAuthorizer(RequestAuthorizerRegistration registration)
     {
         ArgumentNullException.ThrowIfNull(registration);
+
         if (!Enum.IsDefined(registration.Stage))
         {
             throw new ArgumentOutOfRangeException(nameof(registration), registration.Stage,
                 "Choose a defined authorization stage.");
         }
 
+
         var key = (registration.ScopeType, registration.AuthorizerType);
+
         if (_catalog.Authorizers.TryGetValue(key, out var stage))
         {
             return stage == registration.Stage
@@ -211,6 +231,7 @@ public sealed class PortiaBuilder
                 : throw new InvalidOperationException(
                     $"Authorizer '{registration.AuthorizerType}' has conflicting stages.");
         }
+
 
         _catalog.Authorizers[key] = registration.Stage;
         _ = Services.AddSingleton(registration);
@@ -228,10 +249,12 @@ public sealed class PortiaBuilder
     public PortiaBuilder AddGeneratedGuard(RequestGuardRegistration registration)
     {
         ArgumentNullException.ThrowIfNull(registration);
+
         if (!_catalog.Guards.Add((registration.ScopeType, registration.GuardType)))
         {
             return this;
         }
+
 
         _ = Services.AddSingleton(registration);
         registration.Register(Services);
@@ -247,6 +270,7 @@ public sealed class PortiaBuilder
     {
         ArgumentNullException.ThrowIfNull(registration);
         var key = (registration.ScopeType, registration.BehaviorType);
+
         if (_catalog.Behaviors.TryGetValue(key, out var order))
         {
             return order == registration.Order
@@ -254,6 +278,7 @@ public sealed class PortiaBuilder
                 : throw new InvalidOperationException(
                     $"Pipeline behavior '{registration.BehaviorType}' has conflicting orders.");
         }
+
 
         _catalog.Behaviors.Add(key, registration.Order);
         _ = Services.AddSingleton(registration);
@@ -272,6 +297,7 @@ public sealed class PortiaBuilder
     public PortiaBuilder AddGeneratedRequest(RequestTransportRegistration registration)
     {
         ArgumentNullException.ThrowIfNull(registration);
+
         if (_catalog.Requests.TryGetValue(registration.RequestType, out var existing))
         {
             if (!existing.HasSameContractAs(registration))
@@ -282,14 +308,17 @@ public sealed class PortiaBuilder
             return this;
         }
 
+
         _catalog.Requests.Add(registration.RequestType, registration);
         _ = Services.AddSingleton(registration);
 
         _json.AddRoot(registration.RequestType);
+
         if (registration.ResultType is not null)
         {
             _json.AddRoot(registration.ResultType);
         }
+
 
         return this;
     }
@@ -300,8 +329,12 @@ public sealed class PortiaBuilder
             registration.Transports.Contains(transport));
 
     /// <summary>Declares a durable scheduled request that worker hosts ensure on every startup.</summary>
-    public PortiaBuilder AddRequestSchedule<TRequest>(TRequest request, RequestScheduleSpec spec,
-        RequestRouteValues routeValues, ClaimsPrincipal actor)
+    public PortiaBuilder AddRequestSchedule<TRequest>(
+        TRequest request,
+        RequestScheduleSpec spec,
+        RequestRouteValues routeValues,
+        ClaimsPrincipal actor
+    )
         where TRequest : IRequest, ISchedulable
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -332,8 +365,11 @@ public sealed class PortiaBuilder
     [SuppressMessage("ApiDesign", "RS0027", Justification = "The reactor overloads have distinct generic arities.")]
     public PortiaBuilder AddReactor<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
-    TReactor>(string name, WorkloadScope scope,
-        Action<WorkloadOptions>? configure = null)
+    TReactor>(
+        string name,
+        WorkloadScope scope,
+        Action<WorkloadOptions>? configure = null
+    )
         where TReactor : Reactor
     {
         var registration = new WorkloadRegistration(ReactorRegistration.Create<TReactor>(), name, scope, configure);
@@ -349,7 +385,9 @@ public sealed class PortiaBuilder
     /// <returns>This builder, for chaining.</returns>
     public PortiaBuilder AddReactor<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler, TEvent>(
-        string name, EventStreamPattern source)
+            string name,
+            EventStreamPattern source
+        )
         where THandler : class, IReactorHandler<TEvent>
         where TEvent : DomainEvent => AddReactor<THandler, TEvent>(name, source, null);
 
@@ -362,7 +400,10 @@ public sealed class PortiaBuilder
     /// <returns>This builder, for chaining.</returns>
     public PortiaBuilder AddReactor<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler, TEvent>(
-        string name, EventStreamPattern source, Action<WorkloadOptions>? configure)
+            string name,
+            EventStreamPattern source,
+            Action<WorkloadOptions>? configure
+        )
         where THandler : class, IReactorHandler<TEvent>
         where TEvent : DomainEvent
     {
@@ -392,8 +433,11 @@ public sealed class PortiaBuilder
     /// </remarks>
     public PortiaBuilder AddProjector<
         [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
-    TProjector>(string name, WorkloadScope scope,
-        Action<WorkloadOptions>? configure = null)
+    TProjector>(
+        string name,
+        WorkloadScope scope,
+        Action<WorkloadOptions>? configure = null
+    )
         where TProjector : Projector
     {
         var registration = new WorkloadRegistration(ProjectorRegistration.Create<TProjector>(), name, scope, configure);
@@ -503,10 +547,12 @@ public sealed class PortiaBuilder
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentNullException.ThrowIfNull(configure);
+
         if (!_catalog.Workers.TryAdd(name, configure))
         {
             return this;
         }
+
 
         if (_catalog.WorkersActivated)
         {
@@ -550,8 +596,10 @@ public sealed class PortiaBuilder
     /// <param name="getTenantId">Names the tenant a lifecycle event is about.</param>
     /// <returns>This builder, for chaining.</returns>
     /// <remarks>An <see cref="ITenantDirectory" /> the application registered itself is kept.</remarks>
-    public PortiaBuilder AddEventSourcedTenantDirectory<TStartEvent, TStopEvent>(EventStreamPattern pattern,
-        Func<DomainEvent, TenantId> getTenantId)
+    public PortiaBuilder AddEventSourcedTenantDirectory<TStartEvent, TStopEvent>(
+        EventStreamPattern pattern,
+        Func<DomainEvent, TenantId> getTenantId
+    )
         where TStartEvent : DomainEvent
         where TStopEvent : DomainEvent
     {
@@ -592,17 +640,25 @@ public sealed class PortiaBuilder
         // registrations are kept.
         var snapshot = new HashSet<ServiceDescriptor>(Services, ReferenceEqualityComparer.Instance);
         var staged = new ServiceCollection();
+
         foreach (var descriptor in Services)
             staged.Add(descriptor);
+
+
         foreach (var configure in _catalog.Workers.Values)
             configure(staged);
+
         var direct = Services.Where(descriptor => !snapshot.Contains(descriptor)).ToArray();
         _ = staged.AddSingleton<IHostedService, PortiaWorkloadService>();
         Services.Clear();
+
         foreach (var descriptor in staged)
             Services.Add(descriptor);
+
+
         foreach (var descriptor in direct)
             Services.Add(descriptor);
+
         _catalog.WorkersActivated = true;
         return this;
     }

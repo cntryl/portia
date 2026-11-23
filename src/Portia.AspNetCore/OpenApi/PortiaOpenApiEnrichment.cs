@@ -16,8 +16,15 @@ sealed record PortiaOpenApiEnrichment(
     IReadOnlyList<PortiaHttpExample> Responses,
     IReadOnlyList<PortiaHttpResponseHeader> Headers)
 {
-    internal void Apply(OpenApiOperation operation, PortiaOpenApiOperation metadata, IList<object> endpoint,
-        IServiceProvider services, JsonSerializerOptions json, OpenApiDocument document, PortiaHttpOptions options)
+    internal void Apply(
+        OpenApiOperation operation,
+        PortiaOpenApiOperation metadata,
+        IList<object> endpoint,
+        IServiceProvider services,
+        JsonSerializerOptions json,
+        OpenApiDocument document,
+        PortiaHttpOptions options
+    )
     {
         var contracts = services.GetRequiredService<PortiaContractMetadataRegistry>();
         var copied = new HashSet<string>(StringComparer.Ordinal);
@@ -25,8 +32,10 @@ sealed record PortiaOpenApiEnrichment(
         OpenApiResponse Response(int status)
         {
             var key = status.ToString(CultureInfo.InvariantCulture);
+
             if (operation.Responses?.TryGetValue(key, out var response) != true || response is null)
                 throw new InvalidOperationException($"HTTP enrichment refers to undeclared response status {status}.");
+
             if (copied.Add(key))
             {
                 var clone = new OpenApiResponse
@@ -70,15 +79,20 @@ sealed record PortiaOpenApiEnrichment(
             .Select(item => (item.StatusCode, Type: ResponseType(item)))
             .Where(item => item.Type is not null)
             .GroupBy(item => item.StatusCode).ToDictionary(group => group.Key, group => group.Last().Type!);
+
         if (metadata.ResultType is { } resultType && !metadata.JsonStream && !metadata.ServerSentEvents &&
             !metadata.NoContent && !endpoint.OfType<PortiaCreatedResponseMetadata>().Any())
             _ = responseTypes.TryAdd(200, resultType);
+
         foreach (var (status, type) in responseTypes)
         {
             var key = status.ToString(CultureInfo.InvariantCulture);
+
             if (operation.Responses?.TryGetValue(key, out var response) != true || response?.Content is null)
                 continue;
+
             var examples = contracts.Examples.Resolve(json, type, input: false);
+
             foreach (var contentType in response.Content.Keys.Where(name =>
                          name == "application/json" || name.EndsWith("+json", StringComparison.OrdinalIgnoreCase)))
                 foreach (var example in examples)
@@ -94,13 +108,17 @@ sealed record PortiaOpenApiEnrichment(
                 !metadata.ServerSentEvents && !endpoint.OfType<PortiaCreatedResponseMetadata>().Any()
                     ? metadata.ResultType
                     : null;
+
             if (declared != example.Example.Type)
                 throw new InvalidOperationException(
                     $"Response example '{example.Example.Name}' must use the declared response type '{declared}'.");
+
             var response = Response(example.Status!.Value);
+
             if (response.Content?.TryGetValue(example.ContentType, out var media) != true || media is null)
                 throw new InvalidOperationException(
                     $"Response example '{example.Example.Name}' refers to undeclared content type '{example.ContentType}'.");
+
             Add(media, PortiaContractExamples.Resolve(json, contracts, example.Example, input: false));
         }
 
@@ -108,13 +126,16 @@ sealed record PortiaOpenApiEnrichment(
         var requestType =
             custom ? endpoint.OfType<IAcceptsMetadata>().LastOrDefault()?.RequestType : metadata.RequestType;
         var input = requestType is null ? [] : contracts.Examples.Resolve(json, requestType, input: true);
+
         foreach (var example in input)
             AddRequest(example, "application/json");
+
         foreach (var example in Requests)
         {
             if (requestType != example.Example.Type)
                 throw new InvalidOperationException(
                     $"Request example '{example.Example.Name}' must use the declared request type '{requestType}'.");
+
             AddRequest(PortiaContractExamples.Resolve(json, contracts, example.Example, input: true),
                 example.ContentType);
         }
@@ -122,14 +143,17 @@ sealed record PortiaOpenApiEnrichment(
         void AddRequest(PortiaResolvedExample example, string contentType)
         {
             var value = example.Value;
+
             if (!custom)
             {
                 if (value is not JsonObject obj)
                     throw new InvalidOperationException(
                         $"Request example '{example.Name}' requires an object for generated member binding.");
+
                 var body = new JsonObject();
                 var queries = endpoint.OfType<PortiaQueryMembers>().SingleOrDefault()?.Names ?? [];
                 var headers = endpoint.OfType<PortiaHeaderMembers>().SingleOrDefault()?.Members ?? [];
+
                 for (var index = 0; index < metadata.Parameters.Count; index++)
                 {
                     var parameter = metadata.Parameters[index];
@@ -139,6 +163,7 @@ sealed record PortiaOpenApiEnrichment(
                                    json.PropertyNamingPolicy?.ConvertName(parameter.ClrName) ?? parameter.ClrName;
                     var member = PortiaHttpBinding.ResolveBodyMember(json, requestType!, parameter.Type, index,
                         parameter.ClrName, fallback);
+
                     if (parameter.Source == "body" &&
                         !queries.Contains(parameter.ClrName, StringComparer.OrdinalIgnoreCase) && header is null)
                     {
@@ -149,6 +174,7 @@ sealed record PortiaOpenApiEnrichment(
                     {
                         var target = operation.Parameters?.OfType<OpenApiParameter>()
                             .SingleOrDefault(item => item.Name == (header?.Name ?? fallback));
+
                         if (target is not null)
                         {
                             target.Examples ??= new Dictionary<string, IOpenApiExample>(StringComparer.Ordinal);
@@ -164,14 +190,19 @@ sealed record PortiaOpenApiEnrichment(
                     }
                 }
 
+
                 value = body;
+
                 if (operation.RequestBody is null && body.Count == 0)
                     return;
             }
 
+
+
             if (operation.RequestBody?.Content?.TryGetValue(contentType, out var media) != true || media is null)
                 throw new InvalidOperationException(
                     $"Request example '{example.Name}' refers to undeclared content type '{contentType}'.");
+
             Add(media, example with { Value = value });
         }
     }
@@ -211,7 +242,9 @@ sealed record PortiaOpenApiEnrichment(
     {
         if (schema?.Type is { } type && (type & (JsonSchemaType.Integer | JsonSchemaType.Number)) != 0)
             return JsonNode.Parse(value.ToString("D"));
+
         var name = value.ToString();
+
         if (schema?.Enum is { Count: > 0 } names)
         {
             var match = names.OfType<JsonValue>().FirstOrDefault(item => item.TryGetValue<string>(out var text) &&
@@ -221,9 +254,12 @@ sealed record PortiaOpenApiEnrichment(
                 $"HTTP enum parameter example '{name}' has no schema name accepted by scalar binding. Configure a compatible HTTP schema or an explicit OnBind contract.");
         }
 
+
+
         if (fallback is JsonValue encoded && encoded.TryGetValue<string>(out var encodedName) &&
             string.Equals(encodedName, name, StringComparison.OrdinalIgnoreCase))
             return fallback.DeepClone();
+
         return JsonValue.Create(name);
     }
 
@@ -231,6 +267,7 @@ sealed record PortiaOpenApiEnrichment(
     {
         if (media is not OpenApiMediaType target)
             throw new InvalidOperationException("Examples require an inline media type.");
+
         target.Examples = target.Examples is null
             ? [with(StringComparer.Ordinal)]
             : new Dictionary<string, IOpenApiExample>(target.Examples, StringComparer.Ordinal);

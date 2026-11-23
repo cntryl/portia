@@ -7,10 +7,12 @@ public readonly record struct RequestTransportId
     public RequestTransportId(string value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(value);
+
         if (value.Any(character =>
                 !char.IsAsciiLetterOrDigit(character) && character is not '.' and not '-' and not '_'))
             throw new ArgumentException("A transport ID may contain only ASCII letters, digits, '.', '-', and '_'.",
                 nameof(value));
+
         Value = value;
     }
 

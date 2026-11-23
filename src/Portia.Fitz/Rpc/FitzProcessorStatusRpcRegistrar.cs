@@ -21,10 +21,14 @@ sealed class FitzProcessorStatusRpcRegistrar(
     Task? _cleanupTask;
     bool _disposed;
 
-    internal FitzProcessorStatusRpcRegistrar(FitzApplicationConnection connection,
-        IServiceScopeFactory scopes, RequestTransportCatalog catalog, Func<string> application,
+    internal FitzProcessorStatusRpcRegistrar(
+        FitzApplicationConnection connection,
+        IServiceScopeFactory scopes,
+        RequestTransportCatalog catalog,
+        Func<string> application,
         ILogger<FitzProcessorStatusRpcRegistrar>? logger = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null
+    )
         : this(connection.Client.Rpc, scopes, catalog, application, logger, timeProvider) =>
         _connect = connection.StartAsync;
 
@@ -45,6 +49,7 @@ sealed class FitzProcessorStatusRpcRegistrar(
 
         var owned = new FitzProcessorStatusRpcRegistration(workload, route, ct,
             registration => WithdrawAsync(route, registration));
+
         try
         {
             owned.Attach(await new FitzRpcRequestServer(rpc, scopes, catalog)
@@ -65,6 +70,7 @@ sealed class FitzProcessorStatusRpcRegistrar(
         {
             if (_disposed)
                 return;
+
             _disposed = true;
             cleanup = _cleanupTask ?? Task.CompletedTask;
         }
@@ -72,12 +78,15 @@ sealed class FitzProcessorStatusRpcRegistrar(
         await _cleanupLifetime.CancelAsync().ConfigureAwait(false);
         await cleanup.ConfigureAwait(false);
         using var finalWithdrawalBudget = new CancellationTokenSource(TimeSpan.FromSeconds(5), _clock);
+
         foreach (var pending in _withdrawals.ToArray())
         {
             if (finalWithdrawalBudget.IsCancellationRequested)
                 break;
+
             _ = await TryWithdrawAsync(pending.Key, pending.Value, finalWithdrawalBudget.Token).ConfigureAwait(false);
         }
+
 
         _cleanupWake.Dispose();
         _cleanupLifetime.Dispose();
@@ -86,13 +95,17 @@ sealed class FitzProcessorStatusRpcRegistrar(
     async ValueTask WithdrawAsync(string route, RpcWorkerRegistration registration)
     {
         _withdrawals[route] = registration;
+
         if (await TryWithdrawAsync(route, registration, CancellationToken.None).ConfigureAwait(false))
             return;
+
         lock (_cleanupGate)
         {
             if (_disposed)
                 return;
+
             _cleanupTask ??= CleanupPendingAsync(_cleanupLifetime.Token);
+
             if (_cleanupWake.CurrentCount == 0)
                 _ = _cleanupWake.Release();
         }
@@ -106,14 +119,17 @@ sealed class FitzProcessorStatusRpcRegistrar(
             {
                 await _cleanupWake.WaitAsync(ct).ConfigureAwait(false);
                 var delay = TimeSpan.FromSeconds(1);
+
                 while (!_withdrawals.IsEmpty)
                 {
                     await Task.Delay(delay, _clock, ct).ConfigureAwait(false);
+
                     foreach (var pending in _withdrawals.ToArray())
                     {
                         ct.ThrowIfCancellationRequested();
                         _ = await TryWithdrawAsync(pending.Key, pending.Value, ct).ConfigureAwait(false);
                     }
+
 
                     delay = TimeSpan.FromSeconds(Math.Min(delay.TotalSeconds * 2, 30));
                 }
@@ -173,6 +189,7 @@ sealed class FitzProcessorStatusRpcRegistration(
         // retained subscription cannot answer for an owner that has released the workload.
         _ = Interlocked.Exchange(ref _active, 0);
         var registration = Interlocked.Exchange(ref _registration, null);
+
         if (registration is not null)
         {
             if (withdraw is not null)

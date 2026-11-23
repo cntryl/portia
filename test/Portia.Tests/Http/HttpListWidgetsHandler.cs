@@ -6,7 +6,8 @@ sealed class HttpListWidgetsHandler : IStreamRequestHandler<HttpListWidgets, str
 {
     public async IAsyncEnumerable<string> HandleAsync(
         IRequestContext<HttpListWidgets> context,
-        [EnumeratorCancellation] CancellationToken ct)
+        [EnumeratorCancellation] CancellationToken ct
+    )
     {
         yield return "a";
         await Task.Yield();

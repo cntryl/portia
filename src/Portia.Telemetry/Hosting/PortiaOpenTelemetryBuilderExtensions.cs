@@ -12,10 +12,12 @@ public static class PortiaOpenTelemetryBuilderExtensions
     public static OpenTelemetryBuilder WithPortia(this OpenTelemetryBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
+
         if (builder.Services.Any(service => service.ServiceType == typeof(PortiaTelemetryRegistration)))
         {
             return builder;
         }
+
 
         _ = builder.Services.AddSingleton<PortiaTelemetryRegistration>();
         return builder

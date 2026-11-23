@@ -456,8 +456,10 @@ public sealed class RequireAuthorizationTests
         Assert.Contains("AllowAnonymous", error.Message, StringComparison.Ordinal);
     }
 
-    static RequestRegistry Registry(RequestAuthorizationRequirement? requirement,
-        params RequestAuthorizerRegistration[] extraAuthorizers) =>
+    static RequestRegistry Registry(
+        RequestAuthorizationRequirement? requirement,
+        params RequestAuthorizerRegistration[] extraAuthorizers
+    ) =>
         new(
             [
                 new RequestRegistration<UnprotectedCommand, UnprotectedCommandHandler>(),
@@ -475,8 +477,10 @@ public sealed class RequireAuthorizationTests
             ],
             [], [], [], requirement);
 
-    static (RequestBus Bus, List<string> Calls) Bus(RequestAuthorizationRequirement? requirement,
-        params RequestAuthorizerRegistration[] extraAuthorizers)
+    static (RequestBus Bus, List<string> Calls) Bus(
+        RequestAuthorizationRequirement? requirement,
+        params RequestAuthorizerRegistration[] extraAuthorizers
+    )
     {
         var calls = new List<string>();
         var services = new ServiceCollection()
@@ -534,8 +538,10 @@ public sealed class RequireAuthorizationTests
 
     internal sealed class UnprotectedStreamHandler(List<string> calls) : IStreamRequestHandler<UnprotectedStream, int>
     {
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<UnprotectedStream> context,
-            [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<int> HandleAsync(
+            IRequestContext<UnprotectedStream> context,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             calls.Add("unprotected-stream-handler");
             yield return 1;

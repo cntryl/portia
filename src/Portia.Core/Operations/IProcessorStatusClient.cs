@@ -9,6 +9,10 @@ public interface IProcessorStatusClient
     /// <param name="actorToken">The caller's credential, validated by the receiving worker.</param>
     /// <param name="ct">Cancels the RPC call.</param>
     /// <returns>The authorized status or ordinary request failure.</returns>
-    ValueTask<Result<ProcessorStatus>> GetAsync(string processor, TenantId? tenant = null,
-        string? actorToken = null, CancellationToken ct = default);
+    ValueTask<Result<ProcessorStatus>> GetAsync(
+        string processor,
+        TenantId? tenant = null,
+        string? actorToken = null,
+        CancellationToken ct = default
+    );
 }

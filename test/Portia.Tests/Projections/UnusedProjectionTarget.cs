@@ -6,9 +6,11 @@ sealed class UnusedProjectionTarget : ITestProjectionRepository
 
     public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
         CheckpointIdentity identity,
-        CancellationToken ct = default) => throw new NotSupportedException();
+        CancellationToken ct = default
+    ) => throw new NotSupportedException();
 
     public ValueTask<IProjectionBatch> BeginAsync(
         ProjectionBatchContext context,
-        CancellationToken ct = default) => throw new NotSupportedException();
+        CancellationToken ct = default
+    ) => throw new NotSupportedException();
 }

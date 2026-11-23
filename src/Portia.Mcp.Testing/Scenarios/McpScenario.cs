@@ -21,8 +21,11 @@ public sealed class McpScenario : IAsyncDisposable
     public ValueTask DisposeAsync() => _client.DisposeAsync();
 
     /// <summary>Connects to a Streamable HTTP MCP endpoint without taking ownership of the HTTP client.</summary>
-    public static async ValueTask<McpScenario> ConnectAsync(HttpClient httpClient, Uri endpoint,
-        CancellationToken cancellationToken = default)
+    public static async ValueTask<McpScenario> ConnectAsync(
+        HttpClient httpClient,
+        Uri endpoint,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(endpoint);
@@ -37,8 +40,10 @@ public sealed class McpScenario : IAsyncDisposable
     }
 
     /// <summary>Connects to an MCP stdio server and owns the created transport and child process.</summary>
-    public static async ValueTask<McpScenario> ConnectStdioAsync(StdioClientTransportOptions options,
-        CancellationToken cancellationToken = default)
+    public static async ValueTask<McpScenario> ConnectStdioAsync(
+        StdioClientTransportOptions options,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentNullException.ThrowIfNull(options);
         var transport = new StdioClientTransport(options, NullLoggerFactory.Instance);
@@ -68,8 +73,11 @@ public sealed class McpScenario : IAsyncDisposable
         new(ListPromptsAsync(cancellationToken));
 
     /// <summary>Gets a rendered prompt and returns awaitable expectations.</summary>
-    public McpPromptGetExpectations GetPrompt(string name,
-        IReadOnlyDictionary<string, object?>? arguments = null, CancellationToken cancellationToken = default) =>
+    public McpPromptGetExpectations GetPrompt(
+        string name,
+        IReadOnlyDictionary<string, object?>? arguments = null,
+        CancellationToken cancellationToken = default
+    ) =>
         new(GetPromptAsync(name, arguments, cancellationToken));
 
     /// <summary>Lists visible fixed resources.</summary>
@@ -104,8 +112,10 @@ public sealed class McpScenario : IAsyncDisposable
     }
 
     /// <summary>Reads a resource through MCP.</summary>
-    public async Task<IReadOnlyList<McpResourceContentSnapshot>> ReadResourceAsync(string uri,
-        CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<McpResourceContentSnapshot>> ReadResourceAsync(
+        string uri,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(uri);
         var result = await _client.ReadResourceAsync(uri, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -147,8 +157,11 @@ public sealed class McpScenario : IAsyncDisposable
     }
 
     /// <summary>Gets rendered prompt messages.</summary>
-    public async Task<IReadOnlyList<McpPromptMessageSnapshot>> GetPromptAsync(string name,
-        IReadOnlyDictionary<string, object?>? arguments = null, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<McpPromptMessageSnapshot>> GetPromptAsync(
+        string name,
+        IReadOnlyDictionary<string, object?>? arguments = null,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         var result = await _client.GetPromptAsync(name, arguments, cancellationToken: cancellationToken)
@@ -165,8 +178,11 @@ public sealed class McpScenario : IAsyncDisposable
     }
 
     /// <summary>Invokes a tool and returns awaitable expectations.</summary>
-    public McpCallExpectations When(string toolName, IReadOnlyDictionary<string, object?>? arguments = null,
-        CancellationToken cancellationToken = default)
+    public McpCallExpectations When(
+        string toolName,
+        IReadOnlyDictionary<string, object?>? arguments = null,
+        CancellationToken cancellationToken = default
+    )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
         return new McpCallExpectations(CallCoreAsync(toolName, arguments, cancellationToken));
@@ -178,18 +194,23 @@ public sealed class McpScenario : IAsyncDisposable
         return tools.Select(tool => McpToolSnapshot.From(tool.ProtocolTool)).ToArray();
     }
 
-    async Task<McpCallSnapshot> CallCoreAsync(string toolName, IReadOnlyDictionary<string, object?>? arguments,
-        CancellationToken cancellationToken)
+    async Task<McpCallSnapshot> CallCoreAsync(
+        string toolName,
+        IReadOnlyDictionary<string, object?>? arguments,
+        CancellationToken cancellationToken
+    )
     {
         var result = await _client.CallToolAsync(toolName, arguments, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
         var text = result.Content.OfType<TextContentBlock>().Select(block => block.Text).ToArray();
         var structured = result.StructuredContent?.Clone();
         JsonElement? error = null;
+
         if (result.Meta?[McpFailureMetadata.Key] is { } failure)
         {
             error = JsonElement.Parse(failure.ToJsonString());
         }
+
 
         return new McpCallSnapshot(result.IsError == true, text, structured, error);
     }
@@ -202,14 +223,19 @@ public sealed class McpScenario : IAsyncDisposable
     {
         if (annotations is null)
             return null;
+
         var snapshot = new JsonObject();
+
         if (annotations.Audience is { } audience)
             snapshot["audience"] = new JsonArray(audience
                 .Select(role => (JsonNode?)JsonValue.Create(role.ToString().ToLowerInvariant())).ToArray());
+
         if (annotations.Priority is { } priority)
             snapshot["priority"] = JsonValue.Create(priority);
+
         if (annotations.LastModified is { } lastModified)
             snapshot["lastModified"] = JsonValue.Create(lastModified);
+
         return JsonElement.Parse(snapshot.ToJsonString());
     }
 }

@@ -404,13 +404,17 @@ public sealed class GeneratorFalsePositiveTests
         _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA101");
     }
 
-    static ImmutableArray<Diagnostic> GenerateFiles(IIncrementalGenerator generator,
-        params (string Path, string Source)[] files) =>
+    static ImmutableArray<Diagnostic> GenerateFiles(
+        IIncrementalGenerator generator,
+        params (string Path, string Source)[] files
+    ) =>
         CSharpGeneratorDriver.Create([generator.AsSourceGenerator()], parseOptions: FileParseOptions)
             .RunGenerators(CompileFiles(files)).GetRunResult().Diagnostics;
 
-    static ImmutableArray<Diagnostic> AnalyzeFiles(DiagnosticAnalyzer analyzer,
-        params (string Path, string Source)[] files) =>
+    static ImmutableArray<Diagnostic> AnalyzeFiles(
+        DiagnosticAnalyzer analyzer,
+        params (string Path, string Source)[] files
+    ) =>
         CompileFiles(files).WithAnalyzers([analyzer]).GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
 
     static CSharpCompilation CompileFiles((string Path, string Source)[] files) =>

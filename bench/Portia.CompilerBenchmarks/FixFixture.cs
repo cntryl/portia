@@ -23,10 +23,15 @@ sealed class FixFixture : IDisposable
     Diagnostic[] _diagnostics = [];
     public int DiagnosticCount => _diagnostics.Length;
 
-    public static async Task<FixFixture> CreateAsync(string name, int count = 1, bool fixAll = false,
-        CancellationToken ct = default)
+    public static async Task<FixFixture> CreateAsync(
+        string name,
+        int count = 1,
+        bool fixAll = false,
+        CancellationToken ct = default
+    )
     {
         var fixture = new FixFixture { Name = name };
+
         try
         {
             var source = name switch
@@ -44,9 +49,11 @@ sealed class FixFixture : IDisposable
                     "using Cntryl.Portia; public class Outer { public sealed partial class Projection : Projector, IProjectorHandler<Changed> { public Projection() : base(null!, EventStreamPattern.ForPattern(\"events\")) { } public System.Threading.Tasks.ValueTask<Result> HandleAsync(IProjectorContext<Changed> context, System.Threading.CancellationToken ct) => System.Threading.Tasks.ValueTask.FromResult(Result.Success); } } [Discriminator(\"bench.changed\", 1)] public sealed record Changed : DomainEvent;",
                 _ => throw new ArgumentException("Unknown code fix: " + name, nameof(name))
             };
+
             if (name == "reactor")
                 source = source.Replace("Projection", "Reaction", StringComparison.Ordinal)
                     .Replace("Projector", "Reactor", StringComparison.Ordinal);
+
             fixture.Provider = name.StartsWith("json-", StringComparison.Ordinal) ? new JsonMetadataCodeFixProvider()
                 : name is "partial" or "reactor" or "containers" ? new PartialProcessorCodeFixProvider()
                 : new ApplicationStructureCodeFixProvider();
@@ -73,6 +80,7 @@ sealed class FixFixture : IDisposable
                     ? "/benchmark/Bench.Common/Features/Work/Models/"
                     : "/benchmark/Bench.Core/Features/Work/Models/") + file);
             project = document.Project;
+
             if (fixAll)
             {
                 for (var i = 1; i < count; i++)
@@ -94,6 +102,7 @@ sealed class FixFixture : IDisposable
                 }
             }
 
+
             if (name is "version" or "partial" or "reactor" or "containers")
             {
                 var rootType = name == "version" ? "Bench.Core.Features.Work.Models.Price" : "Changed";
@@ -105,11 +114,13 @@ sealed class FixFixture : IDisposable
                     .Project;
             }
 
+
             if (name == "json-add")
                 project = project.AddDocument("AppJsonContext.cs",
                         SourceText.From(
                             "using Cntryl.Portia; using System.Text.Json.Serialization; namespace App; [PortiaJsonContext][JsonSerializable(typeof(int))] internal sealed partial class AppJsonContext : JsonSerializerContext;"))
                     .Project;
+
             if (name == "namespace")
             {
                 var consumerId = ProjectId.CreateNewId();
@@ -119,15 +130,19 @@ sealed class FixFixture : IDisposable
                     compilationOptions: CompilerHost.CompilationOptions,
                     metadataReferences: CompilerHost.References,
                     projectReferences: [new ProjectReference(project.Id)]));
+
                 for (var i = 0; i < count; i++)
                     solution = solution.AddDocument(DocumentId.CreateNewId(consumerId), $"Use{i}.cs",
                         SourceText.From(
                             $"namespace Bench.Api; public static class Use{i} {{ public static Old.Price Create() => new Old.Price({i}); }}"));
+
                 project = solution.GetProject(project.Id)!;
             }
 
+
             if (!fixture.Workspace.TryApplyChanges(project.Solution))
                 throw new InvalidOperationException("Cannot create code-fix workspace.");
+
             fixture.Document = fixture.Workspace.CurrentSolution.GetDocument(document.Id)!;
             fixture.Diagnostic = await fixture.FindDiagnosticAsync(ct).ConfigureAwait(false);
             return fixture;
@@ -161,6 +176,7 @@ sealed class FixFixture : IDisposable
                 .GetAnalyzerDiagnosticsAsync(ct).ConfigureAwait(false)
             : CompilerHost.Driver().RunGenerators(compilation, ct).GetRunResult().Diagnostics;
         var mapped = new List<Diagnostic>();
+
         foreach (var diagnostic in diagnostics.Where(item => item.Id == expected))
         {
             var target =
@@ -172,6 +188,7 @@ sealed class FixFixture : IDisposable
                 : Diagnostic.Create(diagnostic.Descriptor,
                     Location.Create(tree, diagnostic.Location.SourceSpan), diagnostic.Properties));
         }
+
 
         _diagnostics = mapped.ToArray();
         return _diagnostics.FirstOrDefault(diagnostic => diagnostic.Location.GetLineSpan().Path == Document.FilePath)
@@ -220,8 +237,10 @@ sealed class FixFixture : IDisposable
             "containers" => text.Contains("partial class Outer", StringComparison.Ordinal),
             _ => false
         };
+
         if (!valid)
             throw new InvalidOperationException("Code fix did not perform " + Name);
+
         foreach (var project in changed.Projects)
         {
             var compilation = (await project.GetCompilationAsync(ct).ConfigureAwait(false))!;
@@ -231,6 +250,7 @@ sealed class FixFixture : IDisposable
         }
 
         var remaining = await RefreshAsync(changed, ct).ConfigureAwait(false);
+
         if (remaining.Any(diagnostic => diagnostic.Id == Diagnostic.Id))
             throw new InvalidOperationException("The action left an expected repair incomplete: " + Diagnostic.Id);
     }
@@ -251,17 +271,23 @@ sealed class FixFixture : IDisposable
 
     sealed class RecordedDiagnostics(ProjectId projectId, Diagnostic[] diagnostics) : FixAllContext.DiagnosticProvider
     {
-        public override Task<IEnumerable<Diagnostic>> GetDocumentDiagnosticsAsync(Document document,
-            CancellationToken cancellationToken) =>
+        public override Task<IEnumerable<Diagnostic>> GetDocumentDiagnosticsAsync(
+            Document document,
+            CancellationToken cancellationToken
+        ) =>
             Task.FromResult(
                 diagnostics.Where(diagnostic => diagnostic.Location.GetLineSpan().Path == document.FilePath));
 
-        public override Task<IEnumerable<Diagnostic>> GetProjectDiagnosticsAsync(Project project,
-            CancellationToken cancellationToken) =>
+        public override Task<IEnumerable<Diagnostic>> GetProjectDiagnosticsAsync(
+            Project project,
+            CancellationToken cancellationToken
+        ) =>
             Task.FromResult<IEnumerable<Diagnostic>>([]);
 
-        public override Task<IEnumerable<Diagnostic>> GetAllDiagnosticsAsync(Project project,
-            CancellationToken cancellationToken) =>
+        public override Task<IEnumerable<Diagnostic>> GetAllDiagnosticsAsync(
+            Project project,
+            CancellationToken cancellationToken
+        ) =>
             Task.FromResult<IEnumerable<Diagnostic>>(project.Id == projectId ? diagnostics : []);
     }
 }

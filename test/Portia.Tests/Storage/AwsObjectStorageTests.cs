@@ -779,11 +779,13 @@ public sealed class AwsObjectStorageTests
         GetObjectResponse GetObjectResponseForCall(object?[] args)
         {
             var key = args[0] is GetObjectRequest request ? request.Key : args.ElementAtOrDefault(1) as string;
+
             if (MissingPromotedObjectOnGet && key?.StartsWith("content/", StringComparison.Ordinal) == true)
             {
                 throw new AmazonS3Exception("The promoted object was deleted.")
                 { StatusCode = System.Net.HttpStatusCode.NotFound };
             }
+
 
             if (StagingObjectMissing)
             {
@@ -799,6 +801,7 @@ public sealed class AwsObjectStorageTests
         {
             CopyCount++;
             CopyRequest = (CopyObjectRequest)args[0]!;
+
             if (FailCopyConditionally)
             {
                 throw new AmazonS3Exception("The destination object already exists.")
@@ -806,6 +809,7 @@ public sealed class AwsObjectStorageTests
                     StatusCode = System.Net.HttpStatusCode.PreconditionFailed
                 };
             }
+
 
             if (ConditionalCopyConflictsRemaining > 0)
             {
@@ -824,10 +828,12 @@ public sealed class AwsObjectStorageTests
         CompleteMultipartUploadResponse Complete(object?[] args)
         {
             CompleteCount++;
+
             if (CancelCompletion && args.LastOrDefault() is CancellationToken { IsCancellationRequested: true } token)
             {
                 throw new OperationCanceledException(token);
             }
+
 
             if (CompletionErrorCode is { } errorCode)
             {
@@ -868,11 +874,13 @@ public sealed class AwsObjectStorageTests
             }
 
             var response = new GetObjectMetadataResponse { ContentLength = Content.LongLength };
+
             if (PromotedObjectExists || ExistingObject)
             {
                 response.Metadata["portia-sha256"] =
                     MetadataDigest ?? Convert.ToHexString(SHA256.HashData(Content)).ToLowerInvariant();
             }
+
 
             return response;
         }
@@ -880,6 +888,7 @@ public sealed class AwsObjectStorageTests
         AbortMultipartUploadResponse CountAbort()
         {
             AbortCount++;
+
             if (AbortFailuresRemaining > 0)
             {
                 AbortFailuresRemaining--;
@@ -889,6 +898,7 @@ public sealed class AwsObjectStorageTests
                     ErrorCode = "SlowDown"
                 };
             }
+
 
             if (AbortReportsNoSuchUpload)
             {
@@ -903,6 +913,7 @@ public sealed class AwsObjectStorageTests
             var key = args[0] is DeleteObjectRequest deleteRequest
                 ? deleteRequest.Key
                 : args.ElementAtOrDefault(1) as string;
+
             if (FailStagingDelete && key?.StartsWith("staging/", StringComparison.Ordinal) == true)
             {
                 throw new AmazonS3Exception("We encountered an internal error. Please try again.")
@@ -911,6 +922,7 @@ public sealed class AwsObjectStorageTests
                     ErrorCode = "InternalError"
                 };
             }
+
 
             if (args[0] is DeleteObjectRequest request && request.Key.StartsWith("staging/", StringComparison.Ordinal))
             {

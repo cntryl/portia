@@ -8,14 +8,21 @@ sealed class RequestPipelineFrame<TRequest>
     static readonly ConditionalWeakTable<RequestPipelineFrame<TRequest>, int[]> ExtendedStates = [];
     long _state;
 
-    internal RequestPipelineFrame(object plan, IServiceProvider services, RequestHandlerRegistration registration,
-        TRequest request, IRequestContext context, int behaviorCount)
+    internal RequestPipelineFrame(
+        object plan,
+        IServiceProvider services,
+        RequestHandlerRegistration registration,
+        TRequest request,
+        IRequestContext context,
+        int behaviorCount
+    )
     {
         Plan = plan;
         Services = services;
         Registration = registration;
         Request = request;
         Context = context;
+
         if (behaviorCount > 31)
         {
             ExtendedStates.Add(this, new int[behaviorCount - 31]);
@@ -34,6 +41,7 @@ sealed class RequestPipelineFrame<TRequest>
         {
             var extendedState = ExtendedStates.GetValue(this, static _ =>
                 throw new InvalidOperationException("Missing extended request-pipeline state."));
+
             if ((Volatile.Read(ref _state) & Completed) != 0 ||
                 Interlocked.CompareExchange(ref extendedState[position - 31], 1, 0) != 0 ||
                 (Volatile.Read(ref _state) & Completed) != 0)
@@ -41,16 +49,20 @@ sealed class RequestPipelineFrame<TRequest>
                 throw new InvalidOperationException(PipelineContinuationContract.SingleUseMessage);
             }
 
+
             return;
         }
 
         var used = 1L << (position * 2);
         var occupied = used | (used << 1);
+
         while (true)
         {
             var state = Volatile.Read(ref _state);
+
             if ((state & (Completed | occupied)) != 0)
                 throw new InvalidOperationException(PipelineContinuationContract.SingleUseMessage);
+
             if (Interlocked.CompareExchange(ref _state, state | used, state) == state)
                 return;
         }

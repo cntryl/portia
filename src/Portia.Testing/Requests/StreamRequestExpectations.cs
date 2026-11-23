@@ -13,8 +13,10 @@ public sealed class StreamRequestExpectations<TOut>
     readonly Func<ScenarioObservation, IReadOnlyList<TOut>, string?>[] _expectations;
     readonly Lazy<Task<IReadOnlyList<TOut>>> _run;
 
-    internal StreamRequestExpectations(ScenarioDefinition<IReadOnlyList<TOut>> definition,
-        Func<ScenarioObservation, IReadOnlyList<TOut>, string?>[] expectations)
+    internal StreamRequestExpectations(
+        ScenarioDefinition<IReadOnlyList<TOut>> definition,
+        Func<ScenarioObservation, IReadOnlyList<TOut>, string?>[] expectations
+    )
     {
         _definition = definition;
         _expectations = expectations;

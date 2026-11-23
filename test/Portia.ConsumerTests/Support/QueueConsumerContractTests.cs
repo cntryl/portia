@@ -106,6 +106,7 @@ public sealed class QueueConsumerContractTests
         _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
         var retry = reader.Current.RetryAsync(TimeSpan.FromSeconds(7), TestContext.Current.CancellationToken).AsTask();
         await item.NackStarted.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+
         try
         {
             clock.Advance(TimeSpan.FromSeconds(2));
@@ -115,6 +116,7 @@ public sealed class QueueConsumerContractTests
             _ = item.ReleaseNack.TrySetResult();
             await retry;
         }
+
 
         Assert.Equal(0, item.Extensions);
         Assert.Equal(1, item.Nacks);
@@ -234,10 +236,12 @@ public sealed class QueueConsumerContractTests
         clock.Advance(TimeSpan.FromSeconds(2));
         await item.Extended.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
         _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
+
         if (acknowledge)
             await reader.Current.CompleteAsync(TestContext.Current.CancellationToken);
         else
             await reader.Current.AbandonAsync(TestContext.Current.CancellationToken);
+
 
         clock.Advance(TimeSpan.FromDays(1));
         Assert.Equal(1, item.Extensions);
@@ -260,10 +264,12 @@ public sealed class QueueConsumerContractTests
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
+
         if (acknowledge)
             await reader.Current.CompleteAsync(TestContext.Current.CancellationToken);
         else
             await reader.Current.AbandonAsync(TestContext.Current.CancellationToken);
+
 
         await reader.DisposeAsync();
 
@@ -297,6 +303,7 @@ public sealed class QueueConsumerContractTests
         _ = await clock.WaitForDelayAsync(TestContext.Current.CancellationToken);
         var complete = delivery.CompleteAsync(TestContext.Current.CancellationToken).AsTask();
         await item.CompletionStarted.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
+
         try
         {
             clock.Advance(TimeSpan.FromSeconds(2));
@@ -306,6 +313,7 @@ public sealed class QueueConsumerContractTests
             _ = item.ReleaseCompletion.TrySetResult();
             await complete;
         }
+
 
         Assert.Equal(0, item.Extensions);
         Assert.Equal(1, item.Completions);
@@ -321,8 +329,10 @@ public sealed class QueueConsumerContractTests
         // Arrange
         var serializer = ConsumerJson.CreateSerializer();
         var queue = new WakingQueueClient(4);
+
         for (var index = 0; index < 3; index++)
             queue.Enqueue(new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4()))));
+
         var consumer = new FitzRequestQueueConsumer(queue, serializer, "queue://consumer/scopes/delivery",
             ConsumerJson.Catalog(), 4, timeProvider: new ManualClock());
 
@@ -361,8 +371,10 @@ public sealed class QueueConsumerContractTests
 
         // Assert
         Assert.True(await reader.MoveNextAsync());
+
         for (var index = 0; index < 5; index++)
             queue.Enqueue(new Reserved(Serialize(serializer, new ScopeRequest(Uuid.CreateVersion4()))));
+
         await reader.Current.CompleteAsync(TestContext.Current.CancellationToken);
 
         await DrainAndWakeAsync(reader, queue, serializer, 5);
@@ -373,8 +385,12 @@ public sealed class QueueConsumerContractTests
 
     // Consumes the ready items, then proves the consumer is parked on a live subscription: with the
     // backstop clock never advanced, only the next enqueue's wake-up can deliver the following item.
-    static async Task DrainAndWakeAsync(IAsyncEnumerator<IQueuedRequest> reader, WakingQueueClient queue,
-        JsonRequestSerializer serializer, int ready)
+    static async Task DrainAndWakeAsync(
+        IAsyncEnumerator<IQueuedRequest> reader,
+        WakingQueueClient queue,
+        JsonRequestSerializer serializer,
+        int ready
+    )
     {
         for (var index = 0; index < ready; index++)
         {
@@ -432,6 +448,7 @@ public sealed class QueueConsumerContractTests
         finally
         {
             cancellation.Cancel();
+
             try
             {
                 await run;
@@ -550,6 +567,7 @@ public sealed class QueueConsumerContractTests
         finally
         {
             cancellation.Cancel();
+
             try
             {
                 await run;
@@ -605,6 +623,7 @@ public sealed class QueueConsumerContractTests
         finally
         {
             cancellation.Cancel();
+
             try
             {
                 await run;
@@ -637,16 +656,24 @@ public sealed class QueueConsumerContractTests
         public bool SubscribedBeforeReserve { get; private set; }
         public TaskCompletionSource Idle { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? delay = null,
-            CancellationToken ct = default)
+        public Task<ulong> EnqueueAsync(
+            string route,
+            ReadOnlyMemory<byte> body,
+            TimeSpan? delay = null,
+            CancellationToken ct = default
+        )
         {
             Enqueues++;
             EnqueueDelay = delay;
             return Task.FromResult(0UL);
         }
 
-        public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body,
-            QueueEnqueueOptions options, CancellationToken ct = default)
+        public Task<ulong> EnqueueAsync(
+            string route,
+            ReadOnlyMemory<byte> body,
+            QueueEnqueueOptions options,
+            CancellationToken ct = default
+        )
         {
             ArgumentNullException.ThrowIfNull(options);
             ct.ThrowIfCancellationRequested();
@@ -656,19 +683,28 @@ public sealed class QueueConsumerContractTests
                 : EnqueueAsync(route, body, options.Delay, ct);
         }
 
-        public async Task<IQueueReservedItem[]> ReserveAsync(string route, TimeSpan lease, int batchSize = 1,
-            TimeSpan? wait = null, CancellationToken ct = default)
+        public async Task<IQueueReservedItem[]> ReserveAsync(
+            string route,
+            TimeSpan lease,
+            int batchSize = 1,
+            TimeSpan? wait = null,
+            CancellationToken ct = default
+        )
         {
             SubscribedBeforeReserve = Subscribed;
             WaitSeconds = wait is null ? null : (int)wait.Value.TotalSeconds;
             BatchSize = batchSize;
+
             if (Interlocked.Increment(ref _reads) == 1)
                 return items;
+
             _ = Idle.TrySetResult();
+
             if (wait == TimeSpan.Zero)
             {
                 return [];
             }
+
 
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             return [];
@@ -731,25 +767,40 @@ public sealed class QueueConsumerContractTests
             }
         }
 
-        public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body, TimeSpan? delay = null,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<ulong> EnqueueAsync(
+            string route,
+            ReadOnlyMemory<byte> body,
+            TimeSpan? delay = null,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
-        public Task<ulong> EnqueueAsync(string route, ReadOnlyMemory<byte> body,
-            QueueEnqueueOptions options, CancellationToken ct = default)
+        public Task<ulong> EnqueueAsync(
+            string route,
+            ReadOnlyMemory<byte> body,
+            QueueEnqueueOptions options,
+            CancellationToken ct = default
+        )
         {
             ArgumentNullException.ThrowIfNull(options);
             return Task.FromException<ulong>(
                 new NotSupportedException("This fixture accepts already reserved items only."));
         }
 
-        public Task<IQueueReservedItem[]> ReserveAsync(string route, TimeSpan lease, int batchSize = 1,
-            TimeSpan? wait = null, CancellationToken ct = default)
+        public Task<IQueueReservedItem[]> ReserveAsync(
+            string route,
+            TimeSpan lease,
+            int batchSize = 1,
+            TimeSpan? wait = null,
+            CancellationToken ct = default
+        )
         {
             lock (_gate)
             {
                 SubscribedBeforeEveryReserve &= _notifications is not null;
+
                 if (_ready.TryDequeue(out var item))
                     return Task.FromResult<IQueueReservedItem[]>([item]);
+
                 _ = _parked.TrySetResult();
                 _parked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
                 return Task.FromResult<IQueueReservedItem[]>([]);
@@ -804,17 +855,25 @@ public sealed class QueueConsumerContractTests
         public async Task NackAsync(TimeSpan visibilityDelay = default, CancellationToken ct = default)
         {
             NackCalls++;
+
             if (!SupportsNack)
                 throw new NotSupportedException("This fixture does not implement native queue NACK.");
+
+
             if (_closed)
                 throw new QueueException("Queue item is completing or closed", "ITEM_CLOSED");
+
             ct.ThrowIfCancellationRequested();
+
             if (CloseOnNack)
                 Volatile.Write(ref _closed, true);
+
             NackDelay = visibilityDelay;
             _ = NackStarted.TrySetResult();
+
             if (BlockNack)
                 await ReleaseNack.Task.WaitAsync(ct);
+
             Nacks++;
         }
 
@@ -822,6 +881,7 @@ public sealed class QueueConsumerContractTests
         {
             if (Volatile.Read(ref _closed))
                 return Task.FromException(new QueueException("Queue item is completing or closed", "ITEM_CLOSED"));
+
             Extensions++;
             _ = Extended.TrySetResult();
             return FailExtension
@@ -833,9 +893,12 @@ public sealed class QueueConsumerContractTests
         {
             if (CloseOnCompletion)
                 Volatile.Write(ref _closed, true);
+
             _ = CompletionStarted.TrySetResult();
+
             if (BlockCompletion)
                 await ReleaseCompletion.Task.WaitAsync(ct);
+
             if (FailCompletion)
                 throw new IOException("The acknowledgment outcome is unknown.");
 

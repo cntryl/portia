@@ -20,26 +20,34 @@ public readonly record struct DecimalString(decimal Value)
         var magnitude = negative ? text[1..] : text;
         var point = magnitude.IndexOf('.');
         var whole = point < 0 ? magnitude : magnitude[..point];
+
         if (whole.IsEmpty || whole.Length > 1 && whole[0] == '0' || whole.ContainsAnyExceptInRange('0', '9'))
             return false;
 
+
         var exact = magnitude;
+
         if (point >= 0)
         {
             var fraction = magnitude[(point + 1)..];
+
             if (fraction.IsEmpty || fraction.ContainsAnyExceptInRange('0', '9'))
                 return false;
+
             exact = magnitude.TrimEnd('0').TrimEnd('.');
         }
+
 
         if (!decimal.TryParse(exact, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out var parsed))
             return false;
 
         // decimal.TryParse may successfully round an input. Compare its exact fixed-point representation.
         Span<char> formatted = stackalloc char[DecimalStringMaxFormattedLength];
+
         if (!parsed.TryFormat(formatted, out var written, Format, CultureInfo.InvariantCulture) ||
             !exact.SequenceEqual(formatted[..written]))
             return false;
+
 
         value = new DecimalString(negative ? -parsed : parsed);
         return true;

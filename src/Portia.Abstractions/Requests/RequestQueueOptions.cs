@@ -10,6 +10,7 @@ public sealed record RequestQueueOptions(TimeSpan? Delay = null, uint? TtlHours 
     {
         if (Delay is { } delay && (delay < TimeSpan.Zero || delay.Ticks % TimeSpan.TicksPerSecond != 0))
             throw new ArgumentOutOfRangeException(nameof(Delay), "The queue delay must be nonnegative whole seconds.");
+
         if (TtlHours == 0)
             throw new ArgumentOutOfRangeException(nameof(TtlHours), "The queue lifetime must be positive whole hours.");
     }

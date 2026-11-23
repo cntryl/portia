@@ -31,8 +31,12 @@ public abstract class RequestAuthorizerRegistration(
     // Fixed for the life of the process, so it is rendered once rather than on every dispatch.
     internal string StageName { get; } = PortiaTelemetry.StageName(stage);
 
-    internal abstract ValueTask<Result> AuthorizeAsync(IServiceProvider services, IRequestBase request,
-        IRequestContext context, CancellationToken ct);
+    internal abstract ValueTask<Result> AuthorizeAsync(
+        IServiceProvider services,
+        IRequestBase request,
+        IRequestContext context,
+        CancellationToken ct
+    );
 
     internal abstract void Register(IServiceCollection services);
 
@@ -40,8 +44,12 @@ public abstract class RequestAuthorizerRegistration(
 
     string IRequestCheck.Role => "request authorizer";
 
-    ValueTask<Result> IRequestCheck.CheckAsync(IServiceProvider services, IRequestBase request,
-        IRequestContext context, CancellationToken ct) => AuthorizeAsync(services, request, context, ct);
+    ValueTask<Result> IRequestCheck.CheckAsync(
+        IServiceProvider services,
+        IRequestBase request,
+        IRequestContext context,
+        CancellationToken ct
+    ) => AuthorizeAsync(services, request, context, ct);
 
     void IRequestCheck.Finished(long started, string outcome) =>
         PortiaTelemetry.AuthorizationFinished(started, ComponentName, StageName, outcome);

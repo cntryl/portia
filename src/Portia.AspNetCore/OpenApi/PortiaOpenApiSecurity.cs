@@ -23,12 +23,16 @@ public sealed partial class PortiaOpenApiOptions
         SecurityPolicy(policy, new Dictionary<string, string[]> { [scheme] = scopes });
 
     /// <summary>Maps a named policy to OR alternatives; schemes within each dictionary are required together (AND).</summary>
-    public PortiaOpenApiOptions SecurityPolicy(string policy,
-        params IReadOnlyDictionary<string, string[]>[] alternatives)
+    public PortiaOpenApiOptions SecurityPolicy(
+        string policy,
+        params IReadOnlyDictionary<string, string[]>[] alternatives
+    )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(policy);
+
         if (!_policySecurity.TryAdd(policy, Snapshot(alternatives)))
             throw new InvalidOperationException($"SecurityPolicy '{policy}' is mapped more than once.");
+
         return this;
     }
 
@@ -41,6 +45,7 @@ public sealed partial class PortiaOpenApiOptions
     {
         if (!_requestSecurity.TryAdd(typeof(TRequest), Snapshot(alternatives)))
             throw new InvalidOperationException($"SecurityFor '{typeof(TRequest)}' is mapped more than once.");
+
         return this;
     }
 
@@ -49,6 +54,7 @@ public sealed partial class PortiaOpenApiOptions
     {
         if (_defaultSecurity is not null)
             throw new InvalidOperationException("SecurityDefault is mapped more than once.");
+
         _defaultSecurity = Snapshot(alternatives);
         return this;
     }
@@ -58,35 +64,49 @@ public sealed partial class PortiaOpenApiOptions
     {
         if (_fallbackSecurity is not null)
             throw new InvalidOperationException("SecurityFallback is mapped more than once.");
+
         _fallbackSecurity = Snapshot(alternatives);
         return this;
     }
 
-    internal async Task ApplySecurityAsync(OpenApiOperation operation, Type? requestType, IList<object> endpoint,
-        IServiceProvider services, OpenApiDocument document, CancellationToken ct)
+    internal async Task ApplySecurityAsync(
+        OpenApiOperation operation,
+        Type? requestType,
+        IList<object> endpoint,
+        IServiceProvider services,
+        OpenApiDocument document,
+        CancellationToken ct
+    )
     {
         IReadOnlyDictionary<string, string[]>[] requirements = [new Dictionary<string, string[]>()];
+
         if (!endpoint.OfType<IAllowAnonymous>().Any())
         {
             var data = endpoint.OfType<IAuthorizeData>().ToArray();
             var policies = endpoint.OfType<AuthorizationPolicy>().ToArray();
             var provider = services.GetService<IAuthorizationPolicyProvider>();
+
             if (provider is null && (data.Length != 0 || policies.Length != 0))
                 throw new InvalidOperationException(
                     "OpenAPI security requires AddAuthorization for protected endpoints.");
+
             var combined = provider is null
                 ? null
                 : await AuthorizationPolicy.CombineAsync(provider, data, policies).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested();
+
             if (combined is not null)
             {
                 var names = data.Select(item => item.Policy).Where(name => !string.IsNullOrWhiteSpace(name))
                     .Distinct(StringComparer.Ordinal).ToArray();
+
                 foreach (var name in names)
                     if (!_policySecurity.ContainsKey(name!))
                         throw new InvalidOperationException(
                             $"OpenAPI policy '{name}' needs an explicit SecurityPolicy mapping.");
+
                 var unnamed = data.Where(item => string.IsNullOrWhiteSpace(item.Policy)).ToArray();
+
                 if (names.Length == 0)
                 {
                     var explicitMapping = data.Length == 0 && policies.Length == 0 ? _fallbackSecurity :
@@ -103,6 +123,7 @@ public sealed partial class PortiaOpenApiOptions
                     // principal. Separate policy credential maps cannot generally be ANDed or ORed.
                     // Infer only the plain authenticated-user case with exact handler mappings.
                     var simple = combined.Requirements.All(item => item is DenyAnonymousAuthorizationRequirement);
+
                     foreach (var name in names)
                     {
                         var policy = await provider!.GetPolicyAsync(name!).ConfigureAwait(false);
@@ -116,16 +137,20 @@ public sealed partial class PortiaOpenApiOptions
                                   selected.All(scheme => mapping.Any(alternative => alternative.ContainsKey(scheme)));
                     }
 
+
                     if (unnamed.Length != 0 && OnlyDefault(unnamed) && _defaultSecurity is not null)
                         simple = false;
+
                     if (!simple)
                         throw new InvalidOperationException(
                             "OpenAPI cannot compose credential mappings for these authorization policies. Combine them into one named composite policy and describe its complete credential alternatives with SecurityPolicy.");
+
                     requirements = await FromPolicy(combined).ConfigureAwait(false);
                 }
 
                 // A policy mapping must cover explicitly selected authentication handlers too. Do not silently
                 // drop them or invent an AND relationship: the host must describe the actual alternatives.
+
                 foreach (var scheme in data.SelectMany(item =>
                              (item.AuthenticationSchemes ?? string.Empty).Split(',',
                                  StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)))
@@ -135,45 +160,60 @@ public sealed partial class PortiaOpenApiOptions
             }
         }
 
+
+
         if (requestType is not null && _requestSecurity.TryGetValue(requestType, out var core))
             requirements = Combine(requirements, core);
+
         ct.ThrowIfCancellationRequested();
         operation.Security = [];
+
         foreach (var alternative in requirements.Any(item => item.Count != 0) ? requirements : [])
         {
             var requirement = new OpenApiSecurityRequirement();
+
             foreach (var (scheme, scopes) in alternative)
             {
                 if (!SecuritySchemes.TryGetValue(scheme, out var definition))
                     throw new InvalidOperationException(
                         $"OpenAPI security scheme '{scheme}' has no SecuritySchemes definition.");
+
+
                 if (scopes.Length != 0 &&
                     definition.Type is not (SecuritySchemeType.OAuth2 or SecuritySchemeType.OpenIdConnect))
                     throw new InvalidOperationException(
                         $"OpenAPI scopes on '{scheme}' require an OAuth2 or OpenID Connect scheme.");
+
                 requirement.Add(new OpenApiSecuritySchemeReference(scheme, document), [.. scopes]);
             }
 
+
             operation.Security.Add(requirement);
         }
+
 
         async Task<IReadOnlyDictionary<string, string[]>[]> FromPolicy(AuthorizationPolicy policy)
         {
             if (!policy.Requirements.OfType<DenyAnonymousAuthorizationRequirement>().Any())
                 throw new InvalidOperationException(
                     "OpenAPI needs explicit SecurityPolicy, SecurityDefault or SecurityFallback mappings for custom authorization requirements; an arbitrary assertion does not imply an authenticated caller.");
+
             var names = policy.AuthenticationSchemes.ToArray();
+
             if (names.Length == 0)
             {
                 var scheme = await (services.GetService<IAuthenticationSchemeProvider>()
                                         ?.GetDefaultAuthenticateSchemeAsync()
                                     ?? Task.FromResult<AuthenticationScheme?>(null)).ConfigureAwait(false);
                 ct.ThrowIfCancellationRequested();
+
                 if (scheme is null)
                     throw new InvalidOperationException(
                         "OpenAPI cannot determine a protected endpoint's authentication scheme. Configure authentication or SecurityPolicy mappings.");
+
                 names = [scheme.Name];
             }
+
 
             return names.Select(name =>
                 (IReadOnlyDictionary<string, string[]>)new Dictionary<string, string[]> { [name] = [] }).ToArray();
@@ -184,11 +224,14 @@ public sealed partial class PortiaOpenApiOptions
     {
         if (SecuritySchemes.Count == 0)
             return;
+
         document.Components ??= new OpenApiComponents();
         document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>(StringComparer.Ordinal);
+
         foreach (var (name, scheme) in SecuritySchemes)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
             if (!document.Components.SecuritySchemes.TryAdd(name, scheme))
                 throw new InvalidOperationException($"OpenAPI security scheme '{name}' is defined more than once.");
         }
@@ -201,10 +244,12 @@ public sealed partial class PortiaOpenApiOptions
     static IReadOnlyDictionary<string, string[]>[] Snapshot(IReadOnlyDictionary<string, string[]>[] alternatives)
     {
         ArgumentNullException.ThrowIfNull(alternatives);
+
         if (alternatives.Length == 0 || alternatives.Any(item => item is null))
             throw new ArgumentException(
                 "Security mappings require at least one alternative. Use an explicit empty dictionary for anonymous access.",
                 nameof(alternatives));
+
         return alternatives.Select(alternative => (IReadOnlyDictionary<string, string[]>)alternative.ToDictionary(
             item =>
             {
@@ -213,14 +258,18 @@ public sealed partial class PortiaOpenApiOptions
             }, item =>
             {
                 ArgumentNullException.ThrowIfNull(item.Value);
+
                 if (item.Value.Any(string.IsNullOrWhiteSpace))
                     throw new ArgumentException("OAuth scopes cannot be empty.", nameof(alternatives));
+
                 return item.Value.Distinct(StringComparer.Ordinal).ToArray();
             }, StringComparer.Ordinal)).ToArray();
     }
 
-    static IReadOnlyDictionary<string, string[]>[] Combine(IReadOnlyDictionary<string, string[]>[] left,
-        IReadOnlyDictionary<string, string[]>[] right) => left.SelectMany(first => right.Select(second =>
+    static IReadOnlyDictionary<string, string[]>[] Combine(
+        IReadOnlyDictionary<string, string[]>[] left,
+        IReadOnlyDictionary<string, string[]>[] right
+    ) => left.SelectMany(first => right.Select(second =>
         (IReadOnlyDictionary<string, string[]>)first.Concat(second).GroupBy(item => item.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key,
                 group => group.SelectMany(item => item.Value).Distinct(StringComparer.Ordinal).ToArray(),

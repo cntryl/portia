@@ -37,9 +37,11 @@ public sealed class DomainEventTypeCatalog
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentOutOfRangeException.ThrowIfLessThan(version, 1);
+
         if (_types.TryGetValue((name, version), out var registered))
             throw new InvalidOperationException(
                 $"Event '{name}' schema version {version} is already registered to type '{registered}'.");
+
         if (_discriminators.ContainsKey(typeof(TEvent)))
             throw new InvalidOperationException($"Event type '{typeof(TEvent)}' is already registered.");
 

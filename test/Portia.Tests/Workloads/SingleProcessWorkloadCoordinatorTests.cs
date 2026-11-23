@@ -59,6 +59,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
             async (identity, ct) =>
             {
                 running[identity.Name] = true;
+
                 try
                 {
                     await Task.Delay(Timeout.InfiniteTimeSpan, ct);
@@ -66,6 +67,7 @@ public sealed class SingleProcessWorkloadCoordinatorTests
                 finally
                 {
                     running[identity.Name] = false;
+
                     if (identity.Name == "second")
                     {
                         _ = cancelled.TrySetResult();
@@ -114,11 +116,13 @@ public sealed class SingleProcessWorkloadCoordinatorTests
             async (identity, ct) =>
             {
                 running[identity.Name] = true;
+
                 if (identity.Name != "c")
                 {
                     await fault.Task;
                     throw new InvalidOperationException($"fault {identity.Name}");
                 }
+
 
                 try
                 {
@@ -179,8 +183,10 @@ public sealed class SingleProcessWorkloadCoordinatorTests
     [Theory]
     [InlineData(null, "declared-projection-name")]
     [InlineData("chosen-by-the-host", "chosen-by-the-host")]
-    public async Task ShouldUseRegistrationNameAsCheckpointIdentityGivenHostedComponent(string? workloadName,
-        string expected)
+    public async Task ShouldUseRegistrationNameAsCheckpointIdentityGivenHostedComponent(
+        string? workloadName,
+        string expected
+    )
     {
         // Arrange
         var id = Uuid.CreateVersion4();
@@ -213,8 +219,10 @@ public sealed class SingleProcessWorkloadCoordinatorTests
     static async Task WaitUntilAsync(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);
+
         while (!condition() && DateTime.UtcNow < deadline)
             await Task.Delay(10);
+
         Assert.True(condition());
     }
 

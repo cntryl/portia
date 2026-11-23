@@ -54,7 +54,8 @@ sealed class TestRequestBus : IDisposable
         HttpListWidgetsHandler? httpListWidgetsHandler = null,
         NoWorkerRegisteredPingHandler? noWorkerRegisteredPingHandler = null,
         IPermissionEvaluator? permissionEvaluator = null,
-        IRequestActorValidator? actorValidator = null)
+        IRequestActorValidator? actorValidator = null
+    )
     {
         var services = new ServiceCollection();
         _ = services.AddFrameworkTests();
@@ -64,10 +65,12 @@ sealed class TestRequestBus : IDisposable
         _ = services.AddSingleton<IRequestDeserializer>(serializer);
         _ = services.AddSingleton<IRequestOutcomeSerializer>(serializer);
         _ = services.AddSingleton(permissionEvaluator ?? TestPermissionEvaluator.AllowAll());
+
         if (changeValueHandler is not null)
         {
             _ = services.AddSingleton(changeValueHandler);
         }
+
 
         if (getValueHandler is not null)
         {

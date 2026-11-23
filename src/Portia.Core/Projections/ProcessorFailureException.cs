@@ -38,9 +38,15 @@ public sealed class ProcessorFailureException : Exception
     /// <param name="lastSource">The last source record of the failed batch, when available.</param>
     /// <param name="innerException">The original exception, when handling threw.</param>
     /// <param name="error">The declared failure, when handling returned one.</param>
-    public ProcessorFailureException(CheckpointIdentity identity, ProjectionCheckpoint? checkpoint,
-        ProcessorFailureStage stage, DomainEventRecord? firstSource = null, DomainEventRecord? lastSource = null,
-        Exception? innerException = null, RequestError? error = null)
+    public ProcessorFailureException(
+        CheckpointIdentity identity,
+        ProjectionCheckpoint? checkpoint,
+        ProcessorFailureStage stage,
+        DomainEventRecord? firstSource = null,
+        DomainEventRecord? lastSource = null,
+        Exception? innerException = null,
+        RequestError? error = null
+    )
         : base($"Processor '{identity?.ComponentName}' failed during {stage}.", innerException)
     {
         ArgumentNullException.ThrowIfNull(identity);

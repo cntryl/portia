@@ -99,6 +99,7 @@ public sealed class ContractAttributeDiagnosticTests
 
         // Assert
         Assert.NotNull(member.BindingDefaultValue);
+
         if (nullableEnum)
             Assert.Equal(member.DefaultValue, member.BindingDefaultValue);
         else

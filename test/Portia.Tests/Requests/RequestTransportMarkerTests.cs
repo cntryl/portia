@@ -215,16 +215,26 @@ public sealed class RequestTransportMarkerTests
 
         public RequestMetadata? LastMetadata { get; private set; }
 
-        public ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues,
-            string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+        public ValueTask<Result> SendAsync<TRequest>(
+            TRequest request,
+            RequestRouteValues routeValues,
+            string? actorToken,
+            RequestMetadata metadata,
+            CancellationToken ct = default
+        )
             where TRequest : IRequest, ICallable
         {
             LastMetadata = metadata;
             return ValueTask.FromResult(Result.Success);
         }
 
-        public ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues,
-            string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+        public ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(
+            TRequest request,
+            RequestRouteValues routeValues,
+            string? actorToken,
+            RequestMetadata metadata,
+            CancellationToken ct = default
+        )
             where TRequest : IRequest<TOut>, ICallable
         {
             CallCount++;
@@ -237,12 +247,22 @@ public sealed class RequestTransportMarkerTests
     {
         public TaskCompletionSource Dispatched { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues,
-            string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+        public ValueTask<Result> SendAsync<TRequest>(
+            TRequest request,
+            RequestRouteValues routeValues,
+            string? actorToken,
+            RequestMetadata metadata,
+            CancellationToken ct = default
+        )
             where TRequest : IRequest, ICallable => new(WaitAsync(ct));
 
-        public ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues,
-            string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+        public ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(
+            TRequest request,
+            RequestRouteValues routeValues,
+            string? actorToken,
+            RequestMetadata metadata,
+            CancellationToken ct = default
+        )
             where TRequest : IRequest<TOut>, ICallable => new(WaitAsync<TOut>(ct));
 
         async Task<Result> WaitAsync(CancellationToken ct)
@@ -264,8 +284,13 @@ public sealed class RequestTransportMarkerTests
     {
         public RequestMetadata? LastMetadata { get; private set; }
 
-        public ValueTask EnqueueAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
-            RequestMetadata metadata, CancellationToken ct = default)
+        public ValueTask EnqueueAsync<TRequest>(
+            TRequest request,
+            RequestRouteValues routeValues,
+            string? actorToken,
+            RequestMetadata metadata,
+            CancellationToken ct = default
+        )
             where TRequest : IRequest, IQueuable
         {
             LastMetadata = metadata;
@@ -277,8 +302,13 @@ public sealed class RequestTransportMarkerTests
     {
         public RequestMetadata? LastMetadata { get; private set; }
 
-        public ValueTask PublishAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
-            RequestMetadata metadata, CancellationToken ct = default)
+        public ValueTask PublishAsync<TRequest>(
+            TRequest request,
+            RequestRouteValues routeValues,
+            string? actorToken,
+            RequestMetadata metadata,
+            CancellationToken ct = default
+        )
             where TRequest : IRequest, INotifiable
         {
             LastMetadata = metadata;
@@ -296,7 +326,8 @@ public sealed class RequestTransportMarkerTests
             RequestRouteValues routeValues,
             ClaimsPrincipal actor,
             RequestMetadata metadata,
-            CancellationToken ct = default)
+            CancellationToken ct = default
+        )
             where TRequest : IRequest, ISchedulable
         {
             LastMetadata = metadata;

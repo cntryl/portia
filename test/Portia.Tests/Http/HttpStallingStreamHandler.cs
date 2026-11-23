@@ -7,7 +7,8 @@ sealed class HttpStallingStreamHandler : IStreamRequestHandler<HttpStallingStrea
 {
     public async IAsyncEnumerable<string> HandleAsync(
         IRequestContext<HttpStallingStream> context,
-        [EnumeratorCancellation] CancellationToken ct)
+        [EnumeratorCancellation] CancellationToken ct
+    )
     {
         yield return "first\r\nsecond\rthird\nfourth";
         await Task.Delay(Timeout.InfiniteTimeSpan, ct).ConfigureAwait(false);

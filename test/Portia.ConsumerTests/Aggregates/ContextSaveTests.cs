@@ -60,6 +60,7 @@ public sealed class ContextSaveTests
         await repository.SaveAsync(account, context, TestContext.Current.CancellationToken);
         Assert.Equal(first, store.Writes[1]);
         Assert.Equal(audit ? 0UL : 1UL, account.CommittedStreamPosition);
+
         if (audit)
         {
             account.Audit(new Declined("another"));
@@ -68,6 +69,7 @@ public sealed class ContextSaveTests
         {
             account.Deposit(5);
         }
+
 
         await repository.SaveAsync(account, replacement, TestContext.Current.CancellationToken);
         Assert.Equal(replacement.ExecutionId, store.Serializer.Deserialize(store.Writes[2]).Metadata.ExecutionId);
@@ -109,6 +111,7 @@ public sealed class ContextSaveTests
             await repository.SaveAsync(account, first, cancellation.Token));
         var second = new RequestContext<DepositAccount>(first.Request, RequestActor.System);
         await repository.SaveAsync(account, second, TestContext.Current.CancellationToken);
+
         await foreach (var record in store.ReadAsync(account.Stream, ct: TestContext.Current.CancellationToken))
             Assert.Equal(second.ExecutionId, record.Event.Metadata.ExecutionId);
     }
@@ -134,6 +137,7 @@ public sealed class ContextSaveTests
             await repository.SaveAsync(account, context, TestContext.Current.CancellationToken));
         Assert.Same(original, first.Metadata);
         Assert.Equal(0UL, account.CommittedStreamPosition);
+
         await foreach (var record in store.ReadAsync(account.Stream, ct: TestContext.Current.CancellationToken))
             Assert.Fail($"Unexpected appended event {record.Event.Metadata.EventId}");
     }
@@ -154,8 +158,12 @@ public sealed class ContextSaveTests
 
         public List<byte[]> Writes { get; } = [];
 
-        public ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,
-            IReadOnlyList<DomainEvent> events, CancellationToken ct = default)
+        public ValueTask AppendAsync(
+            EventStreamAddress stream,
+            ulong expectedStreamPosition,
+            IReadOnlyList<DomainEvent> events,
+            CancellationToken ct = default
+        )
         {
             Writes.Add(Serializer.Serialize(Assert.Single(events)).ToArray());
             return Writes.Count == 1
@@ -163,12 +171,18 @@ public sealed class ContextSaveTests
                 : _inner.AppendAsync(stream, expectedStreamPosition, events, ct);
         }
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
-            CancellationToken ct = default)
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset = 0,
+            CancellationToken ct = default
+        )
             => _inner.ReadAsync(stream, fromOffset, ct);
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            CancellationToken ct = default)
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            CancellationToken ct = default
+        )
             => _inner.ReadAsync(pattern, cursor, ct);
     }
 }

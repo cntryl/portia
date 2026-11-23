@@ -28,8 +28,11 @@ public sealed class McpTelemetryQualificationTests
     [InlineData("tool", true, true)]
     [InlineData("resource", true, true)]
     [InlineData("prompt", true, true)]
-    public async Task ShouldExportBoundedCorrelatedSignalsGivenEveryPrimitive(string primitive, bool fails,
-        bool cancellationException)
+    public async Task ShouldExportBoundedCorrelatedSignalsGivenEveryPrimitive(
+        string primitive,
+        bool fails,
+        bool cancellationException
+    )
     {
         // Arrange
         var exportedActivities = new ExportedTelemetry<Activity>();
@@ -85,6 +88,7 @@ public sealed class McpTelemetryQualificationTests
                 var result = await client.CallToolAsync("telemetry.read",
                     new Dictionary<string, object?> { ["fail"] = fails }, cancellationToken: TestContext.Current.CancellationToken);
                 Assert.Equal(fails, result.IsError == true);
+
                 if (fails)
                     Assert.Null(result.StructuredContent);
             }
@@ -120,6 +124,7 @@ public sealed class McpTelemetryQualificationTests
         Assert.Equal(2, activities.Length);
         Assert.Equal(process.SpanId, execute.ParentSpanId);
         Assert.Equal(process.TraceId, execute.TraceId);
+
         foreach (var activity in activities)
         {
             Assert.Equal(fails ? "fault" : "success", activity.GetTagItem("portia.outcome"));
@@ -127,21 +132,27 @@ public sealed class McpTelemetryQualificationTests
                                                               || Equals(tag.Value, $"telemetry://read/{fails}"));
         }
 
+
         var duration = Assert.Single(metrics, metric => metric.Name == "portia.request.duration");
         var durationCount = 0;
+
         foreach (ref readonly var point in duration.GetMetricPoints())
         {
             durationCount++;
             Assert.Equal(1, point.GetHistogramCount());
             var tags = new List<KeyValuePair<string, object?>>();
+
             foreach (var tag in point.Tags)
                 tags.Add(tag);
+
             Assert.Equal(fails ? "fault" : "success",
                 Assert.Single(tags, tag => tag.Key == "portia.outcome").Value);
             Assert.Equal(3, point.Tags.Count);
         }
 
+
         Assert.Equal(1, durationCount);
+
         if (fails)
         {
             var fault = Assert.Single(logs, log => log.EventId.Id == 1002);

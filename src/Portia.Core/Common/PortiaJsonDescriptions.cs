@@ -47,8 +47,10 @@ static class PortiaJsonDescriptions
             : (options.TypeInfoResolver as PortiaJsonDescriptionResolver)?.Member(type, name,
                 options.PropertyNamingPolicy);
 
-    internal static PortiaContractMemberMetadata? PropertyMetadata(JsonSerializerOptions options,
-        JsonPropertyInfo property)
+    internal static PortiaContractMemberMetadata? PropertyMetadata(
+        JsonSerializerOptions options,
+        JsonPropertyInfo property
+    )
     {
         var declared = property.AssociatedParameter?.Name ?? (property.AttributeProvider as MemberInfo)?.Name;
         return declared is not null
@@ -71,19 +73,30 @@ static class PortiaJsonDescriptions
                 ? deprecation
                 : description + "\n\nDeprecated: " + deprecation;
 
-    internal static void ApplyFacts(JsonObject schema, JsonSerializerOptions options, Type type,
-        JsonPropertyInfo? property = null) =>
+    internal static void ApplyFacts(
+        JsonObject schema,
+        JsonSerializerOptions options,
+        Type type,
+        JsonPropertyInfo? property = null
+    ) =>
         ApplyMemberFacts(schema, options, type, property is null ? null : PropertyMetadata(options, property));
 
-    internal static void ApplyMemberFacts(JsonObject schema, JsonSerializerOptions options, Type type,
-        PortiaContractMemberMetadata? member)
+    internal static void ApplyMemberFacts(
+        JsonObject schema,
+        JsonSerializerOptions options,
+        Type type,
+        PortiaContractMemberMetadata? member
+    )
     {
         var contract = Metadata(options, type);
         var title = member?.Title ?? contract?.Title;
+
         if (title is not null)
             schema["title"] = title;
+
         if (member?.Deprecated == true || contract?.Deprecated == true)
             schema["deprecated"] = true;
+
         if (member is not null)
             PortiaJsonConstraints.Apply(schema, member, options);
     }
@@ -105,6 +118,7 @@ static class PortiaJsonDescriptions
     internal static void ApplyExamples(JsonObject schema, JsonSerializerOptions options, Type type, bool input)
     {
         var examples = Examples(options, type, input);
+
         if (examples.Count > 0)
             schema["examples"] = new JsonArray(examples.Select(example => example.Value?.DeepClone()).ToArray());
     }
@@ -113,7 +127,9 @@ static class PortiaJsonDescriptions
     {
         if (node is not JsonObject schema || schema["properties"] is not JsonObject properties)
             return;
+
         var required = schema["required"] as JsonArray ?? [];
+
         for (var index = required.Count - 1; index >= 0; index--)
         {
             var name = required[index]?.GetValue<string>();
@@ -125,9 +141,11 @@ static class PortiaJsonDescriptions
                   options.DefaultIgnoreCondition == JsonIgnoreCondition.WhenWritingNull &&
                   (!property.PropertyType.IsValueType ||
                    Nullable.GetUnderlyingType(property.PropertyType) is not null));
+
             if (omit)
                 required.RemoveAt(index);
         }
+
 
         if (input)
         {
@@ -152,6 +170,7 @@ static class PortiaJsonDescriptions
     {
         if (type != typeof(DecimalString) && type != typeof(DecimalString?))
             return;
+
         schema["type"] = type == typeof(DecimalString?)
             ? new JsonArray(JsonValue.Create("string"), JsonValue.Create("null"))
             : JsonValue.Create("string");
@@ -162,22 +181,28 @@ static class PortiaJsonDescriptions
     {
         if (Metadata(options, info.Type) is not { } contract || !contract.Members.Any(member => member.RequiredWhen.Count != 0))
             return;
+
         var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (var property in info.Properties)
         {
             var declared = PropertyMetadata(options, property)?.Name ?? property.AssociatedParameter?.Name ??
                            (property.AttributeProvider as MemberInfo)?.Name;
+
             if (properties.ContainsKey(property.Name) && declared is not null)
                 names[declared] = property.Name;
         }
 
+
         var conditions = schema["allOf"] as JsonArray ?? [];
+
         foreach (var member in contract.Members)
         {
             foreach (var condition in member.RequiredWhen)
             {
                 if (!names.TryGetValue(condition.Selector, out var selector) || !names.TryGetValue(member.Name, out var target))
                     throw new InvalidOperationException($"RequiredWhen requires JSON members '{condition.Selector}' and '{member.Name}'.");
+
                 conditions.Add((JsonNode)new JsonObject
                 {
                     ["if"] = new JsonObject
@@ -199,12 +224,17 @@ static class PortiaJsonDescriptions
             }
         }
 
+
         if (schema["allOf"] is null)
             schema["allOf"] = conditions;
     }
 
-    internal static JsonNode Apply(JsonSchemaExporterContext context, JsonNode node, JsonSerializerOptions options,
-        bool input = false)
+    internal static JsonNode Apply(
+        JsonSchemaExporterContext context,
+        JsonNode node,
+        JsonSerializerOptions options,
+        bool input = false
+    )
     {
         node = node.GetValueKind() switch
         {
@@ -216,6 +246,7 @@ static class PortiaJsonDescriptions
                          context.Path[^2] == "properties" && context.Path[^1] == property.Name;
         var text = (isProperty ? Property(options, context.PropertyInfo!) : null) ??
                    Type(options, context.TypeInfo.Type);
+
         if (text is not null)
         {
             node = node.GetValueKind() switch
@@ -224,9 +255,11 @@ static class PortiaJsonDescriptions
                 JsonValueKind.False => new JsonObject { ["not"] = new JsonObject() },
                 _ => node
             };
+
             if (node is JsonObject described)
                 described["description"] = text;
         }
+
 
         if (node is JsonObject schemaNode)
         {
@@ -240,15 +273,19 @@ static class PortiaJsonDescriptions
             {
                 if (properties[child.Name] is not JsonObject childSchema)
                     continue;
+
                 ApplyDecimalString(childSchema, child.PropertyType);
                 ApplyFacts(childSchema, options, child.PropertyType, child);
+
                 if (Property(options, child) is { } childText)
                     childSchema["description"] = childText;
             }
         }
 
+
         if (node is JsonObject exampleSchema)
             ApplyExamples(exampleSchema, options, context.TypeInfo.Type, input);
+
         CompleteRequired(node, context.TypeInfo, options, input);
         return node;
     }

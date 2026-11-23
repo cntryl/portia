@@ -55,10 +55,12 @@ public sealed class FitzNotificationFaultTests
 
         // Act
         var deliveries = new List<RequestNotification>();
+
         await foreach (var delivery in consumer.ReadAsync(TestContext.Current.CancellationToken))
             deliveries.Add(delivery);
 
         // Assert
+
         Assert.Equal(2, deliveries.Count);
         Assert.All(deliveries, delivery => Assert.Equal(RequestMetadata.FromRequest(request), delivery.Metadata));
     }
@@ -353,7 +355,8 @@ public sealed class FitzNotificationFaultTests
 
     static async Task<List<(string Request, string Transport, string Outcome)>> DrainAsync(
         IRequestDeserializer serializer,
-        ReadOnlyMemory<byte> payload)
+        ReadOnlyMemory<byte> payload
+    )
     {
         var lost = new List<(string, string, string)>();
         using var listener = new MeterListener();
@@ -399,8 +402,13 @@ public sealed class FitzNotificationFaultTests
             Task.FromResult(new ScheduleSubscription(selector, Notifications(selector, ct),
                 _ => ValueTask.CompletedTask, Task.CompletedTask));
 
-        public Task<string?> CreateAsync(string route, string cron, ScheduleDeliveryMode mode,
-            ReadOnlyMemory<byte> body, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<string?> CreateAsync(
+            string route,
+            string cron,
+            ScheduleDeliveryMode mode,
+            ReadOnlyMemory<byte> body,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
         public Task CancelAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
 
@@ -410,11 +418,15 @@ public sealed class FitzNotificationFaultTests
         public Task<ScheduleListPage> ListAsync(string? continuation, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task<IReadOnlyList<ScheduleEntry>> ListBySelectorAsync(string selector,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ScheduleEntry>> ListBySelectorAsync(
+            string selector,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
-        async IAsyncEnumerable<ScheduleNotification> Notifications(string route,
-            [EnumeratorCancellation] CancellationToken ct)
+        async IAsyncEnumerable<ScheduleNotification> Notifications(
+            string route,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             await Task.Yield();
             ct.ThrowIfCancellationRequested();
@@ -430,8 +442,13 @@ public sealed class FitzNotificationFaultTests
             Task.FromResult(new ScheduleSubscription(selector, Notifications(selector, ct),
                 _ => ValueTask.CompletedTask, Task.CompletedTask));
 
-        public Task<string?> CreateAsync(string route, string cron, ScheduleDeliveryMode mode,
-            ReadOnlyMemory<byte> body, CancellationToken ct = default)
+        public Task<string?> CreateAsync(
+            string route,
+            string cron,
+            ScheduleDeliveryMode mode,
+            ReadOnlyMemory<byte> body,
+            CancellationToken ct = default
+        )
         {
             CreatedBody = body;
             return Task.FromResult<string?>(route);
@@ -445,11 +462,15 @@ public sealed class FitzNotificationFaultTests
         public Task<ScheduleListPage> ListAsync(string? continuation, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task<IReadOnlyList<ScheduleEntry>> ListBySelectorAsync(string selector,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ScheduleEntry>> ListBySelectorAsync(
+            string selector,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
-        async IAsyncEnumerable<ScheduleNotification> Notifications(string route,
-            [EnumeratorCancellation] CancellationToken ct)
+        async IAsyncEnumerable<ScheduleNotification> Notifications(
+            string route,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             await Task.Yield();
             yield return new ScheduleNotification(route, payload);
@@ -520,19 +541,27 @@ public sealed class FitzNotificationFaultTests
 
         public void Dispose() => tracker.RecordDisposed();
 
-        public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(string route, string subject, string issuer,
-            CancellationToken ct = default)
+        public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(
+            string route,
+            string subject,
+            string issuer,
+            CancellationToken ct = default
+        )
         {
             var attempt = tracker.RecordAttempt(_id);
+
             if (tracker.ThrowFirst && attempt == 1)
                 throw new IOException("identity provider unavailable");
+
             if (tracker.AlwaysTransient || attempt <= tracker.TransientAttempts ||
                 (tracker.FailFirstTransiently && attempt == 1))
                 return ValueTask.FromResult(Result<ClaimsPrincipal>.Failure(
                     new RequestError(RequestErrorKind.Conflict, "identity provider unavailable", true)));
+
             if (tracker.AlwaysRejected)
                 return ValueTask.FromResult(Result<ClaimsPrincipal>.Failure(
                     new RequestError(RequestErrorKind.Unauthorized, "identity rejected")));
+
             return ValueTask.FromResult(Result<ClaimsPrincipal>.Success(RequestActor.CreateSystem(subject, issuer)));
         }
     }

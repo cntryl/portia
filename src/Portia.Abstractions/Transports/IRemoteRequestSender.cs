@@ -16,8 +16,12 @@ public interface IRemoteRequestSender
     /// <param name="actorToken">The caller's bearer token, or <see langword="null" />.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The completed result or a transport-aware cancellation outcome.</returns>
-    ValueTask<RemoteRequestOutcome> SendWithOutcomeAsync<TRequest>(TRequest request,
-        RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+    ValueTask<RemoteRequestOutcome> SendWithOutcomeAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ICallable
         => SendWithOutcomeAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
@@ -29,12 +33,18 @@ public interface IRemoteRequestSender
     /// <param name="metadata">The logical request identity to propagate.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The completed result or a transport-aware cancellation outcome.</returns>
-    async ValueTask<RemoteRequestOutcome> SendWithOutcomeAsync<TRequest>(TRequest request,
-        RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+    async ValueTask<RemoteRequestOutcome> SendWithOutcomeAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        RequestMetadata metadata,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ICallable
     {
         if (ct.IsCancellationRequested)
             return new RemoteRequestOutcome.NotDispatched();
+
         try
         {
             return new RemoteRequestOutcome.Completed(await SendAsync(request, routeValues, actorToken, metadata, ct)
@@ -55,8 +65,12 @@ public interface IRemoteRequestSender
     /// <param name="actorToken">The caller's bearer token, or <see langword="null" />.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The completed result or a transport-aware cancellation outcome.</returns>
-    ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(TRequest request,
-        RequestRouteValues routeValues, string? actorToken, CancellationToken ct = default)
+    ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest<TOut>, ICallable
         => SendWithOutcomeAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.FromRequest(request),
             ct);
@@ -70,12 +84,18 @@ public interface IRemoteRequestSender
     /// <param name="metadata">The logical request identity to propagate.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The completed result or a transport-aware cancellation outcome.</returns>
-    async ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(TRequest request,
-        RequestRouteValues routeValues, string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+    async ValueTask<RemoteRequestOutcome<TOut>> SendWithOutcomeAsync<TRequest, TOut>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        RequestMetadata metadata,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest<TOut>, ICallable
     {
         if (ct.IsCancellationRequested)
             return new RemoteRequestOutcome<TOut>.NotDispatched();
+
         try
         {
             return new RemoteRequestOutcome<TOut>.Completed(await SendAsync<TRequest, TOut>(request, routeValues,
@@ -105,8 +125,12 @@ public interface IRemoteRequestSender
     /// </param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of handling the request.</returns>
-    ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
-        CancellationToken ct = default)
+    ValueTask<Result> SendAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ICallable
         => SendAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
@@ -124,8 +148,13 @@ public interface IRemoteRequestSender
     /// <param name="metadata">The logical request identity to propagate.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of handling the request.</returns>
-    ValueTask<Result> SendAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
-        RequestMetadata metadata, CancellationToken ct = default)
+    ValueTask<Result> SendAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        RequestMetadata metadata,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ICallable;
 
     /// <summary>
@@ -145,8 +174,12 @@ public interface IRemoteRequestSender
     /// </param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of handling the request.</returns>
-    ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues,
-        string? actorToken, CancellationToken ct = default)
+    ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest<TOut>, ICallable
         => SendAsync<TRequest, TOut>(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
@@ -165,7 +198,12 @@ public interface IRemoteRequestSender
     /// <param name="metadata">The logical request identity to propagate.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of handling the request.</returns>
-    ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(TRequest request, RequestRouteValues routeValues,
-        string? actorToken, RequestMetadata metadata, CancellationToken ct = default)
+    ValueTask<Result<TOut>> SendAsync<TRequest, TOut>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        RequestMetadata metadata,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest<TOut>, ICallable;
 }

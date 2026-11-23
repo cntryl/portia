@@ -70,6 +70,7 @@ public sealed class TransportParityTests
         using var http = app.GetTestClient();
         var json = app.Services.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
         McpClient? client = null;
+
         if (transportName == "mcp-http")
             client = await McpClient.CreateAsync(new HttpClientTransport(new HttpClientTransportOptions
             { Endpoint = new Uri("http://localhost/mcp") }, http), cancellationToken: TestContext.Current.CancellationToken);
@@ -83,6 +84,7 @@ public sealed class TransportParityTests
             { Command = "dotnet", Arguments = [host, "--qualification"], Name = "Application parity" }),
                 StdioClientOptions.Create(), cancellationToken: TestContext.Current.CancellationToken);
         }
+
 
         await using var ownedClient = client;
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
@@ -114,6 +116,7 @@ public sealed class TransportParityTests
         Assert.Equal(DeniedStages, Assert.Single(state.Scopes,
             scope => scope.Stages.Length == 2).Stages);
         Assert.Equal(4, state.Scopes.Count(scope => scope.Stages.Contains("handled", StringComparer.Ordinal)));
+
         if (client is not null)
         {
             var resource = await client.ReadResourceAsync($"qualification://values/{QualifiedObservations.Tenant}",
@@ -135,6 +138,7 @@ public sealed class TransportParityTests
             Assert.Equal(6, (await ReadAsync()).Scopes.Length);
         }
 
+
         var concurrent = await Task.WhenAll(Enumerable.Range(0, 16).Select(_ =>
             ChangeAsync(new QualifiedChange(QualifiedObservations.Tenant, 3, "conflict"))));
         Assert.All(concurrent, result => Assert.Equal(409, result.Status));
@@ -154,11 +158,13 @@ public sealed class TransportParityTests
         async Task<QualifiedState> ReadDisposedAsync(int count)
         {
             var read = await ReadAsync();
+
             while (read.Scopes.Length < count || !read.Scopes.All(scope => scope.Stages.LastOrDefault() == "disposed"))
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(20), token);
                 read = await ReadAsync();
             }
+
 
             return read;
         }
@@ -169,6 +175,7 @@ public sealed class TransportParityTests
             {
                 await using var scope = app.Services.CreateAsyncScope();
                 var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
+
                 try
                 {
                     var result = await bus.DispatchAsync(request, bus.CreateContext(Actor()), token);
@@ -195,9 +202,11 @@ public sealed class TransportParityTests
             var input = JsonSerializer.SerializeToElement(request, TypeInfo<QualifiedChange>()).EnumerateObject()
                 .ToDictionary(property => property.Name, property => (object?)property.Value.Clone());
             var call = await client!.CallToolAsync("qualification.change", input, cancellationToken: token);
+
             if (call.IsError != true)
                 return (200,
                     call.StructuredContent!.Value.GetProperty("result").Deserialize(TypeInfo<QualifiedReply>()));
+
             Assert.DoesNotContain(call.Content.OfType<TextContentBlock>(),
                 content => content.Text.Contains("sensitive", StringComparison.Ordinal));
             var failure = JsonSerializer.SerializeToElement(call.Meta!["portia/error"]);
@@ -214,10 +223,12 @@ public sealed class TransportParityTests
                     bus.CreateContext(Actor()), token)).Value;
             }
 
+
             if (transportName == "rest")
                 return JsonSerializer.Deserialize(
                     await http.GetStringAsync($"/qualification?tenant={QualifiedObservations.Tenant}", token),
                     TypeInfo<QualifiedState>())!;
+
             var result = await client!.CallToolAsync("qualification.read", new Dictionary<string, object?>
             { ["tenant"] = QualifiedObservations.Tenant }, cancellationToken: token);
             Assert.False(result.IsError);

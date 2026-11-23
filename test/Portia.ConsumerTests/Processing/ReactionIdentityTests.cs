@@ -61,8 +61,11 @@ public sealed class ReactionIdentityTests
     {
         public IExecutionContext? Context { get; private set; }
 
-        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
-            CancellationToken ct)
+        protected override ValueTask<Result> ReactToEventAsync(
+            DomainEventRecord record,
+            IExecutionContext context,
+            CancellationToken ct
+        )
         {
             Context = context;
             return ValueTask.FromResult(Result.Success);

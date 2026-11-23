@@ -21,10 +21,12 @@ public sealed class ProjectorContext<TEvent> : IProjectorContext<TEvent>
         ArgumentNullException.ThrowIfNull(ev);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(batch);
+
         if (!ReferenceEquals(ev, source.Event))
         {
             throw new ArgumentException("Projection context must refer to its actual source event.", nameof(source));
         }
+
 
         Trigger = ev;
         Source = source;

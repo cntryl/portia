@@ -2,8 +2,13 @@ namespace Cntryl.Portia;
 
 static class RequestCheckRunner
 {
-    internal static async ValueTask<Result> RunAsync<TCheck>(IServiceProvider services, TCheck[] checks,
-        IRequestBase request, IRequestContext context, CancellationToken ct)
+    internal static async ValueTask<Result> RunAsync<TCheck>(
+        IServiceProvider services,
+        TCheck[] checks,
+        IRequestBase request,
+        IRequestContext context,
+        CancellationToken ct
+    )
         where TCheck : class, IRequestCheck
     {
         foreach (var check in checks)
@@ -11,6 +16,7 @@ static class RequestCheckRunner
             var started = PortiaTelemetry.StartTimestamp();
             var outcome = "fault";
             Result result;
+
             try
             {
                 result = await check.CheckAsync(services, request, context, ct).ConfigureAwait(false);
@@ -26,6 +32,7 @@ static class RequestCheckRunner
             {
                 check.Finished(started, outcome);
             }
+
 
             if (!result.IsSuccess)
                 return result;

@@ -15,6 +15,7 @@ public sealed class FitzPartitionLeaseCompetitor(ILeaseClient client) : IPartiti
         ulong ttlSecs,
         Func<CancellationToken, ValueTask> callback,
         LeaseExecutionOptions? options = null,
-        CancellationToken ct = default) =>
+        CancellationToken ct = default
+    ) =>
         _client.WithLeaseAsync(route, TimeSpan.FromSeconds(ttlSecs), callback, options, ct);
 }

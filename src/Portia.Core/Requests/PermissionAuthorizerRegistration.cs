@@ -9,17 +9,23 @@ sealed class PermissionAuthorizerRegistration(Type requestType, Func<IRequestBas
 {
     internal override string ComponentName => "permission";
 
-    internal override async ValueTask<Result> AuthorizeAsync(IServiceProvider services, IRequestBase request,
-        IRequestContext context, CancellationToken ct)
+    internal override async ValueTask<Result> AuthorizeAsync(
+        IServiceProvider services,
+        IRequestBase request,
+        IRequestContext context,
+        CancellationToken ct
+    )
     {
         // A blank permission names nothing an evaluator can look up, so whether it is granted would
         // depend on how each evaluator treats a permission it does not know.
         var required = permission(request);
+
         if (string.IsNullOrWhiteSpace(required))
         {
             throw new InvalidOperationException(
                 $"The permission declared on request type '{RequestType.FullName}' rendered blank. Declare a non-empty [RequiresPermission].");
         }
+
 
         var evaluator = services.GetRequiredService<IPermissionEvaluator>();
         var result = await evaluator.EvaluateAsync(context.Actor, required, ct).ConfigureAwait(false);

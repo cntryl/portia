@@ -7,10 +7,17 @@ namespace Cntryl.Portia.Consumer;
 
 static class ApplicationAnalyzerCompilation
 {
-    public static ImmutableArray<Diagnostic> Analyze(string projectName, DiagnosticAnalyzer analyzer,
-        (string Path, string Source)[] files, bool enabled = true, bool isTest = false,
-        string? rootNamespace = null, string? projectDirectory = null, MetadataReference[]? references = null,
-        string? assemblyName = null)
+    public static ImmutableArray<Diagnostic> Analyze(
+        string projectName,
+        DiagnosticAnalyzer analyzer,
+        (string Path, string Source)[] files,
+        bool enabled = true,
+        bool isTest = false,
+        string? rootNamespace = null,
+        string? projectDirectory = null,
+        MetadataReference[]? references = null,
+        string? assemblyName = null
+    )
     {
         var platformReferences = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Where(path => !Path.GetFileName(path).StartsWith("Portia.", StringComparison.Ordinal)
@@ -38,8 +45,13 @@ static class ApplicationAnalyzerCompilation
         return diagnostics;
     }
 
-    public static AnalyzerOptions Options(string projectName, string directory, string? rootNamespace = null,
-        bool enabled = true, bool isTest = false)
+    public static AnalyzerOptions Options(
+        string projectName,
+        string directory,
+        string? rootNamespace = null,
+        bool enabled = true,
+        bool isTest = false
+    )
     {
         var values = new Dictionary<string, string>
         {

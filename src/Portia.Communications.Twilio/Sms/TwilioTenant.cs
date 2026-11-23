@@ -15,11 +15,14 @@ public sealed class TwilioTenant
     {
         if (string.IsNullOrEmpty(accountSid) || !accountSid.All(char.IsAsciiLetterOrDigit))
             throw new ArgumentException("A Twilio account SID must be ASCII letters and digits.", nameof(accountSid));
+
         ArgumentException.ThrowIfNullOrWhiteSpace(apiKeySid);
         ArgumentException.ThrowIfNullOrWhiteSpace(apiKeySecret);
         ArgumentException.ThrowIfNullOrWhiteSpace(sender);
+
         if (apiKeySid.Contains(':', StringComparison.Ordinal))
             throw new ArgumentException("A Twilio API key SID cannot contain ':'.", nameof(apiKeySid));
+
         AccountSid = accountSid;
         ApiKeySid = apiKeySid;
         ApiKeySecret = apiKeySecret;

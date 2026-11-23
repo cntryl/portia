@@ -27,6 +27,7 @@ public sealed class DecimalStringConsumerTests
 
         // Assert
         Assert.Equal(expected, status);
+
         if (expected == 200)
             Assert.Equal("\"1.25\"", body);
     }
@@ -58,9 +59,11 @@ public sealed class DecimalStringConsumerTests
         var root = openApi.RootElement;
         var schema = root.GetProperty("paths").GetProperty("/quotes").GetProperty("post")
             .GetProperty("requestBody").GetProperty("content").GetProperty("application/json").GetProperty("schema");
+
         if (schema.TryGetProperty("$ref", out var reference))
             schema = root.GetProperty("components").GetProperty("schemas")
                 .GetProperty(reference.GetString()!.Split('/')[^1]);
+
         var amount = schema.GetProperty("properties").GetProperty("amount");
         Assert.Equal(["string", "null"], amount.GetProperty("type").EnumerateArray().Select(type => type.GetString()).OrderDescending(StringComparer.Ordinal));
         Assert.NotEmpty(amount.GetProperty("pattern").GetString()!);

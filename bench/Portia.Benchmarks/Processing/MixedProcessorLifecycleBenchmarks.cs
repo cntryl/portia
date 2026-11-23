@@ -94,11 +94,14 @@ sealed class MixedProcessorApplication : IDisposable
         _store.Reset();
         _reader.ReadCount = 0;
         var checkpoint = ProjectionCheckpoint.Start;
+
         while (true)
         {
             var next = await _runner.RunAsync(_projector, checkpoint, _options);
+
             if (next == checkpoint)
                 return next;
+
             checkpoint = next;
         }
     }
@@ -112,10 +115,13 @@ sealed class MixedProcessorApplication : IDisposable
         var all = await CatchUpAsync();
         Verify(all, _reader.Records.Length);
         var before = _store.Commits;
+
         if (await _runner.RunAsync(_projector, all, _options) != all || _store.Commits != before)
             throw new InvalidOperationException("An exhausted reader made progress.");
+
         _store.Reset();
         _store.FailCommit = true;
+
         if (_reader.Records.Length > 0)
         {
             try
@@ -135,6 +141,7 @@ sealed class MixedProcessorApplication : IDisposable
                 throw new InvalidOperationException("Failed commit leaked checkpoint or projected rows.");
         }
 
+
         _store.FailCommit = false;
         _reader.ReadCount = 0;
         var authoritative =
@@ -143,6 +150,7 @@ sealed class MixedProcessorApplication : IDisposable
         _store.Reset();
         using var canceled = new CancellationTokenSource();
         canceled.Cancel();
+
         try
         {
             await _runner.RunAsync(_projector, ProjectionCheckpoint.Start, _options, canceled.Token);
@@ -152,8 +160,11 @@ sealed class MixedProcessorApplication : IDisposable
         {
         }
 
+
+
         if (_store.Checkpoint != ProjectionCheckpoint.Start || _store.Commits != 0 || _store.Order.Count != 0)
             throw new InvalidOperationException("Canceled projector changed data or progress.");
+
         _store.RecordOrder = false;
         _store.Reset();
     }
@@ -164,10 +175,13 @@ sealed class MixedProcessorApplication : IDisposable
             ? ProjectionCheckpoint.Start
             : new ProjectionCheckpoint(_reader.Records[count - 1].NextCursor);
         var order = Enumerable.Range(0, count).Where(index => index % 3 != 2);
+
         if (checkpoint != expected || _store.Checkpoint != expected || _reader.ReadCount != count ||
             !_store.Order.SequenceEqual(order))
             throw new InvalidOperationException("Mixed dispatch skipped, reordered or repeated source records.");
+
         var size = _options.MaxBatchSize;
+
         if (_store.Commits != (count + size - 1) / size)
             throw new InvalidOperationException("Unexpected atomic commit count.");
     }
@@ -180,22 +194,30 @@ sealed class MixedReader(DomainEventRecord[] records) : IDomainEventReader
     internal DomainEventRecord[] Records => records;
     internal int ReadCount;
 
-    public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
-        CancellationToken ct) => Read((int)fromOffset, ct);
+    public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+        EventStreamAddress stream,
+        ulong fromOffset,
+        CancellationToken ct
+    ) => Read((int)fromOffset, ct);
 
-    public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-        CancellationToken ct) =>
+    public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+        EventStreamPattern pattern,
+        EventCursor cursor,
+        CancellationToken ct
+    ) =>
         Read(cursor.Value is null ? 0 : int.Parse(cursor.Value, CultureInfo.InvariantCulture), ct);
 
     async IAsyncEnumerable<DomainEventRecord> Read(int start, [EnumeratorCancellation] CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
+
         for (var index = start; index < records.Length; index++)
         {
             ct.ThrowIfCancellationRequested();
             ReadCount++;
             yield return records[index];
         }
+
 
         await Task.CompletedTask;
     }
@@ -220,6 +242,7 @@ sealed class MixedProjectionStore(bool asyncCommit) : IProjectionStore, IProject
     {
         if (RecordOrder && value % 3 != 1)
             throw new InvalidOperationException("Derived dispatch selected the wrong handler.");
+
         Stage(value);
     }
 
@@ -227,6 +250,7 @@ sealed class MixedProjectionStore(bool asyncCommit) : IProjectionStore, IProject
     {
         if (RecordOrder && value % 3 != 0)
             throw new InvalidOperationException("Base dispatch swallowed a derived handler.");
+
         Stage(value);
     }
 
@@ -238,13 +262,16 @@ sealed class MixedProjectionStore(bool asyncCommit) : IProjectionStore, IProject
         _pending.Clear();
     }
 
-    public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-        CancellationToken ct = default) => ValueTask.FromResult(Checkpoint);
+    public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+        CheckpointIdentity identity,
+        CancellationToken ct = default
+    ) => ValueTask.FromResult(Checkpoint);
 
     public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
     {
         if (context.Checkpoint != Checkpoint)
             throw new InvalidOperationException("Stale fixture checkpoint.");
+
         _pending.Clear();
         return ValueTask.FromResult<IProjectionBatch>(this);
     }
@@ -253,11 +280,16 @@ sealed class MixedProjectionStore(bool asyncCommit) : IProjectionStore, IProject
     {
         if (asyncCommit)
             await Task.Yield();
+
         ct.ThrowIfCancellationRequested();
+
         if (FailCommit)
             throw new MixedCommitException();
+
+
         if (RecordOrder)
             Order.AddRange(_pending);
+
         Checkpoint = checkpoint;
         Commits++;
     }
@@ -307,6 +339,7 @@ sealed partial class MixedBatchProjector(MixedProjectionStore store)
     {
         foreach (var context in contexts)
             store.StageBase(context.Trigger.Value);
+
         return ValueTask.FromResult(Result.Success);
     }
 
@@ -314,6 +347,7 @@ sealed partial class MixedBatchProjector(MixedProjectionStore store)
     {
         foreach (var context in contexts)
             store.StageDerived(context.Trigger.Value);
+
         return ValueTask.FromResult(Result.Success);
     }
 }

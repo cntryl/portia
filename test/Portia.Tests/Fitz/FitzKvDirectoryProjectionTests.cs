@@ -117,6 +117,7 @@ public sealed class FitzKvDirectoryProjectionTests(FitzBrokerFixture broker)
         for (var i = 0; i < changes.Length; i++)
             changes[i].AttachMetadata(new DomainEventMetadata(Uuid.CreateVersion4(), team, (ulong)i + 1,
                 DateTimeOffset.UtcNow));
+
         await events.AppendAsync(new EventStreamAddress(tenant.Value, "teams", team.ToString()), 0, changes);
     }
 }
@@ -148,8 +149,12 @@ sealed class TeamRepository(IKvClient kv, string route)
         return await Teams.GetAsync(tx, id, ct);
     }
 
-    public async ValueTask<KvDirectoryPage<Team>> ListAsync(TenantId tenant, int take, string? cursor,
-        CancellationToken ct)
+    public async ValueTask<KvDirectoryPage<Team>> ListAsync(
+        TenantId tenant,
+        int take,
+        string? cursor,
+        CancellationToken ct
+    )
     {
         await using var tx = await BeginReadAsync(tenant.Value, ct);
         return await Teams.QueryAsync(tx, ByName.Query().Take(take).After(cursor), ct);

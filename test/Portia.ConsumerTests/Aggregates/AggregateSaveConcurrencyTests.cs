@@ -19,10 +19,12 @@ public sealed class AggregateSaveConcurrencyTests
         await using var scope = provider.CreateAsyncScope();
         var repository = scope.ServiceProvider.Aggregates();
         var aggregate = new Account(Uuid.CreateVersion4());
+
         if (operation == "audit")
             aggregate.Audit(new Declined("first"));
         else
             aggregate.Deposit(1);
+
 
         var saving = repository.SaveAsync(aggregate, _saveContext, TestContext.Current.CancellationToken).AsTask();
 
@@ -63,12 +65,14 @@ public sealed class AggregateSaveConcurrencyTests
         var aggregate = new Account(Uuid.CreateVersion4());
         var scenario = new AggregateScenario<Account>(aggregate);
         var payload = new Deposited(7);
+
         if (audit)
             aggregate.Audit(payload);
         else
             aggregate.Raise(payload);
 
         // Act
+
         var metadata = payload.Metadata;
 
         // Assert
@@ -95,6 +99,7 @@ public sealed class AggregateSaveConcurrencyTests
         Assert.Equal(audit ? 0UL : 1UL, scenario.CommittedEventCount);
         Assert.Equal(audit ? 0UL : 1UL, aggregate.CommittedStreamPosition);
         Assert.Equal(store.Routes[0], store.Routes[1]);
+
         if (audit)
         {
             Assert.Equal(4, Uuid.Parse(store.Routes[0].Resource, CultureInfo.InvariantCulture).Version);
@@ -172,19 +177,30 @@ public sealed class AggregateSaveConcurrencyTests
 
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
-            CancellationToken ct = default)
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset = 0,
+            CancellationToken ct = default
+        )
             => _inner.ReadAsync(stream, fromOffset, ct);
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            CancellationToken ct = default)
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            CancellationToken ct = default
+        )
             => _inner.ReadAsync(pattern, cursor, ct);
 
-        public async ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,
-            IReadOnlyList<DomainEvent> events, CancellationToken ct = default)
+        public async ValueTask AppendAsync(
+            EventStreamAddress stream,
+            ulong expectedStreamPosition,
+            IReadOnlyList<DomainEvent> events,
+            CancellationToken ct = default
+        )
         {
             AppendCalls++;
             Routes.Add(stream);
+
             if (BlockFirstAppend && AppendCalls == 1)
             {
                 Entered.SetResult();
@@ -196,8 +212,11 @@ public sealed class AggregateSaveConcurrencyTests
                 return;
             }
 
+
+
             if (FailAppend)
                 throw new IOException("Injected append failure");
+
             await _inner.AppendAsync(stream, expectedStreamPosition, events, ct);
         }
     }

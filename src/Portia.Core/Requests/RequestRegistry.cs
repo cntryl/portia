@@ -26,9 +26,12 @@ public sealed class RequestRegistry
     ///     request's declared discriminator. A request absent here is never transported and reports
     ///     its CLR type name.
     /// </param>
-    public RequestRegistry(IEnumerable<RequestHandlerRegistration> handlers,
+    public RequestRegistry(
+        IEnumerable<RequestHandlerRegistration> handlers,
         IEnumerable<RequestAuthorizerRegistration> authorizers,
-        IEnumerable<RequestPipelineBehaviorRegistration> behaviors, IEnumerable<RequestTransportRegistration> requests)
+        IEnumerable<RequestPipelineBehaviorRegistration> behaviors,
+        IEnumerable<RequestTransportRegistration> requests
+    )
         : this(handlers, authorizers, behaviors, [], requests)
     {
     }
@@ -39,19 +42,25 @@ public sealed class RequestRegistry
     /// <param name="behaviors">Generated ordered pipeline behavior descriptors.</param>
     /// <param name="guards">Generated request guard descriptors, in registration order.</param>
     /// <param name="requests">Generated request transport descriptors.</param>
-    public RequestRegistry(IEnumerable<RequestHandlerRegistration> handlers,
+    public RequestRegistry(
+        IEnumerable<RequestHandlerRegistration> handlers,
         IEnumerable<RequestAuthorizerRegistration> authorizers,
         IEnumerable<RequestPipelineBehaviorRegistration> behaviors,
-        IEnumerable<RequestGuardRegistration> guards, IEnumerable<RequestTransportRegistration> requests)
+        IEnumerable<RequestGuardRegistration> guards,
+        IEnumerable<RequestTransportRegistration> requests
+    )
         : this(handlers, authorizers, behaviors, guards, requests, null)
     {
     }
 
-    internal RequestRegistry(IEnumerable<RequestHandlerRegistration> handlers,
+    internal RequestRegistry(
+        IEnumerable<RequestHandlerRegistration> handlers,
         IEnumerable<RequestAuthorizerRegistration> authorizers,
         IEnumerable<RequestPipelineBehaviorRegistration> behaviors,
-        IEnumerable<RequestGuardRegistration> guards, IEnumerable<RequestTransportRegistration> requests,
-        RequestAuthorizationRequirement? authorization)
+        IEnumerable<RequestGuardRegistration> guards,
+        IEnumerable<RequestTransportRegistration> requests,
+        RequestAuthorizationRequirement? authorization
+    )
     {
         ArgumentNullException.ThrowIfNull(handlers);
         ArgumentNullException.ThrowIfNull(authorizers);
@@ -59,6 +68,7 @@ public sealed class RequestRegistry
         ArgumentNullException.ThrowIfNull(guards);
         ArgumentNullException.ThrowIfNull(requests);
         var transportRegistrations = new Dictionary<Type, RequestTransportRegistration>();
+
         foreach (var registration in requests)
         {
             if (transportRegistrations.TryGetValue(registration.RequestType, out var existing))
@@ -74,6 +84,7 @@ public sealed class RequestRegistry
             transportRegistrations.Add(registration.RequestType, registration);
             _names.Add(registration.RequestType, registration.Discriminator.Name);
         }
+
 
         foreach (var registration in handlers)
         {
@@ -96,11 +107,13 @@ public sealed class RequestRegistry
         }
 
         var policies = authorizers.ToArray();
+
         if (policies.FirstOrDefault(registration => !Enum.IsDefined(registration.Stage)) is { } invalid)
         {
             throw new ArgumentOutOfRangeException(nameof(authorizers), invalid.Stage,
                 "Choose a defined authorization stage.");
         }
+
 
         foreach (var group in policies.GroupBy(registration => (registration.ScopeType, registration.AuthorizerType)))
         {
@@ -118,6 +131,7 @@ public sealed class RequestRegistry
                 .OrderBy(registration => registration.Stage)
         ];
         var extensions = behaviors.ToArray();
+
         foreach (var group in extensions.GroupBy(registration => (registration.ScopeType, registration.BehaviorType)))
         {
             if (group.Select(registration => registration.Order).Distinct().Skip(1).Any())
@@ -126,6 +140,7 @@ public sealed class RequestRegistry
                     $"Pipeline behavior '{group.Key.BehaviorType}' has conflicting orders.");
             }
         }
+
 
         _behaviors =
         [
@@ -136,6 +151,7 @@ public sealed class RequestRegistry
         [
             .. guards.DistinctBy(registration => (registration.ScopeType, registration.GuardType))
         ];
+
         if (_guards.Select(registration => registration.GuardType)
                 .Intersect(_authorizers.Select(registration => registration.AuthorizerType))
                 .FirstOrDefault() is { } dualRole)
@@ -143,6 +159,7 @@ public sealed class RequestRegistry
             throw new InvalidOperationException(
                 $"'{dualRole}' is registered as both a request authorizer and a request guard. Authorization and preflight run at different lifecycle phases; split it into two types.");
         }
+
 
         PermissionRequestTypes = _handlers.Values
             .Where(registration => registration.Permission is not null)

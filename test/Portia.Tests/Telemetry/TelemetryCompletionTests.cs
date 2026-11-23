@@ -209,6 +209,7 @@ public sealed class TelemetryCompletionTests
                                bus.CreateContext(RequestActor.System), TestContext.Current.CancellationToken))
             {
                 observed++;
+
                 if (onDispose)
                     break;
             }
@@ -292,8 +293,11 @@ public sealed class TelemetryCompletionTests
     [InlineData("query", false, true)]
     [InlineData("stream", true, true)]
     [InlineData("dispose", true, true)]
-    public async Task ShouldClassifyActualDispatchFailureGivenDispatchFailure(string shape, bool cancel,
-        bool cancellationException)
+    public async Task ShouldClassifyActualDispatchFailureGivenDispatchFailure(
+        string shape,
+        bool cancel,
+        bool cancellationException
+    )
     {
         // Arrange
         using var measurements = new OutcomeMeasurements();
@@ -316,6 +320,7 @@ public sealed class TelemetryCompletionTests
         var exception = await Record.ExceptionAsync(async () =>
         {
             var context = bus.CreateContext(RequestActor.System);
+
             if (shape == "command")
                 _ = await bus.DispatchAsync(new FailureCommand(), context, cancellation.Token);
             else if (shape == "query")
@@ -339,6 +344,7 @@ public sealed class TelemetryCompletionTests
         Assert.Equal(expected == "fault" ? ActivityStatusCode.Error : ActivityStatusCode.Unset, activity.Status);
         var events = activity.Events.Where(item => item.Name == "exception").ToArray();
         Assert.Equal(expected == "fault" ? 1 : 0, events.Length);
+
         if (expected == "fault")
             Assert.Equal(failure.Exception.GetType().FullName,
                 Assert.Single(events[0].Tags, item => item.Key == "exception.type").Value);
@@ -366,6 +372,7 @@ public sealed class TelemetryCompletionTests
         {
             if (cancel)
                 source.Cancel();
+
             return Exception;
         }
     }
@@ -576,8 +583,10 @@ public sealed class TelemetryCompletionTests
     {
         public int Attempts { get; private set; }
 
-        public ValueTask<Result> HandleAsync(IRequestContext<ConcurrencyTelemetryProbe> context,
-            CancellationToken ct)
+        public ValueTask<Result> HandleAsync(
+            IRequestContext<ConcurrencyTelemetryProbe> context,
+            CancellationToken ct
+        )
         {
             Attempts++;
             throw new EventStreamConcurrencyException("sensitive stream address");
@@ -591,8 +600,10 @@ public sealed class TelemetryCompletionTests
     internal sealed class ConcurrencyTelemetryStreamHandler(StreamConcurrencyBehavior behavior)
         : IStreamRequestHandler<ConcurrencyTelemetryStream, int>
     {
-        public IAsyncEnumerable<int> HandleAsync(IRequestContext<ConcurrencyTelemetryStream> context,
-            CancellationToken ct) => new ConcurrencyTelemetryStreamEnumerable(behavior.OnDispose);
+        public IAsyncEnumerable<int> HandleAsync(
+            IRequestContext<ConcurrencyTelemetryStream> context,
+            CancellationToken ct
+        ) => new ConcurrencyTelemetryStreamEnumerable(behavior.OnDispose);
     }
 
     sealed class ConcurrencyTelemetryStreamEnumerable(bool onDispose)
@@ -608,8 +619,11 @@ public sealed class TelemetryCompletionTests
         {
             if (!onDispose)
                 return ValueTask.FromException<bool>(Conflict());
+
+
             if (_moved)
                 return ValueTask.FromResult(false);
+
             _moved = true;
             return ValueTask.FromResult(true);
         }
@@ -681,8 +695,10 @@ public sealed class TelemetryCompletionTests
 
     internal sealed class GuardTelemetryStreamHandler : IStreamRequestHandler<GuardTelemetryStream, int>
     {
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<GuardTelemetryStream> context,
-            [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<int> HandleAsync(
+            IRequestContext<GuardTelemetryStream> context,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             yield return 1;
             await Task.CompletedTask;
@@ -716,14 +732,24 @@ public sealed class TelemetryCompletionTests
 
     sealed class CancelingEventStore : IEventStore
     {
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
-            CancellationToken ct = default) => new CancelingRecords();
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset = 0,
+            CancellationToken ct = default
+        ) => new CancelingRecords();
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            CancellationToken ct = default) => new CancelingRecords();
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            CancellationToken ct = default
+        ) => new CancelingRecords();
 
-        public ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,
-            IReadOnlyList<DomainEvent> events, CancellationToken ct = default) =>
+        public ValueTask AppendAsync(
+            EventStreamAddress stream,
+            ulong expectedStreamPosition,
+            IReadOnlyList<DomainEvent> events,
+            CancellationToken ct = default
+        ) =>
             ValueTask.FromException(new OperationCanceledException());
     }
 
@@ -742,15 +768,21 @@ public sealed class TelemetryCompletionTests
     sealed class CancelingProjector() : Projector(new RecordingProjectionTarget(),
         EventStreamPattern.ForPattern("test", "telemetry"))
     {
-        protected override ValueTask<Result> ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
-            CancellationToken ct) => ValueTask.FromException<Result>(new OperationCanceledException());
+        protected override ValueTask<Result> ProjectEventAsync(
+            DomainEventRecord record,
+            IProjectorContext context,
+            CancellationToken ct
+        ) => ValueTask.FromException<Result>(new OperationCanceledException());
     }
 
     sealed class CancelingReactor() : Reactor(new InMemoryProjectionCheckpointStore(),
         EventStreamPattern.ForPattern("test", "telemetry"))
     {
-        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
-            CancellationToken ct) => ValueTask.FromException<Result>(new OperationCanceledException());
+        protected override ValueTask<Result> ReactToEventAsync(
+            DomainEventRecord record,
+            IExecutionContext context,
+            CancellationToken ct
+        ) => ValueTask.FromException<Result>(new OperationCanceledException());
     }
 
     // Fails its first batch and succeeds on every retry, like a transient fault on a poison-free batch.
@@ -759,8 +791,11 @@ public sealed class TelemetryCompletionTests
     {
         int _attempts;
 
-        protected override ValueTask<Result> ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
-            CancellationToken ct) => ++_attempts == 1
+        protected override ValueTask<Result> ProjectEventAsync(
+            DomainEventRecord record,
+            IProjectorContext context,
+            CancellationToken ct
+        ) => ++_attempts == 1
             ? ValueTask.FromException<Result>(new InvalidOperationException("transient"))
             : ValueTask.FromResult(Result.Success);
     }
@@ -770,8 +805,11 @@ public sealed class TelemetryCompletionTests
     {
         int _attempts;
 
-        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
-            CancellationToken ct) => ++_attempts == 1
+        protected override ValueTask<Result> ReactToEventAsync(
+            DomainEventRecord record,
+            IExecutionContext context,
+            CancellationToken ct
+        ) => ++_attempts == 1
             ? ValueTask.FromException<Result>(new InvalidOperationException("transient"))
             : ValueTask.FromResult(Result.Success);
     }
@@ -783,8 +821,10 @@ public sealed class TelemetryCompletionTests
     internal sealed class EarlyStopTelemetryStreamHandler(EarlyStopBehavior behavior)
         : IStreamRequestHandler<EarlyStopTelemetryStream, int>
     {
-        public IAsyncEnumerable<int> HandleAsync(IRequestContext<EarlyStopTelemetryStream> context,
-            CancellationToken ct) => new EndlessTelemetryStream(behavior.DisposeFails);
+        public IAsyncEnumerable<int> HandleAsync(
+            IRequestContext<EarlyStopTelemetryStream> context,
+            CancellationToken ct
+        ) => new EndlessTelemetryStream(behavior.DisposeFails);
     }
 
     // Never ends on its own, so only the consumer can stop it.
@@ -810,14 +850,22 @@ public sealed class TelemetryCompletionTests
         CancellationTokenSource cancellation,
         bool cancelBeforeFailure) : IStreamClient
     {
-        public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null,
-            CancellationToken ct = default) => failureStage == "begin"
+        public Task<IStreamSession> BeginAsync(
+            string route,
+            ReadOnlyMemory<byte>? ingestMetadata = null,
+            CancellationToken ct = default
+        ) => failureStage == "begin"
             ? Task.FromException<IStreamSession>(new IOException("begin failed"))
             : Task.FromResult<IStreamSession>(new FailingAppendSession(failureStage, cancellation,
                 cancelBeforeFailure));
 
-        public IAsyncEnumerable<StreamReadBatch> ReadAsync(string route, ulong startOffset, StreamReadMode mode,
-            StreamReadOptions? options = null, CancellationToken ct = default) => throw new NotSupportedException();
+        public IAsyncEnumerable<StreamReadBatch> ReadAsync(
+            string route,
+            ulong startOffset,
+            StreamReadMode mode,
+            StreamReadOptions? options = null,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
         public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) =>
             throw new NotSupportedException();
@@ -834,8 +882,13 @@ public sealed class TelemetryCompletionTests
         CancellationTokenSource cancellation,
         bool cancelBeforeFailure) : IStreamSession
     {
-        public Task<ulong?> AppendAsync(ulong expectedOffset, ReadOnlyMemory<byte> body,
-            ReadOnlyMemory<byte>? metadata = null, string? discriminator = null, CancellationToken ct = default)
+        public Task<ulong?> AppendAsync(
+            ulong expectedOffset,
+            ReadOnlyMemory<byte> body,
+            ReadOnlyMemory<byte>? metadata = null,
+            string? discriminator = null,
+            CancellationToken ct = default
+        )
         {
             if (failureStage != "append")
             {

@@ -51,11 +51,17 @@ public class ReactorDispatchBenchmarks
     {
         public DomainEventRecord[] Records { get; set; } = [];
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
-            CancellationToken ct) => Read(ct);
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset,
+            CancellationToken ct
+        ) => Read(ct);
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            CancellationToken ct) => Read(ct);
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            CancellationToken ct
+        ) => Read(ct);
 
         async IAsyncEnumerable<DomainEventRecord> Read([EnumeratorCancellation] CancellationToken ct)
         {
@@ -73,22 +79,33 @@ public class ReactorDispatchBenchmarks
     {
         ProjectionCheckpoint _checkpoint;
 
-        public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity,
-            CancellationToken ct = default) => ValueTask.FromResult(_checkpoint);
+        public ValueTask<ProjectionCheckpoint> LoadAsync(
+            CheckpointIdentity identity,
+            CancellationToken ct = default
+        ) => ValueTask.FromResult(_checkpoint);
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-            CancellationToken ct = default)
+        public ValueTask SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default
+        )
         {
             _checkpoint = checkpoint;
             return ValueTask.CompletedTask;
         }
 
-        ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
-            ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+        ValueTask IConditionalProjectionCheckpointStore.SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint expected,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct
+        )
         {
             ct.ThrowIfCancellationRequested();
+
             if (_checkpoint != expected)
                 throw new ProjectionConcurrencyException("stale checkpoint");
+
             _checkpoint = checkpoint;
             return ValueTask.CompletedTask;
         }
@@ -97,14 +114,19 @@ public class ReactorDispatchBenchmarks
     sealed class SingleBenchmarkReactor(IProjectionCheckpointStore checkpoints)
         : Reactor(checkpoints, EventStreamPattern.ForPattern("bench"))
     {
-        protected override ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
-            CancellationToken ct) => ValueTask.FromResult(Result.Success);
+        protected override ValueTask<Result> ReactToEventAsync(
+            DomainEventRecord record,
+            IExecutionContext context,
+            CancellationToken ct
+        ) => ValueTask.FromResult(Result.Success);
     }
 
     sealed class BatchBenchmarkReactor(IProjectionCheckpointStore checkpoints)
         : BatchReactor(checkpoints, EventStreamPattern.ForPattern("bench"))
     {
-        protected override ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts,
-            CancellationToken ct) => ValueTask.FromResult(Result.Success);
+        protected override ValueTask<Result> ReactBatchAsync(
+            IReadOnlyList<IReactorContext> contexts,
+            CancellationToken ct
+        ) => ValueTask.FromResult(Result.Success);
     }
 }

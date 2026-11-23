@@ -85,24 +85,36 @@ public sealed class TransportExecutionContextTests
     {
         public List<RequestDispatchContext> Contexts { get; } = [];
 
-        public ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
-            CancellationToken ct = default) => ValueTask.FromResult(Result.Success);
+        public ValueTask<Result> AuthorizeAsync(
+            IRequestBase request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        ) => ValueTask.FromResult(Result.Success);
 
         public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>
             new(actor, metadata: metadata);
 
-        public ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context,
-            CancellationToken ct = default)
+        public ValueTask<Result> DispatchAsync(
+            IRequest request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        )
         {
             Contexts.Add(context);
             return ValueTask.FromResult(Result.Success);
         }
 
-        public ValueTask<Result<T>> DispatchAsync<T>(IRequest<T> request, RequestDispatchContext context,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public ValueTask<Result<T>> DispatchAsync<T>(
+            IRequest<T> request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
-        public IAsyncEnumerable<T> DispatchStreamAsync<T>(IStreamRequest<T> request, RequestDispatchContext context,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public IAsyncEnumerable<T> DispatchStreamAsync<T>(
+            IStreamRequest<T> request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
     }
 
     sealed class Validator : IRequestActorValidator
@@ -128,6 +140,7 @@ public sealed class TransportExecutionContextTests
         public async IAsyncEnumerable<IQueuedRequest> ReadAsync([EnumeratorCancellation] CancellationToken ct = default)
         {
             await Task.Yield();
+
             foreach (var request in requests)
                 yield return request;
         }

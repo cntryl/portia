@@ -204,8 +204,10 @@ public sealed partial class OperationalProjectionTests
         internal int Changes { get; private set; }
         internal int OpenTransactions { get; private set; }
 
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-            CancellationToken ct = default) => ValueTask.FromResult(Checkpoint);
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+            CheckpointIdentity identity,
+            CancellationToken ct = default
+        ) => ValueTask.FromResult(Checkpoint);
 
         public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)
         {

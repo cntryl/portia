@@ -14,8 +14,13 @@ public sealed class PortiaOperations : IPortiaOperations
     readonly IConfiguration? _configuration;
 
     /// <summary>Creates the operational API. An absent authorizer denies every operation.</summary>
-    public PortiaOperations(IOperationalStore store, OperationalOptions options, IApplicationTopology topology,
-        IOperationalAuthorizer? authorizer = null, TimeProvider? timeProvider = null)
+    public PortiaOperations(
+        IOperationalStore store,
+        OperationalOptions options,
+        IApplicationTopology topology,
+        IOperationalAuthorizer? authorizer = null,
+        TimeProvider? timeProvider = null
+    )
         : this(null, store, options, topology, authorizer, timeProvider)
     {
     }
@@ -27,8 +32,14 @@ public sealed class PortiaOperations : IPortiaOperations
     /// <param name="topology">Registered application topology.</param>
     /// <param name="authorizer">The required operational permission policy; absence denies all operations.</param>
     /// <param name="timeProvider">The clock, or null for system time.</param>
-    internal PortiaOperations(IConfiguration? configuration, IOperationalStore store, OperationalOptions options,
-        IApplicationTopology topology, IOperationalAuthorizer? authorizer, TimeProvider? timeProvider)
+    internal PortiaOperations(
+        IConfiguration? configuration,
+        IOperationalStore store,
+        OperationalOptions options,
+        IApplicationTopology topology,
+        IOperationalAuthorizer? authorizer,
+        TimeProvider? timeProvider
+    )
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _options = options ?? throw new ArgumentNullException(nameof(options));
@@ -47,21 +58,32 @@ public sealed class PortiaOperations : IPortiaOperations
     /// <param name="authorizer">The operational permission policy; absence denies all operations.</param>
     /// <param name="timeProvider">The clock, or null for system time.</param>
     /// <returns>The configured operator API.</returns>
-    public static PortiaOperations Create(IConfiguration? configuration, IOperationalStore store,
-        OperationalOptions options, IApplicationTopology topology, IOperationalAuthorizer? authorizer = null,
-        TimeProvider? timeProvider = null) => new(configuration, store, options, topology, authorizer, timeProvider);
+    public static PortiaOperations Create(
+        IConfiguration? configuration,
+        IOperationalStore store,
+        OperationalOptions options,
+        IApplicationTopology topology,
+        IOperationalAuthorizer? authorizer = null,
+        TimeProvider? timeProvider = null
+    ) => new(configuration, store, options, topology, authorizer, timeProvider);
 
     /// <inheritdoc />
-    public async ValueTask<ApplicationTopology> DescribeApplicationAsync(ClaimsPrincipal actor,
-        OperationalScope scope, CancellationToken ct = default)
+    public async ValueTask<ApplicationTopology> DescribeApplicationAsync(
+        ClaimsPrincipal actor,
+        OperationalScope scope,
+        CancellationToken ct = default
+    )
     {
         await AuthorizeAsync(actor, scope, OperationalAccess.Read, ct).ConfigureAwait(false);
         return _topology.Describe();
     }
 
     /// <inheritdoc />
-    public async ValueTask<OperationalHealth> GetSystemHealthAsync(ClaimsPrincipal actor,
-        OperationalScope scope, CancellationToken ct = default)
+    public async ValueTask<OperationalHealth> GetSystemHealthAsync(
+        ClaimsPrincipal actor,
+        OperationalScope scope,
+        CancellationToken ct = default
+    )
     {
         await AuthorizeAsync(actor, scope, OperationalAccess.Read, ct).ConfigureAwait(false);
         var states = await _store.ListAsync(scope, ct).ConfigureAwait(false);
@@ -71,16 +93,22 @@ public sealed class PortiaOperations : IPortiaOperations
     }
 
     /// <inheritdoc />
-    public async ValueTask<IReadOnlyList<OperationalProcessorState>> ListIssuesAsync(ClaimsPrincipal actor,
-        OperationalScope scope, CancellationToken ct = default)
+    public async ValueTask<IReadOnlyList<OperationalProcessorState>> ListIssuesAsync(
+        ClaimsPrincipal actor,
+        OperationalScope scope,
+        CancellationToken ct = default
+    )
     {
         await AuthorizeAsync(actor, scope, OperationalAccess.Read, ct).ConfigureAwait(false);
         return (await _store.ListAsync(scope, ct).ConfigureAwait(false)).Where(s => s.Block is not null).ToArray();
     }
 
     /// <inheritdoc />
-    public async ValueTask<OperationalProcessorState?> InspectProcessorAsync(ClaimsPrincipal actor,
-        OperationalTarget target, CancellationToken ct = default)
+    public async ValueTask<OperationalProcessorState?> InspectProcessorAsync(
+        ClaimsPrincipal actor,
+        OperationalTarget target,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(target);
         await AuthorizeAsync(actor, target.Scope, OperationalAccess.Read, ct).ConfigureAwait(false);
@@ -89,8 +117,12 @@ public sealed class PortiaOperations : IPortiaOperations
     }
 
     /// <inheritdoc />
-    public async ValueTask<OperationalAttempt> TraceCausalityAsync(ClaimsPrincipal actor, OperationalTarget target,
-        Guid attemptId, CancellationToken ct = default)
+    public async ValueTask<OperationalAttempt> TraceCausalityAsync(
+        ClaimsPrincipal actor,
+        OperationalTarget target,
+        Guid attemptId,
+        CancellationToken ct = default
+    )
     {
         var state = await InspectProcessorAsync(actor, target, ct).ConfigureAwait(false);
         return state?.Attempts.SingleOrDefault(a => a.Id == attemptId)
@@ -99,8 +131,11 @@ public sealed class PortiaOperations : IPortiaOperations
     }
 
     /// <inheritdoc />
-    public async ValueTask<RepairPlan> PreviewRepairAsync(ClaimsPrincipal actor, OperationalTarget target,
-        CancellationToken ct = default)
+    public async ValueTask<RepairPlan> PreviewRepairAsync(
+        ClaimsPrincipal actor,
+        OperationalTarget target,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(target);
         await AuthorizeAsync(actor, target.Scope, OperationalAccess.Preview, ct).ConfigureAwait(false);
@@ -114,8 +149,10 @@ public sealed class PortiaOperations : IPortiaOperations
                          state.Checkpoint != attempt.ExpectedCheckpoint
                 ? RepairActions.Resume
                 : RepairActions.Retry;
+
             if (action == RepairActions.Retry && attempt.Sources.Count == 0)
                 action = RepairActions.Resume;
+
             var plan = new RepairPlan(id, target, state.OwnerSession, block.AttemptId, block.FailureRevision,
                 action, state.Checkpoint, attempt.Sources.ToArray(), state.Settings, now + _options.RepairPlanLifetime);
             return state with { Plans = [.. state.Plans, plan] };
@@ -124,8 +161,12 @@ public sealed class PortiaOperations : IPortiaOperations
     }
 
     /// <inheritdoc />
-    public async ValueTask<RepairApproval> ApproveRepairAsync(ClaimsPrincipal actor, OperationalTarget target,
-        Guid planId, CancellationToken ct = default)
+    public async ValueTask<RepairApproval> ApproveRepairAsync(
+        ClaimsPrincipal actor,
+        OperationalTarget target,
+        Guid planId,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(target);
         await AuthorizeAsync(actor, target.Scope, OperationalAccess.Approve, ct).ConfigureAwait(false);
@@ -133,8 +174,10 @@ public sealed class PortiaOperations : IPortiaOperations
         var saved = await ChangeAsync(target, state =>
         {
             var plan = RequireCurrentPlan(state, planId, _clock.GetUtcNow());
+
             if (state.Repairs.Any(r => r.PlanId == planId))
                 throw new InvalidOperationException("An execution has already been requested for this plan.");
+
             var approval = new RepairApproval(planId, actorReference, _clock.GetUtcNow(), plan.ExpiresAt);
             return state with { Approvals = [.. state.Approvals.Where(a => a.PlanId != planId), approval] };
         }, ct).ConfigureAwait(false);
@@ -142,8 +185,12 @@ public sealed class PortiaOperations : IPortiaOperations
     }
 
     /// <inheritdoc />
-    public async ValueTask RevokeRepairAsync(ClaimsPrincipal actor, OperationalTarget target, Guid planId,
-        CancellationToken ct = default)
+    public async ValueTask RevokeRepairAsync(
+        ClaimsPrincipal actor,
+        OperationalTarget target,
+        Guid planId,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(target);
         await AuthorizeAsync(actor, target.Scope, OperationalAccess.Approve, ct).ConfigureAwait(false);
@@ -151,8 +198,11 @@ public sealed class PortiaOperations : IPortiaOperations
         {
             if (state.Repairs.Any(r => r.PlanId == planId && r.Status != OperationalRepairStatuses.Queued))
                 throw new InvalidOperationException("The worker already claimed this repair.");
+
+
             if (!state.Approvals.Any(a => a.PlanId == planId))
                 throw new KeyNotFoundException("No approval exists for this plan.");
+
             return state with
             {
                 Approvals = state.Approvals.Select(a => a.PlanId == planId ? a with { Revoked = true } : a).ToArray(),
@@ -163,8 +213,12 @@ public sealed class PortiaOperations : IPortiaOperations
     }
 
     /// <inheritdoc />
-    public async ValueTask<OperationalRepair> ExecuteRepairAsync(ClaimsPrincipal actor, OperationalTarget target,
-        Guid planId, CancellationToken ct = default)
+    public async ValueTask<OperationalRepair> ExecuteRepairAsync(
+        ClaimsPrincipal actor,
+        OperationalTarget target,
+        Guid planId,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(target);
         await AuthorizeAsync(actor, target.Scope, OperationalAccess.Execute, ct).ConfigureAwait(false);
@@ -175,6 +229,7 @@ public sealed class PortiaOperations : IPortiaOperations
             // An authorized duplicate observes the original outcome even after expiry or progress.
             if (state.Repairs.Any(r => r.PlanId == planId))
                 return state;
+
             _ = RequireCurrentPlan(state, planId, _clock.GetUtcNow());
             RequireApproval(state, planId, _clock.GetUtcNow());
             return state with
@@ -190,8 +245,12 @@ public sealed class PortiaOperations : IPortiaOperations
     }
 
     /// <inheritdoc />
-    public async ValueTask<OperationalRepair> VerifyRepairAsync(ClaimsPrincipal actor, OperationalTarget target,
-        Guid planId, CancellationToken ct = default)
+    public async ValueTask<OperationalRepair> VerifyRepairAsync(
+        ClaimsPrincipal actor,
+        OperationalTarget target,
+        Guid planId,
+        CancellationToken ct = default
+    )
     {
         var state = await InspectProcessorAsync(actor, target, ct).ConfigureAwait(false);
         return state?.Repairs.SingleOrDefault(r => r.PlanId == planId)
@@ -202,6 +261,7 @@ public sealed class PortiaOperations : IPortiaOperations
     {
         var plan = state.Plans.SingleOrDefault(p => p.Id == planId)
                    ?? throw new KeyNotFoundException("The repair plan does not exist in retained history.");
+
         if (plan.Target != state.Target || plan.OwnerSession != state.OwnerSession
                                         || plan.ExpiresAt <= now || state.Block is not { } block
                                         || block.AttemptId != plan.FailedAttemptId ||
@@ -211,6 +271,7 @@ public sealed class PortiaOperations : IPortiaOperations
                                         || !state.Attempts.Single(a => a.Id == plan.FailedAttemptId).Sources
                                             .SequenceEqual(plan.Sources))
             throw new InvalidOperationException("The repair plan is expired or no longer matches this workload.");
+
         return plan;
     }
 
@@ -220,12 +281,17 @@ public sealed class PortiaOperations : IPortiaOperations
             throw new UnauthorizedAccessException("An unexpired operator approval of this exact plan is required.");
     }
 
-    async ValueTask AuthorizeAsync(ClaimsPrincipal actor, OperationalScope scope, OperationalAccess permission,
-        CancellationToken ct)
+    async ValueTask AuthorizeAsync(
+        ClaimsPrincipal actor,
+        OperationalScope scope,
+        OperationalAccess permission,
+        CancellationToken ct
+    )
     {
         ArgumentNullException.ThrowIfNull(actor);
         ArgumentNullException.ThrowIfNull(scope);
         scope.Validate();
+
         if (!SystemOperatorAuthorization.IsAdministrator(actor, _configuration) || _authorizer is null
             || !await _authorizer.AuthorizeAsync(actor, scope, permission, ct).ConfigureAwait(false))
             throw new UnauthorizedAccessException("The actor is not authorized for this scoped operational action.");
@@ -243,19 +309,26 @@ public sealed class PortiaOperations : IPortiaOperations
         }
     }
 
-    async ValueTask<OperationalProcessorState> ChangeAsync(OperationalTarget target,
-        Func<OperationalProcessorState, OperationalProcessorState> change, CancellationToken ct)
+    async ValueTask<OperationalProcessorState> ChangeAsync(
+        OperationalTarget target,
+        Func<OperationalProcessorState, OperationalProcessorState> change,
+        CancellationToken ct
+    )
     {
         _ = target.Identity;
+
         while (true)
         {
             ct.ThrowIfCancellationRequested();
             var current = await _store.ReadAsync(target, ct).ConfigureAwait(false)
                           ?? throw new KeyNotFoundException("The processor has no durable operational evidence.");
             var next = change(current);
+
             if (ReferenceEquals(next, current))
                 return current;
+
             next = next with { Revision = checked(current.Revision + 1) };
+
             try
             {
                 if (await _store.CompareExchangeAsync(next, current.Revision, current.OwnerSession, ct)

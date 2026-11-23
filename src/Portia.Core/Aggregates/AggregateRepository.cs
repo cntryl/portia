@@ -11,32 +11,39 @@ sealed class AggregateRepository(IEventStore store) : IAggregateReader, IAggrega
         var started = PortiaTelemetry.StartTimestamp();
         var outcome = "fault";
         var eventCount = 0;
+
         try
         {
             ArgumentNullException.ThrowIfNull(aggregate);
             using var operation = aggregate.BeginOperation();
             ct.ThrowIfCancellationRequested();
+
             if (aggregate.UncommittedEvents.Count != 0 || aggregate.UncommittedAudits.Count != 0)
             {
                 throw new InvalidOperationException("Save pending aggregate changes before hydration.");
             }
 
+
             var events = new List<DomainEvent>();
             var position = aggregate.CommittedStreamPosition;
+
             await foreach (var record in store.ReadAsync(aggregate.Stream, position, ct).ConfigureAwait(false))
             {
                 var ev = record.Event;
                 DomainEventValidation.Validate(ev);
+
                 if (record.Stream != aggregate.Stream || record.ResourceOffset != position)
                 {
                     throw new InvalidOperationException(
                         "Aggregate records must have contiguous physical stream offsets.");
                 }
 
+
                 events.Add(ev);
                 eventCount++;
                 position = checked(position + 1);
             }
+
 
             ct.ThrowIfCancellationRequested();
             aggregate.LoadDuringOperation(events, position);
@@ -55,8 +62,11 @@ sealed class AggregateRepository(IEventStore store) : IAggregateReader, IAggrega
     }
 
     /// <inheritdoc />
-    public ValueTask SaveAsync<TAggregate>(TAggregate aggregate, IExecutionContext context,
-        CancellationToken ct = default)
+    public ValueTask SaveAsync<TAggregate>(
+        TAggregate aggregate,
+        IExecutionContext context,
+        CancellationToken ct = default
+    )
         where TAggregate : Aggregate => SaveCoreAsync(aggregate, EventAttribution.FromContext(context), ct);
 
     async ValueTask SaveCoreAsync<TAggregate>(TAggregate aggregate, EventAttribution attribution, CancellationToken ct)
@@ -65,15 +75,18 @@ sealed class AggregateRepository(IEventStore store) : IAggregateReader, IAggrega
         var started = PortiaTelemetry.StartTimestamp();
         var outcome = "fault";
         var eventCount = 0;
+
         try
         {
             ArgumentNullException.ThrowIfNull(aggregate);
             using var operation = aggregate.BeginOperation();
             ct.ThrowIfCancellationRequested();
+
             if (aggregate.UncommittedEvents.Count != 0 && aggregate.UncommittedAudits.Count != 0)
             {
                 throw new InvalidOperationException("An aggregate save cannot contain both raised events and audits.");
             }
+
 
             if (aggregate.UncommittedEvents.Count == 0 && aggregate.UncommittedAudits.Count == 0)
             {
@@ -89,10 +102,12 @@ sealed class AggregateRepository(IEventStore store) : IAggregateReader, IAggrega
             var stream = isAudit ? aggregate.GetAuditSessionStream() : aggregate.Stream;
             var expectedPosition = isAudit ? 0 : aggregate.CommittedStreamPosition;
             await store.AppendAsync(stream, expectedPosition, pending, ct).ConfigureAwait(false);
+
             foreach (var ev in pending)
                 if (ProcessingObservation.IsEnabled)
                     ProcessingObservation.Record("event", stream.ToString(), ev.Metadata.EventId.ToString(),
                         ev.Metadata.ExecutionId?.ToString(), "committed");
+
             aggregate.Save();
             outcome = "success";
         }

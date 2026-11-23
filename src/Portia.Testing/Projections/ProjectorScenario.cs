@@ -74,17 +74,21 @@ public sealed class ProjectorScenario
     public async Task RunAsync(Projector projector, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(projector);
+
         if (projector.Pattern.IsTenantTemplate)
             projector.BindWorkload(_history.Workload(projector.Name), null);
+
         var store = await _history.ToStoreAsync(projector.Pattern, ct).ConfigureAwait(false);
         var identity = new CheckpointIdentity(projector.Name, projector.Pattern);
         var checkpoint = await projector.Store.LoadCheckpointAsync(identity, ct).ConfigureAwait(false);
         var runner = new ProjectorRunner(store);
+
         while (true)
         {
             ct.ThrowIfCancellationRequested();
             var pass = await runner.RunPassAsync(null, projector, checkpoint, ct: ct).ConfigureAwait(false);
             checkpoint = pass.Checkpoint;
+
             if (!pass.ContinueImmediately)
                 return;
         }

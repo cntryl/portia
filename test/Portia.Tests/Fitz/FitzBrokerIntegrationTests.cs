@@ -456,8 +456,10 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         Assert.Equal(7, result.Value);
         // The terminal response can arrive before the server records completion telemetry.
         using var telemetryDeadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
         while (deliveries.IsEmpty)
             await Task.Delay(10, telemetryDeadline.Token);
+
         AssertParentedFitzTopology(activities, "test.rpc.get-value", "rpc");
         AssertCompletedDelivery(deliveries, "test.rpc.get-value", "rpc");
     }
@@ -529,6 +531,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         Assert.Empty(handler.HandledValues);
         var redelivered = Assert.Single(await workerClient.Queue.ReserveAsync(route, TimeSpan.FromSeconds(2),
             wait: TimeSpan.FromSeconds(5), ct: TestContext.Current.CancellationToken));
+
         try
         {
             var envelope = serializer.DeserializeEnvelope(redelivered.Body);
@@ -699,8 +702,11 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         });
     }
 
-    static void AssertCompletedDelivery(IEnumerable<DeliveryMeasurement> captured, string requestName,
-        string transport)
+    static void AssertCompletedDelivery(
+        IEnumerable<DeliveryMeasurement> captured,
+        string requestName,
+        string transport
+    )
     {
         var delivery = Assert.Single(captured);
         Assert.Equal(1, delivery.Value);
@@ -714,10 +720,12 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         while (true)
         {
             var items = await queue.ReserveAsync(route, TimeSpan.FromSeconds(1), wait: TimeSpan.Zero);
+
             if (items.Length == 0)
             {
                 return;
             }
+
 
             foreach (var item in items)
             {
@@ -811,6 +819,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         {
             ct.ThrowIfCancellationRequested();
             var client = await broker.CreateClientAsync();
+
             try
             {
                 var connection = new FitzApplicationConnection(client, false, TimeSpan.Zero);
@@ -874,6 +883,7 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         {
             ct.ThrowIfCancellationRequested();
             var client = await broker.CreateClientAsync();
+
             try
             {
                 return new FitzKvProjectionSession(client,
@@ -896,11 +906,15 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
         bool _failNextCommit;
         CheckpointIdentity? _identity;
 
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-            CancellationToken ct = default) => repository.LoadCheckpointAsync(identity, ct);
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+            CheckpointIdentity identity,
+            CancellationToken ct = default
+        ) => repository.LoadCheckpointAsync(identity, ct);
 
-        public async ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context,
-            CancellationToken ct = default)
+        public async ValueTask<IProjectionBatch> BeginAsync(
+            ProjectionBatchContext context,
+            CancellationToken ct = default
+        )
         {
             ArgumentNullException.ThrowIfNull(context);
             _identity = context.Identity;
@@ -969,7 +983,8 @@ public sealed class FitzBrokerIntegrationTests(FitzBrokerFixture broker)
     {
         public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(
             string? token,
-            CancellationToken ct = default) =>
+            CancellationToken ct = default
+        ) =>
             ValueTask.FromResult(Result<ClaimsPrincipal>.Success(RequestActor.System));
     }
 

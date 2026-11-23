@@ -21,8 +21,13 @@ public sealed class FitzRequestScheduler(
     readonly IRequestSerializer _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
     /// <inheritdoc />
-    public ValueTask<string> EnsureAsync<TRequest>(TRequest request, RequestScheduleSpec spec,
-        RequestRouteValues routeValues, ClaimsPrincipal actor, CancellationToken ct = default)
+    public ValueTask<string> EnsureAsync<TRequest>(
+        TRequest request,
+        RequestScheduleSpec spec,
+        RequestRouteValues routeValues,
+        ClaimsPrincipal actor,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ISchedulable
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -43,7 +48,8 @@ public sealed class FitzRequestScheduler(
         RequestScheduleSpec spec,
         RequestRouteValues routeValues,
         ClaimsPrincipal actor,
-        CancellationToken ct = default)
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ISchedulable
         => ScheduleAsync(request, spec, routeValues, actor, RequestMetadata.FromRequest(request), ct);
 
@@ -54,7 +60,8 @@ public sealed class FitzRequestScheduler(
         RequestRouteValues routeValues,
         ClaimsPrincipal actor,
         RequestMetadata metadata,
-        CancellationToken ct = default)
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, ISchedulable
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -73,9 +80,15 @@ public sealed class FitzRequestScheduler(
         await _schedule.CancelAsync(scheduleId, ct).ConfigureAwait(false);
     }
 
-    async ValueTask<string> CreateAsync<TRequest>(TRequest request, RequestScheduleSpec spec,
-        ClaimsPrincipal actor, RequestMetadata metadata, string route, bool propagateTraceContext,
-        CancellationToken ct) where TRequest : IRequest, ISchedulable
+    async ValueTask<string> CreateAsync<TRequest>(
+        TRequest request,
+        RequestScheduleSpec spec,
+        ClaimsPrincipal actor,
+        RequestMetadata metadata,
+        string route,
+        bool propagateTraceContext,
+        CancellationToken ct
+    ) where TRequest : IRequest, ISchedulable
     {
         if (!RequestActor.IsSystem(actor))
         {
@@ -90,6 +103,7 @@ public sealed class FitzRequestScheduler(
         using var activity = PortiaTelemetry.StartSend(requestName, "schedule", "fitz");
         var started = PortiaTelemetry.StartTimestamp();
         var outcome = "success";
+
         try
         {
             var traceContext = propagateTraceContext ? PortiaTelemetry.CaptureTraceContext() : null;

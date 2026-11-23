@@ -21,7 +21,8 @@ public sealed class InMemoryEventStore : IEventStore, IDomainEventProgressReader
     public IAsyncEnumerable<DomainEventRecord> ReadAsync(
         EventStreamAddress stream,
         ulong fromOffset,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         ArgumentNullException.ThrowIfNull(stream);
         ct.ThrowIfCancellationRequested();
@@ -46,7 +47,8 @@ public sealed class InMemoryEventStore : IEventStore, IDomainEventProgressReader
     public IAsyncEnumerable<DomainEventRecord> ReadAsync(
         EventStreamPattern pattern,
         EventCursor cursor,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         ArgumentNullException.ThrowIfNull(pattern);
         ct.ThrowIfCancellationRequested();
@@ -73,13 +75,18 @@ public sealed class InMemoryEventStore : IEventStore, IDomainEventProgressReader
     }
 
     /// <inheritdoc />
-    public ValueTask<EventStreamProgress> GetProgressAsync(EventStreamPattern pattern, EventCursor position,
-        CancellationToken ct = default)
+    public ValueTask<EventStreamProgress> GetProgressAsync(
+        EventStreamPattern pattern,
+        EventCursor position,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(pattern);
+
         if (pattern.IsTenantTemplate)
             throw new ArgumentException("Bind the processor's tenant before observing source progress.",
                 nameof(pattern));
+
         ct.ThrowIfCancellationRequested();
         var offset = Decode(position);
         lock (_gate)
@@ -103,7 +110,8 @@ public sealed class InMemoryEventStore : IEventStore, IDomainEventProgressReader
         EventStreamAddress stream,
         ulong expectedStreamPosition,
         IReadOnlyList<DomainEvent> events,
-        CancellationToken ct = default)
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(events);
@@ -219,7 +227,8 @@ public sealed class InMemoryEventStore : IEventStore, IDomainEventProgressReader
         public BufferedAsyncEnumerator(
             T[] items,
             CancellationToken readCt,
-            CancellationToken enumerationCt)
+            CancellationToken enumerationCt
+        )
         {
             _items = items;
             _linkedCts = readCt.CanBeCanceled && enumerationCt.CanBeCanceled && readCt != enumerationCt

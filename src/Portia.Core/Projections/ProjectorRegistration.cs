@@ -44,16 +44,22 @@ public sealed class ProjectorRegistration : IWorkloadDescriptor
             store.EnsureServes(componentName);
     }
 
-    ValueTask<ProjectionCheckpoint> IWorkloadDescriptor.LoadCheckpoint(IServiceProvider services,
-        ProjectionRunOptions options, CancellationToken ct)
+    ValueTask<ProjectionCheckpoint> IWorkloadDescriptor.LoadCheckpoint(
+        IServiceProvider services,
+        ProjectionRunOptions options,
+        CancellationToken ct
+    )
     {
         var component = _resolve(services);
         return ProcessorCheckpoints.LoadAsync(component.Store,
             new CheckpointIdentity(component.Name, component.Pattern, options.RebuildId), ct);
     }
 
-    async ValueTask<ProjectionPassResult> IWorkloadDescriptor.RunPass(IServiceProvider services,
-        ProjectionRunOptions options, CancellationToken ct)
+    async ValueTask<ProjectionPassResult> IWorkloadDescriptor.RunPass(
+        IServiceProvider services,
+        ProjectionRunOptions options,
+        CancellationToken ct
+    )
     {
         options.Validate();
         var projector = _resolve(services);

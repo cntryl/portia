@@ -24,16 +24,21 @@ public static partial class PortiaHttpBinding
     /// <exception cref="HttpUnsupportedMediaTypeException">
     ///     The request declares a non-JSON content type, or carries a body without declaring one.
     /// </exception>
-    public static async ValueTask<JsonDocument> ReadJsonBodyAsync(HttpContext context, bool bodyRequired,
-        CancellationToken ct)
+    public static async ValueTask<JsonDocument> ReadJsonBodyAsync(
+        HttpContext context,
+        bool bodyRequired,
+        CancellationToken ct
+    )
     {
         ArgumentNullException.ThrowIfNull(context);
         // A cross-site page can send a text/plain or untyped body without a CORS preflight, and that
         // body can still be valid JSON, so only a declared JSON media type is read as JSON. A request
         // without a content type is accepted only when it carries no body.
         var declaresJson = context.Request.HasJsonContentType();
+
         if (!declaresJson && (context.Request.ContentType is not null || context.Request.ContentLength > 0))
             throw new HttpUnsupportedMediaTypeException(JsonMediaTypeRequired);
+
         var maximum = MaximumBodyBytes(context);
 
         if (context.Request.ContentLength > 0 && context.Request.ContentLength > maximum)
@@ -42,15 +47,18 @@ public static partial class PortiaHttpBinding
         var hint = Math.Min(Math.Min(context.Request.ContentLength ?? 0, maximum), MaximumInitialBodyBytes);
         await using var buffer = new MemoryStream((int)hint);
         var chunk = ArrayPool<byte>.Shared.Rent(BodyChunkBytes);
+
         try
         {
             while (true)
             {
                 var read = await context.Request.Body.ReadAsync(chunk, ct).ConfigureAwait(false);
+
                 if (read == 0)
                 {
                     break;
                 }
+
 
                 if (buffer.Length + read > maximum)
                 {
@@ -68,6 +76,7 @@ public static partial class PortiaHttpBinding
         {
             ArrayPool<byte>.Shared.Return(chunk);
         }
+
 
         if (buffer.Length == 0)
         {

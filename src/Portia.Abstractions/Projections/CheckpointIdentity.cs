@@ -16,10 +16,12 @@ public sealed record CheckpointIdentity
     {
         _ = IdentityText.Require(componentName, nameof(componentName));
         ArgumentNullException.ThrowIfNull(pattern);
+
         if (rebuildId is not null)
         {
             _ = IdentityText.Require(rebuildId, nameof(rebuildId));
         }
+
 
         ComponentName = componentName;
         Pattern = pattern;

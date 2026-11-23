@@ -29,7 +29,8 @@ public sealed class InMemoryLeaseClient : IPartitionLeaseCompetitor
         ulong ttlSecs,
         Func<CancellationToken, ValueTask> callback,
         LeaseExecutionOptions? options = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default
+    )
     {
         var gate = GetGate(route);
         await gate.WaitAsync(ct).ConfigureAwait(false);

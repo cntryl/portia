@@ -165,26 +165,38 @@ public sealed class CallerOwnedHydrationTests
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Continue { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
-            [EnumeratorCancellation] CancellationToken ct = default)
+        public async IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset = 0,
+            [EnumeratorCancellation] CancellationToken ct = default
+        )
         {
             Offsets.Add(fromOffset);
+
             if (Pause)
             {
                 _ = Entered.TrySetResult();
                 await Continue.Task.WaitAsync(ct);
             }
 
+
             await foreach (var record in _inner.ReadAsync(stream, fromOffset, ct))
                 yield return record;
         }
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            CancellationToken ct = default)
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            CancellationToken ct = default
+        )
             => _inner.ReadAsync(pattern, cursor, ct);
 
-        public ValueTask AppendAsync(EventStreamAddress stream, ulong expectedVersion,
-            IReadOnlyList<DomainEvent> events, CancellationToken ct = default)
+        public ValueTask AppendAsync(
+            EventStreamAddress stream,
+            ulong expectedVersion,
+            IReadOnlyList<DomainEvent> events,
+            CancellationToken ct = default
+        )
             => _inner.AppendAsync(stream, expectedVersion, events, ct);
     }
 }

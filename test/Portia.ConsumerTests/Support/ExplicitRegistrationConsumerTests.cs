@@ -140,6 +140,7 @@ public sealed class ExplicitRegistrationConsumerTests
     {
         // Arrange
         var services = ConsumerHost.CreateServices();
+
         if (reverse)
         {
             _ = services.AddReporting();
@@ -150,6 +151,7 @@ public sealed class ExplicitRegistrationConsumerTests
             _ = services.AddAccounts();
             _ = services.AddReporting();
         }
+
 
         await using var provider = services.BuildServiceProvider(new ServiceProviderOptions
         { ValidateScopes = true, ValidateOnBuild = true });
@@ -168,6 +170,7 @@ public sealed class ExplicitRegistrationConsumerTests
         var serializer = provider.GetRequiredService<IDomainEventSerializer>();
         var id = Uuid.CreateVersion4();
         DomainEvent[] events = [new Deposited(1), new FeatureOneObserved(2), new FeatureTwoObserved(3)];
+
         foreach (var ev in events)
         {
             _ = DomainEventSeed.Attach(ev, id, 1);

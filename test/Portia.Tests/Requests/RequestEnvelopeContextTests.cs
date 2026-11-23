@@ -97,6 +97,7 @@ public sealed class RequestEnvelopeContextTests
         var serializer = TestJson.Serializer(typeof(EnvelopeCommand));
         var json = Assert.IsType<JsonObject>(JsonNode.Parse(
             serializer.Serialize(new EnvelopeCommand(1), null, RequestMetadata.Create(), null).Span));
+
         if (unsupportedVersion)
         {
             json["version"] = 99;
@@ -109,6 +110,7 @@ public sealed class RequestEnvelopeContextTests
 
 
         // Act
+
         var exception = Record.Exception(() =>
             serializer.DeserializeEnvelope(Encoding.UTF8.GetBytes(json.ToJsonString())));
 

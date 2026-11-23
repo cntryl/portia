@@ -18,14 +18,18 @@ public sealed partial class PortiaOpenApiOptions
     public Action<OpenApiDocument>? ConfigureDocument { get; set; }
 
     /// <summary>Describes an exact contract type and, optionally, its direct CLR properties.</summary>
-    public PortiaOpenApiOptions DescribeSchema<T>(string description,
-        Action<PortiaOpenApiSchemaDescription<T>>? configure = null)
+    public PortiaOpenApiOptions DescribeSchema<T>(
+        string description,
+        Action<PortiaOpenApiSchemaDescription<T>>? configure = null
+    )
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
         var schema = new PortiaOpenApiSchemaDescription<T>();
         configure?.Invoke(schema);
+
         if (!_schemas.TryAdd(typeof(T), new PortiaOpenApiSchemaDescription(description, schema.Snapshot())))
             throw new InvalidOperationException($"OpenAPI schema '{typeof(T)}' is described more than once.");
+
         return this;
     }
 
@@ -34,8 +38,10 @@ public sealed partial class PortiaOpenApiOptions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
+
         if (!_members.TryAdd(name, description))
             throw new InvalidOperationException($"OpenAPI member '{name}' is described more than once.");
+
         return this;
     }
 
@@ -48,13 +54,18 @@ public sealed partial class PortiaOpenApiOptions
 
     internal string? SharedMember(string wireName) => _members.GetValueOrDefault(wireName);
 
-    internal string? Property(JsonPropertyInfo property, JsonSerializerOptions options,
-        JsonSerializerOptions? descriptionOptions = null)
+    internal string? Property(
+        JsonPropertyInfo property,
+        JsonSerializerOptions options,
+        JsonSerializerOptions? descriptionOptions = null
+    )
     {
         var name = DeclaredName(property);
+
         if (name is null && property.DeclaringType is { } declaringType && Registration(declaringType) is { } schema)
             name = schema.Properties.Keys.SingleOrDefault(candidate =>
                 (options.PropertyNamingPolicy?.ConvertName(candidate) ?? candidate) == property.Name);
+
         return Member(property.DeclaringType, name ?? property.Name, property.Name, descriptionOptions ?? options);
     }
 
@@ -62,7 +73,9 @@ public sealed partial class PortiaOpenApiOptions
     {
         if (Registration(typeInfo.Type) is not { } schema)
             return;
+
         var names = serializedNames.ToHashSet(StringComparer.Ordinal);
+
         foreach (var name in schema.Properties.Keys)
         {
             if (!typeInfo.Properties.Any(property => names.Contains(property.Name) && (

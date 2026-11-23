@@ -16,6 +16,7 @@ readonly record struct DiagnosticLocation(
     {
         if (location is null || !location.IsInSource)
             return default;
+
         var span = location.SourceSpan;
         var lines = location.GetLineSpan().Span;
         return new DiagnosticLocation(location.SourceTree?.FilePath ?? string.Empty, span.Start, span.Length,

@@ -12,6 +12,7 @@ static class ScenarioExpectations
     public static string? Denied(ScenarioObservation observation, RequestErrorKind? kind)
     {
         var denied = observation is { Authorized: true, ProceededPastAuthorization: false, Outcome.IsSuccess: false };
+
         if (!denied)
         {
             return observation.Outcome.IsSuccess
@@ -20,6 +21,7 @@ static class ScenarioExpectations
                     ? "expected the request to be denied by authorization, but no request authorizer or permission check ran"
                     : $"expected the request to be denied by authorization, but authorization allowed it and it failed later ({observation.Outcome.Error!.Kind})";
         }
+
 
         return kind is { } expected && observation.Outcome.Error!.Kind != expected
             ? $"expected the request to be denied with {expected}, but it was denied with {observation.Outcome.Error.Kind}"
@@ -30,6 +32,7 @@ static class ScenarioExpectations
     {
         if (NotApplicable(observation, guard) is { } notApplicable)
             return notApplicable;
+
         var index = LastIndex(observation, guard);
         return index < 0
             ? $"expected guard {guard.Name} to pass, but it did not run"
@@ -43,13 +46,18 @@ static class ScenarioExpectations
     {
         if (NotApplicable(observation, guard) is { } notApplicable)
             return notApplicable;
+
         var index = LastIndex(observation, guard);
+
         if (index < 0)
             return $"expected guard {guard.Name} to fail, but it did not run";
+
+
         if (observation.Lifecycle.Skip(index + 1)
                 .Any(entry => entry.Phase is LifecyclePhase.Guard or LifecyclePhase.Handler)
             || observation.Outcome.IsSuccess)
             return $"expected guard {guard.Name} to fail, but it passed";
+
         return kind is { } expected && observation.Outcome.Error!.Kind != expected
             ? $"expected guard {guard.Name} to fail with {expected}, but it failed with {observation.Outcome.Error.Kind}"
             : null;

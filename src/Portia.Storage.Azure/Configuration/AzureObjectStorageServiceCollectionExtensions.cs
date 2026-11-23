@@ -6,7 +6,8 @@ public static class AzureObjectStorageServiceCollectionExtensions
     /// <summary>Registers Azure Blob object storage using a configured blob service client and tenant resolver.</summary>
     public static IServiceCollection AddAzureObjectStorage(
         this IServiceCollection services,
-        Action<AzureObjectStorageBuilder> configure)
+        Action<AzureObjectStorageBuilder> configure
+    )
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configure);

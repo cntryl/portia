@@ -92,9 +92,12 @@ public abstract class Aggregate(
             throw new InvalidOperationException("An aggregate with uncommitted changes cannot load committed events.");
         }
 
+
         if (!committedEvents.IsEmpty)
             _ = _issuedEventIds.EnsureCapacity(checked(_issuedEventIds.Count + committedEvents.Length));
+
         var validated = 0;
+
         try
         {
             for (; validated < committedEvents.Length; validated++)
@@ -107,8 +110,10 @@ public abstract class Aggregate(
         {
             for (var index = 0; index < validated; index++)
                 _ = _issuedEventIds.Remove(committedEvents[index].Metadata.EventId);
+
             throw;
         }
+
 
         for (var index = 0; index < committedEvents.Length; index++)
         {
@@ -124,8 +129,10 @@ public abstract class Aggregate(
                 // Validation reserves the whole batch in the permanent set. Release the failed
                 // event and everything after it; events already applied stay committed and keep
                 // their IDs reserved.
+
                 for (; index < committedEvents.Length; index++)
                     _ = _issuedEventIds.Remove(committedEvents[index].Metadata.EventId);
+
                 throw;
             }
 
@@ -189,10 +196,12 @@ public abstract class Aggregate(
     protected void RaiseEvent(DomainEvent ev)
     {
         using var operation = BeginOperation();
+
         if (_savePrepared)
         {
             throw new InvalidOperationException("Resolve the pending save before emitting more events.");
         }
+
 
         if (_uncommittedAudits.Count != 0)
         {
@@ -200,6 +209,7 @@ public abstract class Aggregate(
         }
 
         AttachMetadata(ev, checked(Version + 1), false);
+
         try
         {
             Apply(ev);
@@ -212,6 +222,7 @@ public abstract class Aggregate(
             throw;
         }
 
+
         _uncommittedEvents.Add(ev);
         Version++;
     }
@@ -223,10 +234,12 @@ public abstract class Aggregate(
     protected void AuditEvent(DomainEvent ev)
     {
         using var operation = BeginOperation();
+
         if (_savePrepared)
         {
             throw new InvalidOperationException("Resolve the pending save before emitting more events.");
         }
+
 
         if (_uncommittedEvents.Count != 0)
         {
@@ -245,15 +258,19 @@ public abstract class Aggregate(
                 "Retry a pending save with the original execution context; event attribution is frozen.");
         }
 
+
         foreach (var ev in _uncommittedEvents.Concat(_uncommittedAudits))
             ev.ValidateAttribution(attribution);
+
         if (_savePrepared)
         {
             return;
         }
 
+
         foreach (var ev in _uncommittedEvents.Concat(_uncommittedAudits))
             ev.StampAttribution(attribution);
+
         _saveAttribution = attribution;
         _savePrepared = true;
     }
@@ -261,12 +278,14 @@ public abstract class Aggregate(
     internal void Save()
     {
         CommittedStreamPosition = checked(CommittedStreamPosition + (ulong)_uncommittedEvents.Count);
+
         if (_uncommittedEvents.Count != 0)
             IsNew = false;
         // Committed history is not retained: an aggregate may replay a whole stream and be caught
         // up in place for the life of the process, and Version and CommittedStreamPosition already
         // carry everything the framework needs from it. Both lists' IDs entered the issued set when
         // their metadata was attached, so committing them adds nothing there either.
+
         _uncommittedEvents.Clear();
         _uncommittedAudits.Clear();
         _auditSessionStream = null;
@@ -283,6 +302,7 @@ public abstract class Aggregate(
     {
         if (_uncommittedEvents.Count == 0 && _uncommittedAudits.Count == 0)
             return;
+
         _uncommittedEvents.Clear();
         _uncommittedAudits.Clear();
         _auditSessionStream = null;
@@ -358,10 +378,12 @@ public abstract class Aggregate(
     {
         ArgumentNullException.ThrowIfNull(ev);
         var metadata = ev.Metadata;
+
         if (metadata.IsAudit)
         {
             throw new InvalidOperationException("Aggregate replay accepts only state-changing events.");
         }
+
 
         if (metadata.EventId == Uuid.Empty)
         {
@@ -393,6 +415,7 @@ public abstract class Aggregate(
         public void Dispose()
         {
             var owner = Interlocked.Exchange(ref _aggregate, null);
+
             if (owner is not null)
             {
                 Volatile.Write(ref owner._operation, 0);

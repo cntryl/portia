@@ -471,8 +471,10 @@ public sealed class RequestPipelineBehaviorTests
             else
             {
                 var items = new List<int>();
+
                 await foreach (var item in bus.StreamAsync(new PipelineStream(), RequestActor.System, timeout.Token))
                     items.Add(item);
+
                 Assert.Equal([1, 2], items);
             }
         }
@@ -480,6 +482,7 @@ public sealed class RequestPipelineBehaviorTests
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         behavior.OnFirst = nested ? DispatchAsync : () => release.Task.WaitAsync(timeout.Token);
         var first = DispatchAsync();
+
         if (!nested)
         {
             try
@@ -492,6 +495,7 @@ public sealed class RequestPipelineBehaviorTests
                 release.TrySetResult();
             }
         }
+
 
         await first;
         Assert.Equal(SingleUseMessage, Assert.Single(behavior.Failures).Message);
@@ -514,6 +518,7 @@ public sealed class RequestPipelineBehaviorTests
         Task<bool> Attempt() => Task.Run(() =>
         {
             Assert.True(ready.SignalAndWait(TimeSpan.FromSeconds(10)));
+
             try
             {
                 frame.Use(position);
@@ -618,13 +623,18 @@ public sealed class RequestPipelineBehaviorTests
         Assert.Null(messagingSystem);
     }
 
-    static ServiceProvider Provider(List<string> calls, RequestHandlerRegistration handler,
-        params RequestPipelineBehaviorRegistration[] behaviors)
+    static ServiceProvider Provider(
+        List<string> calls,
+        RequestHandlerRegistration handler,
+        params RequestPipelineBehaviorRegistration[] behaviors
+    )
     {
         var services = Services(calls);
         _ = services.AddSingleton(handler);
+
         foreach (var behavior in behaviors)
             _ = services.AddSingleton(behavior);
+
         return services.BuildServiceProvider();
     }
 
@@ -684,8 +694,10 @@ public sealed class RequestPipelineBehaviorTests
 
     internal sealed class PipelineStreamHandler : IStreamRequestHandler<PipelineStream, int>
     {
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context,
-            [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<int> HandleAsync(
+            IRequestContext<PipelineStream> context,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             yield return 1;
             await Task.Yield();
@@ -707,8 +719,11 @@ public sealed class RequestPipelineBehaviorTests
 
     internal sealed class OuterBehavior(List<string> calls) : IRequestPipelineBehavior<IBehaviorRequest>
     {
-        public async ValueTask<Result> HandleAsync(IRequestContext<IBehaviorRequest> context,
-            RequestPipelineNext continuation, CancellationToken ct)
+        public async ValueTask<Result> HandleAsync(
+            IRequestContext<IBehaviorRequest> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        )
         {
             calls.Add("outer-before");
             var result = await continuation(ct);
@@ -719,8 +734,11 @@ public sealed class RequestPipelineBehaviorTests
 
     internal sealed class InnerBehavior(List<string> calls) : IRequestPipelineBehavior<PipelineAction>
     {
-        public async ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
-            RequestPipelineNext continuation, CancellationToken ct)
+        public async ValueTask<Result> HandleAsync(
+            IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        )
         {
             calls.Add("inner-before");
             var result = await continuation(ct);
@@ -731,8 +749,11 @@ public sealed class RequestPipelineBehaviorTests
 
     internal sealed class QueryBehavior : IRequestPipelineBehavior<PipelineQuery, int>
     {
-        public async ValueTask<Result<int>> HandleAsync(IRequestContext<PipelineQuery> context,
-            RequestPipelineNext<int> continuation, CancellationToken ct)
+        public async ValueTask<Result<int>> HandleAsync(
+            IRequestContext<PipelineQuery> context,
+            RequestPipelineNext<int> continuation,
+            CancellationToken ct
+        )
         {
             var result = await continuation(ct);
             return Result<int>.Success(result.Value + 1);
@@ -741,13 +762,17 @@ public sealed class RequestPipelineBehaviorTests
 
     internal sealed class StreamBehavior : IStreamRequestPipelineBehavior<PipelineStream, int>
     {
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context,
+        public async IAsyncEnumerable<int> HandleAsync(
+            IRequestContext<PipelineStream> context,
             StreamRequestPipelineNext<int> continuation,
-            [EnumeratorCancellation] CancellationToken ct)
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             yield return 0;
+
             await foreach (var item in continuation(ct).WithCancellation(ct))
                 yield return item;
+
             yield return 3;
         }
     }
@@ -760,8 +785,11 @@ public sealed class RequestPipelineBehaviorTests
 
     internal sealed class ShortCircuitBehavior(List<string> calls) : IRequestPipelineBehavior<PipelineAction>
     {
-        public ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
-            RequestPipelineNext continuation, CancellationToken ct)
+        public ValueTask<Result> HandleAsync(
+            IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        )
         {
             calls.Add("short-circuit");
             return ValueTask.FromResult(Result.Success);
@@ -770,15 +798,21 @@ public sealed class RequestPipelineBehaviorTests
 
     internal sealed class ShortCircuitQueryBehavior : IRequestPipelineBehavior<PipelineQuery, int>
     {
-        public ValueTask<Result<int>> HandleAsync(IRequestContext<PipelineQuery> context,
-            RequestPipelineNext<int> continuation, CancellationToken ct) =>
+        public ValueTask<Result<int>> HandleAsync(
+            IRequestContext<PipelineQuery> context,
+            RequestPipelineNext<int> continuation,
+            CancellationToken ct
+        ) =>
             ValueTask.FromResult(Result<int>.Success(99));
     }
 
     internal sealed class ShortCircuitStreamBehavior : IStreamRequestPipelineBehavior<PipelineStream, int>
     {
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context,
-            StreamRequestPipelineNext<int> continuation, [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<int> HandleAsync(
+            IRequestContext<PipelineStream> context,
+            StreamRequestPipelineNext<int> continuation,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             ct.ThrowIfCancellationRequested();
             yield return 9;
@@ -788,8 +822,11 @@ public sealed class RequestPipelineBehaviorTests
 
     internal sealed class TwiceBehavior : IRequestPipelineBehavior<PipelineAction>
     {
-        public async ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
-            RequestPipelineNext continuation, CancellationToken ct)
+        public async ValueTask<Result> HandleAsync(
+            IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        )
         {
             _ = await continuation(ct);
             return await continuation(ct);
@@ -800,8 +837,11 @@ public sealed class RequestPipelineBehaviorTests
     {
         public RequestPipelineNext? Continuation { get; private set; }
 
-        public ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
-            RequestPipelineNext continuation, CancellationToken ct)
+        public ValueTask<Result> HandleAsync(
+            IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        )
         {
             Continuation = continuation;
             return ValueTask.FromResult(Result.Success);
@@ -815,14 +855,19 @@ public sealed class RequestPipelineBehaviorTests
 
         public List<InvalidOperationException> Failures { get; } = [];
 
-        public async ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
-            RequestPipelineNext continuation, CancellationToken ct)
+        public async ValueTask<Result> HandleAsync(
+            IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        )
         {
             async Task<Result?> AttemptAsync()
             {
                 if (Interlocked.Increment(ref _ready) == 2)
                     _ = _release.TrySetResult();
+
                 await _release.Task.WaitAsync(ct);
+
                 try
                 {
                     return await continuation(ct);
@@ -841,8 +886,11 @@ public sealed class RequestPipelineBehaviorTests
 
     internal sealed class YieldBeforeContinuationBehavior : IRequestPipelineBehavior<PipelineAction>
     {
-        public async ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
-            RequestPipelineNext continuation, CancellationToken ct)
+        public async ValueTask<Result> HandleAsync(
+            IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        )
         {
             await Task.Yield();
             return await continuation(ct);
@@ -852,8 +900,11 @@ public sealed class RequestPipelineBehaviorTests
     internal sealed class InvokeRetainedInnerBehavior(RetainingBehavior inner)
         : IRequestPipelineBehavior<PipelineAction>
     {
-        public async ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
-            RequestPipelineNext continuation, CancellationToken ct)
+        public async ValueTask<Result> HandleAsync(
+            IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        )
         {
             _ = await continuation(ct);
             return await inner.Continuation!(ct);
@@ -890,22 +941,31 @@ public sealed class RequestPipelineBehaviorTests
             }
         }
 
-        public async ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
-            RequestPipelineNext continuation, CancellationToken ct)
+        public async ValueTask<Result> HandleAsync(
+            IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        )
         {
             await EnterAsync(async token => { _ = await continuation(token); }, ct);
             return await continuation(ct);
         }
 
-        public async ValueTask<Result<int>> HandleAsync(IRequestContext<PipelineQuery> context,
-            RequestPipelineNext<int> continuation, CancellationToken ct)
+        public async ValueTask<Result<int>> HandleAsync(
+            IRequestContext<PipelineQuery> context,
+            RequestPipelineNext<int> continuation,
+            CancellationToken ct
+        )
         {
             await EnterAsync(async token => { _ = await continuation(token); }, ct);
             return await continuation(ct);
         }
 
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context,
-            StreamRequestPipelineNext<int> continuation, [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<int> HandleAsync(
+            IRequestContext<PipelineStream> context,
+            StreamRequestPipelineNext<int> continuation,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             await EnterAsync(async token =>
             {
@@ -913,6 +973,7 @@ public sealed class RequestPipelineBehaviorTests
                 {
                 }
             }, ct);
+
             await foreach (var item in continuation(ct).WithCancellation(ct))
                 yield return item;
         }
@@ -925,33 +986,46 @@ public sealed class RequestPipelineBehaviorTests
         RequestPipelineNext<int>? _result;
         StreamRequestPipelineNext<int>? _stream;
 
-        public ValueTask<Result> HandleAsync(IRequestContext<PipelineAction> context,
-            RequestPipelineNext continuation, CancellationToken ct)
+        public ValueTask<Result> HandleAsync(
+            IRequestContext<PipelineAction> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        )
         {
             if (_unary is not null)
                 return _unary(ct);
+
             _unary = continuation;
             return useFirst ? continuation(ct) : ValueTask.FromResult(Result.Success);
         }
 
-        public ValueTask<Result<int>> HandleAsync(IRequestContext<PipelineQuery> context,
-            RequestPipelineNext<int> continuation, CancellationToken ct)
+        public ValueTask<Result<int>> HandleAsync(
+            IRequestContext<PipelineQuery> context,
+            RequestPipelineNext<int> continuation,
+            CancellationToken ct
+        )
         {
             if (_result is not null)
                 return _result(ct);
+
             _result = continuation;
             return useFirst ? continuation(ct) : ValueTask.FromResult(Result<int>.Success(0));
         }
 
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context,
-            StreamRequestPipelineNext<int> continuation, [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<int> HandleAsync(
+            IRequestContext<PipelineStream> context,
+            StreamRequestPipelineNext<int> continuation,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             if (_stream is null)
             {
                 _stream = continuation;
+
                 if (useFirst)
                     await foreach (var item in continuation(ct).WithCancellation(ct))
                         yield return item;
+
                 yield break;
             }
 
@@ -962,8 +1036,11 @@ public sealed class RequestPipelineBehaviorTests
 
     internal sealed class TwiceQueryBehavior : IRequestPipelineBehavior<PipelineQuery, int>
     {
-        public async ValueTask<Result<int>> HandleAsync(IRequestContext<PipelineQuery> context,
-            RequestPipelineNext<int> continuation, CancellationToken ct)
+        public async ValueTask<Result<int>> HandleAsync(
+            IRequestContext<PipelineQuery> context,
+            RequestPipelineNext<int> continuation,
+            CancellationToken ct
+        )
         {
             _ = await continuation(ct);
             return await continuation(ct);
@@ -972,11 +1049,15 @@ public sealed class RequestPipelineBehaviorTests
 
     internal sealed class TwiceStreamBehavior : IStreamRequestPipelineBehavior<PipelineStream, int>
     {
-        public async IAsyncEnumerable<int> HandleAsync(IRequestContext<PipelineStream> context,
-            StreamRequestPipelineNext<int> continuation, [EnumeratorCancellation] CancellationToken ct)
+        public async IAsyncEnumerable<int> HandleAsync(
+            IRequestContext<PipelineStream> context,
+            StreamRequestPipelineNext<int> continuation,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             await foreach (var item in continuation(ct).WithCancellation(ct))
                 yield return item;
+
             await foreach (var item in continuation(ct).WithCancellation(ct))
                 yield return item;
         }
@@ -984,8 +1065,11 @@ public sealed class RequestPipelineBehaviorTests
 
     internal sealed class ContextBehavior(List<IRequestContext> seen) : IRequestPipelineBehavior<IBehaviorRequest>
     {
-        public ValueTask<Result> HandleAsync(IRequestContext<IBehaviorRequest> context,
-            RequestPipelineNext continuation, CancellationToken ct)
+        public ValueTask<Result> HandleAsync(
+            IRequestContext<IBehaviorRequest> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        )
         {
             seen.Add(context);
             return continuation(ct);
@@ -1012,8 +1096,11 @@ public sealed class RequestPipelineBehaviorTests
         {
             if (Bypass)
                 return;
+
+
             if (Interlocked.Increment(ref _arrivals) == 2)
                 _ = _release.TrySetResult();
+
             await _release.Task.WaitAsync(ct);
         }
     }
@@ -1021,12 +1108,17 @@ public sealed class RequestPipelineBehaviorTests
     internal sealed class NestedConcurrentBehavior(IRequestBus bus, DispatchGate gate)
         : IRequestPipelineBehavior<NestedConcurrentAction>
     {
-        public async ValueTask<Result> HandleAsync(IRequestContext<NestedConcurrentAction> context,
-            RequestPipelineNext continuation, CancellationToken ct)
+        public async ValueTask<Result> HandleAsync(
+            IRequestContext<NestedConcurrentAction> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        )
         {
             await gate.EnterAsync(ct);
+
             if (!context.Request.Inner)
                 _ = await bus.SendAsync(new NestedConcurrentAction(context.Request.Id + 100, true), context.Actor, ct);
+
             return await continuation(ct);
         }
     }

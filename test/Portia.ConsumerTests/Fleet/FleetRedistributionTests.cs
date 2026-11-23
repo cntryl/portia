@@ -48,8 +48,10 @@ public sealed class FleetRedistributionTests
             await AdvanceReconciliation(clock, options.ReconciliationInterval);
             Assert.Equal([Partitions[2], Partitions[3], Partitions[5], Partitions[7]],
                 state.Active.Keys.Order(StringComparer.Ordinal));
+
             foreach (var (route, scope) in state.Active)
                 Assert.Equal(original[route], scope);
+
             Assert.Equal(4, state.Disposed.Count);
             membership.Observer.Set("a", "b", "c");
             await AdvanceReconciliation(clock, options.ReconciliationInterval);
@@ -91,6 +93,7 @@ public sealed class FleetRedistributionTests
             {
                 _ = partition;
                 _ = Interlocked.Increment(ref active);
+
                 try
                 {
                     await Task.Delay(Timeout.InfiniteTimeSpan, ct);
@@ -157,7 +160,8 @@ public sealed class FleetRedistributionTests
     [InlineData(1, 1UL)]
     public async Task ShouldRetainGeneratedWorkerIdentityGivenMembershipFailureWhenBackingOff(
         int milliseconds,
-        ulong expectedTtl)
+        ulong expectedTtl
+    )
     {
         // Arrange
         var clock = new ManualClock();
@@ -212,6 +216,7 @@ public sealed class FleetRedistributionTests
             {
                 _ = partition;
                 _ = Interlocked.Increment(ref active);
+
                 try
                 {
                     await Task.Delay(Timeout.InfiniteTimeSpan, ct);
@@ -260,6 +265,7 @@ public sealed class FleetRedistributionTests
             [Partitions[0]], async (partition, ct) =>
             {
                 _ = Interlocked.Increment(ref active);
+
                 try
                 {
                     await Task.Delay(Timeout.InfiniteTimeSpan, ct);
@@ -270,6 +276,7 @@ public sealed class FleetRedistributionTests
                 }
             }, options, cancellation.Token);
         TimeSpan retry;
+
         try
         {
             // Six failed sessions in a row grow the retry delay to its ceiling.
@@ -298,6 +305,7 @@ public sealed class FleetRedistributionTests
         }
 
         // Assert
+
         Assert.InRange(retry, TimeSpan.Zero, TimeSpan.FromSeconds(1));
     }
 
@@ -306,6 +314,7 @@ public sealed class FleetRedistributionTests
     internal static async Task UntilAdvanced(ManualClock clock, Func<bool> predicate)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(4));
+
         while (!predicate())
         {
             clock.Advance(FleetPartitionRunner.MaximumRetryBackoff);
@@ -316,6 +325,7 @@ public sealed class FleetRedistributionTests
     internal static async Task Until(Func<bool> predicate)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(4));
+
         while (!predicate())
             await Task.Delay(5, deadline.Token);
     }
@@ -325,8 +335,13 @@ public sealed class FleetRedistributionTests
         public ulong Ttl { get; private set; }
         public LeaseExecutionOptions? Options { get; private set; }
 
-        public async Task WithLeaseAsync(string route, ulong ttlSecs, Func<CancellationToken, ValueTask> callback,
-            LeaseExecutionOptions? options = null, CancellationToken ct = default)
+        public async Task WithLeaseAsync(
+            string route,
+            ulong ttlSecs,
+            Func<CancellationToken, ValueTask> callback,
+            LeaseExecutionOptions? options = null,
+            CancellationToken ct = default
+        )
         {
             Ttl = ttlSecs;
             Options = options;
@@ -352,6 +367,7 @@ public sealed class FleetRedistributionTests
         {
             state.Started();
             Assert.True(state.Active.TryAdd(partition, _id));
+
             try
             {
                 await Task.Delay(Timeout.InfiniteTimeSpan, ct);
@@ -370,14 +386,19 @@ public sealed class FleetRedistributionTests
         public bool AutoSelf { get; init; }
         public ConcurrentQueue<FleetRunOptions> Attempts { get; } = new();
 
-        public Task RunAsync(FleetRunOptions options, Func<ILeaseInventoryObserver, CancellationToken, Task> callback,
-            CancellationToken ct = default)
+        public Task RunAsync(
+            FleetRunOptions options,
+            Func<ILeaseInventoryObserver, CancellationToken, Task> callback,
+            CancellationToken ct = default
+        )
         {
             Attempts.Enqueue(options);
+
             if (FailFirst && Attempts.Count == 1)
             {
                 throw new IOException("Membership unavailable");
             }
+
 
             if (AutoSelf)
             {

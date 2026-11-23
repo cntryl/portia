@@ -81,11 +81,14 @@ sealed class MixedReactorApplication
         _store.Reset();
         _reader.ReadCount = 0;
         var checkpoint = ProjectionCheckpoint.Start;
+
         while (true)
         {
             var next = await _runner.RunPassAsync(_reactor, checkpoint, _options);
+
             if (next == checkpoint)
                 return next;
+
             checkpoint = next;
         }
     }
@@ -96,11 +99,14 @@ sealed class MixedReactorApplication
         Verify(await RunAsync(), Math.Min(4096, _reader.Records.Length));
         var firstEffects = _store.Effects.ToArray();
         Verify(await RunAsync(), Math.Min(4096, _reader.Records.Length));
+
         if (!_store.Effects.SequenceEqual(firstEffects))
             throw new InvalidOperationException("Effect IDs changed on replay.");
+
         Verify(await CatchUpAsync(), _reader.Records.Length);
         _store.Reset();
         _store.FailCheckpoint = true;
+
         try
         {
             await _runner.RunPassAsync(_reactor, ProjectionCheckpoint.Start, _options);
@@ -114,8 +120,11 @@ sealed class MixedReactorApplication
         {
         }
 
+
+
         if (_store.Checkpoint != ProjectionCheckpoint.Start || _store.Commits != 0 || _store.Effects.Count == 0)
             throw new InvalidOperationException("At-least-once effects/checkpoint failure semantics changed.");
+
         var failedEffects = _store.Effects.ToArray();
         _store.FailCheckpoint = false;
         _store.Order.Clear();
@@ -123,11 +132,14 @@ sealed class MixedReactorApplication
         _reader.ReadCount = 0;
         var authoritative = await _store.LoadAsync(new CheckpointIdentity(_reactor.Name, _reactor.Pattern));
         Verify(await _runner.RunPassAsync(_reactor, authoritative, _options), Math.Min(4096, _reader.Records.Length));
+
         if (!_store.Effects.Take(failedEffects.Length).SequenceEqual(failedEffects))
             throw new InvalidOperationException("Failed-checkpoint replay changed stable effect identity.");
+
         _store.Reset();
         using var canceled = new CancellationTokenSource();
         canceled.Cancel();
+
         try
         {
             await _runner.RunPassAsync(_reactor, ProjectionCheckpoint.Start, _options, canceled.Token);
@@ -137,6 +149,7 @@ sealed class MixedReactorApplication
         {
         }
 
+
         _store.RecordControls = false;
         _store.Reset();
     }
@@ -145,6 +158,7 @@ sealed class MixedReactorApplication
     {
         var expected = new ProjectionCheckpoint(_reader.Records[count - 1].NextCursor);
         var values = Enumerable.Range(0, count).Where(index => index % 3 != 2);
+
         if (checkpoint != expected || _store.Checkpoint != expected || _reader.ReadCount != count ||
             !_store.Order.SequenceEqual(values) || _store.Effects.Distinct().Count() != _store.Effects.Count ||
             _store.Commits != (count + _options.MaxBatchSize - 1) / _options.MaxBatchSize)
@@ -171,17 +185,26 @@ sealed class MixedReactionStore(bool asyncCheckpoint, bool awaitedEffect) : IPro
         Commits = 0;
     }
 
-    internal async ValueTask EffectAsync(IReactorContext context, Uuid effect, int value, bool derived,
-        CancellationToken ct)
+    internal async ValueTask EffectAsync(
+        IReactorContext context,
+        Uuid effect,
+        int value,
+        bool derived,
+        CancellationToken ct
+    )
     {
         ct.ThrowIfCancellationRequested();
+
         if (awaitedEffect)
             await Task.Yield();
+
         if (!RecordControls)
             return;
+
         if (context.CauseId != context.Source.Event.Metadata.EventId || !RequestActor.IsSystem(context.Actor) ||
             effect == Uuid.Empty || derived != (value % 3 == 1))
             throw new InvalidOperationException("Reaction lost causal/system context or derived handler selection.");
+
         Order.Add(value);
         Effects.Add(effect);
     }
@@ -189,30 +212,44 @@ sealed class MixedReactionStore(bool asyncCheckpoint, bool awaitedEffect) : IPro
     public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default) =>
         ValueTask.FromResult(Checkpoint);
 
-    public async ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-        CancellationToken ct = default)
+    public async ValueTask SaveAsync(
+        CheckpointIdentity identity,
+        ProjectionCheckpoint checkpoint,
+        CancellationToken ct = default
+    )
     {
         if (asyncCheckpoint)
             await Task.Yield();
+
         ct.ThrowIfCancellationRequested();
+
         if (FailCheckpoint)
             throw new MixedCommitException();
+
         Checkpoint = checkpoint;
         Commits++;
     }
 
-    async ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
-        ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+    async ValueTask IConditionalProjectionCheckpointStore.SaveAsync(
+        CheckpointIdentity identity,
+        ProjectionCheckpoint expected,
+        ProjectionCheckpoint checkpoint,
+        CancellationToken ct
+    )
     {
         if (asyncCheckpoint)
             await Task.Yield();
+
         ct.ThrowIfCancellationRequested();
         lock (_checkpointGate)
         {
             if (Checkpoint != expected)
                 throw new ProjectionConcurrencyException("stale checkpoint");
+
+
             if (FailCheckpoint)
                 throw new MixedCommitException();
+
             Checkpoint = checkpoint;
             Commits++;
         }
@@ -242,8 +279,10 @@ sealed partial class MixedBatchReactor(MixedReactionStore store)
     : BatchReactor(store, EventStreamPattern.ForPattern("bench")), IBatchReactorHandler<MixedMatched>,
         IBatchReactorHandler<MixedDerived>
 {
-    public async ValueTask<Result> HandleAsync(IReadOnlyList<IReactorContext<MixedMatched>> contexts,
-        CancellationToken ct)
+    public async ValueTask<Result> HandleAsync(
+        IReadOnlyList<IReactorContext<MixedMatched>> contexts,
+        CancellationToken ct
+    )
     {
         foreach (var context in contexts)
             await store.EffectAsync(context, CreateEffectId(context, "benchmark-effect"), context.Trigger.Value, false,
@@ -252,8 +291,10 @@ sealed partial class MixedBatchReactor(MixedReactionStore store)
         return Result.Success;
     }
 
-    public async ValueTask<Result> HandleAsync(IReadOnlyList<IReactorContext<MixedDerived>> contexts,
-        CancellationToken ct)
+    public async ValueTask<Result> HandleAsync(
+        IReadOnlyList<IReactorContext<MixedDerived>> contexts,
+        CancellationToken ct
+    )
     {
         foreach (var context in contexts)
             await store.EffectAsync(context, CreateEffectId(context, "benchmark-effect"), context.Trigger.Value, true,

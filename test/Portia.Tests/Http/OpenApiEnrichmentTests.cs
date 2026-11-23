@@ -313,6 +313,7 @@ public sealed class OpenApiEnrichmentTests
 
         // Assert
         var parameter = Assert.Single(document.Paths["/enum-example"].Operations![HttpMethod.Get].Parameters!);
+
         if (strings)
         {
             Assert.True(parameter.Schema!.Type is null or JsonSchemaType.String);

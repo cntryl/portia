@@ -27,8 +27,10 @@ static class PortiaHttpHeaderName
     internal static void Validate(string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
         if (name.AsSpan().ContainsAnyExcept(Token))
             throw new ArgumentException($"'{name}' is not a valid HTTP header name.", nameof(name));
+
         if (Reserved.Contains(name))
             throw new ArgumentException($"HTTP header '{name}' cannot be bound to a request member.", nameof(name));
     }

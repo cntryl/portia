@@ -12,6 +12,9 @@ public interface IDomainEventProgressReader
     /// <param name="position">The committed cursor issued by this reader for that pattern.</param>
     /// <param name="ct">Cancels the observation.</param>
     /// <returns>A sampled source position and backlog, preserving unknown values when unavailable.</returns>
-    ValueTask<EventStreamProgress> GetProgressAsync(EventStreamPattern pattern, EventCursor position,
-        CancellationToken ct = default);
+    ValueTask<EventStreamProgress> GetProgressAsync(
+        EventStreamPattern pattern,
+        EventCursor position,
+        CancellationToken ct = default
+    );
 }

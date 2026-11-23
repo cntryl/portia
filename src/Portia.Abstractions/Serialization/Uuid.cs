@@ -80,8 +80,12 @@ public readonly record struct Uuid : ISpanParsable<Uuid>, ISpanFormattable, ICom
     /// <param name="format">The standard UUID format, or an empty span for the default.</param>
     /// <param name="provider">The format provider. UUID formatting is culture-independent.</param>
     /// <returns><see langword="true" /> when the destination was large enough; otherwise, <see langword="false" />.</returns>
-    public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format,
-        IFormatProvider? provider)
+    public bool TryFormat(
+        Span<char> destination,
+        out int charsWritten,
+        ReadOnlySpan<char> format,
+        IFormatProvider? provider
+    )
     {
         _ = provider;
         return _value.TryFormat(destination, out charsWritten, format);
@@ -234,8 +238,10 @@ public readonly record struct Uuid : ISpanParsable<Uuid>, ISpanFormattable, ICom
 
         Span<byte> hash = stackalloc byte[HashByteLength];
         var hashed = SHA1.HashData(input[..(bytesWritten + nameByteLength)], hash);
+
         if (hashed != HashByteLength)
             throw new InvalidOperationException("The UUID name hash was not the expected length.");
+
 
         hash[6] = (byte)((hash[6] & 0x0f) | 0x50);
         hash[8] = (byte)((hash[8] & 0x3f) | 0x80);

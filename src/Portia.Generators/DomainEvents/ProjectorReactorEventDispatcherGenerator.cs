@@ -43,6 +43,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
     {
         ct.ThrowIfCancellationRequested();
         var declaration = (ClassDeclarationSyntax)context.Node;
+
         if (context.SemanticModel.GetDeclaredSymbol(declaration, ct) is not INamedTypeSymbol symbol ||
             symbol.IsAbstract ||
             !IsFirstDeclaration(symbol, declaration))
@@ -50,11 +51,14 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
             return null;
         }
 
+
         var projector = InheritsFrom(symbol, "Cntryl.Portia.Projector");
         var plain = !projector && symbol.AllInterfaces.Any(i => SymbolNames.Is(i, "Cntryl.Portia.IProjector"));
         projector |= plain;
+
         if (!projector && !InheritsFrom(symbol, "Cntryl.Portia.Reactor"))
             return null;
+
 
         var singleName = projector ? "IProjectorHandler" : "IReactorHandler";
         var batchName = projector ? "IBatchProjectorHandler" : "IBatchReactorHandler";
@@ -66,8 +70,10 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         // A concrete base processor already generates dispatch for every handler it implements, and this type
         // inherits that override; it needs its own only when it adds handlers.
         var dispatchingBase = symbol.BaseType;
+
         while (dispatchingBase is not null && dispatchingBase.IsAbstract)
             dispatchingBase = dispatchingBase.BaseType;
+
         if (dispatchingBase is not null
             && InheritsFrom(dispatchingBase, projector ? "Cntryl.Portia.Projector" : "Cntryl.Portia.Reactor")
             && symbol.AllInterfaces.Where(IsHandlerInterface)
@@ -119,6 +125,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         }
 
         var invalidBatchHandler = processor.Handlers.FirstOrDefault(h => h.Batch && !processor.Batch);
+
         if (invalidBatchHandler is not null)
         {
             context.ReportDiagnostic(Diagnostic.Create(InvalidBatchHandler, processor.Location.ToLocation(),
@@ -126,7 +133,9 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
             return;
         }
 
+
         var ambiguousEvent = processor.Handlers.GroupBy(h => h.Type).FirstOrDefault(g => g.Count() > 1);
+
         if (ambiguousEvent is not null)
         {
             context.ReportDiagnostic(Diagnostic.Create(AmbiguousHandlerMode, processor.Location.ToLocation(),
@@ -153,6 +162,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         Line(source, depth, "{");
         Line(source, depth + 1, "switch (record.Event)");
         Line(source, depth + 1, "{");
+
         foreach (var handler in processor.Handlers.Where(h => !h.Batch))
         {
             context.CancellationToken.ThrowIfCancellationRequested();
@@ -169,15 +179,20 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
                 .Append('\n');
         }
 
+
         Line(source, depth + 2, "default:");
         Line(source, depth + 3,
             "return global::System.Threading.Tasks.ValueTask.FromResult(global::Cntryl.Portia.Result.Success);");
         Line(source, depth + 1, "}");
         Line(source, depth, "}");
+
         if (processor.Handlers.Any(h => h.Batch))
             AppendBatch(source, processor, depth, context.CancellationToken);
+
+
         for (var index = processor.Parents.Length; index >= 0; index--)
             Line(source, index, "}");
+
         GeneratedSource.Add(context, processor.HintName + ".EventDispatcher.g.cs", source.ToString());
     }
 
@@ -186,9 +201,11 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         _ = source.Append('\n');
         Line(source, depth, "private static int PortiaHandlerKind(global::Cntryl.Portia.DomainEvent ev) => ev switch");
         Line(source, depth, "{");
+
         for (var i = 0; i < processor.Handlers.Length; i++)
             _ = source.Append(' ', (depth + 1) * 4).Append(processor.Handlers[i].Type).Append(" => ").Append(i)
                 .Append(",\n");
+
         Line(source, depth + 1, "_ => -1");
         Line(source, depth, "};");
         _ = source.Append('\n');
@@ -202,10 +219,12 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
         var ev = processor.Projector ? "records[i].Event" : "records[i].Source.Event";
         Line(source, depth + 2, "switch (PortiaHandlerKind(" + ev + "))");
         Line(source, depth + 2, "{");
+
         for (var i = 0; i < processor.Handlers.Length; i++)
         {
             ct.ThrowIfCancellationRequested();
             var handler = processor.Handlers[i];
+
             if (handler.Batch)
             {
                 var type = processor.Projector
@@ -241,10 +260,13 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
             }
         }
 
+
         Line(source, depth + 3, "default:");
         Line(source, depth + 3, "{");
+
         if (!processor.Projector)
             Line(source, depth + 4, "var item = records[i++];");
+
         Line(source, depth + 4, processor.Projector
             ? "var result = await ProjectEventAsync(records[i++], context, ct).ConfigureAwait(false);"
             : "var result = await ReactToEventAsync(item.Source, item, ct).ConfigureAwait(false);");
@@ -265,6 +287,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
     static string[] GetParents(INamedTypeSymbol symbol)
     {
         var parents = new Stack<string>();
+
         for (var parent = symbol.ContainingType; parent is not null; parent = parent.ContainingType)
         {
             var kind = parent.IsRecord ? parent.IsValueType ? "record struct" : "record"
@@ -273,14 +296,17 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
             parents.Push($"partial {kind} @{parent.Name}");
         }
 
+
         return [.. parents];
     }
 
     static StringBuilder OpenShape(Processor processor)
     {
         var source = new StringBuilder("// <auto-generated />\n#nullable enable\n");
+
         if (processor.Namespace is not null)
             _ = source.Append("namespace ").Append(processor.Namespace).Append(";\n");
+
         for (var index = 0; index < processor.Parents.Length; index++)
         {
             Line(source, index, processor.Parents[index]);
@@ -293,6 +319,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
             h.DisplayType + (h.Batch ? " [batch]" : " [single]"), true)));
         _ = source.Append(subscriptions);
         _ = source.Append(")]\n");
+
         if (processor.Plain)
         {
             var target = "global::" + processor.DisplayName;
@@ -303,6 +330,7 @@ public sealed class ProjectorReactorEventDispatcherGenerator : IIncrementalGener
             Line(source, processor.Parents.Length + 1, $"internal static void Register() => global::Cntryl.Portia.ProjectorDispatch<{target}>.Register(static (value, name, source) => new {adapter}(value, name, source), {subscriptions});");
             return source;
         }
+
 
         Line(source, processor.Parents.Length, "partial class @" + processor.Name);
         Line(source, processor.Parents.Length, "{");

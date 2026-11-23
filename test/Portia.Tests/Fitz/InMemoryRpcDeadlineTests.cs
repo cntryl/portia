@@ -368,6 +368,7 @@ public sealed class InMemoryRpcDeadlineTests
         Assert.False(await enumerator.MoveNextAsync().AsTask().WaitAsync(HangGuard, TestContext.Current.CancellationToken));
 
         Assert.Equal(1, dispatched);
+
         if (useMaximumBudget)
         {
             Assert.NotNull(receivedBudget);
@@ -377,6 +378,7 @@ public sealed class InMemoryRpcDeadlineTests
         {
             Assert.Null(receivedBudget);
         }
+
 
         Assert.Equal(RpcCancellationOutcome.NotRequested, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
     }
@@ -413,6 +415,7 @@ public sealed class InMemoryRpcDeadlineTests
             probe.Release.SetResult();
             await probe.Completed.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
             _ = await Record.ExceptionAsync(() => firstMove.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
+
             if (!disposed)
                 await enumerator.DisposeAsync().AsTask().WaitAsync(HangGuard, TestContext.Current.CancellationToken);
         }
@@ -432,6 +435,7 @@ public sealed class InMemoryRpcDeadlineTests
         var probe = new IgnoringWorker(() =>
         {
             callbackEntered.SetResult();
+
             try
             {
                 callbackRelease.Wait(CancellationToken.None);
@@ -467,11 +471,13 @@ public sealed class InMemoryRpcDeadlineTests
             disposed = disposeStream;
 
             await callbackEntered.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+
             if (!disposeStream)
             {
                 nextMove = enumerator.MoveNextAsync().AsTask();
                 await Assert.ThrowsAnyAsync<OperationCanceledException>(() => nextMove.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             }
+
 
             Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             Assert.False(callbackExited.Task.IsCompleted);
@@ -483,10 +489,14 @@ public sealed class InMemoryRpcDeadlineTests
             probe.Release.SetResult();
             _ = await Record.ExceptionAsync(() => stop.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
             _ = await Record.ExceptionAsync(() => firstMove.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
+
             if (nextMove is not null)
                 _ = await Record.ExceptionAsync(() => nextMove.WaitAsync(HangGuard, TestContext.Current.CancellationToken));
+
+
             if (!disposed)
                 await enumerator.DisposeAsync().AsTask().WaitAsync(HangGuard, TestContext.Current.CancellationToken);
+
             await probe.Completed.Task.WaitAsync(HangGuard, TestContext.Current.CancellationToken);
         }
     }
@@ -614,6 +624,7 @@ public sealed class InMemoryRpcDeadlineTests
         {
             await writer.SendAsync(new byte[] { 42 }, false, ct);
             await writer.SendAsync(ReadOnlyMemory<byte>.Empty, finishWithEmptyFrame, ct);
+
             if (!finishWithEmptyFrame)
                 await writer.SendAsync(new byte[] { 43 }, true, ct);
         }, ct: TestContext.Current.CancellationToken);
@@ -701,8 +712,10 @@ public sealed class InMemoryRpcDeadlineTests
     static async Task<List<RpcResponseFrame>> ReadFramesAsync(RpcCall call)
     {
         var frames = new List<RpcResponseFrame>();
+
         await foreach (var frame in call)
             frames.Add(frame);
+
         return frames;
     }
 
@@ -721,8 +734,11 @@ public sealed class InMemoryRpcDeadlineTests
         public ValueTask HandleStreamingAsync(RpcRequest request, IRpcResponseWriter writer, CancellationToken ct) =>
             HandleAsync(writer, false, ct);
 
-        public ValueTask HandleFinalThenWaitAsync(RpcRequest request, IRpcResponseWriter writer,
-            CancellationToken ct) =>
+        public ValueTask HandleFinalThenWaitAsync(
+            RpcRequest request,
+            IRpcResponseWriter writer,
+            CancellationToken ct
+        ) =>
             HandleAsync(writer, true, ct);
 
         async ValueTask HandleAsync(IRpcResponseWriter writer, bool? firstFrameFinal, CancellationToken ct)
@@ -735,9 +751,12 @@ public sealed class InMemoryRpcDeadlineTests
                     cancellationCallback?.Invoke();
                 });
                 Started.SetResult();
+
                 if (firstFrameFinal is { } isFinal)
                     await writer.SendAsync(new byte[] { 42 }, isFinal, CancellationToken.None);
+
                 await Release.Task;
+
                 if (firstFrameFinal != true)
                     await writer.SendAsync(new byte[] { 42 }, true, CancellationToken.None);
             }

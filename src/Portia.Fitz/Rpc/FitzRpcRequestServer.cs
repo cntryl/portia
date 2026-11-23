@@ -46,11 +46,13 @@ public sealed class FitzRpcRequestServer(
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var workers = new Workers();
+
         try
         {
             var handled = scope.ServiceProvider.GetServices<RequestHandlerRegistration>()
                 .Select(registration => registration.RequestType)
                 .ToHashSet();
+
             foreach (var descriptor in scope.ServiceProvider.GetServices<RequestTransportRegistration>())
             {
                 // Processor endpoints belong to their exact workload owner's lifetime rather than
@@ -66,6 +68,7 @@ public sealed class FitzRpcRequestServer(
                     $"Callable request '{descriptor.RequestType}' has no generated RPC registration.");
                 workers.Items.Add(await register(this, ct).ConfigureAwait(false));
             }
+
 
             return workers;
         }
@@ -108,6 +111,7 @@ public sealed class FitzRpcRequestServer(
                 var actorValidator = scope.ServiceProvider.GetRequiredService<IRequestActorValidator>();
                 var invocation = new RpcInvocation(request.Route) { MessagingSystem = "fitz" };
                 DeserializedRequest envelope;
+
                 try
                 {
                     envelope = requestDeserializer.DeserializeEnvelope(request.Body);
@@ -127,10 +131,12 @@ public sealed class FitzRpcRequestServer(
                     throw;
                 }
 
+
                 if (envelope.Request is not TRequest typed)
                 {
                     var failure = new RequestError(RequestErrorKind.Validation, "Unexpected request contract.");
                     using var process = PortiaTelemetry.StartProcess(requestName, invocation, envelope.TraceContext);
+
                     try
                     {
                         await writer.SendAsync(outcomeSerializer.SerializeOutcome(Result.Failure(failure)), true,
@@ -150,6 +156,7 @@ public sealed class FitzRpcRequestServer(
                         PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Fault);
                         throw;
                     }
+
 
                     return;
                 }
@@ -192,8 +199,11 @@ public sealed class FitzRpcRequestServer(
         where TRequest : IRequest<TOut>, ICallable
         => RegisterAsync<TRequest, TOut>(FitzRouting.ResolveRpcWorkerPattern<TRequest>(Catalog()), null, ct);
 
-    internal ValueTask<RpcWorkerRegistration> RegisterAsync<TRequest, TOut>(string pattern,
-        Func<TRequest, string, bool>? accepts, CancellationToken ct)
+    internal ValueTask<RpcWorkerRegistration> RegisterAsync<TRequest, TOut>(
+        string pattern,
+        Func<TRequest, string, bool>? accepts,
+        CancellationToken ct
+    )
         where TRequest : IRequest<TOut>, ICallable
     {
         var requestName = Catalog().Get(typeof(TRequest)).Discriminator.Name;
@@ -209,6 +219,7 @@ public sealed class FitzRpcRequestServer(
                 var actorValidator = scope.ServiceProvider.GetRequiredService<IRequestActorValidator>();
                 var invocation = new RpcInvocation(request.Route) { MessagingSystem = "fitz" };
                 DeserializedRequest envelope;
+
                 try
                 {
                     envelope = requestDeserializer.DeserializeEnvelope(request.Body);
@@ -228,10 +239,12 @@ public sealed class FitzRpcRequestServer(
                     throw;
                 }
 
+
                 if (envelope.Request is not TRequest typed || accepts is not null && !accepts(typed, request.Route))
                 {
                     var failure = new RequestError(RequestErrorKind.Validation, "Unexpected request contract.");
                     using var process = PortiaTelemetry.StartProcess(requestName, invocation, envelope.TraceContext);
+
                     try
                     {
                         await writer.SendAsync(outcomeSerializer.SerializeResult(Result<TOut>.Failure(failure)), true,
@@ -251,6 +264,7 @@ public sealed class FitzRpcRequestServer(
                         PortiaTelemetry.RecordDelivery(requestName, "rpc", RequestDeliveryOutcome.Fault);
                         throw;
                     }
+
 
                     return;
                 }
@@ -288,6 +302,7 @@ public sealed class FitzRpcRequestServer(
         public async ValueTask DisposeAsync()
         {
             List<Exception>? errors = null;
+
             for (var i = Items.Count - 1; i >= 0; i--)
             {
                 try
@@ -300,7 +315,9 @@ public sealed class FitzRpcRequestServer(
                 }
             }
 
+
             Items.Clear();
+
             if (errors is not null)
             {
                 throw new AggregateException(errors);

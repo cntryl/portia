@@ -32,8 +32,10 @@ public sealed class FitzKvProjectionStoreTests
     /// </summary>
     [Theory]
     [MemberData(nameof(BeginValidationFailures))]
-    public async Task ShouldCleanUpAndRemainReusableGivenBeginValidationFailure(string failureKind,
-        bool cleanupFails)
+    public async Task ShouldCleanUpAndRemainReusableGivenBeginValidationFailure(
+        string failureKind,
+        bool cleanupFails
+    )
     {
         // Arrange
         var original = new IOException("checkpoint read failed");
@@ -42,6 +44,7 @@ public sealed class FitzKvProjectionStoreTests
         var repository = new TotalsRepository(client, "kv://portia/state/orders");
         var supplied = ProjectionCheckpoint.Start;
         var key = FitzKvCheckpoints.Key(Identity);
+
         switch (failureKind)
         {
             case "read":
@@ -60,6 +63,7 @@ public sealed class FitzKvProjectionStoreTests
             default:
                 throw new InvalidOperationException($"Unknown failure kind '{failureKind}'.");
         }
+
 
         var checkpointBeforeFailure = client.Read(key)?.ToArray();
 

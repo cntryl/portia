@@ -15,7 +15,8 @@ public interface IDomainEventReader
     IAsyncEnumerable<DomainEventRecord> ReadAsync(
         EventStreamAddress stream,
         ulong fromOffset,
-        CancellationToken ct);
+        CancellationToken ct
+    );
 
     /// <summary>
     ///     Reads events selected for a projector or reactor from a scope offset.
@@ -27,5 +28,6 @@ public interface IDomainEventReader
     IAsyncEnumerable<DomainEventRecord> ReadAsync(
         EventStreamPattern pattern,
         EventCursor cursor,
-        CancellationToken ct);
+        CancellationToken ct
+    );
 }

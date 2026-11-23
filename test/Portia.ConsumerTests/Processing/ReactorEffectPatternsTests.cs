@@ -113,11 +113,17 @@ public sealed class ReactorEffectPatternsTests
         public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>
             new(actor, metadata: metadata);
 
-        public ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
-            CancellationToken ct = default) => ValueTask.FromResult(Result.Success);
+        public ValueTask<Result> AuthorizeAsync(
+            IRequestBase request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        ) => ValueTask.FromResult(Result.Success);
 
-        public ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context,
-            CancellationToken ct = default)
+        public ValueTask<Result> DispatchAsync(
+            IRequest request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        )
         {
             ct.ThrowIfCancellationRequested();
             var rejected = (RejectOrder)request;
@@ -125,17 +131,22 @@ public sealed class ReactorEffectPatternsTests
             return ValueTask.FromResult(Result.Success);
         }
 
-        public async ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context,
-            CancellationToken ct = default)
+        public async ValueTask<Result<TOut>> DispatchAsync<TOut>(
+            IRequest<TOut> request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        )
         {
             var reserve = (ReserveInventory)(object)request;
             Reservations.Add(context);
             var stream = new EventStreamAddress("testing", "inventory", reserve.RequestId.ToString());
+
             await foreach (var record in store.ReadAsync(stream, 0, ct).ConfigureAwait(false))
             {
                 if (record.Event is InventoryRefused)
                     return Result<TOut>.Success((TOut)(object)ReservationDecision.Refused);
             }
+
 
             if (CanReserve)
                 return Result<TOut>.Success((TOut)(object)ReservationDecision.Reserved);
@@ -148,8 +159,11 @@ public sealed class ReactorEffectPatternsTests
                 isTransient: true));
         }
 
-        public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request,
-            RequestDispatchContext context, CancellationToken ct = default) => throw new NotSupportedException();
+        public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(
+            IStreamRequest<TOut> request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
     }
 
     sealed class ReservationReaction(IProjectionCheckpointStore checkpoints, IRequestBus bus, Uuid orderId)
@@ -157,12 +171,17 @@ public sealed class ReactorEffectPatternsTests
             "reservation-reaction")
     {
         protected override async ValueTask<Result> ReactToEventAsync(
-            DomainEventRecord record, IExecutionContext context, CancellationToken ct)
+            DomainEventRecord record,
+            IExecutionContext context,
+            CancellationToken ct
+        )
         {
             var id = record.Event.Metadata.EventId;
             var outcome = await bus.SendAsync(new ReserveInventory(id), context, ct).ConfigureAwait(false);
+
             if (!outcome.IsSuccess)
                 return outcome.Error;
+
             if (outcome.Value == ReservationDecision.Refused)
                 return await bus.SendReactionAsync(new RejectOrder(id), (IReactorContext)context, ct)
                     .ConfigureAwait(false);
@@ -185,22 +204,34 @@ public sealed class ReactorEffectPatternsTests
     {
         public Result Outcome { get; set; } = outcome;
 
-        public ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
-            CancellationToken ct = default) => ValueTask.FromResult(Result.Success);
+        public ValueTask<Result> AuthorizeAsync(
+            IRequestBase request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        ) => ValueTask.FromResult(Result.Success);
 
         public RequestDispatchContext CreateContext(ClaimsPrincipal actor, RequestMetadata? metadata = null) =>
             new(actor, metadata: metadata);
 
-        public ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context,
-            CancellationToken ct = default) =>
+        public ValueTask<Result> DispatchAsync(
+            IRequest request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        ) =>
             ValueTask.FromResult(Outcome);
 
-        public ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context,
-            CancellationToken ct = default) =>
+        public ValueTask<Result<TOut>> DispatchAsync<TOut>(
+            IRequest<TOut> request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        ) =>
             throw new NotSupportedException();
 
-        public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request,
-            RequestDispatchContext context, CancellationToken ct = default) =>
+        public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(
+            IStreamRequest<TOut> request,
+            RequestDispatchContext context,
+            CancellationToken ct = default
+        ) =>
             throw new NotSupportedException();
     }
 
@@ -211,10 +242,12 @@ public sealed class ReactorEffectPatternsTests
         public ValueTask SendReceiptAsync(Deposited ev, IReactorContext context, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
+
             if (!ReferenceEquals(ev, context.Source.Event))
             {
                 throw new InvalidOperationException("The direct effect lost its triggering context.");
             }
+
 
             Receipts++;
             return ValueTask.CompletedTask;
@@ -228,7 +261,10 @@ public sealed class ReactorEffectPatternsTests
             "command-reaction")
     {
         protected override async ValueTask<Result> ReactToEventAsync(
-            DomainEventRecord record, IExecutionContext context, CancellationToken ct)
+            DomainEventRecord record,
+            IExecutionContext context,
+            CancellationToken ct
+        )
         {
             return await bus.SendReactionAsync(
                 new SendReceipt(record.Event.Metadata.AggregateId), (IReactorContext)context, ct).ConfigureAwait(false);
@@ -243,7 +279,10 @@ public sealed class ReactorEffectPatternsTests
             "direct-effect-reaction")
     {
         protected override async ValueTask<Result> ReactToEventAsync(
-            DomainEventRecord record, IExecutionContext context, CancellationToken ct)
+            DomainEventRecord record,
+            IExecutionContext context,
+            CancellationToken ct
+        )
         {
             await effects.SendReceiptAsync((Deposited)record.Event, (IReactorContext)context, ct).ConfigureAwait(false);
             return Result.Success;

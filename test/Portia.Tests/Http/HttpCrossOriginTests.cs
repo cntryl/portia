@@ -131,8 +131,12 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
     [InlineData("example.com", "ftp://example.com", "https", false)]
     [InlineData("example.com", "null", "https", false)]
     [InlineData("example.com", "", "https", false)]
-    public void ShouldCompareOriginWithRequestHostGivenNoFetchMetadata(string host, string origin, string scheme,
-        bool allowed)
+    public void ShouldCompareOriginWithRequestHostGivenNoFetchMetadata(
+        string host,
+        string origin,
+        string scheme,
+        bool allowed
+    )
     {
         // Arrange
         var context = new DefaultHttpContext();
@@ -241,20 +245,29 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
     static HttpRequestMessage Request(HttpMethod method, string path, string? fetchSite, string? origin)
     {
         var request = new HttpRequestMessage(method, path);
+
         if (fetchSite is not null)
             request.Headers.Add("Sec-Fetch-Site", fetchSite);
+
+
         if (origin is not null)
             request.Headers.Add("Origin", origin);
+
         return request;
     }
 
-    async Task<HttpClient> StartAsync(Action<WebApplication> map, Action<IServiceCollection>? configureCors = null,
-        bool corsRegisteredFirst = true)
+    async Task<HttpClient> StartAsync(
+        Action<WebApplication> map,
+        Action<IServiceCollection>? configureCors = null,
+        bool corsRegisteredFirst = true
+    )
     {
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
+
         if (corsRegisteredFirst)
             configureCors?.Invoke(builder.Services);
+
         _ = builder.Services.AddFrameworkTests();
         _ = builder.Services.AddPortia().AddHttp()
             .AddRequestHandler<HttpCrossOriginReplaceHandler>()
@@ -262,8 +275,10 @@ public sealed class HttpCrossOriginTests : IAsyncDisposable
             .AddRequestHandler<HttpCrossOriginRemoveHandler>()
             .AddRequestHandler<HttpCrossOriginCustomHandler>();
         _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
+
         if (!corsRegisteredFirst)
             configureCors?.Invoke(builder.Services);
+
         _app = builder.Build();
         map(_app);
         await _app.StartAsync();

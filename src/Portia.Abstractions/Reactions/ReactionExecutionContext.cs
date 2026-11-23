@@ -50,8 +50,11 @@ public sealed class ReactionExecutionContext : IReactorContext
     /// <inheritdoc />
     public DomainEventRecord Source { get; }
 
-    internal static ReactionExecutionContext FromSystemSnapshot(DomainEventRecord source,
-        ClaimsPrincipal actorSnapshot, TimeProvider timeProvider) => new(source, timeProvider, actorSnapshot);
+    internal static ReactionExecutionContext FromSystemSnapshot(
+        DomainEventRecord source,
+        ClaimsPrincipal actorSnapshot,
+        TimeProvider timeProvider
+    ) => new(source, timeProvider, actorSnapshot);
 
     static ClaimsPrincipal SnapshotSystemActor(ClaimsPrincipal actor)
     {

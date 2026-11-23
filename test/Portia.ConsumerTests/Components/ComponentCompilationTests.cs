@@ -7,8 +7,11 @@ public sealed class ComponentCompilationTests
     [InlineData(true, false, "class")]
     [InlineData(true, false, "interface")]
     [InlineData(false, true, "class")]
-    public async Task ShouldCompileAndExecuteGivenGlobalNestedOrPartialComponents(bool nested, bool partial,
-        string containerKind)
+    public async Task ShouldCompileAndExecuteGivenGlobalNestedOrPartialComponents(
+        bool nested,
+        bool partial,
+        string containerKind
+    )
     {
         // Arrange
         var components = """
@@ -34,10 +37,12 @@ public sealed class ComponentCompilationTests
                              public ValueTask<Result> Process() => ProjectEventAsync(new DomainEventRecord(new EventStreamAddress("test", "area", "id"), new Ev(), 0, new EventCursor("1")), new Context(), default);
                          }
                          """;
+
         if (partial)
         {
             components += "public partial class Watcher { } public partial class View { }";
         }
+
 
         if (nested)
         {

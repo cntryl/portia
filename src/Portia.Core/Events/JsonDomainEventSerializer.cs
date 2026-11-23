@@ -30,8 +30,11 @@ public sealed class JsonDomainEventSerializer : IDomainEventSerializer
     ///     An upcaster is malformed or duplicated, or a chain
     ///     of upcasters cannot reach a version the catalog knows.
     /// </exception>
-    public JsonDomainEventSerializer(DomainEventTypeCatalog catalog, IEnumerable<IJsonDomainEventUpcaster>? upcasters,
-        JsonSerializerOptions options)
+    public JsonDomainEventSerializer(
+        DomainEventTypeCatalog catalog,
+        IEnumerable<IJsonDomainEventUpcaster>? upcasters,
+        JsonSerializerOptions options
+    )
     {
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(options);
@@ -51,6 +54,7 @@ public sealed class JsonDomainEventSerializer : IDomainEventSerializer
             }
 
             var key = (eventName, upcaster.FromVersion);
+
             if (upcaster.FromVersion is <= 0 or int.MaxValue)
             {
                 errors.Add((upcaster.EventName, upcaster.FromVersion,
@@ -71,6 +75,7 @@ public sealed class JsonDomainEventSerializer : IDomainEventSerializer
             // The walk only ever moves forward one schema version at a time, so it terminates at
             // the first version with neither a registered type nor an upcaster to bridge it.
             var version = fromVersion + 1;
+
             while (!catalog.TryResolve(name, version, out _))
             {
                 if (!upcastersByKey.ContainsKey((name, version)))
@@ -131,6 +136,7 @@ public sealed class JsonDomainEventSerializer : IDomainEventSerializer
         var version = root.GetProperty("version").GetInt32();
         var payloadElement = root.GetProperty("payload");
         DomainEvent? ev;
+
         if (_catalog.TryResolve(name, version, out var resolvedType) && resolvedType is not null)
         {
             ev = (DomainEvent?)payloadElement.Deserialize(_options.GetTypeInfo(resolvedType));
@@ -143,8 +149,11 @@ public sealed class JsonDomainEventSerializer : IDomainEventSerializer
             ev = (DomainEvent?)payload.Deserialize(_options.GetTypeInfo(resolvedType));
         }
 
+
+
         if (ev is null)
             throw new InvalidOperationException($"The '{resolvedType}' payload deserialized to null.");
+
         var metadata = root.GetProperty("metadata")
                            .Deserialize(PortiaCoreJsonContext.Default.DomainEventMetadata)
                        ?? throw new InvalidOperationException("The event metadata deserialized to null.");

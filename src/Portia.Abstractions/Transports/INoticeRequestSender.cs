@@ -23,8 +23,12 @@ public interface INoticeRequestSender
     /// </param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the publish.</returns>
-    ValueTask PublishAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
-        CancellationToken ct = default)
+    ValueTask PublishAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, INotifiable
         => PublishAsync(request, routeValues, actorToken, RequestMetadata.FromRequest(request), ct);
 
@@ -42,7 +46,12 @@ public interface INoticeRequestSender
     /// <param name="metadata">The logical request identity to propagate.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task representing the publish.</returns>
-    ValueTask PublishAsync<TRequest>(TRequest request, RequestRouteValues routeValues, string? actorToken,
-        RequestMetadata metadata, CancellationToken ct = default)
+    ValueTask PublishAsync<TRequest>(
+        TRequest request,
+        RequestRouteValues routeValues,
+        string? actorToken,
+        RequestMetadata metadata,
+        CancellationToken ct = default
+    )
         where TRequest : IRequest, INotifiable;
 }

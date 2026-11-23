@@ -29,8 +29,10 @@ static class GeneratorChecks
                                        """, CompilerHost.ParseOptions, "/benchmark/Bench.Core/Unsupported.cs",
                 Encoding.UTF8));
         var result = CompilerHost.Driver(tracking: true).RunGenerators(compilation).GetRunResult();
+
         if (result.Results.Any(item => item.Exception is not null))
             throw new InvalidOperationException("Generator diagnostic control threw an exception.");
+
         Verification.Coverage(["PORTIA015", "PORTIA025", "PORTIA031"],
             result.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error).Select(item => item.Id)
                 .Distinct());
@@ -39,6 +41,7 @@ static class GeneratorChecks
         var stages = edited.GetRunResult().Results.SelectMany(item => item.TrackedSteps).GroupBy(item => item.Key)
             .ToDictionary(group => group.Key, group => group.SelectMany(item => item.Value).ToArray(),
                 StringComparer.Ordinal);
+
         foreach (var name in new[]
                  {
                      "PortiaHttpBindingShapes", "PortiaProcessorImplementations", "DomainEventCatalogRegistrations",

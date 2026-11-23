@@ -10,6 +10,10 @@ public interface ITenantDirectorySnapshotStore
     ///     Saves a complete snapshot only if the previously loaded cursor is still current.
     ///     Returns false when another writer has advanced the snapshot.
     /// </summary>
-    ValueTask<bool> TrySaveAsync(EventStreamPattern pattern, EventCursor? expectedCursor,
-        TenantDirectorySnapshot snapshot, CancellationToken ct = default);
+    ValueTask<bool> TrySaveAsync(
+        EventStreamPattern pattern,
+        EventCursor? expectedCursor,
+        TenantDirectorySnapshot snapshot,
+        CancellationToken ct = default
+    );
 }

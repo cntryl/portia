@@ -19,8 +19,13 @@ public abstract class McpToolRegistration
     readonly ConditionalWeakTable<JsonSerializerOptions, Tool> _protocolTools = [];
     readonly IReadOnlyDictionary<string, McpJsonPropertyDescription> _propertyDescriptions;
 
-    internal McpToolRegistration(Type requestType, Type? resultType, string name, string description,
-        McpToolOptions options)
+    internal McpToolRegistration(
+        Type requestType,
+        Type? resultType,
+        string name,
+        string description,
+        McpToolOptions options
+    )
     {
         RequestType = requestType;
         ResultType = resultType;
@@ -28,13 +33,17 @@ public abstract class McpToolRegistration
         RequestName = name;
         Name = string.IsNullOrWhiteSpace(options.Name) ? name : options.Name;
         Description = string.IsNullOrWhiteSpace(options.Description) ? description : options.Description;
+
         if (!IsValidName(Name))
             throw new ArgumentException(
                 $"MCP tool name '{Name}' must contain 1 to 128 ASCII letters, digits, dots, underscores, or hyphens.",
                 nameof(options));
+
+
         if (string.IsNullOrWhiteSpace(Description))
             throw new ArgumentException(
                 $"MCP tool '{Name}' requires a non-empty description.", nameof(options));
+
         Title = options.Title;
         ReadOnly = options.ReadOnlyHint;
         Destructive = options.DestructiveHint;
@@ -81,34 +90,43 @@ public abstract class McpToolRegistration
     Tool BuildProtocolTool(JsonSerializerOptions json)
     {
         var binding = PortiaJsonRequestOptions.Strict(json).GetTypeInfo(RequestType);
+
         if (binding.Kind != JsonTypeInfoKind.Object)
             throw new InvalidOperationException(
                 $"MCP tool '{Name}' requires object-shaped JSON input metadata for '{RequestType}'. "
                 + "Use an object request without a root converter.");
+
         var input = PortiaJsonSchemaProjection.For(json, json, true).GetTypeInfo(RequestType).GetJsonSchemaAsNode(
             new JsonSchemaExporterOptions
             {
                 TransformSchemaNode = (context, node) => PortiaJsonDescriptions.Apply(context, node, json, input: true)
             });
+
         if (input is not JsonObject inputObject)
             throw new InvalidOperationException($"MCP tool '{Name}' did not produce an object input schema.");
+
         inputObject["type"] = "object";
+
         if (inputObject["properties"] is JsonObject properties)
         {
             var contractNames = new Dictionary<string, string>(StringComparer.Ordinal);
+
             foreach (var property in binding.Properties)
                 if (property.AttributeProvider is MemberInfo member)
                     contractNames.TryAdd(member.Name, property.Name);
+
 
             foreach (var (propertyName, propertyDescription) in _propertyDescriptions)
             {
                 var jsonName = contractNames.GetValueOrDefault(propertyName)
                                ?? propertyDescription.JsonName
                                ?? json.PropertyNamingPolicy?.ConvertName(propertyName) ?? propertyName;
+
                 if (properties[jsonName] is JsonObject propertySchema)
                     propertySchema["description"] = propertyDescription.Description;
             }
         }
+
 
         var result = ResultType is null
             ? null
@@ -117,8 +135,10 @@ public abstract class McpToolRegistration
                 {
                     TransformSchemaNode = (context, node) => PortiaJsonDescriptions.Apply(context, node, json)
                 });
+
         if (result is not null)
             RewriteResultReferences(result);
+
         JsonNode? output = result is null
             ? null
             : new JsonObject
@@ -148,7 +168,9 @@ public abstract class McpToolRegistration
 
     internal abstract ValueTask<McpToolInvocationResult> InvokeAsync(
         ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call,
-        JsonSerializerOptions json, CancellationToken ct);
+        JsonSerializerOptions json,
+        CancellationToken ct
+    );
 
     /// <summary>Binds, attributes, and dispatches one MCP call, projecting only a successful result.</summary>
     private protected async ValueTask<McpToolInvocationResult> DispatchAsync<TRequest, TResult>(
@@ -157,7 +179,8 @@ public abstract class McpToolRegistration
         Func<IRequestBus, TRequest, RequestDispatchContext, CancellationToken, ValueTask<TResult>> dispatch,
         Func<TResult, RequestError?> failure,
         Func<TResult, JsonSerializerOptions, CallToolResult> success,
-        CancellationToken ct)
+        CancellationToken ct
+    )
         where TRequest : IRequestBase
     {
         var services = call.Services ?? throw new InvalidOperationException("The MCP request has no service scope.");
@@ -167,8 +190,10 @@ public abstract class McpToolRegistration
         var context = new RequestDispatchContext(actor, Invocation,
             timeProvider: services.GetService<TimeProvider>());
         var binding = context.BindRequest(request);
+
         if (!binding.IsSuccess)
             return new McpToolInvocationResult(Failure(binding.Error), binding.Error);
+
         var result = await dispatch(bus, request, binding.Value, ct).ConfigureAwait(false);
         return failure(result) is { } error
             ? new McpToolInvocationResult(Failure(error), error)
@@ -181,11 +206,13 @@ public abstract class McpToolRegistration
         try
         {
             var arguments = new JsonObject();
+
             if (call.Arguments is not null)
             {
                 foreach (var argument in call.Arguments)
                     arguments[argument.Key] = JsonNode.Parse(argument.Value.GetRawText());
             }
+
 
             return (TRequest?)arguments.Deserialize(PortiaJsonRequestOptions.Strict(json).GetTypeInfo<TRequest>())
                    ?? throw new JsonException("The MCP tool input cannot be null.");
@@ -199,15 +226,19 @@ public abstract class McpToolRegistration
     /// <summary>Resolves the authenticated or explicitly provided actor.</summary>
     protected static async ValueTask<ClaimsPrincipal> ActorAsync(
         ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         if (call.User is not null)
             return call.User;
+
         var services = call.Services ?? throw new InvalidOperationException("The MCP request has no service scope.");
         // HTTP authentication owns identity: the SDK omits an unauthenticated caller's principal, so it
         // stays anonymous and the request bus fails closed. The actor provider is a stdio-only policy.
+
         if (PortiaMcpHttpMarker.IsCurrentRequest)
             return new ClaimsPrincipal(new ClaimsIdentity());
+
         var provider = services.GetService<IMcpActorProvider>()
                        ?? throw new McpActorRequiredException(
                            "MCP ingress has no authenticated principal or registered IMcpActorProvider.");
@@ -258,6 +289,7 @@ public abstract class McpToolRegistration
     {
         if (name.Length is < 1 or > 128)
             return false;
+
         foreach (var character in name)
         {
             if (!(character is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9'
@@ -272,6 +304,7 @@ public abstract class McpToolRegistration
     {
         if (node is not JsonObject schema)
             return;
+
         if (schema["$ref"] is JsonValue value && value.TryGetValue<string>(out var reference) &&
             (reference == "#" || reference.StartsWith("#/", StringComparison.Ordinal)))
             schema["$ref"] = reference == "#"
@@ -308,7 +341,9 @@ public sealed class McpToolRegistration<TRequest>(string name, string descriptio
 {
     internal override ValueTask<McpToolInvocationResult> InvokeAsync(
         ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call,
-        JsonSerializerOptions json, CancellationToken ct) =>
+        JsonSerializerOptions json,
+        CancellationToken ct
+    ) =>
         DispatchAsync<TRequest, Result>(call, json,
             static (bus, request, context, token) => bus.DispatchAsync(request, context, token),
             static result => result.IsSuccess ? null : result.Error!,
@@ -328,7 +363,9 @@ public sealed class McpToolRegistration<TRequest, TOut>(string name, string desc
 {
     internal override ValueTask<McpToolInvocationResult> InvokeAsync(
         ModelContextProtocol.Server.RequestContext<CallToolRequestParams> call,
-        JsonSerializerOptions json, CancellationToken ct) =>
+        JsonSerializerOptions json,
+        CancellationToken ct
+    ) =>
         DispatchAsync<TRequest, Result<TOut>>(call, json,
             static (bus, request, context, token) => bus.DispatchAsync(request, context, token),
             static result => result.IsSuccess ? null : result.Error!,

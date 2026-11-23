@@ -54,6 +54,7 @@ public abstract class FakeSenderScript
     {
         if (!SendId.IsValid(id.Value))
             throw new ArgumentException("A send ID is required.", nameof(id));
+
         if (tenant.Value is null)
             throw new ArgumentException("A tenant ID is required.", nameof(tenant));
     }
@@ -70,8 +71,12 @@ public sealed class FakeMailSender : FakeSenderScript, IMailSender
     public IReadOnlyList<FakeSubmission<MailMessage>> Submissions => [.. _submissions];
 
     /// <inheritdoc />
-    public ValueTask<SendOutcome> SendAsync(TenantId tenant, SendId id, MailMessage message,
-        CancellationToken ct = default)
+    public ValueTask<SendOutcome> SendAsync(
+        TenantId tenant,
+        SendId id,
+        MailMessage message,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(message);
         ValidateIdentity(tenant, id);
@@ -90,8 +95,12 @@ public sealed class FakeSmsSender : FakeSenderScript, ISmsSender
     public IReadOnlyList<FakeSubmission<SmsMessage>> Submissions => [.. _submissions];
 
     /// <inheritdoc />
-    public ValueTask<SendOutcome> SendAsync(TenantId tenant, SendId id, SmsMessage message,
-        CancellationToken ct = default)
+    public ValueTask<SendOutcome> SendAsync(
+        TenantId tenant,
+        SendId id,
+        SmsMessage message,
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(message);
         ValidateIdentity(tenant, id);

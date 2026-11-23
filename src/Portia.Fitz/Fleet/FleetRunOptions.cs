@@ -39,10 +39,12 @@ public sealed record FleetRunOptions
         var segments = MembershipSelector?.StartsWith("lease://", StringComparison.Ordinal) == true
             ? MembershipSelector[8..].Split('/')
             : [];
+
         if (segments.Length != 3 || !IsSegment(segments[0]) || !IsSegment(segments[1]) || segments[2] != "*")
         {
             throw new ArgumentException("Membership selector must be lease://realm/area/*.");
         }
+
 
         if (WorkerId is not null && !IsSegment(WorkerId))
         {
@@ -51,17 +53,20 @@ public sealed record FleetRunOptions
 
         var prefix = MembershipSelector![..^1];
         var seen = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var partition in partitions)
         {
             var parts = partition?.StartsWith("lease://", StringComparison.Ordinal) == true
                 ? partition[8..].Split('/')
                 : [];
+
             if (parts.Length != 3 || !parts.All(IsSegment))
             {
                 throw new ArgumentException(
                     "Partition must be lease://{realm}/{area}/{resource} with exact nonblank segments.",
                     nameof(partitions));
             }
+
 
             if (partition!.StartsWith(prefix, StringComparison.Ordinal))
             {

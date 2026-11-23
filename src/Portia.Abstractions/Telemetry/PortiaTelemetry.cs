@@ -115,11 +115,13 @@ public static partial class PortiaTelemetry
     internal static Activity? StartExecute(string requestName, string transport)
     {
         var activity = ActivitySource.StartActivity(ExecuteActivityName);
+
         if (activity?.IsAllDataRequested == true)
         {
             _ = activity.SetTag("portia.request.name", requestName);
             _ = activity.SetTag("portia.transport.name", transport);
         }
+
 
         return activity;
     }
@@ -132,16 +134,19 @@ public static partial class PortiaTelemetry
     internal static Activity? StartSend(string requestName, string transport, string? messagingSystem)
     {
         var activity = ActivitySource.StartActivity(SendActivityName, ActivityKind.Producer);
+
         if (activity?.IsAllDataRequested == true)
         {
             _ = activity.SetTag("portia.request.name", requestName);
             _ = activity.SetTag("portia.transport.name", transport);
+
             if (messagingSystem is not null)
             {
                 _ = activity.SetTag("messaging.system", messagingSystem);
                 _ = activity.SetTag("messaging.operation.type", "send");
             }
         }
+
 
         return activity;
     }
@@ -156,19 +161,28 @@ public static partial class PortiaTelemetry
     ///     <c>portia.transport.trace_context.invalid</c>. The invocation decides whether valid
     ///     context is a parent or a link.
     /// </remarks>
-    internal static Activity? StartProcess(string requestName, RequestInvocation invocation,
-        RequestTraceContext? propagated) => StartProcess(requestName, invocation, propagated, true);
+    internal static Activity? StartProcess(
+        string requestName,
+        RequestInvocation invocation,
+        RequestTraceContext? propagated
+    ) => StartProcess(requestName, invocation, propagated, true);
 
-    internal static Activity? StartProcess(string requestName, RequestInvocation invocation,
-        RequestTraceContext? propagated, bool receivedTraceContext)
+    internal static Activity? StartProcess(
+        string requestName,
+        RequestInvocation invocation,
+        RequestTraceContext? propagated,
+        bool receivedTraceContext
+    )
     {
         ArgumentNullException.ThrowIfNull(invocation);
         ActivityContext parent = default;
+
         if (propagated is { } context && !context.TryParse(out parent))
         {
             InvalidTraceContext.Add(1,
                 new KeyValuePair<string, object?>("portia.transport.name", invocation.TransportName));
         }
+
 
         if (!ActivitySource.HasListeners())
         {
@@ -183,9 +197,11 @@ public static partial class PortiaTelemetry
         var linked = invocation.TraceRelationship == RequestTraceRelationship.Link;
         var links = linked && parent != default ? new[] { new ActivityLink(parent) } : null;
         Activity? activity;
+
         if (linked)
         {
             var previous = Activity.Current;
+
             try
             {
                 Activity.Current = null;
@@ -199,6 +215,7 @@ public static partial class PortiaTelemetry
 
             // A non-W3C parent sentinel prevents Start from adopting Activity.Current.
             // Sampling ran with an empty context above; the resulting span remains a root.
+
             activity?.SetParentId(" ").Start();
         }
         else
@@ -206,10 +223,12 @@ public static partial class PortiaTelemetry
             activity = ActivitySource.StartActivity(ProcessActivityName, ActivityKind.Consumer, parent);
         }
 
+
         if (activity?.IsAllDataRequested == true)
         {
             _ = activity.SetTag("portia.request.name", requestName);
             _ = activity.SetTag("portia.transport.name", invocation.TransportName);
+
             if (invocation.MessagingSystem is not null)
             {
                 _ = activity.SetTag("messaging.system", invocation.MessagingSystem);
@@ -303,6 +322,7 @@ public static partial class PortiaTelemetry
     {
         AggregateDuration.Record(Seconds(started), new KeyValuePair<string, object?>("portia.operation", operation),
             new KeyValuePair<string, object?>("portia.outcome", outcome));
+
         if (eventCount > 0)
         {
             AggregateEvents.Add(eventCount, new KeyValuePair<string, object?>("portia.operation", operation));
@@ -315,13 +335,19 @@ public static partial class PortiaTelemetry
     /// <param name="scope">The stable stream or pattern scope.</param>
     /// <param name="outcome">The stable operation outcome.</param>
     /// <param name="eventCount">The number of events handled; zero suppresses the count instrument.</param>
-    internal static void EventStoreFinished(long started, string operation, string scope, string outcome,
-        int eventCount = 0)
+    internal static void EventStoreFinished(
+        long started,
+        string operation,
+        string scope,
+        string outcome,
+        int eventCount = 0
+    )
     {
         EventStoreDuration.Record(Seconds(started),
             new KeyValuePair<string, object?>("portia.operation", operation),
             new KeyValuePair<string, object?>("portia.scope", scope),
             new KeyValuePair<string, object?>("portia.outcome", outcome));
+
         if (eventCount > 0)
         {
             EventStoreEvents.Add(eventCount, new KeyValuePair<string, object?>("portia.operation", operation),
@@ -339,18 +365,26 @@ public static partial class PortiaTelemetry
     ///     The occurrence time of the last committed event, or
     ///     <see langword="null" /> to omit lag. Negative lag is clamped to zero.
     /// </param>
-    internal static void ProcessorBatchFinished(long started, string component, string runner, string outcome,
-        int eventCount, DateTimeOffset? lastOccurrence = null)
+    internal static void ProcessorBatchFinished(
+        long started,
+        string component,
+        string runner,
+        string outcome,
+        int eventCount,
+        DateTimeOffset? lastOccurrence = null
+    )
     {
         ProcessorDuration.Record(Seconds(started),
             new KeyValuePair<string, object?>("portia.component.name", component),
             new KeyValuePair<string, object?>("portia.runner.name", runner),
             new KeyValuePair<string, object?>("portia.outcome", outcome));
+
         if (eventCount > 0)
         {
             ProcessorEvents.Add(eventCount, new KeyValuePair<string, object?>("portia.component.name", component),
                 new KeyValuePair<string, object?>("portia.runner.name", runner));
         }
+
 
         if (lastOccurrence is { } occurrence)
         {
@@ -361,8 +395,14 @@ public static partial class PortiaTelemetry
     }
 
     /// <summary>Records one bounded tenant-directory read pass without tenant or cursor identities.</summary>
-    internal static void TenantDirectoryReadFinished(TimeSpan duration, string operation, string phase,
-        string outcome, int eventCount, int activeTenantCount)
+    internal static void TenantDirectoryReadFinished(
+        TimeSpan duration,
+        string operation,
+        string phase,
+        string outcome,
+        int eventCount,
+        int activeTenantCount
+    )
     {
         var tags = new TagList
         {
@@ -371,8 +411,10 @@ public static partial class PortiaTelemetry
             { "portia.outcome", outcome }
         };
         TenantDirectoryDuration.Record(Math.Max(0, duration.TotalSeconds), tags);
+
         if (eventCount > 0)
             TenantDirectoryEvents.Add(eventCount, tags);
+
         TenantDirectoryActive.Record(activeTenantCount, tags);
     }
 
@@ -386,6 +428,7 @@ public static partial class PortiaTelemetry
         WorkloadActive.Add(active ? 1 : -1,
             new KeyValuePair<string, object?>("portia.component.name", component),
             new KeyValuePair<string, object?>("portia.scope", scope));
+
         if (logger is not null)
         {
             LogWorkload(logger, component, scope, active);
@@ -445,6 +488,7 @@ public static partial class PortiaTelemetry
         if (activity.IsAllDataRequested)
         {
             _ = activity.SetTag("portia.outcome", "fault");
+
             if (exception is not null)
             {
                 _ = activity.AddException(exception);
@@ -486,16 +530,23 @@ public static partial class PortiaTelemetry
     ///     the bounded runner and stage. The structured log retains the exception type and full
     ///     exception for operator diagnosis.
     /// </remarks>
-    internal static void RecordRunnerFault(string runnerName, RunnerFaultStage stage, Exception? exception = null,
-        ILogger? logger = null, bool recordException = true)
+    internal static void RecordRunnerFault(
+        string runnerName,
+        RunnerFaultStage stage,
+        Exception? exception = null,
+        ILogger? logger = null,
+        bool recordException = true
+    )
     {
         WorkerFailure.Add(1, new KeyValuePair<string, object?>("portia.runner.name", runnerName),
             new KeyValuePair<string, object?>("portia.stage", StageName(stage)));
+
         if (logger is not null)
         {
             LogRunnerFault(logger, runnerName, StageName(stage), exception?.GetType().Name ?? "unexpected_termination",
                 exception);
         }
+
 
         if (recordException && exception is not null && Activity.Current is { IsAllDataRequested: true } activity)
         {
@@ -536,6 +587,7 @@ public static partial class PortiaTelemetry
     {
         FleetAssignmentActive.Add(assigned ? 1 : -1,
             new KeyValuePair<string, object?>("portia.scope", "partition"));
+
         if (logger is not null)
         {
             LogFleetAssignment(logger, assigned);

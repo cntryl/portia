@@ -33,15 +33,21 @@ public readonly record struct TenantId(string Value) : ISpanParsable<TenantId>, 
     public string ToString(string? format, IFormatProvider? formatProvider) => ToString();
 
     /// <inheritdoc />
-    public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format,
-        IFormatProvider? provider)
+    public bool TryFormat(
+        Span<char> destination,
+        out int charsWritten,
+        ReadOnlySpan<char> format,
+        IFormatProvider? provider
+    )
     {
         var value = ToString().AsSpan();
+
         if (!value.TryCopyTo(destination))
         {
             charsWritten = 0;
             return false;
         }
+
 
         charsWritten = value.Length;
         return true;
@@ -100,10 +106,12 @@ public readonly record struct TenantId(string Value) : ISpanParsable<TenantId>, 
     static string Validate(string value, string parameterName)
     {
         _ = IdentityText.Require(value, parameterName);
+
         if (value.Contains('/') || value.Contains('*'))
         {
             throw new ArgumentException("A tenant ID cannot contain '/' or '*'.", parameterName);
         }
+
 
         return string.Equals(value, EventStreamPattern.TenantTemplateRealm, StringComparison.Ordinal)
             ? throw new ArgumentException(

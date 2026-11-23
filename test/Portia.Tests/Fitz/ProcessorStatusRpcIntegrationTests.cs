@@ -54,13 +54,16 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
         {
             await Task.WhenAll(control.ProjectorEntered.Task, control.ReactorEntered.Task)
                 .WaitAsync(TimeSpan.FromSeconds(15), ct);
+
             foreach (var name in names)
                 pending.Add(name, await GetStatusWhenReadyAsync(client, name, "global", ct));
+
 
             denied = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, ct: ct);
             outsideScope = await GetStatusWhenReadyAsync(client, StatusControl.ReactorName, "tenant-a", ct);
             member = await GetStatusWhenReadyAsync(client, StatusControl.ProjectorName, "member", ct);
             _ = control.Release.TrySetResult();
+
             foreach (var name in names)
                 completed.Add(name, await WaitForCaughtUpAsync(client, name));
         }
@@ -77,6 +80,7 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
 
         // Assert
         Assert.DoesNotContain(readerHost.GetServices<IHostedService>(), service => service is PortiaWorkloadService);
+
         foreach (var name in names)
         {
             var status = pending[name];
@@ -96,11 +100,14 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
             Assert.Equal(name == StatusControl.ProjectorName ? "projector" : "reactor", complete.Kind);
         }
 
+
         Assert.False(denied.IsSuccess);
         Assert.Equal(RequestErrorKind.Unauthorized, denied.Error.Kind);
         Assert.Equal(!operationalPolicy, outsideScope.IsSuccess);
+
         if (operationalPolicy)
             Assert.Equal(RequestErrorKind.Forbidden, Assert.IsType<RequestError>(outsideScope.Error).Kind);
+
         Assert.False(member.IsSuccess);
         Assert.Equal(RequestErrorKind.Forbidden, member.Error.Kind);
         Assert.True(afterStop.IsSuccess);
@@ -119,12 +126,15 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
             _ = services.AddSingleton(control);
             _ = services.AddSingleton(store);
             _ = services.AddSingleton<IRequestActorValidator, StatusActorValidator>();
+
             if (operationalPolicy)
                 _ = services.AddSingleton<IOperationalAuthorizer, TestOperationalAuthorizer>();
+
             var applicationBuilder = services.AddPortia()
                 .UseFitzClient(connection, fitz =>
                 {
                     _ = fitz.DisableRequestWorkers().UseFleet(fleet).UseProcessorStatusRpc(application);
+
                     if (reader)
                         _ = fitz.AddProcessorStatusReader();
                 })
@@ -132,8 +142,10 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
                     options => options.PollInterval = TimeSpan.FromMilliseconds(10))
                 .AddReactor<StatusReactor>(StatusControl.ReactorName, WorkloadScope.Global,
                     options => options.PollInterval = TimeSpan.FromMilliseconds(10));
+
             if (!reader)
                 _ = applicationBuilder.AddWorkers();
+
             return services.BuildServiceProvider();
         }
     }
@@ -175,8 +187,11 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
 
     sealed class WaitingStatusProbe : IDomainEventProgressReader
     {
-        public async ValueTask<EventStreamProgress> GetProgressAsync(EventStreamPattern pattern,
-            EventCursor position, CancellationToken ct = default)
+        public async ValueTask<EventStreamProgress> GetProgressAsync(
+            EventStreamPattern pattern,
+            EventCursor position,
+            CancellationToken ct = default
+        )
         {
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
             throw new InvalidOperationException("The status probe should reach its timeout.");
@@ -186,21 +201,29 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
     static async Task<ProcessorStatus> WaitForCaughtUpAsync(IProcessorStatusClient client, string processor)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
         while (true)
         {
             var response = await GetStatusWhenReadyAsync(client, processor, "global", deadline.Token);
             Assert.True(response.IsSuccess);
+
             if (response.Value.Progress!.IsCaughtUp == true)
                 return response.Value;
+
             await Task.Delay(10, deadline.Token);
         }
     }
 
-    static async Task<Result<ProcessorStatus>> GetStatusWhenReadyAsync(IProcessorStatusClient client, string processor,
-        string? actorToken = null, CancellationToken ct = default)
+    static async Task<Result<ProcessorStatus>> GetStatusWhenReadyAsync(
+        IProcessorStatusClient client,
+        string processor,
+        string? actorToken = null,
+        CancellationToken ct = default
+    )
     {
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(TimeSpan.FromSeconds(15));
+
         while (true)
         {
             try
@@ -235,8 +258,11 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
     sealed class StatusProjector(StatusStore store, StatusControl control)
         : Projector(store, EventStreamPattern.ForPattern("status-source", "events"))
     {
-        protected override async ValueTask<Result> ProjectEventAsync(DomainEventRecord record,
-            IProjectorContext context, CancellationToken ct)
+        protected override async ValueTask<Result> ProjectEventAsync(
+            DomainEventRecord record,
+            IProjectorContext context,
+            CancellationToken ct
+        )
         {
             control.ProjectorEntered.TrySetResult();
             await control.Release.Task.WaitAsync(ct);
@@ -247,8 +273,11 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
     sealed class StatusReactor(StatusStore store, StatusControl control)
         : Reactor(store, EventStreamPattern.ForPattern("status-source", "events"))
     {
-        protected override async ValueTask<Result> ReactToEventAsync(DomainEventRecord record,
-            IExecutionContext context, CancellationToken ct)
+        protected override async ValueTask<Result> ReactToEventAsync(
+            DomainEventRecord record,
+            IExecutionContext context,
+            CancellationToken ct
+        )
         {
             control.ReactorEntered.TrySetResult();
             await control.Release.Task.WaitAsync(ct);
@@ -260,26 +289,37 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
     {
         readonly ConcurrentDictionary<CheckpointIdentity, ProjectionCheckpoint> _checkpoints = new();
 
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-            CancellationToken ct = default)
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+            CheckpointIdentity identity,
+            CancellationToken ct = default
+        )
             => ValueTask.FromResult(_checkpoints.GetValueOrDefault(identity));
 
         public ValueTask<ProjectionCheckpoint> LoadAsync(CheckpointIdentity identity, CancellationToken ct = default)
             => LoadCheckpointAsync(identity, ct);
 
-        public ValueTask SaveAsync(CheckpointIdentity identity, ProjectionCheckpoint checkpoint,
-            CancellationToken ct = default)
+        public ValueTask SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct = default
+        )
         {
             _checkpoints[identity] = checkpoint;
             return ValueTask.CompletedTask;
         }
 
-        ValueTask IConditionalProjectionCheckpointStore.SaveAsync(CheckpointIdentity identity,
-            ProjectionCheckpoint expected, ProjectionCheckpoint checkpoint, CancellationToken ct)
+        ValueTask IConditionalProjectionCheckpointStore.SaveAsync(
+            CheckpointIdentity identity,
+            ProjectionCheckpoint expected,
+            ProjectionCheckpoint checkpoint,
+            CancellationToken ct
+        )
         {
             ct.ThrowIfCancellationRequested();
+
             if (_checkpoints.GetValueOrDefault(identity) != expected)
                 throw new ProjectionConcurrencyException("stale checkpoint");
+
             _checkpoints[identity] = checkpoint;
             return ValueTask.CompletedTask;
         }
@@ -303,9 +343,12 @@ public sealed class ProcessorStatusRpcIntegrationTests(FitzBrokerFixture broker)
             if (token is null)
                 return ValueTask.FromResult(
                     Result<ClaimsPrincipal>.Failure(RequestError.Unauthorized("Missing credential.")));
+
             var actor = TestOperationalAuthorizer.Actor(scope: token == "member" ? "global" : token);
+
             if (token != "member")
                 ((ClaimsIdentity)actor.Identity!).AddClaim(new Claim(ClaimTypes.Role, "platform-operators"));
+
             return ValueTask.FromResult(Result<ClaimsPrincipal>.Success(actor));
         }
     }

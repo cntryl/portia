@@ -57,11 +57,17 @@ public class ProcessorDispatchBenchmarks : IDisposable
     {
         public DomainEventRecord[] Records { get; set; } = [];
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset,
-            CancellationToken ct) => Read(ct);
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset,
+            CancellationToken ct
+        ) => Read(ct);
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            CancellationToken ct) => Read(ct);
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            CancellationToken ct
+        ) => Read(ct);
 
         async IAsyncEnumerable<DomainEventRecord> Read([EnumeratorCancellation] CancellationToken ct)
         {
@@ -84,11 +90,15 @@ public class ProcessorDispatchBenchmarks : IDisposable
 
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-            CancellationToken ct = default) => ValueTask.FromResult(ProjectionCheckpoint.Start);
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+            CheckpointIdentity identity,
+            CancellationToken ct = default
+        ) => ValueTask.FromResult(ProjectionCheckpoint.Start);
 
-        public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context,
-            CancellationToken ct = default) => ValueTask.FromResult<IProjectionBatch>(this);
+        public ValueTask<IProjectionBatch> BeginAsync(
+            ProjectionBatchContext context,
+            CancellationToken ct = default
+        ) => ValueTask.FromResult<IProjectionBatch>(this);
     }
 }
 
@@ -105,6 +115,8 @@ sealed partial class SingleBenchmarkProjector(IProjectionStore store)
 sealed partial class BatchBenchmarkProjector(IProjectionStore store)
     : BatchProjector(store, EventStreamPattern.ForPattern("bench")), IBatchProjectorHandler<ProcessorBenchmarkEvent>
 {
-    public ValueTask<Result> HandleAsync(IReadOnlyList<IProjectorContext<ProcessorBenchmarkEvent>> contexts,
-        CancellationToken ct) => ValueTask.FromResult(Result.Success);
+    public ValueTask<Result> HandleAsync(
+        IReadOnlyList<IProjectorContext<ProcessorBenchmarkEvent>> contexts,
+        CancellationToken ct
+    ) => ValueTask.FromResult(Result.Success);
 }

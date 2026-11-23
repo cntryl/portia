@@ -29,6 +29,7 @@ public sealed class ApplicationFleetTests
         {
             await Until(() => probe.Owner == "a");
             await second.StartAsync(TestContext.Current.CancellationToken);
+
             try
             {
                 await first.StopAsync(TestContext.Current.CancellationToken);
@@ -73,6 +74,7 @@ public sealed class ApplicationFleetTests
     static async Task Until(Func<bool> condition)
     {
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+
         while (!condition())
             await Task.Delay(10, timeout.Token);
     }
@@ -102,9 +104,11 @@ public sealed class ApplicationFleetTests
 
         public void Dispose() => Interlocked.Increment(ref _probe.Disposed);
 
-        protected override async ValueTask<Result> ReactToEventAsync(DomainEventRecord record,
+        protected override async ValueTask<Result> ReactToEventAsync(
+            DomainEventRecord record,
             IExecutionContext context,
-            CancellationToken ct)
+            CancellationToken ct
+        )
         {
             lock (_probe)
             {

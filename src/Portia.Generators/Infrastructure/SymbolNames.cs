@@ -12,22 +12,29 @@ static class SymbolNames
     {
         var end = metadataName.Length;
         var current = type.OriginalDefinition;
+
         while (true)
         {
             if (end <= 0)
                 return false;
+
             var separator = Math.Max(metadataName.LastIndexOf('.', end - 1), metadataName.LastIndexOf('+', end - 1));
+
             if (!Segment(metadataName, separator + 1, end, current.MetadataName))
                 return false;
+
             var nested = separator >= 0 && metadataName[separator] == '+';
             end = separator;
+
             if (current.ContainingType is { } containing)
             {
                 if (!nested)
                     return false;
+
                 current = containing;
                 continue;
             }
+
 
             return !nested && current.ContainingNamespace is { } space && NamespaceMatches(space, metadataName, end);
         }
@@ -42,9 +49,12 @@ static class SymbolNames
         {
             if (end <= 0)
                 return false;
+
             var separator = name.LastIndexOf('.', end - 1);
+
             if (!Segment(name, separator + 1, end, space.Name))
                 return false;
+
             end = separator;
         }
 

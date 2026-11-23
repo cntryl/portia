@@ -32,6 +32,7 @@ public sealed class FleetBrokerTests
         {
             comparer.Resume();
             await lifetime.CancelAsync();
+
             if (hold is not null)
                 stopped = await Record.ExceptionAsync(() => hold.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         }
@@ -93,6 +94,7 @@ public sealed class FleetBrokerTests
                 options with { WorkerId = workerB }, cancelB.Token);
             var expectedB = partitions.Where(route => Owner(route, "a", workerB) == workerB)
                 .ToHashSet(StringComparer.Ordinal);
+
             try
             {
                 await Until(() =>
@@ -106,6 +108,7 @@ public sealed class FleetBrokerTests
                     error);
             }
 
+
             foreach (var route in activeA.Keys)
             {
                 Assert.Equal(original[route], activeA[route]);
@@ -113,6 +116,7 @@ public sealed class FleetBrokerTests
             }
 
             Assert.Empty(activeA.Keys.Intersect(activeB.Keys));
+
             if (crash)
             {
                 await second.DisposeAsync();
@@ -121,6 +125,7 @@ public sealed class FleetBrokerTests
             {
                 cancelB.Cancel();
             }
+
 
             await Until(() => activeA.Count == partitions.Length);
             Assert.All(expectedB, route => Assert.Equal(2, startsA[route]));
@@ -131,10 +136,12 @@ public sealed class FleetBrokerTests
             cancelA.Cancel();
             cancelB.Cancel();
             await runA.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+
             if (runB is not null)
             {
                 await runB.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             }
+
 
             await second.DisposeAsync();
         }
@@ -184,6 +191,7 @@ public sealed class FleetBrokerTests
             LeaseTtl = TimeSpan.FromSeconds(2),
             ReconciliationInterval = TimeSpan.FromMilliseconds(100)
         }, cancellation.Token);
+
         try
         {
             await Task.Delay(300, TestContext.Current.CancellationToken);
@@ -197,13 +205,18 @@ public sealed class FleetBrokerTests
         }
     }
 
-    static async Task Hold(string route, ConcurrentDictionary<string, bool> active,
-        ConcurrentDictionary<string, int>? starts, CancellationToken ct)
+    static async Task Hold(
+        string route,
+        ConcurrentDictionary<string, bool> active,
+        ConcurrentDictionary<string, int>? starts,
+        CancellationToken ct
+    )
     {
         _ = starts?.AddOrUpdate(route, 1, (_, count) => count + 1);
         // Active is the test's publication point: a reader observing it must also see the
         // completed start count, including the second start after ownership returns.
         Assert.True(active.TryAdd(route, true));
+
         try
         {
             await Task.Delay(Timeout.InfiniteTimeSpan, ct);
@@ -217,6 +230,7 @@ public sealed class FleetBrokerTests
     static async Task Until(Func<bool> predicate)
     {
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+
         while (!predicate())
             await Task.Delay(20, deadline.Token);
     }
@@ -233,8 +247,10 @@ public sealed class FleetBrokerTests
         public int GetHashCode(string obj)
         {
             RecordingStarted.TrySetResult();
+
             if (!_resume.Wait(TimeSpan.FromSeconds(5)))
                 throw new TimeoutException("The start-count recording was not released.");
+
             return StringComparer.Ordinal.GetHashCode(obj);
         }
 
@@ -248,6 +264,7 @@ public sealed class FleetBrokerTests
     static string Score(string route, string worker)
     {
         using var bytes = new MemoryStream();
+
         foreach (var value in new[] { route, worker })
         {
             var utf8 = Encoding.UTF8.GetBytes(value);
@@ -256,6 +273,7 @@ public sealed class FleetBrokerTests
             bytes.Write(length);
             bytes.Write(utf8);
         }
+
 
         return Convert.ToHexString(SHA256.HashData(bytes.ToArray()));
     }

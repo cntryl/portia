@@ -23,8 +23,11 @@ sealed class FitzWakeupSubscription<T> : IAsyncDisposable
     SubscriptionHandle<T> _subscription;
     bool _disposed;
 
-    FitzWakeupSubscription(Func<CancellationToken, Task<SubscriptionHandle<T>>> subscribe, string endedMessage,
-        SubscriptionHandle<T> subscription)
+    FitzWakeupSubscription(
+        Func<CancellationToken, Task<SubscriptionHandle<T>>> subscribe,
+        string endedMessage,
+        SubscriptionHandle<T> subscription
+    )
     {
         _subscribe = subscribe;
         _endedMessage = endedMessage;
@@ -40,7 +43,10 @@ sealed class FitzWakeupSubscription<T> : IAsyncDisposable
 
     /// <summary>Subscribes, so a caller can establish it before its first read of durable state.</summary>
     public static async Task<FitzWakeupSubscription<T>> SubscribeAsync(
-        Func<CancellationToken, Task<SubscriptionHandle<T>>> subscribe, string endedMessage, CancellationToken ct)
+        Func<CancellationToken, Task<SubscriptionHandle<T>>> subscribe,
+        string endedMessage,
+        CancellationToken ct
+    )
     {
         var subscription = await subscribe(ct).ConfigureAwait(false);
         return new FitzWakeupSubscription<T>(subscribe, endedMessage, subscription);
@@ -54,8 +60,10 @@ sealed class FitzWakeupSubscription<T> : IAsyncDisposable
     {
         var next = Next;
         await next.WaitAsync(ct).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+
         if (!next.IsCompleted)
             throw new OperationCanceledException(ct);
+
         await DrainAsync(ct).ConfigureAwait(false);
     }
 
@@ -69,6 +77,7 @@ sealed class FitzWakeupSubscription<T> : IAsyncDisposable
         {
             var pending = _pending!;
             _pending = null;
+
             try
             {
                 if (!await pending.ConfigureAwait(false))
@@ -95,12 +104,14 @@ sealed class FitzWakeupSubscription<T> : IAsyncDisposable
         }
 
         await _stop.CancelAsync().ConfigureAwait(false);
+
         try
         {
             // The move's cancellation or fault belongs to the caller that waited on it; disposal
             // only has to release the subscription.
             if (_pending is not null)
                 await ((Task)_pending).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+
             await notifications.DisposeAsync().ConfigureAwait(false);
         }
         finally

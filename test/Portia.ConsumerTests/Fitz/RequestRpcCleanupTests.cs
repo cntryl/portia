@@ -14,6 +14,7 @@ public sealed class RequestRpcCleanupTests
         _ = services.AddSingleton<RequestHandlerRegistration>(
             new RequestRegistration<FeatureOneRequest, FeatureOneHandler, int>());
         var handles = new[] { new Handle(), new Handle { Fail = true }, new Handle() };
+
         foreach (var handle in handles)
         {
             _ = services.AddSingleton(new RequestTransportRegistration(typeof(FeatureOneRequest),
@@ -22,6 +23,7 @@ public sealed class RequestRpcCleanupTests
                 new DiscriminatorAttribute("consumer.modules.feature-one"),
                 (_, _) => ValueTask.FromResult<IAsyncDisposable>(handle)));
         }
+
 
         if (registrationFails)
         {

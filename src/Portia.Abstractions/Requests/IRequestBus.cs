@@ -42,8 +42,11 @@ public interface IRequestBus
     /// <param name="context">Execution state from <see cref="CreateContext" />.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>Success when authorization permits the actor and standard value validation succeeds.</returns>
-    ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
-        CancellationToken ct = default);
+    ValueTask<Result> AuthorizeAsync(
+        IRequestBase request,
+        RequestDispatchContext context,
+        CancellationToken ct = default
+    );
 
     /// <summary>Dispatches a no-result request using receiver-created execution state.</summary>
     /// <param name="request">The request to dispatch.</param>
@@ -58,8 +61,11 @@ public interface IRequestBus
     /// <param name="context">Execution state from <see cref="CreateContext" />.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>The outcome of handling the request.</returns>
-    ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context,
-        CancellationToken ct = default);
+    ValueTask<Result<TOut>> DispatchAsync<TOut>(
+        IRequest<TOut> request,
+        RequestDispatchContext context,
+        CancellationToken ct = default
+    );
 
     /// <summary>Streams a request using receiver-created execution state.</summary>
     /// <typeparam name="TOut">The type of the values produced.</typeparam>
@@ -67,6 +73,9 @@ public interface IRequestBus
     /// <param name="context">Execution state from <see cref="CreateContext" />.</param>
     /// <param name="ct">A token that can cancel enumeration.</param>
     /// <returns>The values produced by the handler, yielded as they are produced.</returns>
-    IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request, RequestDispatchContext context,
-        CancellationToken ct = default);
+    IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(
+        IStreamRequest<TOut> request,
+        RequestDispatchContext context,
+        CancellationToken ct = default
+    );
 }

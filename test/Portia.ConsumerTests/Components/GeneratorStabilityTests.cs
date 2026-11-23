@@ -168,11 +168,14 @@ public sealed class GeneratorStabilityTests
     static IEnumerable<string> Failures(string source)
     {
         var run = Run(source);
+
         foreach (var generator in run.Generators.Results.Where(generator => generator.Exception is not null))
             yield return $"{generator.Generator.GetGeneratorType().Name} threw {generator.Exception}";
+
         foreach (var diagnostic in
                  run.Generators.Diagnostics.Where(diagnostic => diagnostic.Id is "CS8784" or "CS8785"))
             yield return diagnostic.ToString();
+
         foreach (var exception in run.AnalyzerExceptions)
             yield return exception;
     }

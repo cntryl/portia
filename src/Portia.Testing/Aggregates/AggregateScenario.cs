@@ -33,13 +33,16 @@ public sealed class AggregateScenario<TAggregate>(TAggregate aggregate)
         ArgumentNullException.ThrowIfNull(events);
         SaveCommitted();
         var version = Aggregate.Version;
+
         foreach (var ev in events)
         {
             ArgumentNullException.ThrowIfNull(ev);
             version++;
+
             if (ev.AttachedMetadata is null)
                 _ = DomainEventSeed.Attach(ev, Aggregate.Id, version);
         }
+
 
         Aggregate.Load(events);
         return this;
@@ -120,6 +123,7 @@ public sealed class AggregateScenario<TAggregate>(TAggregate aggregate)
             return;
 
         Aggregate.DiscardPending();
+
         if (disposition != AggregateDisposition.Discard)
         {
             throw new InvalidOperationException(

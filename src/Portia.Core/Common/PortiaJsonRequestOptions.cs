@@ -28,6 +28,7 @@ static class PortiaJsonRequestOptions
     static void RequireNonNullableMembers(JsonTypeInfo info, JsonSerializerOptions facts)
     {
         JsonTypeInfo? original = null;
+
         foreach (var property in info.Properties)
         {
             if (PortiaJsonDescriptions.PropertyMetadata(facts, property)?.Input == false)
@@ -37,6 +38,7 @@ static class PortiaJsonRequestOptions
             }
 
             property.IsGetNullable = property.IsSetNullable;
+
             if (property.AssociatedParameter is { HasDefaultValue: false, IsMemberInitializer: false } parameter)
             {
                 if (!parameter.IsNullable || facts.RespectRequiredConstructorParameters)

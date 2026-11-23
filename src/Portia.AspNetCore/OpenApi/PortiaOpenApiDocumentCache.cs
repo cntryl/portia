@@ -49,6 +49,7 @@ sealed class PortiaOpenApiDocumentCache(IServiceProvider services, string docume
         }
 
         await _gate.WaitAsync(ct).ConfigureAwait(false);
+
         try
         {
             // A second caller that queued behind the render uses its result rather than repeating it.

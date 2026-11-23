@@ -37,8 +37,10 @@ public sealed class PortiaEndpointConfiguration<TRequest>
     void SetResult(Func<HttpContext, Result, CancellationToken, ValueTask<IResult?>> handler)
     {
         EnsureMutable();
+
         if (ResultHandler is not null)
             throw new InvalidOperationException("OnResult can only be configured once.");
+
         RegisterResultHandler();
         ResultHandler = async (http, result, ct) =>
             EnsureResultHandlerResponse(result.IsSuccess, await handler(http, result, ct).ConfigureAwait(false));
@@ -96,8 +98,10 @@ public sealed class PortiaEndpointConfiguration<TRequest, TOut>
     void SetResult(Func<HttpContext, Result<TOut>, CancellationToken, ValueTask<IResult?>> handler)
     {
         EnsureMutable();
+
         if (ResultHandler is not null)
             throw new InvalidOperationException("OnResult can only be configured once.");
+
         RegisterResultHandler();
         ResultHandler = async (http, result, ct) =>
             EnsureResultHandlerResponse(result.IsSuccess, await handler(http, result, ct).ConfigureAwait(false));

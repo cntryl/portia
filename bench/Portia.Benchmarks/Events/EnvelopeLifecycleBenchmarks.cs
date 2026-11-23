@@ -50,6 +50,7 @@ public class EnvelopeLifecycleBenchmarks
         _legacy = JsonSerializer.SerializeToUtf8Bytes(legacy, EnvelopeJsonContext.Default.JsonObject);
         Qualify(_current);
         Qualify(_legacy);
+
         if (!_current.Span.SequenceEqual(_serializer.Serialize(_event).Span))
             throw new InvalidOperationException("Frozen envelope serialization was not deterministic.");
     }
@@ -57,6 +58,7 @@ public class EnvelopeLifecycleBenchmarks
     void Qualify(ReadOnlyMemory<byte> data)
     {
         var result = (EnvelopeEvent)_serializer.Deserialize(data);
+
         if (result.Payload != _event.Payload || result.Number != _event.Number || result.Metadata != _event.Metadata)
             throw new InvalidOperationException("Envelope payload, converter or full metadata did not round-trip.");
     }

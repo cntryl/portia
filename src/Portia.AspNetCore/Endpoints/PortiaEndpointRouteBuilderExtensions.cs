@@ -38,8 +38,10 @@ public static class PortiaEndpointRouteBuilderExtensions
     /// <param name="builder">The endpoint the route values apply to.</param>
     /// <param name="resolver">Reads the wildcard route segments from each incoming request.</param>
     /// <returns>The same builder, for chaining.</returns>
-    public static IEndpointConventionBuilder WithPortiaRouteValues(this IEndpointConventionBuilder builder,
-        Func<HttpContext, RequestRouteValues> resolver)
+    public static IEndpointConventionBuilder WithPortiaRouteValues(
+        this IEndpointConventionBuilder builder,
+        Func<HttpContext, RequestRouteValues> resolver
+    )
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(resolver);
@@ -58,8 +60,11 @@ public static class PortiaEndpointRouteBuilderExtensions
         where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>Maps a configurable no-result GET endpoint.</summary>
-    public static IEndpointConventionBuilder MapPortiaGet<TRequest>(this IEndpointRouteBuilder app, string pattern,
-        Action<PortiaEndpointConfiguration<TRequest>> configure)
+    public static IEndpointConventionBuilder MapPortiaGet<TRequest>(
+        this IEndpointRouteBuilder app,
+        string pattern,
+        Action<PortiaEndpointConfiguration<TRequest>> configure
+    )
         where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
@@ -70,13 +75,18 @@ public static class PortiaEndpointRouteBuilderExtensions
     /// <param name="app">The route builder the endpoint is added to.</param>
     /// <param name="pattern">The route pattern, which must be a compile-time constant.</param>
     /// <returns>A builder for applying further endpoint conventions.</returns>
-    public static IEndpointConventionBuilder MapPortiaGet<TRequest, TOut>(this IEndpointRouteBuilder app,
-        string pattern)
+    public static IEndpointConventionBuilder MapPortiaGet<TRequest, TOut>(
+        this IEndpointRouteBuilder app,
+        string pattern
+    )
         where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>Maps a configurable result-bearing GET endpoint.</summary>
-    public static IEndpointConventionBuilder MapPortiaGet<TRequest, TOut>(this IEndpointRouteBuilder app,
-        string pattern, Action<PortiaEndpointConfiguration<TRequest, TOut>> configure)
+    public static IEndpointConventionBuilder MapPortiaGet<TRequest, TOut>(
+        this IEndpointRouteBuilder app,
+        string pattern,
+        Action<PortiaEndpointConfiguration<TRequest, TOut>> configure
+    )
         where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
@@ -90,8 +100,11 @@ public static class PortiaEndpointRouteBuilderExtensions
         where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>Maps a configurable no-result POST endpoint.</summary>
-    public static IEndpointConventionBuilder MapPortiaPost<TRequest>(this IEndpointRouteBuilder app, string pattern,
-        Action<PortiaEndpointConfiguration<TRequest>> configure)
+    public static IEndpointConventionBuilder MapPortiaPost<TRequest>(
+        this IEndpointRouteBuilder app,
+        string pattern,
+        Action<PortiaEndpointConfiguration<TRequest>> configure
+    )
         where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
@@ -102,13 +115,18 @@ public static class PortiaEndpointRouteBuilderExtensions
     /// <param name="app">The route builder the endpoint is added to.</param>
     /// <param name="pattern">The route pattern, which must be a compile-time constant.</param>
     /// <returns>A builder for applying further endpoint conventions.</returns>
-    public static IEndpointConventionBuilder MapPortiaPost<TRequest, TOut>(this IEndpointRouteBuilder app,
-        string pattern)
+    public static IEndpointConventionBuilder MapPortiaPost<TRequest, TOut>(
+        this IEndpointRouteBuilder app,
+        string pattern
+    )
         where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>Maps a configurable result-bearing POST endpoint.</summary>
-    public static IEndpointConventionBuilder MapPortiaPost<TRequest, TOut>(this IEndpointRouteBuilder app,
-        string pattern, Action<PortiaEndpointConfiguration<TRequest, TOut>> configure)
+    public static IEndpointConventionBuilder MapPortiaPost<TRequest, TOut>(
+        this IEndpointRouteBuilder app,
+        string pattern,
+        Action<PortiaEndpointConfiguration<TRequest, TOut>> configure
+    )
         where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
@@ -122,8 +140,11 @@ public static class PortiaEndpointRouteBuilderExtensions
         where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>Maps a configurable no-result PUT endpoint.</summary>
-    public static IEndpointConventionBuilder MapPortiaPut<TRequest>(this IEndpointRouteBuilder app, string pattern,
-        Action<PortiaEndpointConfiguration<TRequest>> configure)
+    public static IEndpointConventionBuilder MapPortiaPut<TRequest>(
+        this IEndpointRouteBuilder app,
+        string pattern,
+        Action<PortiaEndpointConfiguration<TRequest>> configure
+    )
         where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
@@ -134,13 +155,18 @@ public static class PortiaEndpointRouteBuilderExtensions
     /// <param name="app">The route builder the endpoint is added to.</param>
     /// <param name="pattern">The route pattern, which must be a compile-time constant.</param>
     /// <returns>A builder for applying further endpoint conventions.</returns>
-    public static IEndpointConventionBuilder MapPortiaPut<TRequest, TOut>(this IEndpointRouteBuilder app,
-        string pattern)
+    public static IEndpointConventionBuilder MapPortiaPut<TRequest, TOut>(
+        this IEndpointRouteBuilder app,
+        string pattern
+    )
         where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>Maps a configurable result-bearing PUT endpoint.</summary>
-    public static IEndpointConventionBuilder MapPortiaPut<TRequest, TOut>(this IEndpointRouteBuilder app,
-        string pattern, Action<PortiaEndpointConfiguration<TRequest, TOut>> configure)
+    public static IEndpointConventionBuilder MapPortiaPut<TRequest, TOut>(
+        this IEndpointRouteBuilder app,
+        string pattern,
+        Action<PortiaEndpointConfiguration<TRequest, TOut>> configure
+    )
         where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
@@ -154,8 +180,11 @@ public static class PortiaEndpointRouteBuilderExtensions
         where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>Maps a configurable no-result PATCH endpoint.</summary>
-    public static IEndpointConventionBuilder MapPortiaPatch<TRequest>(this IEndpointRouteBuilder app, string pattern,
-        Action<PortiaEndpointConfiguration<TRequest>> configure)
+    public static IEndpointConventionBuilder MapPortiaPatch<TRequest>(
+        this IEndpointRouteBuilder app,
+        string pattern,
+        Action<PortiaEndpointConfiguration<TRequest>> configure
+    )
         where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
@@ -166,13 +195,18 @@ public static class PortiaEndpointRouteBuilderExtensions
     /// <param name="app">The route builder the endpoint is added to.</param>
     /// <param name="pattern">The route pattern, which must be a compile-time constant.</param>
     /// <returns>A builder for applying further endpoint conventions.</returns>
-    public static IEndpointConventionBuilder MapPortiaPatch<TRequest, TOut>(this IEndpointRouteBuilder app,
-        string pattern)
+    public static IEndpointConventionBuilder MapPortiaPatch<TRequest, TOut>(
+        this IEndpointRouteBuilder app,
+        string pattern
+    )
         where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>Maps a configurable result-bearing PATCH endpoint.</summary>
-    public static IEndpointConventionBuilder MapPortiaPatch<TRequest, TOut>(this IEndpointRouteBuilder app,
-        string pattern, Action<PortiaEndpointConfiguration<TRequest, TOut>> configure)
+    public static IEndpointConventionBuilder MapPortiaPatch<TRequest, TOut>(
+        this IEndpointRouteBuilder app,
+        string pattern,
+        Action<PortiaEndpointConfiguration<TRequest, TOut>> configure
+    )
         where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
@@ -186,8 +220,11 @@ public static class PortiaEndpointRouteBuilderExtensions
         where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>Maps a configurable no-result DELETE endpoint.</summary>
-    public static IEndpointConventionBuilder MapPortiaDelete<TRequest>(this IEndpointRouteBuilder app, string pattern,
-        Action<PortiaEndpointConfiguration<TRequest>> configure)
+    public static IEndpointConventionBuilder MapPortiaDelete<TRequest>(
+        this IEndpointRouteBuilder app,
+        string pattern,
+        Action<PortiaEndpointConfiguration<TRequest>> configure
+    )
         where TRequest : IRequest, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
@@ -198,13 +235,18 @@ public static class PortiaEndpointRouteBuilderExtensions
     /// <param name="app">The route builder the endpoint is added to.</param>
     /// <param name="pattern">The route pattern, which must be a compile-time constant.</param>
     /// <returns>A builder for applying further endpoint conventions.</returns>
-    public static IEndpointConventionBuilder MapPortiaDelete<TRequest, TOut>(this IEndpointRouteBuilder app,
-        string pattern)
+    public static IEndpointConventionBuilder MapPortiaDelete<TRequest, TOut>(
+        this IEndpointRouteBuilder app,
+        string pattern
+    )
         where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>Maps a configurable result-bearing DELETE endpoint.</summary>
-    public static IEndpointConventionBuilder MapPortiaDelete<TRequest, TOut>(this IEndpointRouteBuilder app,
-        string pattern, Action<PortiaEndpointConfiguration<TRequest, TOut>> configure)
+    public static IEndpointConventionBuilder MapPortiaDelete<TRequest, TOut>(
+        this IEndpointRouteBuilder app,
+        string pattern,
+        Action<PortiaEndpointConfiguration<TRequest, TOut>> configure
+    )
         where TRequest : IRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
@@ -219,13 +261,18 @@ public static class PortiaEndpointRouteBuilderExtensions
     /// <param name="app">The route builder the endpoint is added to.</param>
     /// <param name="pattern">The route pattern, which must be a compile-time constant.</param>
     /// <returns>A builder for applying further endpoint conventions.</returns>
-    public static IEndpointConventionBuilder MapPortiaGetStream<TRequest, TOut>(this IEndpointRouteBuilder app,
-        string pattern)
+    public static IEndpointConventionBuilder MapPortiaGetStream<TRequest, TOut>(
+        this IEndpointRouteBuilder app,
+        string pattern
+    )
         where TRequest : IStreamRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>Maps a configurable JSON-stream endpoint.</summary>
-    public static IEndpointConventionBuilder MapPortiaGetStream<TRequest, TOut>(this IEndpointRouteBuilder app,
-        string pattern, Action<PortiaStreamingEndpointConfiguration<TRequest>> configure)
+    public static IEndpointConventionBuilder MapPortiaGetStream<TRequest, TOut>(
+        this IEndpointRouteBuilder app,
+        string pattern,
+        Action<PortiaStreamingEndpointConfiguration<TRequest>> configure
+    )
         where TRequest : IStreamRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>
@@ -242,13 +289,18 @@ public static class PortiaEndpointRouteBuilderExtensions
     /// <param name="app">The route builder the endpoint is added to.</param>
     /// <param name="pattern">The route pattern, which must be a compile-time constant.</param>
     /// <returns>A builder for applying further endpoint conventions.</returns>
-    public static IEndpointConventionBuilder MapPortiaGetSse<TRequest, TOut>(this IEndpointRouteBuilder app,
-        string pattern)
+    public static IEndpointConventionBuilder MapPortiaGetSse<TRequest, TOut>(
+        this IEndpointRouteBuilder app,
+        string pattern
+    )
         where TRequest : IStreamRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     /// <summary>Maps a configurable server-sent-events endpoint.</summary>
-    public static IEndpointConventionBuilder MapPortiaGetSse<TRequest, TOut>(this IEndpointRouteBuilder app,
-        string pattern, Action<PortiaStreamingEndpointConfiguration<TRequest>> configure)
+    public static IEndpointConventionBuilder MapPortiaGetSse<TRequest, TOut>(
+        this IEndpointRouteBuilder app,
+        string pattern,
+        Action<PortiaStreamingEndpointConfiguration<TRequest>> configure
+    )
         where TRequest : IStreamRequest<TOut>, ICallable => MissingGeneratedEndpoint(app, pattern);
 
     static IEndpointConventionBuilder MissingGeneratedEndpoint(IEndpointRouteBuilder app, string pattern)

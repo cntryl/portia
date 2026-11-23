@@ -6,7 +6,8 @@ public static class GcpObjectStorageServiceCollectionExtensions
     /// <summary>Registers Cloud Storage object storage using a configured client and tenant resolver.</summary>
     public static IServiceCollection AddGcpObjectStorage(
         this IServiceCollection services,
-        Action<GcpObjectStorageBuilder> configure)
+        Action<GcpObjectStorageBuilder> configure
+    )
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configure);

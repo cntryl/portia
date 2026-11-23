@@ -12,8 +12,11 @@ sealed class FitzWorkloadCoordinator(
 {
     static readonly Uuid NamespaceId = Uuid.Parse("c41f6c39-9c25-4f7f-b8b0-fce08b5ccfc4", CultureInfo.InvariantCulture);
 
-    public async Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-        Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default)
+    public async Task RunAsync(
+        Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
+        Func<WorkloadIdentity, CancellationToken, Task> run,
+        CancellationToken ct = default
+    )
     {
         await connection.StartAsync(ct).ConfigureAwait(false);
         var options = configuration.Fleet ?? new FleetRunOptions

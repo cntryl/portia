@@ -17,6 +17,7 @@ sealed class ApplicationProject(string directory, string name, string rootNamesp
     public static ApplicationProject? From(AnalyzerConfigOptionsProvider options)
     {
         var global = options.GlobalOptions;
+
         if (!global.TryGetValue("build_property.PortiaProjectStructure", out var enabled)
             || !string.Equals(enabled, "true", StringComparison.OrdinalIgnoreCase)
             || !global.TryGetValue("build_property.MSBuildProjectDirectory", out var directory)
@@ -27,6 +28,7 @@ sealed class ApplicationProject(string directory, string name, string rootNamesp
         {
             return null;
         }
+
 
         _ = global.TryGetValue("build_property.IsTestProject", out var isTest);
         return new ApplicationProject(directory.Replace('\\', '/').TrimEnd('/'), name, rootNamespace,

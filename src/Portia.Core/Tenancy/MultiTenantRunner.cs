@@ -42,7 +42,8 @@ public sealed class MultiTenantRunner
         ITenantDirectory tenantDirectory,
         MultiTenantRunnerOptions? options = null,
         ILogger<MultiTenantRunner>? logger = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null
+    )
     {
         _tenantDirectory = tenantDirectory ?? throw new ArgumentNullException(nameof(tenantDirectory));
         options ??= new MultiTenantRunnerOptions();
@@ -79,7 +80,8 @@ public sealed class MultiTenantRunner
     public async Task RunAsync(
         Func<TenantId, CancellationToken, Task> onTenantStarted,
         Func<TenantId, CancellationToken, Task> onTenantStopped,
-        CancellationToken ct = default)
+        CancellationToken ct = default
+    )
     {
         ArgumentNullException.ThrowIfNull(onTenantStarted);
         ArgumentNullException.ThrowIfNull(onTenantStopped);
@@ -110,12 +112,14 @@ public sealed class MultiTenantRunner
                         // Snapshot/watch directories have no resumable cursor. Re-reading complete
                         // membership on reconnect closes the gap between separately opened watches.
                         var snapshot = new HashSet<TenantId>();
+
                         await foreach (var tenantId in _tenantDirectory.GetActiveTenantsAsync(ct).WithCancellation(ct)
                                            .ConfigureAwait(false))
                         {
                             _ = snapshot.Add(tenantId);
                             Start(tenantId, onTenantStarted, active, ct);
                         }
+
 
                         foreach (var tenantId in active.Keys.ToArray())
                         {
@@ -175,7 +179,9 @@ public sealed class MultiTenantRunner
         {
             foreach (var (tenantId, run) in active)
                 Cancel(run.Cancellation);
+
             using var shutdown = new CancellationTokenSource(_shutdownGrace, _clock);
+
             foreach (var tenantId in active.Keys.ToArray())
                 await StopAsync(tenantId, onTenantStopped, active, false, shutdown.Token).ConfigureAwait(false);
         }
@@ -186,7 +192,8 @@ public sealed class MultiTenantRunner
         Func<TenantId, CancellationToken, Task> onTenantStarted,
         Func<TenantId, CancellationToken, Task> onTenantStopped,
         ConcurrentDictionary<TenantId, TenantRun> active,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         if (change.Kind == TenantLifecycleChangeKind.Added)
         {
@@ -206,7 +213,8 @@ public sealed class MultiTenantRunner
         TenantId tenantId,
         Func<TenantId, CancellationToken, Task> onTenantStopped,
         ConcurrentDictionary<TenantId, TenantRun> active,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         using var deadline = new CancellationTokenSource(_tenantStopTimeout, _clock);
         using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct, deadline.Token);
@@ -218,14 +226,17 @@ public sealed class MultiTenantRunner
         TenantId tenantId,
         Func<TenantId, CancellationToken, Task> onTenantStarted,
         ConcurrentDictionary<TenantId, TenantRun> active,
-        CancellationToken ct)
+        CancellationToken ct
+    )
     {
         // RunAsync only ever calls Start/StopAsync sequentially from its own loops — never
         // concurrently with each other — so this reservation-then-fill isn't racing anything;
         // it's just how a TenantRun's Task can reference the same instance's own Cancellation.
         ct.ThrowIfCancellationRequested();
+
         if (active.ContainsKey(tenantId))
             return;
+
 
         var cts = new CancellationTokenSource();
         var registration = ct.Register(() => Cancel(cts));
@@ -234,14 +245,18 @@ public sealed class MultiTenantRunner
         active[tenantId] = new TenantRun(cts, task, registration);
     }
 
-    async Task RunTenantAsync(TenantId tenantId, Func<TenantId, CancellationToken, Task> onTenantStarted,
-        CancellationToken ct)
+    async Task RunTenantAsync(
+        TenantId tenantId,
+        Func<TenantId, CancellationToken, Task> onTenantStarted,
+        CancellationToken ct
+    )
     {
         while (!ct.IsCancellationRequested)
         {
             try
             {
                 await onTenantStarted(tenantId, ct).ConfigureAwait(false);
+
                 if (!ct.IsCancellationRequested)
                 {
                     PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), RunnerFaultStage.Workload,
@@ -281,7 +296,8 @@ public sealed class MultiTenantRunner
         bool throwOnTimeout,
         CancellationToken stopToken,
         CancellationToken timeoutToken = default,
-        CancellationToken hostToken = default)
+        CancellationToken hostToken = default
+    )
     {
         if (!active.TryGetValue(tenantId, out var run))
             return;
@@ -289,6 +305,7 @@ public sealed class MultiTenantRunner
         Cancel(run.Cancellation);
 
         var timedOut = false;
+
         try
         {
             await run.Task.WaitAsync(stopToken).ConfigureAwait(false);
@@ -299,6 +316,7 @@ public sealed class MultiTenantRunner
             // observes its workload within the grace interval before running its stop callback.
             if (hostToken.IsCancellationRequested)
                 return;
+
             _ = ObserveLateStopAsync(run.Task);
             timedOut = throwOnTimeout && timeoutToken.IsCancellationRequested;
         }
@@ -311,13 +329,17 @@ public sealed class MultiTenantRunner
             ReportCleanupFault(ex);
         }
 
+
         _ = active.TryRemove(tenantId, out _);
         run.Registration.Dispose();
         run.Cancellation.Dispose();
+
         if (timedOut)
             throw new TenantStopTimeoutException(tenantId, _tenantStopTimeout);
 
+
         Task? stop = null;
+
         try
         {
             stop = onTenantStopped(tenantId, stopToken);
@@ -327,6 +349,7 @@ public sealed class MultiTenantRunner
         {
             if (stop is not null)
                 _ = ObserveLateStopAsync(stop);
+
             if (throwOnTimeout && timeoutToken.IsCancellationRequested && !hostToken.IsCancellationRequested)
                 throw new TenantStopTimeoutException(tenantId, _tenantStopTimeout);
         }
@@ -366,6 +389,7 @@ public sealed class MultiTenantRunner
     void ReportCleanupFault(Exception exception)
     {
         var errors = exception is AggregateException aggregate ? aggregate.Flatten().InnerExceptions : [exception];
+
         foreach (var error in errors)
             PortiaTelemetry.RecordRunnerFault(nameof(MultiTenantRunner), RunnerFaultStage.Cleanup, error, _logger);
     }

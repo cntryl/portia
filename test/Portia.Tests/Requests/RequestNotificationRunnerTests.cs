@@ -23,8 +23,11 @@ public sealed class RequestNotificationRunnerTests
     [InlineData(false, true, true)]
     [InlineData(true, false, true)]
     [InlineData(true, true, true)]
-    public async Task ShouldExportCorrelatedOutcomeLogsGivenFaultAmbientAndScheduleVariations(bool fault, bool ambient,
-        bool schedule)
+    public async Task ShouldExportCorrelatedOutcomeLogsGivenFaultAmbientAndScheduleVariations(
+        bool fault,
+        bool ambient,
+        bool schedule
+    )
     {
         // Arrange
         using var capture = new RunnerExportCapture();

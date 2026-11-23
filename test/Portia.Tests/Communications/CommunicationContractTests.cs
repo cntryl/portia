@@ -72,12 +72,14 @@ public sealed class CommunicationContractTests
 
         // Assert
         var printed = string.Join('|', mail, sms, invalidMail?.Message, invalidSms?.Message);
+
         foreach (var secret in new[]
                  {
                      "person@example.com", "Secret subject", "Secret text", "Secret body",
                      "+15005550006", "not an address", "555-0100 secret"
                  })
             Assert.DoesNotContain(secret, printed, StringComparison.Ordinal);
+
         _ = Assert.IsType<ArgumentException>(invalidMail);
         _ = Assert.IsType<ArgumentException>(invalidSms);
     }

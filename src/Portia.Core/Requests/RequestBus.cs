@@ -18,40 +18,56 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         => new(actor, metadata: metadata, timeProvider: services.GetService<TimeProvider>());
 
     /// <inheritdoc />
-    public async ValueTask<Result> AuthorizeAsync(IRequestBase request, RequestDispatchContext context,
-        CancellationToken ct = default)
+    public async ValueTask<Result> AuthorizeAsync(
+        IRequestBase request,
+        RequestDispatchContext context,
+        CancellationToken ct = default
+    )
     {
         Validate(request, context, ct);
         var binding = context.BindRequest(request);
+
         if (!binding.IsSuccess)
             return Result.Failure(binding.Error);
+
         context = binding.Value;
         var registration = registry.Handler(request.GetType());
         var policies = registry.Policies(registration.RequestType);
+
         if (policies.IsUnprotected)
             ThrowUnprotectedRequest(registration.RequestType);
+
         var authorization = policies.HasAuthorizers
             ? await AuthorizeAsync(policies, request, registration.CreateContext(request, context), ct)
                 .ConfigureAwait(false)
             : Result.Success;
+
         if (!authorization.IsSuccess)
             return authorization;
+
         var validation = ValidateContract(request, ct);
         return validation is null ? Result.Success : Result.Failure(validation);
     }
 
     /// <inheritdoc />
-    public async ValueTask<Result> DispatchAsync(IRequest request, RequestDispatchContext context,
-        CancellationToken ct = default)
+    public async ValueTask<Result> DispatchAsync(
+        IRequest request,
+        RequestDispatchContext context,
+        CancellationToken ct = default
+    )
     {
         Validate(request, context, ct);
         var binding = context.BindRequest(request);
+
         if (!binding.IsSuccess)
             return Result.Failure(binding.Error);
+
         context = binding.Value;
         var registration = registry.Handler(request.GetType());
+
         if (registration is not IRequestInvocation)
             ThrowNotHandledAs(registration, "IRequest");
+
         var policies = registry.Policies(registration.RequestType);
         var transport = context.Invocation.TransportName;
         using var activity = PortiaTelemetry.StartExecute(policies.Name, transport);
@@ -59,6 +75,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         PortiaTelemetry.RequestStarted(policies.Name, transport);
         ObserveStarted(registration, context);
         var outcome = "fault";
+
         try
         {
             var result = await ExecuteAsync(registration, policies, request, context, ct).ConfigureAwait(false);
@@ -90,22 +107,30 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
                 ProcessingObservation.Record("request",
                     registration.RequestType.FullName ?? registration.RequestType.Name,
                     context.Metadata.RequestId.ToString(), context.ExecutionId.ToString(), outcome);
+
             PortiaTelemetry.RequestFinished(started, policies.Name, transport, outcome);
         }
     }
 
     /// <inheritdoc />
-    public async ValueTask<Result<TOut>> DispatchAsync<TOut>(IRequest<TOut> request, RequestDispatchContext context,
-        CancellationToken ct = default)
+    public async ValueTask<Result<TOut>> DispatchAsync<TOut>(
+        IRequest<TOut> request,
+        RequestDispatchContext context,
+        CancellationToken ct = default
+    )
     {
         Validate(request, context, ct);
         var binding = context.BindRequest(request);
+
         if (!binding.IsSuccess)
             return Result<TOut>.Failure(binding.Error);
+
         context = binding.Value;
         var registration = registry.Handler(request.GetType());
+
         if (registration is not IRequestInvocation<TOut>)
             ThrowNotHandledAs(registration, $"IRequest<{typeof(TOut)}>");
+
         var policies = registry.Policies(registration.RequestType);
         var transport = context.Invocation.TransportName;
         using var activity = PortiaTelemetry.StartExecute(policies.Name, transport);
@@ -113,6 +138,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         PortiaTelemetry.RequestStarted(policies.Name, transport);
         ObserveStarted(registration, context);
         var outcome = "fault";
+
         try
         {
             var result = await ExecuteAsync(registration, policies, request, context, ct).ConfigureAwait(false);
@@ -144,13 +170,17 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
                 ProcessingObservation.Record("request",
                     registration.RequestType.FullName ?? registration.RequestType.Name,
                     context.Metadata.RequestId.ToString(), context.ExecutionId.ToString(), outcome);
+
             PortiaTelemetry.RequestFinished(started, policies.Name, transport, outcome);
         }
     }
 
     /// <inheritdoc />
-    public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(IStreamRequest<TOut> request,
-        RequestDispatchContext context, CancellationToken ct = default)
+    public IAsyncEnumerable<TOut> DispatchStreamAsync<TOut>(
+        IStreamRequest<TOut> request,
+        RequestDispatchContext context,
+        CancellationToken ct = default
+    )
     {
         // An iterator runs nothing until it is enumerated, so a missing argument is rejected here,
         // where the caller that passed it is still on the stack.
@@ -159,17 +189,24 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         return EnumerateDispatchAsync(request, context, ct);
     }
 
-    async IAsyncEnumerable<TOut> EnumerateDispatchAsync<TOut>(IStreamRequest<TOut> request,
-        RequestDispatchContext context, [EnumeratorCancellation] CancellationToken ct)
+    async IAsyncEnumerable<TOut> EnumerateDispatchAsync<TOut>(
+        IStreamRequest<TOut> request,
+        RequestDispatchContext context,
+        [EnumeratorCancellation] CancellationToken ct
+    )
     {
         ct.ThrowIfCancellationRequested();
         var binding = context.BindRequest(request);
+
         if (!binding.IsSuccess)
             throw new RequestGuardException(binding.Error);
+
         context = binding.Value;
         var registration = registry.Handler(request.GetType());
+
         if (registration is not IStreamRequestInvocation<TOut>)
             ThrowNotHandledAs(registration, $"IStreamRequest<{typeof(TOut)}>");
+
         var policies = registry.Policies(registration.RequestType);
         var requestContext = registration.CreateContext(request, context);
         var transport = context.Invocation.TransportName;
@@ -181,11 +218,13 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         var completed = false;
         var observed = new StreamObservation();
         var suspended = false;
+
         try
         {
             var (authorization, validation) = await AuthorizeStreamAsync(registration, policies, request,
                 requestContext,
                 activity, observed, ct).ConfigureAwait(false);
+
             if (!authorization.IsSuccess)
             {
                 PortiaTelemetry.RecordOutcome(activity, false, authorization.Error);
@@ -195,6 +234,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
                 completed = true;
                 throw new RequestAuthorizationException(authorization.Error);
             }
+
 
             if (validation is not null)
             {
@@ -244,24 +284,32 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
             if (!completed)
                 PortiaTelemetry.RecordFault(activity);
 
+
             if (ProcessingObservation.IsEnabled)
                 ProcessingObservation.Record("request",
                     registration.RequestType.FullName ?? registration.RequestType.Name,
                     context.Metadata.RequestId.ToString(), context.ExecutionId.ToString(), outcome);
+
             PortiaTelemetry.RequestFinished(started, policies.Name, transport, outcome);
         }
     }
 
     // Preflight runs outside an iterator catch so its exception is recorded before the iterator settles.
     async ValueTask<(Result Authorization, RequestError? Validation)> AuthorizeStreamAsync(
-        RequestHandlerRegistration registration, RequestPolicies policies,
-        IRequestBase request, IRequestContext requestContext, Activity? activity, StreamObservation observed,
-        CancellationToken ct)
+        RequestHandlerRegistration registration,
+        RequestPolicies policies,
+        IRequestBase request,
+        IRequestContext requestContext,
+        Activity? activity,
+        StreamObservation observed,
+        CancellationToken ct
+    )
     {
         try
         {
             if (policies.IsUnprotected)
                 ThrowUnprotectedRequest(registration.RequestType);
+
             var authorization = await AuthorizeAsync(policies, request, requestContext, ct).ConfigureAwait(false);
             return (authorization, authorization.IsSuccess ? ValidateContract(request, ct) : null);
         }
@@ -294,16 +342,23 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
 
     // A yield return cannot sit inside a try with a catch, so enumeration is wrapped in methods
     // that can, keeping mid-stream faults on the activity like the unary paths.
-    static async IAsyncEnumerable<TOut> CatchStream<TOut>(IAsyncEnumerable<TOut> source, Activity? activity,
-        StreamObservation observed, bool hasGuards, [EnumeratorCancellation] CancellationToken ct)
+    static async IAsyncEnumerable<TOut> CatchStream<TOut>(
+        IAsyncEnumerable<TOut> source,
+        Activity? activity,
+        StreamObservation observed,
+        bool hasGuards,
+        [EnumeratorCancellation] CancellationToken ct
+    )
     {
         var enumerator = source.GetAsyncEnumerator(ct);
+
         try
         {
             while (true)
             {
                 var (hasValue, value) = await MoveNextAsync(enumerator, activity, observed, hasGuards, ct)
                     .ConfigureAwait(false);
+
                 if (!hasValue)
                 {
                     yield break;
@@ -320,8 +375,13 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
     }
 
-    static async ValueTask<(bool HasValue, TOut? Value)> MoveNextAsync<TOut>(IAsyncEnumerator<TOut> enumerator,
-        Activity? activity, StreamObservation observed, bool hasGuards, CancellationToken ct)
+    static async ValueTask<(bool HasValue, TOut? Value)> MoveNextAsync<TOut>(
+        IAsyncEnumerator<TOut> enumerator,
+        Activity? activity,
+        StreamObservation observed,
+        bool hasGuards,
+        CancellationToken ct
+    )
     {
         try
         {
@@ -357,8 +417,12 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         }
     }
 
-    static async ValueTask DisposeAsync<TOut>(IAsyncEnumerator<TOut> enumerator, Activity? activity,
-        StreamObservation observed, CancellationToken ct)
+    static async ValueTask DisposeAsync<TOut>(
+        IAsyncEnumerator<TOut> enumerator,
+        Activity? activity,
+        StreamObservation observed,
+        CancellationToken ct
+    )
     {
         try
         {
@@ -405,44 +469,69 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     // request can implement a no-result family interface and IRequest<TOut> at once, so a
     // behavior registered against that family reaches this dispatch without being able to serve
     // it. Skipping a shape it cannot serve is the same answer scope matching already gives.
-    ValueTask<Result> ExecuteAsync(RequestHandlerRegistration registration, RequestPolicies policies,
-        IRequest request, RequestDispatchContext dispatchContext, CancellationToken ct)
+    ValueTask<Result> ExecuteAsync(
+        RequestHandlerRegistration registration,
+        RequestPolicies policies,
+        IRequest request,
+        RequestDispatchContext dispatchContext,
+        CancellationToken ct
+    )
     {
         if (policies.IsUnprotected)
             ThrowUnprotectedRequest(registration.RequestType);
+
         if (!policies.HasAuthorizers && ValidateContract(request, ct) is { } invalid)
             return ValueTask.FromResult(Result.Failure(invalid));
+
         if (!policies.HasAuthorizers && policies.Unary.IsEmpty)
             return InvokeHandlerAsync(registration, request, dispatchContext, ct);
+
+
         if (!policies.HasAuthorizers)
             return InvokeAsync(registration, policies, request, registration.CreateContext(request, dispatchContext),
                 ct);
+
         return AuthorizeAndInvokeAsync(registration, policies, request, dispatchContext, ct);
     }
 
-    async ValueTask<Result> AuthorizeAndInvokeAsync(RequestHandlerRegistration registration,
-        RequestPolicies policies, IRequest request, RequestDispatchContext dispatchContext, CancellationToken ct)
+    async ValueTask<Result> AuthorizeAndInvokeAsync(
+        RequestHandlerRegistration registration,
+        RequestPolicies policies,
+        IRequest request,
+        RequestDispatchContext dispatchContext,
+        CancellationToken ct
+    )
     {
         var requestContext = registration.CreateContext(request, dispatchContext);
         var authorization = await AuthorizeAsync(policies, request, requestContext, ct)
             .ConfigureAwait(false);
+
         if (!authorization.IsSuccess)
             return authorization;
+
         var validation = ValidateContract(request, ct);
         return validation is null
             ? await InvokeAsync(registration, policies, request, requestContext, ct).ConfigureAwait(false)
             : Result.Failure(validation);
     }
 
-    ValueTask<Result<TOut>> ExecuteAsync<TOut>(RequestHandlerRegistration registration, RequestPolicies policies,
-        IRequest<TOut> request, RequestDispatchContext dispatchContext, CancellationToken ct)
+    ValueTask<Result<TOut>> ExecuteAsync<TOut>(
+        RequestHandlerRegistration registration,
+        RequestPolicies policies,
+        IRequest<TOut> request,
+        RequestDispatchContext dispatchContext,
+        CancellationToken ct
+    )
     {
         if (policies.IsUnprotected)
             ThrowUnprotectedRequest(registration.RequestType);
+
         if (!policies.HasAuthorizers && ValidateContract(request, ct) is { } invalid)
             return ValueTask.FromResult(Result<TOut>.Failure(invalid));
+
         if (!policies.HasAuthorizers && policies.Result<TOut>().IsEmpty)
             return InvokeHandlerAsync(registration, request, dispatchContext, ct);
+
         if (!policies.HasAuthorizers)
         {
             return InvokeAsync(registration, policies, request, registration.CreateContext(request, dispatchContext),
@@ -452,31 +541,47 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         return AuthorizeAndInvokeAsync(registration, policies, request, dispatchContext, ct);
     }
 
-    async ValueTask<Result<TOut>> AuthorizeAndInvokeAsync<TOut>(RequestHandlerRegistration registration,
-        RequestPolicies policies, IRequest<TOut> request, RequestDispatchContext dispatchContext,
-        CancellationToken ct)
+    async ValueTask<Result<TOut>> AuthorizeAndInvokeAsync<TOut>(
+        RequestHandlerRegistration registration,
+        RequestPolicies policies,
+        IRequest<TOut> request,
+        RequestDispatchContext dispatchContext,
+        CancellationToken ct
+    )
     {
         var requestContext = registration.CreateContext(request, dispatchContext);
         var authorization = await AuthorizeAsync(policies, request, requestContext, ct)
             .ConfigureAwait(false);
+
         if (!authorization.IsSuccess)
             return Result<TOut>.Failure(authorization.Error);
+
         var validation = ValidateContract(request, ct);
         return validation is null
             ? await InvokeAsync(registration, policies, request, requestContext, ct).ConfigureAwait(false)
             : Result<TOut>.Failure(validation);
     }
 
-    ValueTask<Result> InvokeAsync(RequestHandlerRegistration registration, RequestPolicies policies, IRequest request,
-        IRequestContext context, CancellationToken ct)
+    ValueTask<Result> InvokeAsync(
+        RequestHandlerRegistration registration,
+        RequestPolicies policies,
+        IRequest request,
+        IRequestContext context,
+        CancellationToken ct
+    )
     {
         if (policies.Unary.IsEmpty)
             return InvokeHandlerAsync(registration, request, context, ct);
+
         return policies.Unary.InvokeAsync(services, registration, request, context, ct);
     }
 
-    async ValueTask<Result> InvokeHandlerAsync(RequestHandlerRegistration registration, IRequest request,
-        IRequestContext context, CancellationToken ct)
+    async ValueTask<Result> InvokeHandlerAsync(
+        RequestHandlerRegistration registration,
+        IRequest request,
+        IRequestContext context,
+        CancellationToken ct
+    )
     {
         var result = await ((IRequestInvocation)registration).InvokeAsync(services, request, context, ct)
             .ConfigureAwait(false);
@@ -484,8 +589,12 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         return result;
     }
 
-    async ValueTask<Result> InvokeHandlerAsync(RequestHandlerRegistration registration, IRequest request,
-        RequestDispatchContext context, CancellationToken ct)
+    async ValueTask<Result> InvokeHandlerAsync(
+        RequestHandlerRegistration registration,
+        IRequest request,
+        RequestDispatchContext context,
+        CancellationToken ct
+    )
     {
         var result = await ((IRequestInvocation)registration).InvokeUnsharedAsync(services, request, context, ct)
             .ConfigureAwait(false);
@@ -493,18 +602,28 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         return result;
     }
 
-    ValueTask<Result<TOut>> InvokeAsync<TOut>(RequestHandlerRegistration registration, RequestPolicies policies,
+    ValueTask<Result<TOut>> InvokeAsync<TOut>(
+        RequestHandlerRegistration registration,
+        RequestPolicies policies,
         IRequest<TOut> request,
-        IRequestContext context, CancellationToken ct)
+        IRequestContext context,
+        CancellationToken ct
+    )
     {
         var plan = policies.Result<TOut>();
+
         if (plan.IsEmpty)
             return InvokeHandlerAsync(registration, request, context, ct);
+
         return plan.InvokeAsync(services, registration, request, context, ct);
     }
 
-    async ValueTask<Result<TOut>> InvokeHandlerAsync<TOut>(RequestHandlerRegistration registration,
-        IRequest<TOut> request, IRequestContext context, CancellationToken ct)
+    async ValueTask<Result<TOut>> InvokeHandlerAsync<TOut>(
+        RequestHandlerRegistration registration,
+        IRequest<TOut> request,
+        IRequestContext context,
+        CancellationToken ct
+    )
     {
         var result = await ((IRequestInvocation<TOut>)registration).InvokeAsync(services, request, context, ct)
             .ConfigureAwait(false);
@@ -512,8 +631,12 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         return result;
     }
 
-    async ValueTask<Result<TOut>> InvokeHandlerAsync<TOut>(RequestHandlerRegistration registration,
-        IRequest<TOut> request, RequestDispatchContext context, CancellationToken ct)
+    async ValueTask<Result<TOut>> InvokeHandlerAsync<TOut>(
+        RequestHandlerRegistration registration,
+        IRequest<TOut> request,
+        RequestDispatchContext context,
+        CancellationToken ct
+    )
     {
         var result = await ((IRequestInvocation<TOut>)registration)
             .InvokeUnsharedAsync(services, request, context, ct).ConfigureAwait(false);
@@ -521,12 +644,21 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
         return result;
     }
 
-    IAsyncEnumerable<TOut> EnumerateStream<TOut>(RequestHandlerRegistration registration, RequestPolicies policies,
-        IStreamRequest<TOut> request, IRequestContext context, CancellationToken ct) =>
+    IAsyncEnumerable<TOut> EnumerateStream<TOut>(
+        RequestHandlerRegistration registration,
+        RequestPolicies policies,
+        IStreamRequest<TOut> request,
+        IRequestContext context,
+        CancellationToken ct
+    ) =>
         policies.Stream<TOut>().Invoke(services, registration, request, context, ct);
 
-    ValueTask<Result> AuthorizeAsync(RequestPolicies policies, IRequestBase request, IRequestContext context,
-        CancellationToken ct) =>
+    ValueTask<Result> AuthorizeAsync(
+        RequestPolicies policies,
+        IRequestBase request,
+        IRequestContext context,
+        CancellationToken ct
+    ) =>
         RequestCheckRunner.RunAsync(services, policies.Authorizers, request, context, ct);
 
     // An unprotected request under RequireAuthorization() is a composition mistake, not an access
@@ -549,6 +681,7 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     {
         if (!ProcessingObservation.IsEnabled)
             return;
+
         var name = registration.RequestType.FullName ?? registration.RequestType.Name;
         var execution = context.ExecutionId.ToString();
         ProcessingObservation.Record("request", name, context.Metadata.RequestId.ToString(), execution, "started");

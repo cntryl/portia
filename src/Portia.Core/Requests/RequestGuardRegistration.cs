@@ -15,8 +15,12 @@ public abstract class RequestGuardRegistration(Type scopeType, Type guardType) :
 
     internal string ComponentName { get; } = guardType.Name;
 
-    internal abstract ValueTask<Result> GuardAsync(IServiceProvider services, IRequestBase request,
-        IRequestContext context, CancellationToken ct);
+    internal abstract ValueTask<Result> GuardAsync(
+        IServiceProvider services,
+        IRequestBase request,
+        IRequestContext context,
+        CancellationToken ct
+    );
 
     internal abstract void Register(IServiceCollection services);
 
@@ -24,8 +28,12 @@ public abstract class RequestGuardRegistration(Type scopeType, Type guardType) :
 
     string IRequestCheck.Role => "request guard";
 
-    ValueTask<Result> IRequestCheck.CheckAsync(IServiceProvider services, IRequestBase request,
-        IRequestContext context, CancellationToken ct) => GuardAsync(services, request, context, ct);
+    ValueTask<Result> IRequestCheck.CheckAsync(
+        IServiceProvider services,
+        IRequestBase request,
+        IRequestContext context,
+        CancellationToken ct
+    ) => GuardAsync(services, request, context, ct);
 
     void IRequestCheck.Finished(long started, string outcome) =>
         PortiaTelemetry.GuardFinished(started, ComponentName, outcome);

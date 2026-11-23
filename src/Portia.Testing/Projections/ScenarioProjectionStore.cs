@@ -4,8 +4,10 @@ sealed class ScenarioProjectionStore : IProjectionStore
 {
     readonly Dictionary<CheckpointIdentity, ProjectionCheckpoint> _checkpoints = [];
 
-    public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-        CancellationToken ct = default) =>
+    public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+        CheckpointIdentity identity,
+        CancellationToken ct = default
+    ) =>
         ValueTask.FromResult(_checkpoints.GetValueOrDefault(identity, ProjectionCheckpoint.Start));
 
     public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)

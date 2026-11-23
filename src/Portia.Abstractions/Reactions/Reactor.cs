@@ -61,6 +61,7 @@ public abstract class Reactor
     {
         if (!WorkloadComponentBinding.TryBind(ref _boundIdentity, identity, componentName, "Reactor", GetType()))
             return;
+
         if (componentName is not null)
         {
             Name = componentName;
@@ -89,8 +90,10 @@ public abstract class Reactor
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentException.ThrowIfNullOrWhiteSpace(effectName);
+
         if (HasMalformedUtf16(effectName))
             throw new ArgumentException("An effect name cannot contain malformed UTF-16 text.", nameof(effectName));
+
         return Uuid.CreateVersion5(Uuid.UrlNamespace,
             "portia:effect:v2:" + EffectField(_boundIdentity?.Name) + EffectField(_boundIdentity?.Tenant?.Value)
             + EffectField(Name) + EffectField(context.Source.Event.Metadata.EventId.ToString()) +
@@ -106,8 +109,10 @@ public abstract class Reactor
         for (var index = 0; index < value.Length; index++)
         {
             var character = value[index];
+
             if (char.IsLowSurrogate(character))
                 return true;
+
             if (char.IsHighSurrogate(character)
                 && (++index == value.Length || !char.IsLowSurrogate(value[index])))
                 return true;
@@ -127,20 +132,26 @@ public abstract class Reactor
     /// <param name="context">The execution the reaction's effects are attributed to.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task that completes once the reaction has run.</returns>
-    protected virtual ValueTask<Result> ReactToEventAsync(DomainEventRecord record, IExecutionContext context,
-        CancellationToken ct)
+    protected virtual ValueTask<Result> ReactToEventAsync(
+        DomainEventRecord record,
+        IExecutionContext context,
+        CancellationToken ct
+    )
         => ValueTask.FromResult(Result.Success);
 
     /// <summary>Handles reactions in source order, preserving each event's causal context.</summary>
     /// <param name="contexts">One context per triggering event, in source order.</param>
     /// <param name="ct">A token that can cancel the operation.</param>
     /// <returns>A task that completes once every reaction has run.</returns>
-    protected virtual async ValueTask<Result> ReactBatchAsync(IReadOnlyList<IReactorContext> contexts,
-        CancellationToken ct)
+    protected virtual async ValueTask<Result> ReactBatchAsync(
+        IReadOnlyList<IReactorContext> contexts,
+        CancellationToken ct
+    )
     {
         foreach (var context in contexts)
         {
             var result = await ReactToEventAsync(context.Source, context, ct).ConfigureAwait(false);
+
             if (!result.IsSuccess)
                 return result;
         }

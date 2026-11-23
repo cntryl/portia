@@ -11,21 +11,28 @@ sealed class ProcessorStatusHandler(
     readonly WorkloadRegistration[] _registrations = [.. registrations];
     readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
 
-    public async ValueTask<Result<ProcessorStatus>> HandleAsync(IRequestContext<GetProcessorStatus> context,
-        CancellationToken ct)
+    public async ValueTask<Result<ProcessorStatus>> HandleAsync(
+        IRequestContext<GetProcessorStatus> context,
+        CancellationToken ct
+    )
     {
         var request = context.Request;
         var registration = _registrations.FirstOrDefault(item => item.Name == request.Processor);
+
         if (registration is null)
             return RequestError.NotFound("The requested processor is not registered.");
 
+
         TenantId? tenant = null;
+
         if (request.Tenant is { } tenantValue)
         {
             if (!TenantId.TryParse(tenantValue, null, out var parsed))
                 return RequestError.Validation("Processor status requires a valid tenant identity.");
+
             tenant = parsed;
         }
+
 
         if (registration.Scope == WorkloadScope.PerTenant && tenant is null ||
             registration.Scope == WorkloadScope.Global && tenant is not null)
@@ -44,17 +51,21 @@ sealed class ProcessorStatusHandler(
                      provider.GetService<IDomainEventReader>() as IDomainEventProgressReader;
         EventStreamProgress? progress = null;
         string? sourceError = null;
+
         if (checkpoint.Error is null)
         {
             var cursor = checkpoint.Value.Cursor;
             progress = new EventStreamProgress(cursor, null, null, null, checkpoint.ObservedAt);
+
             if (reader is not null)
             {
                 var source = await ObserveAsync(async token =>
                 {
                     var observation = await reader.GetProgressAsync(pattern, cursor, token).ConfigureAwait(false);
+
                     if (observation.Position != cursor)
                         throw new InvalidOperationException("Source progress must preserve the supplied committed checkpoint.");
+
                     return observation;
                 }, ct).ConfigureAwait(false);
 
@@ -63,7 +74,9 @@ sealed class ProcessorStatusHandler(
             }
         }
 
+
         Observation<OperationalProcessorState?>? journalObservation = null;
+
         if (provider.GetService<IOperationalStore>() is { } journal)
         {
             var target = new OperationalTarget(registration.Name, pattern.ToString(),
@@ -72,10 +85,12 @@ sealed class ProcessorStatusHandler(
                 .ConfigureAwait(false);
         }
 
+
         var live = runtime.Observe(identity);
         var now = _clock.GetUtcNow();
         var owner = new ProcessorOwnerStatus(live is null ? null : true, now,
             live is null ? "unavailable" : "local_worker");
+
         if (provider.GetService<IProcessorOwnerProbe>() is { } ownerProbe)
         {
             var sampled = await ObserveAsync(token => ownerProbe.ObserveAsync(identity, token), ct)
@@ -84,6 +99,7 @@ sealed class ProcessorStatusHandler(
             // A local callback is useful only while the provider has not observed its withdrawal.
             live = owner.HasOwner == false ? null : runtime.Observe(identity);
         }
+
 
         var state = journalObservation?.Value;
         var blockedAttempt = state?.Block is { } block
@@ -120,17 +136,22 @@ sealed class ProcessorStatusHandler(
         };
     }
 
-    static ProcessorRepairStatus? Repair(OperationalProcessorState? state, OperationalAttempt? block,
-        EventStreamProgress? progress)
+    static ProcessorRepairStatus? Repair(
+        OperationalProcessorState? state,
+        OperationalAttempt? block,
+        EventStreamProgress? progress
+    )
     {
         if (state is null)
             return null;
 
         var latest = state.Repairs.Count > 0 ? state.Repairs[^1] : null;
         var plan = state.Plans.LastOrDefault(item => item.Id == latest?.PlanId);
+
         if (block is null || plan?.FailedAttemptId == block.Id &&
             latest?.Status is OperationalRepairStatuses.Queued or OperationalRepairStatuses.Running)
             return latest is null ? null : new ProcessorRepairStatus(latest.Id, plan?.Action, latest.Status);
+
 
         var checkpoint = progress?.Position.Value ?? state.Checkpoint;
         var action = block.Sources.Count == 0 || block.ExpectedCheckpoint != checkpoint ||
@@ -139,17 +160,28 @@ sealed class ProcessorStatusHandler(
         return new ProcessorRepairStatus(null, action, "approval_required");
     }
 
-    static ProcessorExecutionStatus Execution(int attemptLimit, ProcessorExecutionStatus? live,
-        ProcessorOwnerStatus owner, EventStreamProgress? progress, OperationalAttempt? attempt,
-        ProcessorStatusFailure? failure, ProcessorRepairStatus? repair, string? checkpointError, string? sourceError,
-        string? journalError, DateTimeOffset now)
+    static ProcessorExecutionStatus Execution(
+        int attemptLimit,
+        ProcessorExecutionStatus? live,
+        ProcessorOwnerStatus owner,
+        EventStreamProgress? progress,
+        OperationalAttempt? attempt,
+        ProcessorStatusFailure? failure,
+        ProcessorRepairStatus? repair,
+        string? checkpointError,
+        string? sourceError,
+        string? journalError,
+        DateTimeOffset now
+    )
     {
         if (live?.Phase == "waiting_for_journal")
             return live;
+
         if (failure?.IsBlocked == true && repair?.Status != OperationalRepairStatuses.Running)
             return new ProcessorExecutionStatus("blocked", failure.FailedAt, failure.Stage, failure.Kind,
                 repair?.Status == OperationalRepairStatuses.Queued ? "wait_for_repair" : "preview_and_approve_repair",
                 null, failure.ConsecutiveFailures, attemptLimit);
+
         if (live is not null && live.Phase != "idle")
         {
             return live with
@@ -159,13 +191,16 @@ sealed class ProcessorStatusHandler(
             };
         }
 
+
         if (owner.HasOwner is false)
             return new ProcessorExecutionStatus("owner_unavailable", null, null, null, "restore_worker",
                 null, null, attemptLimit);
+
         if (attempt?.Outcome is OperationalAttemptOutcomes.Running or OperationalAttemptOutcomes.Interrupted
             or OperationalAttemptOutcomes.Indeterminate)
             return new ProcessorExecutionStatus("recovery_unconfirmed", attempt.StartedAt, attempt.FailureStage,
                 attempt.Outcome, "observe_owner_and_reconcile", null, failure?.ConsecutiveFailures, attemptLimit);
+
         if ((checkpointError ?? sourceError ?? journalError) is { } error)
             return new ProcessorExecutionStatus("observation_unavailable", null,
                 checkpointError is not null ? "checkpoint" : sourceError is not null ? "source" : "journal",
@@ -180,6 +215,7 @@ sealed class ProcessorStatusHandler(
     {
         using var timeout = new CancellationTokenSource(ProcessorStatusTimeouts.Probe, _clock);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
+
         try
         {
             var value = await read(deadline.Token).ConfigureAwait(false);

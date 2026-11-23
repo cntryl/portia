@@ -36,9 +36,11 @@ sealed record CompilerFixture(CSharpCompilation Compilation, FixtureSize Size)
 
         Add("Features/Work/Execution/Editing.cs",
             Header + "public static class Editing { public static int Value() => 1; }");
+
         for (var i = 0; i < size.Unrelated; i++)
             Add($"Features/Work/Models/Unrelated{i}.cs",
                 Header + $"public sealed class Unrelated{i} {{ public int Value {{ get; init; }} }}");
+
         if (!negative)
         {
             for (var i = 0; i < size.Requests; i++)
@@ -53,37 +55,47 @@ sealed record CompilerFixture(CSharpCompilation Compilation, FixtureSize Size)
                                                                         """);
             }
 
+
             for (var i = 0; i < size.Events; i++)
                 Add($"Features/Work/Events/Event{i}.cs",
                     Header +
                     $"[Discriminator(\"bench.event{i}\", 1)] public sealed record Event{i}(int Value) : DomainEvent;");
+
             for (var i = 0; i < size.Processors; i++)
                 Add($"Features/Work/Projectors/Projection{i}.cs", Header + $$"""
                                                                              public sealed partial class Projection{{i}} : Projector, IProjectorHandler<Event0>
                                                                              { public Projection{{i}}() : base(null!, EventStreamPattern.ForPattern("events")) { }
                                                                              public ValueTask<Result> HandleAsync(IProjectorContext<Event0> context, CancellationToken ct) => ValueTask.FromResult(Result.Success); }
                                                                              """);
+
             for (var i = 0; i < size.Contexts; i++)
             {
                 var source = new StringBuilder(Header).AppendLine("[PortiaJsonContext]");
+
                 for (var j = i; j < size.Requests; j += size.Contexts)
                     source.AppendLine(CultureInfo.InvariantCulture,
                         $"[System.Text.Json.Serialization.JsonSerializable(typeof(Command{j}))]");
+
+
                 for (var j = i; j < size.Events; j += size.Contexts)
                     source.AppendLine(CultureInfo.InvariantCulture,
                         $"[System.Text.Json.Serialization.JsonSerializable(typeof(Event{j}))]");
+
                 source.AppendLine(CultureInfo.InvariantCulture,
                     $"internal sealed partial class JsonContext{i} : System.Text.Json.Serialization.JsonSerializerContext;");
                 Add($"Features/Work/Serialization/JsonContext{i}.cs", source.ToString());
             }
+
 
             var composition =
                 new StringBuilder(
                         "using Cntryl.Portia; using Microsoft.Extensions.DependencyInjection; using Microsoft.AspNetCore.Routing; namespace Bench.Core.Features.Work;\n")
                     .AppendLine(
                         "public static class Composition { public static void Add(IServiceCollection services) { var builder = services.AddPortia();");
+
             for (var i = 0; i < size.Requests; i++)
                 composition.AppendLine(CultureInfo.InvariantCulture, $"builder.AddRequestHandler<Handler{i}>();");
+
             Add("Features/Work/Composition.cs", composition.AppendLine("} }").ToString());
             Add("Features/Work/Catalog.cs",
                 Header +
@@ -92,9 +104,11 @@ sealed record CompilerFixture(CSharpCompilation Compilation, FixtureSize Size)
                 new StringBuilder(
                         "using Cntryl.Portia; using Microsoft.AspNetCore.Routing; namespace Bench.Core.Features.Work;\n")
                     .AppendLine("public static class Endpoints { public static void Map(IEndpointRouteBuilder app) {");
+
             for (var i = 0; i < size.Mappings; i++)
                 endpoints.AppendLine(CultureInfo.InvariantCulture,
                     $"app.MapPortiaPost<Command{i % size.Requests}>(\"/command{i}\");");
+
             Add("Features/Work/Endpoints.cs", endpoints.AppendLine("} }").ToString());
         }
 
@@ -106,6 +120,7 @@ sealed record CompilerFixture(CSharpCompilation Compilation, FixtureSize Size)
     {
         if (edit == "unchanged")
             return this;
+
         if (edit == "event-add")
         {
             var added = CSharpSyntaxTree.ParseText(
@@ -139,17 +154,23 @@ sealed record CompilerFixture(CSharpCompilation Compilation, FixtureSize Size)
         var tree = Compilation.SyntaxTrees.Single(item => item.FilePath.EndsWith("/" + file, StringComparison.Ordinal));
         var before = tree.GetText();
         var after = change(before.ToString());
+
         if (after == before.ToString())
             throw new InvalidOperationException("Edit did not change " + file);
+
         var oldText = before.ToString();
         var prefix = 0;
+
         while (prefix < oldText.Length && prefix < after.Length && oldText[prefix] == after[prefix])
             prefix++;
+
         var suffix = 0;
+
         while (suffix < oldText.Length - prefix && suffix < after.Length - prefix
                                                 && oldText[oldText.Length - suffix - 1] ==
                                                 after[after.Length - suffix - 1])
             suffix++;
+
         var changeSpan = new TextSpan(prefix, oldText.Length - prefix - suffix);
         var changeText = after.Substring(prefix, after.Length - prefix - suffix);
         return Compilation.ReplaceSyntaxTree(tree,

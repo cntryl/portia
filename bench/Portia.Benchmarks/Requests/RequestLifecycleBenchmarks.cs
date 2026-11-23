@@ -149,6 +149,7 @@ public class RequestLifecycleTelemetryBenchmarks : IDisposable
     {
         if (Cohort == "propagation")
             _parent = new Activity("benchmark-propagation-parent").SetIdFormat(ActivityIdFormat.W3C).Start();
+
         if (Cohort is "propagation" or "sampled")
         {
             var sampling = Cohort == "sampled"
@@ -227,8 +228,10 @@ sealed class RuntimeApplication : IDisposable
             .AddRequestHandler<RuntimeQueryHandler>().AddRequestHandler<RuntimeStreamHandler>()
             .AddRequestHandler<RuntimeSecureHandler>().AddRequestAuthorizer<RuntimeAuthorizer>()
             .AddRequestPipelineBehavior<RuntimeSecureBehavior>().AddRequestGuard<RuntimeGuard>();
+
         if (outcomeLogging)
             portia.AddRequestPipelineBehavior<RuntimeOutcomeBehavior>();
+
         _provider = services.BuildServiceProvider(new ServiceProviderOptions
         { ValidateScopes = true, ValidateOnBuild = true });
         _scope = _provider.CreateScope();
@@ -280,8 +283,10 @@ sealed class RuntimeApplication : IDisposable
     static async ValueTask<int> CollectAsync(IAsyncEnumerable<int> values)
     {
         var sum = 0;
+
         await foreach (var value in values)
             sum += value;
+
         return sum;
     }
 
@@ -292,6 +297,7 @@ sealed class RuntimeApplication : IDisposable
             if (!(await CommandAsync(boundary)).IsSuccess || (await QueryAsync(boundary)).Value != 42 ||
                 await StreamAsync(boundary) != 28)
                 throw new InvalidOperationException("Lifecycle fixture failed to consume the expected results.");
+
             if (boundary == "scope")
             {
                 await using var scope = _provider.CreateAsyncScope();
@@ -307,35 +313,47 @@ sealed class RuntimeApplication : IDisposable
         }
 
         var disposed = _state.StreamDisposals;
+
         await foreach (var _ in Bus.StreamAsync(Stream, Actor))
             break;
+
+
         if (_state.StreamDisposals != disposed + 1)
             throw new InvalidOperationException("Early stream consumption did not dispose the enumerator.");
+
         var before = _state.ScopeDisposals;
         await CommandAsync("scope");
         await CommandAsync("scope");
+
         if (_state.ScopeDisposals != before + 2)
             throw new InvalidOperationException("Fresh request scopes were not disposed.");
+
         var snapshot = Context.Actor;
         ((ClaimsIdentity)snapshot.Identity!).AddClaim(new Claim("mutated", "true"));
+
         if (Actor.HasClaim("mutated", "true") || Context.Actor.HasClaim("mutated", "true"))
             throw new InvalidOperationException("Principal copies were not independent.");
+
         _state.RecordOrder = true;
         _state.Order.Clear();
+
         if (!(await SecureAsync()).IsSuccess ||
             string.Join(',', _state.Order) != "permission,authorizer,behavior,guard,handler")
             throw new InvalidOperationException("Preflight fixture violated pipeline ordering.");
+
         _state.RecordOrder = false;
     }
 
     static async Task VerifySequenceAsync(IAsyncEnumerable<int> values)
     {
         var index = 0;
+
         await foreach (var value in values)
         {
             if (index >= 8 || value != index++)
                 throw new InvalidOperationException("Finite lifecycle stream did not preserve the expected sequence.");
         }
+
 
         if (index != 8)
             throw new InvalidOperationException("Finite lifecycle stream emitted the wrong number of items.");
@@ -384,6 +402,7 @@ sealed class RuntimeCommandHandler(RuntimeState state, RuntimeScopeMarker marker
     {
         if (state.Yield)
             await Task.Yield();
+
         return marker.Value == 42 ? Result.Success : throw new InvalidOperationException();
     }
 }
@@ -394,6 +413,7 @@ sealed class RuntimeQueryHandler(RuntimeState state, RuntimeScopeMarker marker) 
     {
         if (state.Yield)
             await Task.Yield();
+
         return Result<int>.Success(marker.Value);
     }
 }
@@ -401,16 +421,20 @@ sealed class RuntimeQueryHandler(RuntimeState state, RuntimeScopeMarker marker) 
 sealed class RuntimeStreamHandler(RuntimeState state, RuntimeScopeMarker marker)
     : IStreamRequestHandler<RuntimeStream, int>
 {
-    public async IAsyncEnumerable<int> HandleAsync(IRequestContext<RuntimeStream> context,
-        [EnumeratorCancellation] CancellationToken ct)
+    public async IAsyncEnumerable<int> HandleAsync(
+        IRequestContext<RuntimeStream> context,
+        [EnumeratorCancellation] CancellationToken ct
+    )
     {
         try
         {
             for (var value = 0; value < 8; value++)
             {
                 ct.ThrowIfCancellationRequested();
+
                 if (state.Yield)
                     await Task.Yield();
+
                 yield return marker.Value == 42 ? value : throw new InvalidOperationException();
             }
         }
@@ -423,12 +447,17 @@ sealed class RuntimeStreamHandler(RuntimeState state, RuntimeScopeMarker marker)
 
 sealed class RuntimePermissions(RuntimeState state) : IPermissionEvaluator
 {
-    public async ValueTask<Result> EvaluateAsync(ClaimsPrincipal actor, string permission,
-        CancellationToken ct = default)
+    public async ValueTask<Result> EvaluateAsync(
+        ClaimsPrincipal actor,
+        string permission,
+        CancellationToken ct = default
+    )
     {
         state.Record("permission");
+
         if (state.Yield)
             await Task.Yield();
+
         return actor.HasClaim("permission", permission)
             ? Result.Success
             : Result.Failure(new(RequestErrorKind.Forbidden, "expected"));
@@ -440,8 +469,10 @@ sealed class RuntimeAuthorizer(RuntimeState state) : IRequestAuthorizer<RuntimeS
     public async ValueTask<Result> AuthorizeAsync(IRequestContext<RuntimeSecure> context, CancellationToken ct)
     {
         state.Record("authorizer");
+
         if (state.Yield)
             await Task.Yield();
+
         return Result.Success;
     }
 }
@@ -451,20 +482,27 @@ sealed class RuntimeGuard(RuntimeState state) : IRequestGuard<RuntimeSecure>
     public async ValueTask<Result> GuardAsync(IRequestContext<RuntimeSecure> context, CancellationToken ct)
     {
         state.Record("guard");
+
         if (state.Yield)
             await Task.Yield();
+
         return Result.Success;
     }
 }
 
 sealed class RuntimeSecureBehavior(RuntimeState state) : IRequestPipelineBehavior<RuntimeSecure>
 {
-    public async ValueTask<Result> HandleAsync(IRequestContext<RuntimeSecure> context, RequestPipelineNext continuation,
-        CancellationToken ct)
+    public async ValueTask<Result> HandleAsync(
+        IRequestContext<RuntimeSecure> context,
+        RequestPipelineNext continuation,
+        CancellationToken ct
+    )
     {
         state.Record("behavior");
+
         if (state.Yield)
             await Task.Yield();
+
         return await continuation(ct);
     }
 }
@@ -474,8 +512,10 @@ sealed class RuntimeSecureHandler(RuntimeState state) : IRequestHandler<RuntimeS
     public async ValueTask<Result> HandleAsync(IRequestContext<RuntimeSecure> context, CancellationToken ct)
     {
         state.Record("handler");
+
         if (state.Yield)
             await Task.Yield();
+
         return Result.Success;
     }
 }
@@ -483,8 +523,11 @@ sealed class RuntimeSecureHandler(RuntimeState state) : IRequestHandler<RuntimeS
 sealed partial class RuntimeOutcomeBehavior(ILogger<RuntimeOutcomeBehavior> logger)
     : IRequestPipelineBehavior<RuntimeCommand>
 {
-    public async ValueTask<Result> HandleAsync(IRequestContext<RuntimeCommand> context,
-        RequestPipelineNext continuation, CancellationToken ct)
+    public async ValueTask<Result> HandleAsync(
+        IRequestContext<RuntimeCommand> context,
+        RequestPipelineNext continuation,
+        CancellationToken ct
+    )
     {
         var result = await continuation(ct);
         LogOutcome(logger, result.IsSuccess);
@@ -500,8 +543,13 @@ sealed class RuntimeLogger(bool enabled) : ILogger<RuntimeOutcomeBehavior>
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
     public bool IsEnabled(LogLevel logLevel) => enabled;
 
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-        Func<TState, Exception?, string> formatter) => GC.KeepAlive(state);
+    public void Log<TState>(
+        LogLevel logLevel,
+        EventId eventId,
+        TState state,
+        Exception? exception,
+        Func<TState, Exception?, string> formatter
+    ) => GC.KeepAlive(state);
 }
 
 [PortiaJsonContext]

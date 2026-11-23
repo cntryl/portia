@@ -67,6 +67,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
         if (Interlocked.Exchange(ref _executed, 1) != 0)
             throw new InvalidOperationException(
                 "An independent benchmark case may execute only once. Prepare fresh state.");
+
         await execute().ConfigureAwait(false);
         _completed = true;
     }
@@ -99,8 +100,13 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
         { PreparationMilliseconds = preparation };
     }
 
-    public static async Task<Sample> MeasurePreparedAsync(BenchmarkCase operation, CaseSpec spec, string size,
-        int index, Action? requestCompleted = null)
+    public static async Task<Sample> MeasurePreparedAsync(
+        BenchmarkCase operation,
+        CaseSpec spec,
+        string size,
+        int index,
+        Action? requestCompleted = null
+    )
     {
         using var process = Process.GetCurrentProcess();
         var cpu = process.TotalProcessorTime;
@@ -126,13 +132,16 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
         var edit = spec.Operation is "cold" or "negative" ? "unchanged" : spec.Operation;
         var input = fixture.Edit(edit).Compilation;
         var original = CompilerHost.Driver(component: spec.Component);
+
         if (spec.Operation != "cold")
             original = original.RunGenerators(fixture.Compilation, ct);
+
         var driver = original;
         return new BenchmarkCase(() =>
         {
             if (spec.Operation == "cold")
                 driver = CompilerHost.Driver(component: spec.Component);
+
             driver = driver.RunGenerators(input, ct);
             return ValueTask.CompletedTask;
         }, () =>
@@ -142,6 +151,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
             var clean = CompilerHost.Driver(component: spec.Component).RunGenerators(input, ct);
             var cleanSources = CompilerHost.Sources(clean);
             Verification.Changes(cleanSources, sources, []);
+
             if (spec.Component == "all" && spec.Operation != "negative")
             {
                 var emitting = CompilerHost.Generators.Where(type => type != typeof(JsonMetadataDiagnosticGenerator)
@@ -152,6 +162,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
                     .Where(name => name != "JsonSourceGenerator"));
             }
 
+
             if (spec.Operation is not ("cold" or "negative"))
             {
                 var before = CompilerHost.Sources(original);
@@ -159,14 +170,17 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
                                                                            || !sources.TryGetValue(key,
                                                                                out var right) || left != right)
                     .ToArray();
+
                 if (edit is "unchanged" or "body" or "incomplete")
                     Verification.Changes(before, sources, []);
                 else if (spec.Component == "all" && changed.Length == 0)
                     throw new InvalidOperationException("Edit failed to invalidate outputs: " + edit);
+
                 if (edit == "metadata" && spec.Component == "all" && !sources.Any(pair =>
                         pair.Key.StartsWith("JsonRootMarkerGenerator/", StringComparison.Ordinal) &&
                         pair.Value.Contains("units", StringComparison.Ordinal)))
                     throw new InvalidOperationException("Nested contract description was not emitted.");
+
                 if (spec.Component == "all" && edit is "route" or "metadata" or "location" or "event-add")
                 {
                     string[] expected = edit switch
@@ -236,6 +250,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
                 ? await driver.GetAnalyzerSemanticDiagnosticsAsync(compilation.GetSemanticModel(control), null, ct)
                     .ConfigureAwait(false)
                 : await driver.GetAnalyzerDiagnosticsAsync(ct).ConfigureAwait(false);
+
             if (contractDriver is not null)
                 diagnostics = diagnostics.AddRange(spec.Operation == "document"
                     ? await contractDriver
@@ -246,6 +261,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
         {
             if (diagnostics.Any(item => item.Id == "AD0001"))
                 throw new InvalidOperationException(string.Join("\n", diagnostics));
+
             var expected = spec.Component switch
             {
                 nameof(ApplicationContractAnalyzer) => "PORTIA209",
@@ -255,13 +271,16 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
                 nameof(AggregateOnHandlerAnalyzer) => "PORTIA108",
                 _ => "PORTIA200"
             };
+
             if (!diagnostics.Any(item => item.Id == expected))
                 throw new InvalidOperationException(spec.Id + " did not activate " + expected);
+
             var repeat = compilation.WithAnalyzers([.. CompilerHost.CreateAnalyzers(spec.Component)], options);
             var comparison = spec.Operation == "document"
                 ? await repeat.GetAnalyzerSemanticDiagnosticsAsync(compilation.GetSemanticModel(control), null, ct)
                     .ConfigureAwait(false)
                 : await repeat.GetAnalyzerDiagnosticsAsync(ct).ConfigureAwait(false);
+
             if (spec.Component == "all")
             {
                 var repeatContract = compilation.WithAnalyzers([new ApplicationContractAnalyzer()],
@@ -271,10 +290,12 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
                         .GetAnalyzerSemanticDiagnosticsAsync(compilation.GetSemanticModel(control), null, ct)
                         .ConfigureAwait(false)
                     : await repeatContract.GetAnalyzerDiagnosticsAsync(ct).ConfigureAwait(false));
+
                 foreach (var id in CombinedAnalyzerDiagnostics)
                     if (!diagnostics.Any(item => item.Id == id))
                         throw new InvalidOperationException("Combined analyzer workload did not activate " + id);
             }
+
 
             Verification.Coverage(DiagnosticKeys(comparison), DiagnosticKeys(diagnostics));
             return new Evidence(CompilerHost.Hash(string.Join("\n", DiagnosticKeys(diagnostics))), 0, 0,
@@ -288,15 +309,20 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
     {
         var fixture = await FixFixture.CreateAsync(spec.Component, size == "minimal" ? 1 : size == "small" ? 10 : 100,
             fixAll: spec.Operation == "fix-all", ct: ct).ConfigureAwait(false);
+
         try
         {
             CodeAction? action = null;
             ImmutableArray<CodeActionOperation> operations = [];
             Solution? changed = null;
+
             if (spec.Operation is not ("discover" or "complete"))
                 action = await fixture.DiscoverAsync(ct).ConfigureAwait(false);
+
+
             if (spec.Operation == "apply")
                 operations = await action!.GetOperationsAsync(ct).ConfigureAwait(false);
+
             return new BenchmarkCase(async () =>
             {
                 switch (spec.Operation)
@@ -335,14 +361,17 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
             {
                 if (spec.Operation is "discover" or "discover-cached")
                     operations = await action!.GetOperationsAsync(ct).ConfigureAwait(false);
+
                 changed ??= operations.OfType<ApplyChangesOperation>().SingleOrDefault()?.ChangedSolution
                             ?? throw new InvalidOperationException("Action produced no solution change.");
                 await fixture.VerifyAsync(changed, ct).ConfigureAwait(false);
                 var texts = new Dictionary<string, string>(StringComparer.Ordinal);
+
                 foreach (var project in changed.Projects)
                     foreach (var document in project.Documents)
                         texts.Add(project.Name + "/" + document.Name,
                             (await document.GetTextAsync(ct).ConfigureAwait(false)).ToString());
+
                 return Snapshot(texts, fixture.DiagnosticCount,
                     "fresh AdhocWorkspace/project; diagnostics already bound; "
                     + (spec.Operation == "discover-cached"

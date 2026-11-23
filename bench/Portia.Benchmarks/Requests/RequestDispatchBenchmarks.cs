@@ -96,8 +96,11 @@ public class RequestDispatchBenchmarks
 
     internal abstract class PassThroughBehavior : IRequestPipelineBehavior<BenchmarkRequest>
     {
-        public ValueTask<Result> HandleAsync(IRequestContext<BenchmarkRequest> context,
-            RequestPipelineNext continuation, CancellationToken ct) => continuation(ct);
+        public ValueTask<Result> HandleAsync(
+            IRequestContext<BenchmarkRequest> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        ) => continuation(ct);
     }
 
     internal sealed class FirstBehavior : PassThroughBehavior;
@@ -112,8 +115,11 @@ public class RequestDispatchBenchmarks
 
     internal sealed class YieldingBehavior : IRequestPipelineBehavior<BenchmarkRequest>
     {
-        public async ValueTask<Result> HandleAsync(IRequestContext<BenchmarkRequest> context,
-            RequestPipelineNext continuation, CancellationToken ct)
+        public async ValueTask<Result> HandleAsync(
+            IRequestContext<BenchmarkRequest> context,
+            RequestPipelineNext continuation,
+            CancellationToken ct
+        )
         {
             await Task.Yield();
             return await continuation(ct);

@@ -252,8 +252,10 @@ sealed class ContractValidationProbe
 sealed class ContractLocalValidatedHandler(ContractValidationProbe probe)
     : IRequestHandler<ContractLocalValidatedRequest, string>
 {
-    public ValueTask<Result<string>> HandleAsync(IRequestContext<ContractLocalValidatedRequest> context,
-        CancellationToken ct)
+    public ValueTask<Result<string>> HandleAsync(
+        IRequestContext<ContractLocalValidatedRequest> context,
+        CancellationToken ct
+    )
     {
         probe.Invocations++;
         return ValueTask.FromResult(Result<string>.Success(context.Request.Name!));
@@ -277,8 +279,10 @@ sealed record ContractInterfaceValidatedRequest(IReadOnlyList<ContractValidatedI
 
 sealed class ContractInterfaceValidatedHandler : IRequestHandler<ContractInterfaceValidatedRequest>
 {
-    public ValueTask<Result> HandleAsync(IRequestContext<ContractInterfaceValidatedRequest> context,
-        CancellationToken ct) => ValueTask.FromResult(Result.Success);
+    public ValueTask<Result> HandleAsync(
+        IRequestContext<ContractInterfaceValidatedRequest> context,
+        CancellationToken ct
+    ) => ValueTask.FromResult(Result.Success);
 }
 
 sealed record ContractDeniedRequest : IRequest
@@ -304,6 +308,8 @@ sealed record ContractEnumerableValidatedRequest(IEnumerable<ContractValidatedIt
 
 sealed class ContractEnumerableValidatedHandler : IRequestHandler<ContractEnumerableValidatedRequest>
 {
-    public ValueTask<Result> HandleAsync(IRequestContext<ContractEnumerableValidatedRequest> context,
-        CancellationToken ct) => ValueTask.FromResult(Result.Success);
+    public ValueTask<Result> HandleAsync(
+        IRequestContext<ContractEnumerableValidatedRequest> context,
+        CancellationToken ct
+    ) => ValueTask.FromResult(Result.Success);
 }

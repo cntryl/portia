@@ -46,12 +46,15 @@ public static class ReactionDeduplicationConformance
         }, ct)).ToArray();
         start.SetResult();
         _ = await Task.WhenAll(attempts).ConfigureAwait(false);
+
         if (attempts.Count(task => task.Result) != 1 || effects != 2)
         {
             throw new ConformanceViolationException("A concurrent duplicate reaction executed more than once.");
         }
 
+
         await probe.ReopenAsync(ct).ConfigureAwait(false);
+
         if (await probe.ExecuteAsync(eventId, Effect, ct).ConfigureAwait(false) || effects != 2)
         {
             throw new ConformanceViolationException("A duplicate reaction executed after the implementation reopened.");

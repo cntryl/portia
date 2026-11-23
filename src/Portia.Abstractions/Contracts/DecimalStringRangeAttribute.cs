@@ -15,6 +15,7 @@ public sealed class DecimalStringRangeAttribute : ValidationAttribute
     {
         if (!DecimalString.TryParse(minimum, out var lower))
             throw new ArgumentException("Expected an exact decimal string.", nameof(minimum));
+
         if (!DecimalString.TryParse(maximum, out var upper) || upper.Value < lower.Value)
             throw new ArgumentException("Expected an exact decimal string at or above the minimum.", nameof(maximum));
 

@@ -16,6 +16,7 @@ sealed class McpStartupValidator(
     {
         foreach (var tool in tools)
             _ = tool.CreateProtocolTool(json);
+
         var handled = handlers.Select(handler => handler.RequestType).ToHashSet();
         var missing = tools.Select(tool => (RequestType: tool.RequestType, Name: tool.Name))
             .Concat(resources.Select(resource => (RequestType: resource.RequestType, Name: resource.Template)))
@@ -23,11 +24,13 @@ sealed class McpStartupValidator(
             .Where(entry => !handled.Contains(entry.RequestType))
             .OrderBy(entry => entry.Name, StringComparer.Ordinal)
             .ToArray();
+
         if (missing.Length > 0)
         {
             throw new InvalidOperationException(
                 $"MCP declarations require registered request handlers: {string.Join(", ", missing.Select(entry => $"'{entry.Name}' ({entry.RequestType})"))}.");
         }
+
 
         return Task.CompletedTask;
     }

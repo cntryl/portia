@@ -15,7 +15,8 @@ sealed class TransientReloadFailureProjectionTarget : ITestProjectionRepository
 
     public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
         CheckpointIdentity identity,
-        CancellationToken ct = default)
+        CancellationToken ct = default
+    )
     {
         ct.ThrowIfCancellationRequested();
         LoadAttempts++;
@@ -36,7 +37,8 @@ sealed class TransientReloadFailureProjectionTarget : ITestProjectionRepository
 
     public ValueTask<IProjectionBatch> BeginAsync(
         ProjectionBatchContext context,
-        CancellationToken ct = default) =>
+        CancellationToken ct = default
+    ) =>
         ValueTask.FromResult<IProjectionBatch>(new TransientReloadFailureProjectionBatch(this));
 
     sealed class TransientReloadFailureProjectionBatch(TransientReloadFailureProjectionTarget target)

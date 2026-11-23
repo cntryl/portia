@@ -46,14 +46,18 @@ public static class RequestActor
     {
         ArgumentNullException.ThrowIfNull(actor);
         var authenticated = false;
+
         foreach (var identity in actor.Identities)
         {
             if (!identity.IsAuthenticated)
                 continue;
+
             authenticated = true;
+
             if (identity.AuthenticationType != "Portia.System")
                 return false;
         }
+
 
         return authenticated;
     }

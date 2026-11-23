@@ -15,8 +15,11 @@ public sealed class ConsumerRecoveryTests
     [InlineData(false, true, true)]
     [InlineData(true, false, true)]
     [InlineData(true, true, true)]
-    public async Task ShouldRestartConsumerGivenHostedConsumerFaultOrUnexpectedCompletion(bool notification, bool fault,
-        bool stopDuringBackoff)
+    public async Task ShouldRestartConsumerGivenHostedConsumerFaultOrUnexpectedCompletion(
+        bool notification,
+        bool fault,
+        bool stopDuringBackoff
+    )
     {
         // Arrange
         var clock = new ManualClock();
@@ -26,6 +29,7 @@ public sealed class ConsumerRecoveryTests
         _ = services.AddScoped<IRequestActorValidator, DeliveryScopeTests.ScopeValidator>();
         _ = services.AddScoped<IQueuedRequestTerminalHandler, TestTerminalHandler>();
         _ = services.AddSingleton<TimeProvider>(clock);
+
         if (notification)
         {
             _ = services.AddSingleton<IRequestNotificationConsumer>(consumer);
@@ -38,11 +42,13 @@ public sealed class ConsumerRecoveryTests
         }
 
         // Act
+
         await using var provider = ConsumerHost.Build(services);
 
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
         using var cancellation = new CancellationTokenSource();
+
         try
         {
             await worker.StartAsync(TestContext.Current.CancellationToken);
@@ -53,6 +59,7 @@ public sealed class ConsumerRecoveryTests
             Assert.Equal(TimeSpan.FromSeconds(1), await delay);
             Assert.Equal(1, consumer.Starts);
             Assert.Equal(1, consumer.Disposals);
+
             if (!stopDuringBackoff)
             {
                 clock.Advance(TimeSpan.FromSeconds(1));
@@ -66,6 +73,7 @@ public sealed class ConsumerRecoveryTests
             await worker.StopAsync(TestContext.Current.CancellationToken);
             worker.Dispose();
         }
+
 
         Assert.Equal(stopDuringBackoff ? 1 : 2, consumer.Disposals);
         Assert.All(provider.GetRequiredService<ConsumerHost.Effects>().Scopes.Values, Assert.True);

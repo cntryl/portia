@@ -23,9 +23,11 @@ public sealed class CheckpointIdentityTests
                 new EventCursor(((ulong)i + 1).ToString(CultureInfo.InvariantCulture))), TestContext.Current.CancellationToken);
 
         // Assert
+
         for (var i = 0; i < identities.Length; i++)
             Assert.Equal(((ulong)i + 1).ToString(CultureInfo.InvariantCulture),
                 (await store.LoadAsync(identities[i], TestContext.Current.CancellationToken)).Cursor.ToString());
+
         Assert.Equal(identities[0],
             new CheckpointIdentity("same", EventStreamPattern.ForPattern("tenant-a", "orders", "")));
     }
@@ -95,6 +97,7 @@ public sealed class CheckpointIdentityTests
             EventStreamPattern.ForPattern("tenant-b", "orders"),
             EventStreamPattern.ForPattern("tenant-a", "returns")
         };
+
         foreach (var pattern in patterns)
         {
             var id = Uuid.CreateVersion4();
@@ -103,6 +106,7 @@ public sealed class CheckpointIdentityTests
                 DomainEventSeed.Attach(new Declined("one"), id, 1), DomainEventSeed.Attach(new Declined("two"), id, 2)
             ], TestContext.Current.CancellationToken);
         }
+
 
         async Task Pass(EventStreamPattern pattern)
         {
@@ -123,6 +127,7 @@ public sealed class CheckpointIdentityTests
         Assert.Equal(ProcessorFailureStage.Committing, diagnostic.Stage);
         var first = new CheckpointIdentity("same", patterns[0], "interrupted");
         Assert.Equal("1", (await target.LoadCheckpointAsync(first, TestContext.Current.CancellationToken)).Cursor.ToString());
+
         foreach (var pattern in patterns)
         {
             await Pass(pattern);
@@ -135,8 +140,11 @@ public sealed class CheckpointIdentityTests
 
     sealed class Projection(Target target, EventStreamPattern pattern) : BatchProjector(target, pattern, "same")
     {
-        protected override ValueTask<Result> ProjectEventAsync(DomainEventRecord record, IProjectorContext context,
-            CancellationToken ct)
+        protected override ValueTask<Result> ProjectEventAsync(
+            DomainEventRecord record,
+            IProjectorContext context,
+            CancellationToken ct
+        )
         {
             target.Add(context.IsRebuild);
             return ValueTask.FromResult(Result.Success);
@@ -153,8 +161,10 @@ public sealed class CheckpointIdentityTests
         public List<CheckpointIdentity> Loads { get; } = [];
         public List<CheckpointIdentity> Begins { get; } = [];
 
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-            CancellationToken ct = default)
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+            CheckpointIdentity identity,
+            CancellationToken ct = default
+        )
         {
             Loads.Add(identity);
             return ValueTask.FromResult(_checkpoints.GetValueOrDefault(identity));

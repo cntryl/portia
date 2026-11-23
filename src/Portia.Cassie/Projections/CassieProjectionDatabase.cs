@@ -15,15 +15,19 @@ public sealed class CassieProjectionDatabase : IDisposable
     /// <summary>Creates a shared projection database.</summary>
     /// <param name="dataSource">The application's Cassie data source.</param>
     /// <param name="checkpointTable">An unqualified metadata table name, using ASCII letters, digits, and underscores.</param>
-    public CassieProjectionDatabase(CassieDataSource dataSource,
-        string checkpointTable = "portia_projection_checkpoints")
+    public CassieProjectionDatabase(
+        CassieDataSource dataSource,
+        string checkpointTable = "portia_projection_checkpoints"
+    )
     {
         ArgumentNullException.ThrowIfNull(dataSource);
         ArgumentException.ThrowIfNullOrWhiteSpace(checkpointTable);
+
         if (checkpointTable.Length > 63 || !(char.IsAsciiLetter(checkpointTable[0]) || checkpointTable[0] == '_')
                                         || checkpointTable.Any(static c => !(char.IsAsciiLetterOrDigit(c) || c == '_')))
             throw new ArgumentException("Use an unqualified SQL identifier of at most 63 ASCII characters.",
                 nameof(checkpointTable));
+
         DataSource = dataSource;
         CheckpointTable = "\"" + checkpointTable + "\"";
     }
@@ -42,10 +46,12 @@ public sealed class CassieProjectionDatabase : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         await _initialization.WaitAsync(ct).ConfigureAwait(false);
+
         try
         {
             if (_initialized)
                 return;
+
             await using var connection = await DataSource.OpenConnectionAsync(ct).ConfigureAwait(false);
             await using (var create = connection.CreateCommand())
             {
@@ -69,6 +75,7 @@ public sealed class CassieProjectionDatabase : IDisposable
     {
         await using var transaction = await connection.BeginTransactionAsync(ct).ConfigureAwait(false);
         Exception? failure = null;
+
         try
         {
             await using (var schema = connection.CreateCommand())
@@ -76,6 +83,7 @@ public sealed class CassieProjectionDatabase : IDisposable
                 schema.Transaction = transaction;
                 schema.CommandText = $"SELECT identity, cursor, revision FROM {CheckpointTable} WHERE 1 = 0";
                 await using var fields = await schema.ExecuteReaderAsync(ct).ConfigureAwait(false);
+
                 if (fields.GetFieldType(0) != typeof(string) || fields.GetFieldType(1) != typeof(string)
                                                              || fields.GetFieldType(2) != typeof(long))
                     failure = Incompatible(null);
@@ -95,6 +103,7 @@ public sealed class CassieProjectionDatabase : IDisposable
                 select.Transaction = transaction;
                 select.CommandText = $"SELECT identity, cursor, revision FROM {CheckpointTable} WHERE identity = ''";
                 await using var row = await select.ExecuteReaderAsync(ct).ConfigureAwait(false);
+
                 if (!await row.ReadAsync(ct).ConfigureAwait(false))
                     failure = Incompatible(null);
             }
@@ -107,6 +116,7 @@ public sealed class CassieProjectionDatabase : IDisposable
         {
             failure = ex;
         }
+
 
         try
         {
@@ -135,6 +145,7 @@ public sealed class CassieProjectionDatabase : IDisposable
     {
         if (_disposed)
             return;
+
         _disposed = true;
         _initialization.Dispose();
         GC.SuppressFinalize(this);

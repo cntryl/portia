@@ -12,8 +12,14 @@ public static class DomainEventSeed
     /// <param name="eventId">An explicit event identity, or a generated UUID.</param>
     /// <param name="occurredOn">An explicit UTC timestamp, or the current UTC time.</param>
     /// <returns>The identified event.</returns>
-    public static TEvent Attach<TEvent>(TEvent ev, Uuid aggregateId, ulong aggregateVersion,
-        bool isAudit = false, Uuid? eventId = null, DateTimeOffset? occurredOn = null)
+    public static TEvent Attach<TEvent>(
+        TEvent ev,
+        Uuid aggregateId,
+        ulong aggregateVersion,
+        bool isAudit = false,
+        Uuid? eventId = null,
+        DateTimeOffset? occurredOn = null
+    )
         where TEvent : DomainEvent
     {
         ArgumentNullException.ThrowIfNull(ev);

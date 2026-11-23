@@ -125,8 +125,10 @@ public sealed class FitzKvDurabilityTests
     [Theory]
     [InlineData(KvDurability.Buffered, KvDurability.Sync)]
     [InlineData(KvDurability.Sync, KvDurability.Buffered)]
-    public void ShouldRejectConflictingDurabilityGivenRepeatedCheckpointSelection(KvDurability first,
-        KvDurability second)
+    public void ShouldRejectConflictingDurabilityGivenRepeatedCheckpointSelection(
+        KvDurability first,
+        KvDurability second
+    )
     {
         // Arrange
         var services = new ServiceCollection();

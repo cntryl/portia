@@ -6,8 +6,12 @@ namespace Cntryl.Portia.RepositoryTools;
 
 static class ProcessRunner
 {
-    internal static async Task<ProcessResult> RunAsync(string executable, IEnumerable<string> arguments,
-        string workingDirectory, IReadOnlyDictionary<string, string>? environment = null)
+    internal static async Task<ProcessResult> RunAsync(
+        string executable,
+        IEnumerable<string> arguments,
+        string workingDirectory,
+        IReadOnlyDictionary<string, string>? environment = null
+    )
     {
         var startInfo = new ProcessStartInfo(executable)
         {
@@ -17,8 +21,10 @@ static class ProcessRunner
             UseShellExecute = false,
             CreateNoWindow = true
         };
+
         foreach (var argument in arguments)
             startInfo.ArgumentList.Add(argument);
+
         if (environment is not null)
         {
             foreach (var pair in environment)

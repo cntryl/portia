@@ -123,10 +123,12 @@ public sealed class McpScenarioTests
             {
                 if (childProcessId == 0)
                     childProcessId = Volatile.Read(ref observedProcessId);
+
                 if (childProcessId == 0 && File.Exists(processIdFile)
                                         && int.TryParse(await File.ReadAllTextAsync(processIdFile, TestContext.Current.CancellationToken),
                                             out var persistedProcessId))
                     childProcessId = persistedProcessId;
+
                 if (childProcessId > 0)
                 {
                     KillProcessIfRunning(childProcessId);
@@ -259,6 +261,7 @@ public sealed class McpScenarioTests
         {
             if (context.Request.Path == "/mcp" && context.Request.Method == "POST")
                 Interlocked.Increment(ref postRequests);
+
             await next(context);
         });
         app.Use((context, next) =>
@@ -350,11 +353,13 @@ public sealed class McpScenarioTests
     static async Task<bool> WaitForProcessExitAsync(int processId, TimeSpan timeout)
     {
         var deadline = DateTime.UtcNow + timeout;
+
         while (DateTime.UtcNow < deadline)
         {
             try
             {
                 using var process = Process.GetProcessById(processId);
+
                 if (process.HasExited)
                     return true;
             }
@@ -366,6 +371,7 @@ public sealed class McpScenarioTests
             await Task.Delay(TimeSpan.FromMilliseconds(50)).ConfigureAwait(false);
         }
 
+
         return false;
     }
 
@@ -374,6 +380,7 @@ public sealed class McpScenarioTests
         try
         {
             using var process = Process.GetProcessById(processId);
+
             if (!process.HasExited)
                 process.Kill(entireProcessTree: true);
         }

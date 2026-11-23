@@ -81,6 +81,7 @@ public sealed class OpenApiTests : IAsyncDisposable
             Assert.Equal(JsonSchemaType.Array | JsonSchemaType.Null, optional.Type);
             var result = operation.Responses!["200"].Content!["application/json"].Schema!;
             Assert.Equal(JsonSchemaType.Array, result.Type);
+
             foreach (var collection in new[] { required, optional, result })
             {
                 Assert.True(collection.Type!.Value.HasFlag(JsonSchemaType.Array));
@@ -139,6 +140,7 @@ public sealed class OpenApiTests : IAsyncDisposable
         var operation = parsed.Document!.Paths!["/collection-nullability"].Operations![HttpMethod.Post];
         var request = operation.RequestBody!.Content!["application/json"].Schema!.Properties!["payload"];
         var result = operation.Responses!["200"].Content!["application/json"].Schema!;
+
         foreach (var envelope in new[] { request, result })
         {
             Assert.True(envelope.Properties!["items"].Items!.Type!.Value.HasFlag(JsonSchemaType.Null));
@@ -318,6 +320,7 @@ public sealed class OpenApiTests : IAsyncDisposable
             var item =
                 document.Paths["/contract-stream"].Operations![HttpMethod.Get].Responses!["200"].Content![
                     "application/json"].Schema!.Items!;
+
             foreach (var schema in new[] { result, body, item })
             {
                 Assert.Contains("display_name", schema.Properties!.Keys);
@@ -345,6 +348,7 @@ public sealed class OpenApiTests : IAsyncDisposable
                 Assert.Contains("display_name", child.Properties!.Keys);
                 Assert.Contains("display_name", child.Properties["next_node"].Properties!.Keys);
             }
+
 
             if (format == "json")
             {
@@ -438,8 +442,10 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.Equal(jsonDocument.Paths.Keys.Order(), yamlDocument.Paths.Keys.Order());
         var yamlCreate = yamlDocument.Paths["/api/orders"].Operations![HttpMethod.Post];
         var yamlResponses = yamlCreate.Responses!;
+
         foreach (var status in new[] { "400", "403", "404", "409", "413", "415", "500" })
             Assert.IsType<OpenApiResponseReference>(yamlResponses[status]);
+
         Assert.IsType<OpenApiResponseReference>(yamlResponses["401"]);
         Assert.Equal(2, yamlDocument.Components!.Responses!.Count);
         var yamlUpload = yamlDocument.Paths["/api/upload"].Operations![HttpMethod.Post];
@@ -472,6 +478,7 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.False(createContent.TryGetProperty("application/x-www-form-urlencoded", out _));
         var updateContent = paths.GetProperty("/api/widgets/{widget_id}/update").GetProperty("post")
             .GetProperty("requestBody").GetProperty("content");
+
         foreach (var mediaType in new[]
                      { "application/json", "application/x-www-form-urlencoded", "multipart/form-data" })
         {
@@ -483,11 +490,13 @@ public sealed class OpenApiTests : IAsyncDisposable
                 .Select(item => item.GetString()).ToArray();
             Assert.Contains("name", required);
             Assert.Contains("quantity", required);
+
             if (mediaType == "application/json")
                 Assert.Contains("active", required);
             else
                 Assert.DoesNotContain("active", required);
         }
+
 
         var dryRun = Assert.Single(paths.GetProperty("/api/widgets/{widget_id}/update").GetProperty("post")
                 .GetProperty("parameters").EnumerateArray(),
@@ -522,12 +531,14 @@ public sealed class OpenApiTests : IAsyncDisposable
         Assert.Equal("uuid", createdId.GetProperty("format").GetString());
         const string problemRef = "#/components/responses/CntrylPortiaHttpProblemResponse";
         const string unauthorizedRef = "#/components/responses/CntrylPortiaHttpUnauthorizedResponse";
+
         foreach (var path in paths.EnumerateObject()
                      .Where(path => path.Name.StartsWith("/api/", StringComparison.Ordinal)))
         {
             foreach (var operation in path.Value.EnumerateObject())
             {
                 var operationResponses = operation.Value.GetProperty("responses");
+
                 foreach (var status in new[] { "400", "403", "404", "409", "413", "415", "500" })
                 {
                     if (path.Name == "/api/upload" && status == "400")
@@ -538,14 +549,18 @@ public sealed class OpenApiTests : IAsyncDisposable
                         operationResponses.GetProperty(status).GetProperty("$ref").GetString());
                 }
 
+
                 Assert.Equal(
                     unauthorizedRef,
                     operationResponses.GetProperty("401").GetProperty("$ref").GetString());
             }
         }
 
+
+
         foreach (var status in new[] { "400", "403", "404", "409", "413", "415", "500" })
             Assert.Equal(problemRef, responses.GetProperty(status).GetProperty("$ref").GetString());
+
         Assert.Equal(unauthorizedRef, responses.GetProperty("401").GetProperty("$ref").GetString());
         var componentResponses = raw.RootElement.GetProperty("components").GetProperty("responses");
         Assert.Equal(2, componentResponses.EnumerateObject().Count());
@@ -693,12 +708,15 @@ public sealed class OpenApiTests : IAsyncDisposable
         using var raw = JsonDocument.Parse(json);
         var components = raw.RootElement.GetProperty("components").GetProperty("responses");
         Assert.Equal(2, components.EnumerateObject().Count());
+
         foreach (var path in raw.RootElement.GetProperty("paths").EnumerateObject())
         {
             var responses = path.Value.GetProperty("get").GetProperty("responses");
+
             foreach (var status in new[] { "400", "403", "404", "409", "413", "415", "500" })
                 Assert.Equal("#/components/responses/CntrylPortiaHttpProblemResponse",
                     responses.GetProperty(status).GetProperty("$ref").GetString());
+
             Assert.Equal("#/components/responses/CntrylPortiaHttpUnauthorizedResponse",
                 responses.GetProperty("401").GetProperty("$ref").GetString());
         }

@@ -34,8 +34,10 @@ public sealed class RequestContext<TRequest> : RequestDispatchContext, IRequestC
     static RequestDispatchContext CreateExecution(TRequest request, ClaimsPrincipal actor)
     {
         var context = new RequestDispatchContext(actor);
+
         if (request is not IRequestBase command)
             return context;
+
         var bound = context.BindRequest(command);
         return bound.IsSuccess ? bound.Value : throw new ArgumentException(bound.Error.Message, nameof(request));
     }

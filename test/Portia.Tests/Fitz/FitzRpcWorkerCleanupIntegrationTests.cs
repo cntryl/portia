@@ -65,6 +65,7 @@ public sealed class FitzRpcWorkerCleanupIntegrationTests(FitzBrokerFixture broke
                 {
                     var first = cleanup.BeginInvocation() == 1;
                     await writer.SendAsync(new byte[] { 42 }, true, token);
+
                     if (first)
                         await cleanup.WaitAsync();
                 }, new RpcWorkerOptions { MaxConcurrency = maxConcurrency }, deadline.Token);
@@ -76,6 +77,7 @@ public sealed class FitzRpcWorkerCleanupIntegrationTests(FitzBrokerFixture broke
             Assert.Equal(expected, await call().WaitAsync(deadline.Token));
             await cleanup.Entered.Task.WaitAsync(deadline.Token);
             second = call();
+
             if (maxConcurrency == 1)
             {
                 // Normal terminal frames release broker credit before local callback cleanup, so the
@@ -99,8 +101,10 @@ public sealed class FitzRpcWorkerCleanupIntegrationTests(FitzBrokerFixture broke
         finally
         {
             cleanup.Release.TrySetResult();
+
             if (second is { } pending)
                 _ = await Record.ExceptionAsync(() => pending.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+
             if (registration is not null)
                 await registration.DisposeAsync();
         }
@@ -109,8 +113,10 @@ public sealed class FitzRpcWorkerCleanupIntegrationTests(FitzBrokerFixture broke
     static async Task<int> ReadRawAsync(RpcCall call, CancellationToken ct)
     {
         var value = -1;
+
         await foreach (var frame in call.WithCancellation(ct))
             value = frame.Body.Span[0];
+
         return value;
     }
 
@@ -147,6 +153,7 @@ public sealed class FitzRpcWorkerCleanupIntegrationTests(FitzBrokerFixture broke
         {
             if (first)
                 await cleanup.WaitAsync();
+
             if (inner is IAsyncDisposable asynchronous)
                 await asynchronous.DisposeAsync();
             else

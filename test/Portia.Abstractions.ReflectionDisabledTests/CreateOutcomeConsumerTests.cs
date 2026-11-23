@@ -17,7 +17,9 @@ public sealed record Account(string AccountId, string Name);
 public sealed class CreateAccountHandler : IRequestHandler<CreateAccount, PortiaCreateOutcome<Account>>
 {
     public ValueTask<Result<PortiaCreateOutcome<Account>>> HandleAsync(
-        IRequestContext<CreateAccount> context, CancellationToken ct)
+        IRequestContext<CreateAccount> context,
+        CancellationToken ct
+    )
     {
         var outcome = PortiaCreateOutcome<Account>.Created(new Account("server-id", context.Request.Name));
         return ValueTask.FromResult(Result<PortiaCreateOutcome<Account>>.Success(outcome));

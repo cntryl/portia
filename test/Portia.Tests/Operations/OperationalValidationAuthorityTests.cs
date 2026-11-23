@@ -51,13 +51,17 @@ public sealed partial class OperationalValidationAuthorityTests
             new ReservationReactor(new InMemoryProjectionCheckpointStore(), repository),
             ProjectionCheckpoint.Start, ct: TestContext.Current.CancellationToken);
         var decisions = new List<DomainEvent>();
+
         await foreach (var record in events.ReadAsync(new Inventory(inventoryId).Stream, 0, TestContext.Current.CancellationToken))
             decisions.Add(record.Event);
+
         Assert.Single(decisions.OfType<ReservationRefused>());
         Assert.Single(decisions.OfType<ReservationAccepted>());
         var outcomes = new List<DomainEvent>();
+
         await foreach (var record in events.ReadAsync(new Order(orderId).Stream, 0, TestContext.Current.CancellationToken))
             outcomes.Add(record.Event);
+
         Assert.Single(outcomes.OfType<OrderRejected>());
         Assert.DoesNotContain(outcomes, outcome => outcome is OrderConfirmed);
     }
@@ -102,6 +106,7 @@ public sealed partial class OperationalValidationAuthorityTests
         {
             if (_decisions.TryGetValue(reservation, out var existing))
                 return existing;
+
             if (Available == 0)
             {
                 RaiseEvent(new ReservationRefused(reservation));
@@ -129,6 +134,7 @@ public sealed partial class OperationalValidationAuthorityTests
         {
             if (State != "pending")
                 return;
+
             if (accepted)
                 RaiseEvent(new OrderConfirmed());
             else

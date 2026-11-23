@@ -132,20 +132,32 @@ public sealed class TestingConformanceTests
     // shows the suite fails a store that would silently lose a concurrent writer's events.
     sealed class PermissiveEventStore(InMemoryEventStore inner) : IEventStore
     {
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamAddress stream, ulong fromOffset = 0,
-            CancellationToken ct = default)
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamAddress stream,
+            ulong fromOffset = 0,
+            CancellationToken ct = default
+        )
             => inner.ReadAsync(stream, fromOffset, ct);
 
-        public IAsyncEnumerable<DomainEventRecord> ReadAsync(EventStreamPattern pattern, EventCursor cursor,
-            CancellationToken ct = default)
+        public IAsyncEnumerable<DomainEventRecord> ReadAsync(
+            EventStreamPattern pattern,
+            EventCursor cursor,
+            CancellationToken ct = default
+        )
             => inner.ReadAsync(pattern, cursor, ct);
 
-        public async ValueTask AppendAsync(EventStreamAddress stream, ulong expectedStreamPosition,
-            IReadOnlyList<DomainEvent> events, CancellationToken ct = default)
+        public async ValueTask AppendAsync(
+            EventStreamAddress stream,
+            ulong expectedStreamPosition,
+            IReadOnlyList<DomainEvent> events,
+            CancellationToken ct = default
+        )
         {
             var actual = 0UL;
+
             await foreach (var _ in inner.ReadAsync(stream, 0, ct))
                 actual++;
+
             await inner.AppendAsync(stream, actual, events, ct);
         }
     }
@@ -162,8 +174,11 @@ public sealed class TestingConformanceTests
 
         public ValueTask ReopenAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
 
-        public async ValueTask<bool> ExecuteAsync(Uuid eventId, Func<CancellationToken, ValueTask> effect,
-            CancellationToken ct = default)
+        public async ValueTask<bool> ExecuteAsync(
+            Uuid eventId,
+            Func<CancellationToken, ValueTask> effect,
+            CancellationToken ct = default
+        )
         {
             if (!_seen.TryAdd(eventId, 0))
             {
@@ -180,8 +195,11 @@ public sealed class TestingConformanceTests
         public ValueTask ResetAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
         public ValueTask ReopenAsync(CancellationToken ct = default) => ValueTask.CompletedTask;
 
-        public async ValueTask<bool> ExecuteAsync(Uuid eventId, Func<CancellationToken, ValueTask> effect,
-            CancellationToken ct = default)
+        public async ValueTask<bool> ExecuteAsync(
+            Uuid eventId,
+            Func<CancellationToken, ValueTask> effect,
+            CancellationToken ct = default
+        )
         {
             await effect(ct);
             return true;
@@ -221,6 +239,7 @@ public sealed class TestingConformanceTests
             {
                 var current = _states.GetValueOrDefault(context.Identity) ??
                               new ProjectionState(null, ProjectionCheckpoint.Start);
+
                 if (current.Checkpoint != context.Checkpoint)
                 {
                     if (!translateConflict)
@@ -230,6 +249,7 @@ public sealed class TestingConformanceTests
 
                     throw new ProjectionConcurrencyException("stale checkpoint");
                 }
+
 
                 _states[context.Identity] = new ProjectionState(value, checkpoint);
             }
@@ -253,8 +273,10 @@ public sealed class TestingConformanceTests
         ProjectionBatch? _batch;
         bool _failNextCommit;
 
-        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(CheckpointIdentity identity,
-            CancellationToken ct = default) =>
+        public ValueTask<ProjectionCheckpoint> LoadCheckpointAsync(
+            CheckpointIdentity identity,
+            CancellationToken ct = default
+        ) =>
             ValueTask.FromResult(_probe.Read(identity).Checkpoint);
 
         public ValueTask<IProjectionBatch> BeginAsync(ProjectionBatchContext context, CancellationToken ct = default)

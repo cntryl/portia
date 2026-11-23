@@ -7,7 +7,11 @@ sealed class ProcessorRuntimeStatusRegistry
     readonly ConcurrentDictionary<WorkloadIdentity, ProcessorRuntimeStatus> _owners = new();
 
     internal ProcessorRuntimeStatus Start(
-        WorkloadIdentity identity, int attemptLimit, TimeProvider clock, CancellationToken ownership)
+        WorkloadIdentity identity,
+        int attemptLimit,
+        TimeProvider clock,
+        CancellationToken ownership
+    )
     {
         var observed = new ProcessorRuntimeStatus(attemptLimit, clock, ownership);
         _owners[identity] = observed;
@@ -26,8 +30,14 @@ sealed class ProcessorRuntimeStatus(int attemptLimit, TimeProvider clock, Cancel
     ProcessorExecutionStatus _status = new("starting", clock.GetUtcNow(), null, null, "start", null, null, attemptLimit);
     ProcessorExecutionStatus? _journal;
 
-    internal void Set(string phase, string? stage = null, string? reason = null, string? next = null,
-        DateTimeOffset? retryAt = null, int? failures = null)
+    internal void Set(
+        string phase,
+        string? stage = null,
+        string? reason = null,
+        string? next = null,
+        DateTimeOffset? retryAt = null,
+        int? failures = null
+    )
         => Volatile.Write(ref _status,
             new ProcessorExecutionStatus(phase, clock.GetUtcNow(), stage, reason, next, retryAt, failures, attemptLimit));
 

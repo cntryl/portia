@@ -22,11 +22,14 @@ if (args.Contains("--hang-before-mcp", StringComparer.Ordinal))
 if (args.Contains("--fail-initialization", StringComparer.Ordinal))
 {
     Console.Error.WriteLine(Environment.ProcessId);
+
     while (Console.ReadLine() is { } request)
     {
         using var message = JsonDocument.Parse(request);
+
         if (!message.RootElement.TryGetProperty("id", out var id))
             continue;
+
 
         Console.Out.WriteLine("{\"jsonrpc\":\"2.0\",\"id\":" + id.GetRawText()
                                                              + ",\"error\":{\"code\":-32601,\"message\":\"Intentional initialization failure.\"}}");
@@ -34,6 +37,7 @@ if (args.Contains("--fail-initialization", StringComparer.Ordinal))
     }
 
     // Keep the child alive after the client closes its input so the test observes transport cleanup.
+
     await Task.Delay(Timeout.InfiniteTimeSpan);
     return;
 }
@@ -54,6 +58,7 @@ if (args.Contains("--qualification", StringComparer.Ordinal))
     var evidence = evidenceIndex >= 0 ? new QualificationTelemetry(args[evidenceIndex + 1]) : null;
     evidence?.Configure(builder.Services);
     var ingressGate = new object();
+
     if (evidenceIndex >= 0)
         builder.Services.Configure<McpServerOptions>(options => options.Filters.Message.IncomingFilters.Add(next =>
             async (message, ct) =>
@@ -68,6 +73,7 @@ if (args.Contains("--qualification", StringComparer.Ordinal))
                     File.AppendAllText(Path.Combine(args[evidenceIndex + 1], "ingress.tsv"), line + "\n");
                 await next(message, ct);
             }));
+
     _ = builder.Services.AddSingleton<IEventStore, InMemoryEventStore>();
     var qualification = QualifiedApplication.Add(builder.Services)
         .AddMcpTool<QualifiedChange>(tool => tool.ReadOnly().Idempotent())
@@ -115,11 +121,14 @@ if (args.Contains("--qualification", StringComparer.Ordinal))
                 options.Required("tenant");
             })
         .AddMcpStdio(options => options.UseActorProvider<QualificationActorProvider>());
+
     if (args.Contains("--short-deadline", StringComparer.Ordinal))
         _ = qualification.ConfigureMcpLimits(options => options.OperationDeadline = TimeSpan.FromMilliseconds(250));
+
     using var host = builder.Build();
     using var snapshots = new CancellationTokenSource();
     var export = evidence?.RunAsync(host.Services, snapshots.Token) ?? Task.CompletedTask;
+
     try
     {
         await host.RunAsync();
@@ -127,6 +136,7 @@ if (args.Contains("--qualification", StringComparer.Ordinal))
     finally
     {
         await snapshots.CancelAsync();
+
         try
         {
             await export;
@@ -135,6 +145,7 @@ if (args.Contains("--qualification", StringComparer.Ordinal))
         {
         }
     }
+
 
     return;
 }

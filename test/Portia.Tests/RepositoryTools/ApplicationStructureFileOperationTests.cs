@@ -15,6 +15,7 @@ public sealed class ApplicationStructureFileOperationTests
     {
         // Arrange
         var directory = CreateTemporaryDirectory();
+
         try
         {
             var collisionPath = Path.Combine(directory, "collision.stage");
@@ -44,6 +45,7 @@ public sealed class ApplicationStructureFileOperationTests
     {
         // Arrange
         var directory = CreateTemporaryDirectory();
+
         try
         {
             var sourcePath = Path.Combine(directory, "source.cs");

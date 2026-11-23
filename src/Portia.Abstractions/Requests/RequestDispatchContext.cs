@@ -24,8 +24,12 @@ public class RequestDispatchContext : IRequestContext
     ///     The clock that stamps the start time, or <see langword="null" /> to use
     ///     <see cref="TimeProvider.System" />.
     /// </param>
-    public RequestDispatchContext(ClaimsPrincipal actor, RequestInvocation? invocation = null,
-        RequestMetadata? metadata = null, TimeProvider? timeProvider = null)
+    public RequestDispatchContext(
+        ClaimsPrincipal actor,
+        RequestInvocation? invocation = null,
+        RequestMetadata? metadata = null,
+        TimeProvider? timeProvider = null
+    )
     {
         _identity = new IdentityState(PrincipalSnapshot.Copy(actor), metadata ?? RequestMetadata.Create(),
             metadata is not null);
@@ -60,8 +64,10 @@ public class RequestDispatchContext : IRequestContext
     public Result<RequestDispatchContext> BindRequest(IRequestBase request)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         if (RequestMetadata.IdentityError(request, _identity.IsPropagated ? Metadata : null) is { } error)
             return Result<RequestDispatchContext>.Failure(error);
+
         return Result<RequestDispatchContext>.Success(request is not IIdentifiedRequest || _identity.IsPropagated
             ? this
             : new RequestDispatchContext(this, RequestMetadata.FromRequest(request)));

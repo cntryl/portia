@@ -33,6 +33,7 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
         if (await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false) is not
             CompilationUnitSyntax root)
             return;
+
         foreach (var diagnostic in context.Diagnostics)
         {
             if (diagnostic.Id is "PORTIA200" or "PORTIA201"
@@ -43,13 +44,17 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
                 var declaration = root.FindNode(diagnostic.Location.SourceSpan).AncestorsAndSelf()
                     .OfType<MemberDeclarationSyntax>().FirstOrDefault(node =>
                         node is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax);
+
                 if (declaration is null)
                     continue;
+
                 var model = await context.Document.GetSemanticModelAsync(context.CancellationToken)
                     .ConfigureAwait(false);
+
                 if (model?.GetDeclaredSymbol(declaration, context.CancellationToken) is INamedTypeSymbol declared
                     && declared.DeclaringSyntaxReferences.Length > 1)
                     continue;
+
                 if (diagnostic.Id == "PORTIA201")
                 {
                     context.RegisterCodeFix(CodeAction.Create($"Rename file to '{filename}'",
@@ -103,17 +108,22 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
     static CompilationUnitSyntax MovedRoot(CompilationUnitSyntax root, MemberDeclarationSyntax declaration)
     {
         var member = declaration;
+
         foreach (var space in declaration.Ancestors().OfType<BaseNamespaceDeclarationSyntax>())
             member = space.WithMembers(SyntaxFactory.SingletonList(member));
+
         var moved = root.WithAttributeLists(default).WithMembers(SyntaxFactory.SingletonList(member));
+
         if (!moved.GetLeadingTrivia().Any(trivia => trivia.IsDirective))
         {
             var directives = string.Concat(root.GetLeadingTrivia().Where(trivia => trivia.IsDirective)
                 .Select(trivia => trivia.ToFullString()));
+
             if (directives.Length > 0)
                 moved = moved.WithLeadingTrivia(SyntaxFactory.ParseLeadingTrivia(directives)
                     .AddRange(moved.GetLeadingTrivia()));
         }
+
 
         return moved.WithAdditionalAnnotations(Formatter.Annotation);
     }
@@ -132,11 +142,15 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
                 "Portia.SyncApplicationNamespace" => "PORTIA202",
                 _ => null
             };
+
             if (id is null ||
                 context.Scope is not (FixAllScope.Document or FixAllScope.Project or FixAllScope.Solution))
                 return null;
+
+
             if (id is "PORTIA200" or "PORTIA201" && !SupportsFileChanges(context.Solution.Workspace))
                 return null;
+
             var documents = context.Scope switch
             {
                 FixAllScope.Document when context.Document is { } document => new[] { document },
@@ -145,32 +159,43 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
                 _ => []
             };
             var changes = new Dictionary<DocumentId, ImmutableArray<Diagnostic>>();
+
             foreach (var document in documents)
             {
                 context.CancellationToken.ThrowIfCancellationRequested();
                 var diagnostics = await context.GetDocumentDiagnosticsAsync(document).ConfigureAwait(false);
                 var selected = diagnostics.Where(diagnostic => diagnostic.Id == id && !diagnostic.IsSuppressed)
                     .ToImmutableArray();
+
                 if (!selected.IsEmpty)
                     changes.Add(document.Id, selected);
             }
 
+
+
             if (changes.Count == 0)
                 return null;
+
             return CodeAction.Create("Fix all application structure violations",
                 ct => ApplyAsync(context.Solution, changes, id, ct), context.CodeActionEquivalenceKey);
         }
 
-        internal static async Task<Solution> ApplyAsync(Solution solution,
-            Dictionary<DocumentId, ImmutableArray<Diagnostic>> changes, string id, CancellationToken ct)
+        internal static async Task<Solution> ApplyAsync(
+            Solution solution,
+            Dictionary<DocumentId, ImmutableArray<Diagnostic>> changes,
+            string id,
+            CancellationToken ct
+        )
         {
             foreach (var pair in changes)
             {
                 ct.ThrowIfCancellationRequested();
                 var document = solution.GetDocument(pair.Key);
+
                 if (document is null ||
                     await document.GetSyntaxRootAsync(ct).ConfigureAwait(false) is not CompilationUnitSyntax root)
                     continue;
+
                 if (id == "PORTIA200")
                 {
                     solution = await SplitAsync(document, root, pair.Value, ct).ConfigureAwait(false);
@@ -182,6 +207,7 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
                     if (pair.Value[0].Properties.TryGetValue("ExpectedFileName", out var name) && name is not null
                         && AvailableFile(document, name))
                         solution = await RenameFileAsync(document, name, ct).ConfigureAwait(false);
+
                     continue;
                 }
 
@@ -205,8 +231,10 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
                         DelegateDeclarationSyntax declaration => declaration.Identifier.ValueText == identifier,
                         _ => false
                     });
+
                 if (current is null)
                     continue;
+
                 var token = current is BaseTypeDeclarationSyntax typeDeclaration
                     ? typeDeclaration.Identifier
                     : ((DelegateDeclarationSyntax)current).Identifier;
@@ -216,6 +244,7 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
                 var codeContext = new CodeFixContext(document, diagnostic, (action, _) => actions.Add(action), ct);
                 await new ApplicationStructureCodeFixProvider().RegisterCodeFixesAsync(codeContext)
                     .ConfigureAwait(false);
+
                 if (actions.FirstOrDefault() is { } action)
                 {
                     var operations = await action.GetOperationsAsync(ct).ConfigureAwait(false);
@@ -226,11 +255,16 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
             return solution;
         }
 
-        static async Task<Solution> SplitAsync(Document document, CompilationUnitSyntax root,
-            ImmutableArray<Diagnostic> diagnostics, CancellationToken ct)
+        static async Task<Solution> SplitAsync(
+            Document document,
+            CompilationUnitSyntax root,
+            ImmutableArray<Diagnostic> diagnostics,
+            CancellationToken ct
+        )
         {
             if (!SafeToSplit(root))
                 return document.Project.Solution;
+
             var moves = diagnostics.Select(diagnostic =>
                 {
                     _ = diagnostic.Properties.TryGetValue("ExpectedFileName", out var name);
@@ -249,11 +283,14 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
                 moves.Count(other => string.Equals(other.Name, move.Name, StringComparison.OrdinalIgnoreCase)) == 1
                 && AvailableFile(document, move.Name!) &&
                 !string.Equals(document.Name, move.Name, StringComparison.OrdinalIgnoreCase)).ToArray();
+
             if (eligible.Length == 0)
                 return document.Project.Solution;
+
             var text = await document.GetTextAsync(ct).ConfigureAwait(false);
             var remaining = root.RemoveNodes(eligible.Select(move => move.Node!), SyntaxRemoveOptions.KeepNoTrivia)!;
             var solution = document.Project.Solution.WithDocumentSyntaxRoot(document.Id, remaining);
+
             foreach (var move in eligible)
             {
                 ct.ThrowIfCancellationRequested();
@@ -266,6 +303,7 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
                     .ConfigureAwait(false)).Project.Solution;
             }
 
+
             return solution;
         }
     }
@@ -274,14 +312,17 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
     {
         if (document.FilePath is { } path && document.Project.Solution.GetDocumentIdsWithFilePath(path).Length > 1)
             return false;
+
         var destination = SiblingPath(document.FilePath, filename);
 #pragma warning disable RS1035 // Code actions preflight files outside the solution before offering a file operation.
+
         if (destination is not null
             && (System.IO.File.Exists(destination) || System.IO.Directory.Exists(destination))
             && !string.Equals(System.IO.Path.GetFullPath(destination),
                 System.IO.Path.GetFullPath(document.FilePath ?? string.Empty), StringComparison.Ordinal))
 #pragma warning restore RS1035
             return false;
+
         return !document.Project.Solution.Projects.SelectMany(project => project.Documents).Any(other =>
             other.Id != document.Id
             && (destination is not null &&
@@ -313,8 +354,13 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
             : solution;
     }
 
-    static async Task<Solution> MoveTypeAsync(Document document, CompilationUnitSyntax root,
-        MemberDeclarationSyntax declaration, string filename, CancellationToken ct)
+    static async Task<Solution> MoveTypeAsync(
+        Document document,
+        CompilationUnitSyntax root,
+        MemberDeclarationSyntax declaration,
+        string filename,
+        CancellationToken ct
+    )
     {
         var movedRoot = MovedRoot(root, declaration);
         var remaining = root.RemoveNode(declaration, SyntaxRemoveOptions.KeepNoTrivia)!;
@@ -328,8 +374,11 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
         return formatted.Project.Solution;
     }
 
-    static async Task RegisterNamespaceFixAsync(CodeFixContext context, Diagnostic diagnostic,
-        CompilationUnitSyntax root)
+    static async Task RegisterNamespaceFixAsync(
+        CodeFixContext context,
+        Diagnostic diagnostic,
+        CompilationUnitSyntax root
+    )
     {
         if (!diagnostic.Properties.TryGetValue("ExpectedNamespace", out var target) || target is null
             || !diagnostic.Properties.TryGetValue("Folders", out var value) || value is null)
@@ -339,8 +388,10 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
 
         var folders = value.Length == 0 ? [] : value.Split('/');
         var project = context.Document.Project;
+
         if (string.Join(".", new[] { project.DefaultNamespace }.Concat(folders)) != target)
             return;
+
         var model = await context.Document.GetSemanticModelAsync(context.CancellationToken).ConfigureAwait(false);
         // A move into an existing type with the same name is a design conflict, not a repair.
         foreach (var declaration in root.DescendantNodes()
@@ -360,8 +411,12 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
             diagnostic);
     }
 
-    static async Task<Solution> SyncNamespaceAsync(Document document, string target, string[] folders,
-        CancellationToken ct)
+    static async Task<Solution> SyncNamespaceAsync(
+        Document document,
+        string target,
+        string[] folders,
+        CancellationToken ct
+    )
     {
         if (await document.GetSyntaxRootAsync(ct).ConfigureAwait(false) is not CompilationUnitSyntax root
             || await document.GetSemanticModelAsync(ct).ConfigureAwait(false) is not { } model)
@@ -372,10 +427,13 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
         prepared = prepared.WithFolders(prepared.Folders.Concat(["PortiaNamespaceFix"]));
         var actions = await Renamer.RenameDocumentAsync(prepared, new DocumentRenameOptions(), prepared.Name,
             folders, ct).ConfigureAwait(false);
+
         if (actions.ApplicableActions.Length == 0 ||
             actions.ApplicableActions.Any(action => action.GetErrors(CultureInfo.InvariantCulture).Any()))
             return document.Project.Solution;
+
         Solution corrected;
+
         try
         {
             corrected = await actions.UpdateSolutionAsync(prepared.Project.Solution, ct).ConfigureAwait(false);
@@ -386,8 +444,10 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
             {
                 var referenceRoot = await corrected.GetDocument(id)!.GetSyntaxRootAsync(ct).ConfigureAwait(false);
                 var references = referenceRoot!.GetAnnotatedNodes(ConstructorReference).ToArray();
+
                 if (references.Length == 0)
                     continue;
+
                 var updatedRoot = referenceRoot.ReplaceNodes(references,
                     (_, current) => QualifyConstructorReference(current, target));
                 corrected = corrected.WithDocumentSyntaxRoot(id, updatedRoot);
@@ -400,9 +460,11 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
             return document.Project.Solution;
         }
 
+
         var changed = corrected.GetDocument(document.Id)!;
         var changedRoot = await changed.GetSyntaxRootAsync(ct).ConfigureAwait(false);
         var changedModel = await changed.GetSemanticModelAsync(ct).ConfigureAwait(false);
+
         if (changedRoot is null || changedModel is null || changedRoot.DescendantNodes()
                 .Where(node => node is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax)
                 .Any(node => changedModel.GetDeclaredSymbol(node, ct)?.ContainingNamespace.ToDisplayString() != target))
@@ -412,25 +474,35 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
 
         // RenameDocument uses temporary logical folders. Copy the resulting text into the
         // original solution so hosts that cannot change document properties can apply it.
+
         var result = document.Project.Solution;
+
         foreach (var id in corrected.GetChanges(result).GetProjectChanges()
                      .SelectMany(change => change.GetChangedDocuments()))
             result = result.WithDocumentText(id,
                 await corrected.GetDocument(id)!.GetTextAsync(ct).ConfigureAwait(false));
+
         return result;
     }
 
-    static async Task<Document> PrepareConstructorReferencesAsync(Document document, CompilationUnitSyntax root,
-        SemanticModel model, CancellationToken ct)
+    static async Task<Document> PrepareConstructorReferencesAsync(
+        Document document,
+        CompilationUnitSyntax root,
+        SemanticModel model,
+        CancellationToken ct
+    )
     {
         var locations = new Dictionary<DocumentId, HashSet<TextSpan>>();
+
         foreach (var declaration in root.DescendantNodes()
                      .Where(node => node is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax))
         {
             if (model.GetDeclaredSymbol(declaration, ct) is not INamedTypeSymbol symbol)
                 continue;
+
             var references = await SymbolFinder.FindReferencesAsync(symbol, document.Project.Solution, ct)
                 .ConfigureAwait(false);
+
             foreach (var reference in references.Where(reference =>
                          reference.Definition is IMethodSymbol { MethodKind: MethodKind.Constructor }))
             {
@@ -440,20 +512,26 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
                     // inputs after the move; they are not editable solution documents.
                     if (document.Project.Solution.GetDocument(location.Document.Id) is null)
                         continue;
+
+
                     if (!locations.TryGetValue(location.Document.Id, out var spans))
                         locations.Add(location.Document.Id, spans = []);
+
                     _ = spans.Add(location.Location.SourceSpan);
                 }
             }
         }
 
+
         var solution = document.Project.Solution;
+
         foreach (var pair in locations)
         {
             if (solution.GetDocument(pair.Key) is not { } referenceDocument
                 || await referenceDocument.GetSyntaxRootAsync(ct).ConfigureAwait(false) is not { } referenceRoot
                 || await referenceDocument.GetSemanticModelAsync(ct).ConfigureAwait(false) is not { } referenceModel)
                 continue;
+
             var types = pair.Value.Select(span =>
                     referenceRoot.FindNode(span).FirstAncestorOrSelf<ObjectCreationExpressionSyntax>()?.Type)
                 .Where(type => type is QualifiedNameSyntax or AliasQualifiedNameSyntax).Distinct().Cast<TypeSyntax>()
@@ -463,15 +541,19 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
                 {
                     if (referenceModel.GetTypeInfo(original, ct).Type is not INamedTypeSymbol type)
                         return current;
+
                     var depth = 1;
+
                     for (var containing = type.ContainingType;
                          containing is not null;
                          containing = containing.ContainingType)
                         depth++;
+
                     return current.WithAdditionalAnnotations(new SyntaxAnnotation(ConstructorReference,
                         depth.ToString(CultureInfo.InvariantCulture)));
                 }));
         }
+
 
         return solution.GetDocument(document.Id)!;
     }
@@ -486,6 +568,7 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
         // the whole qualifier would turn Namespace.Outer<T>.Inner into Namespace.Inner.
         var types = new Stack<SimpleNameSyntax>();
         var remaining = (NameSyntax?)name;
+
         while (types.Count < depth && remaining is not null)
         {
             switch (remaining)
@@ -505,16 +588,26 @@ public sealed class ApplicationStructureCodeFixProvider : CodeFixProvider
             }
         }
 
+
+
         if (types.Count != depth)
             return node;
+
         var replacement = SyntaxFactory.ParseName("global::" + target);
+
         foreach (var type in types)
             replacement = SyntaxFactory.QualifiedName(replacement, type);
+
         return replacement.WithTriviaFrom(node).WithAdditionalAnnotations(Simplifier.Annotation);
     }
 
-    static async Task<Document> MakeVersionExplicitAsync(Document document, CompilationUnitSyntax root,
-        AttributeSyntax attribute, int version, CancellationToken ct)
+    static async Task<Document> MakeVersionExplicitAsync(
+        Document document,
+        CompilationUnitSyntax root,
+        AttributeSyntax attribute,
+        int version,
+        CancellationToken ct
+    )
     {
         var argument = SyntaxFactory.AttributeArgument(SyntaxFactory.LiteralExpression(
             SyntaxKind.NumericLiteralExpression,

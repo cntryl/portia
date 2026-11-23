@@ -5,8 +5,12 @@ namespace Cntryl.Portia.Testing;
 /// <summary>An immutable copy of one MCP tool result.</summary>
 public sealed class McpCallSnapshot
 {
-    internal McpCallSnapshot(bool isError, IReadOnlyList<string> text, JsonElement? structuredJson,
-        JsonElement? error)
+    internal McpCallSnapshot(
+        bool isError,
+        IReadOnlyList<string> text,
+        JsonElement? structuredJson,
+        JsonElement? error
+    )
     {
         IsError = isError;
         Text = text;

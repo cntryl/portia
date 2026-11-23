@@ -231,8 +231,10 @@ public sealed class FitzNotificationPoisonMessageTests
     static async Task<List<RequestNotification>> ReadAllAsync(IRequestNotificationConsumer consumer)
     {
         var delivered = new List<RequestNotification>();
+
         await foreach (var notification in consumer.ReadAsync())
             delivered.Add(notification);
+
         return delivered;
     }
 
@@ -277,6 +279,7 @@ public sealed class FitzNotificationPoisonMessageTests
         listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
         {
             var values = tags.ToArray();
+
             if (Equals(values[2].Value, "lost"))
                 captured.Add((string)values[1].Value!);
         });
@@ -288,8 +291,12 @@ public sealed class FitzNotificationPoisonMessageTests
     {
         public int Calls { get; private set; }
 
-        public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(string route, string subject,
-            string issuer, CancellationToken ct = default)
+        public ValueTask<Result<ClaimsPrincipal>> ValidateAsync(
+            string route,
+            string subject,
+            string issuer,
+            CancellationToken ct = default
+        )
         {
             Calls++;
             return ValueTask.FromResult(Result<ClaimsPrincipal>.Success(RequestActor.System));
@@ -327,8 +334,13 @@ public sealed class FitzNotificationPoisonMessageTests
             Task.FromResult(new ScheduleSubscription(selector,
                 Notifications(selector, ct), _ => ValueTask.CompletedTask, Task.CompletedTask));
 
-        public Task<string?> CreateAsync(string route, string cron, ScheduleDeliveryMode mode,
-            ReadOnlyMemory<byte> payload, CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<string?> CreateAsync(
+            string route,
+            string cron,
+            ScheduleDeliveryMode mode,
+            ReadOnlyMemory<byte> payload,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
         public Task CancelAsync(string id, CancellationToken ct = default) => throw new NotSupportedException();
 
@@ -338,11 +350,15 @@ public sealed class FitzNotificationPoisonMessageTests
         public Task<ScheduleListPage> ListAsync(string? continuation, ulong? limit, CancellationToken ct = default) =>
             throw new NotSupportedException();
 
-        public Task<IReadOnlyList<ScheduleEntry>> ListBySelectorAsync(string selector,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<ScheduleEntry>> ListBySelectorAsync(
+            string selector,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
-        async IAsyncEnumerable<ScheduleNotification> Notifications(string route,
-            [EnumeratorCancellation] CancellationToken ct)
+        async IAsyncEnumerable<ScheduleNotification> Notifications(
+            string route,
+            [EnumeratorCancellation] CancellationToken ct
+        )
         {
             foreach (var payload in payloads)
             {
@@ -362,7 +378,12 @@ public sealed class FitzNotificationPoisonMessageTests
 
         public bool IsEnabled(LogLevel logLevel) => true;
 
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
-            Func<TState, Exception?, string> formatter) => Entries.Add((eventId.Id, logLevel));
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter
+        ) => Entries.Add((eventId.Id, logLevel));
     }
 }

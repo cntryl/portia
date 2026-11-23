@@ -14,8 +14,10 @@ public sealed record RequestMetadata(Uuid RequestId, Uuid CorrelationId, Uuid? C
     public static RequestMetadata FromRequest(IRequestBase request, IExecutionContext? parent = null)
     {
         ArgumentNullException.ThrowIfNull(request);
+
         if (IdentityError(request) is { } error)
             throw new ArgumentException(error.Message, nameof(request));
+
         var id = request is IIdentifiedRequest identified ? identified.RequestId : Uuid.CreateVersion4();
         var metadata = new RequestMetadata(id, parent?.CorrelationId ?? id, parent?.CauseId);
         metadata.Validate();
@@ -29,6 +31,7 @@ public sealed record RequestMetadata(Uuid RequestId, Uuid CorrelationId, Uuid? C
     {
         ArgumentNullException.ThrowIfNull(request);
         Validate();
+
         if (IdentityError(request, this) is { } error)
             throw new ArgumentException(error.Message, nameof(request));
     }
@@ -37,9 +40,12 @@ public sealed record RequestMetadata(Uuid RequestId, Uuid CorrelationId, Uuid? C
     {
         if (request is not IIdentifiedRequest identified)
             return null;
+
+
         if (identified.RequestId == Uuid.Empty)
             return new RequestError(RequestErrorKind.Validation,
                 "A typed operation identity is required and cannot be empty.");
+
         return metadata is not null && metadata.RequestId != identified.RequestId
             ? new RequestError(RequestErrorKind.Validation,
                 "The typed operation identity conflicts with the carried request identity.")

@@ -56,12 +56,14 @@ public sealed class InMemoryEventStoreProgressTests
         var aggregateId = Uuid.CreateVersion4();
         var stream = new EventStreamAddress(realm, area, resource);
         var raisedCount = count - 1;
+
         if (raisedCount > 0)
         {
             var events = Enumerable.Range(0, raisedCount).Select(index =>
                 DomainEventSeed.Attach(new Changed(index), aggregateId, (ulong)index + 1)).ToArray();
             await store.AppendAsync(stream, 0, events);
         }
+
 
         var audit = DomainEventSeed.Attach(new Changed(raisedCount), aggregateId, (ulong)raisedCount, isAudit: true);
         await store.AppendAsync(stream, (ulong)raisedCount, [audit]);

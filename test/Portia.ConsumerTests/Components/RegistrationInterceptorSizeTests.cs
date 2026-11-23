@@ -95,6 +95,7 @@ public sealed class RegistrationInterceptorSizeTests
             // Assert
             using var provider = services.BuildServiceProvider();
             var catalog = provider.GetRequiredService<DomainEventTypeCatalog>();
+
             for (var index = 0; index < 4; index++)
                 Assert.Equal(($"size.event_{index}", 1), catalog.Describe(assembly.GetType("Changed" + index)!));
         }
@@ -114,13 +115,17 @@ public sealed class RegistrationInterceptorSizeTests
                                            public ValueTask<Result> HandleAsync(IRequestContext<Request> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
                                        }
                                        """);
+
         for (var index = 0; index < events; index++)
             _ = source.Append(CultureInfo.InvariantCulture,
                 $"\n[Discriminator(\"size.event_{index}\", 1)] public sealed record Changed{index} : DomainEvent;");
+
         _ = source.AppendLine("public static class Composition {");
+
         for (var index = 0; index < callSites; index++)
             _ = source.AppendLine(CultureInfo.InvariantCulture,
                 $"public static PortiaBuilder Compose{index}(IServiceCollection services) => services.AddPortia().AddRequestHandler<Handler>();");
+
         return source
             .AppendLine(
                 "public static PortiaBuilder Feature(PortiaBuilder builder) => builder.AddRequestHandler<Handler>(); }")

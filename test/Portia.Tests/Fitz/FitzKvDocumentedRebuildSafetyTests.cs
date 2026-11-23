@@ -62,6 +62,7 @@ public sealed class FitzKvDocumentedRebuildSafetyProof(FitzBrokerFixture broker)
         var candidate = new CheckpointIdentity("AccountProjector", pattern, "candidate");
         var account = Uuid.CreateVersion4();
         var first = new ProjectionCheckpoint(new EventCursor("1"));
+
         foreach (var identity in new[] { live, candidate })
         {
             await using var seed = await repository.BeginAsync(new ProjectionBatchContext(identity, ProjectionCheckpoint.Start), TestContext.Current.CancellationToken);
@@ -70,6 +71,7 @@ public sealed class FitzKvDocumentedRebuildSafetyProof(FitzBrokerFixture broker)
         }
 
         // Act
+
         var context = new ProjectionBatchContext(candidate, first);
         await using var batch = await repository.BeginAsync(context, TestContext.Current.CancellationToken);
         var conflict = await Record.ExceptionAsync(async () => await contender.BeginAsync(context, TestContext.Current.CancellationToken));
@@ -105,8 +107,10 @@ public sealed class FitzKvDocumentedRebuildSafetyProof(FitzBrokerFixture broker)
         internal async Task<int> DeleteBalancesAsync()
         {
             var page = await Transaction.ScanAsync(new KvScanQuery("balance"u8.ToArray(), "balancf"u8.ToArray()));
+
             foreach (var pair in page.Pairs)
                 await Transaction.DeleteAsync(pair.Key);
+
             return page.Pairs.Count;
         }
 

@@ -541,8 +541,11 @@ public sealed class PortiaFitzBuilderTests
 
     sealed class CustomCoordinator : IWorkloadCoordinator
     {
-        public Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-            Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default) =>
+        public Task RunAsync(
+            Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
+            Func<WorkloadIdentity, CancellationToken, Task> run,
+            CancellationToken ct = default
+        ) =>
             Task.CompletedTask;
     }
 }

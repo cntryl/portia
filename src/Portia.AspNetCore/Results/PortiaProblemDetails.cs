@@ -17,10 +17,12 @@ static class PortiaProblemDetails
         writer.WriteNumber("status", statusCode);
         writer.WriteString("detail", detail);
         writer.WriteString("instance", context.Request.PathBase.Add(context.Request.Path).Value ?? "/");
+
         if (transient is { } isTransient)
         {
             writer.WriteBoolean("transient", isTransient);
         }
+
 
         writer.WriteEndObject();
         await writer.FlushAsync(context.RequestAborted).ConfigureAwait(false);

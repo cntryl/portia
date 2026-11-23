@@ -32,6 +32,7 @@ public sealed partial class ComponentHostingTests
 
         // Assert
         var worker = Assert.Single(provider.GetServices<IHostedService>().OfType<BackgroundService>());
+
         try
         {
             await worker.StartAsync(TestContext.Current.CancellationToken);
@@ -40,6 +41,7 @@ public sealed partial class ComponentHostingTests
             await ConsumerHost.SeedAsync(provider, id, 1);
             clock.Advance(pollInterval);
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
             while (effects.Items.Count < 2)
                 await Task.Delay(10, timeout.Token);
         }
@@ -48,6 +50,7 @@ public sealed partial class ComponentHostingTests
             await worker.StopAsync(TestContext.Current.CancellationToken);
             (worker as IDisposable)?.Dispose();
         }
+
 
         Assert.Equal(2, effects.Items.Count);
     }

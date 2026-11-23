@@ -9,5 +9,6 @@ public interface IDomainEventNotifier
     /// <returns>A subscription that signals until it is disposed.</returns>
     ValueTask<IDomainEventSubscription> SubscribeAsync(
         EventStreamPattern pattern,
-        CancellationToken ct = default);
+        CancellationToken ct = default
+    );
 }

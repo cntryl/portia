@@ -16,11 +16,14 @@ sealed class RequestScheduleStartupService(
     {
         foreach (var declaration in declarations)
             declaration.Validate();
+
         _scheduler = services.GetService(typeof(IRequestScheduler)) as IRequestScheduler
                      ?? throw new InvalidOperationException(
                          "Portia startup schedules require an IRequestScheduler. Configure a scheduling provider, such as AddFitz(), before starting workers.");
+
         if (!validations.HasPendingEndpointValidations)
             return EnsureAsync(_scheduler, cancellationToken);
+
         _deferred = true;
         return Task.CompletedTask;
     }
@@ -29,6 +32,7 @@ sealed class RequestScheduleStartupService(
     {
         if (!_deferred)
             return;
+
         _deferred = false;
         await validations.WaitForEndpointValidationsAsync(cancellationToken).ConfigureAwait(false);
         await EnsureAsync(_scheduler!, cancellationToken).ConfigureAwait(false);

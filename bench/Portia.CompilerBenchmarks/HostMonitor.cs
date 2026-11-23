@@ -61,16 +61,19 @@ sealed class HostMonitor : IDisposable
     public static async Task<HostRun> IdleAsync(int seconds, CancellationToken ct)
     {
         using var monitor = new HostMonitor();
+
         for (var i = 0; i < seconds; i++)
         {
             try
             { await Task.Delay(TimeSpan.FromSeconds(1), ct).ConfigureAwait(false); }
             catch (OperationCanceledException)
             { return new HostRun(Policy, false, monitor._observations.ToArray(), ["host preflight canceled"]); }
+
             if (!monitor.Observe())
                 break;
         }
         // Observe() already closed every full interval; avoid an unmeasurably short trailing interval.
+
         var reasons = monitor._observations.SelectMany(row => row.Verdict.Reasons).Distinct(StringComparer.Ordinal).ToArray();
         return new HostRun(Policy, monitor._observations.Count == seconds && reasons.Length == 0,
             monitor._observations.ToArray(), reasons);

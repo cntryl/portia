@@ -11,6 +11,9 @@ public interface IWorkloadCoordinator
     /// </param>
     /// <param name="ct">Cancels coordination and every owned callback.</param>
     /// <returns>The complete lifetime, ending only after cancellation or an unrecoverable failure.</returns>
-    Task RunAsync(Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
-        Func<WorkloadIdentity, CancellationToken, Task> run, CancellationToken ct = default);
+    Task RunAsync(
+        Func<IReadOnlyCollection<WorkloadIdentity>> workloads,
+        Func<WorkloadIdentity, CancellationToken, Task> run,
+        CancellationToken ct = default
+    );
 }

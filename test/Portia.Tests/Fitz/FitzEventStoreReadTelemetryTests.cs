@@ -13,8 +13,11 @@ public sealed class FitzEventStoreReadTelemetryTests
     [InlineData(false, true, 1)]
     [InlineData(true, false, 2)]
     [InlineData(true, true, 1)]
-    public async Task ShouldReportSuccessGivenReadEndingByCompletionOrEarlyDisposal(bool pattern, bool stopEarly,
-        long expectedCount)
+    public async Task ShouldReportSuccessGivenReadEndingByCompletionOrEarlyDisposal(
+        bool pattern,
+        bool stopEarly,
+        long expectedCount
+    )
     {
         // Arrange
         var measurements = new Measurements();
@@ -46,15 +49,20 @@ public sealed class FitzEventStoreReadTelemetryTests
     [InlineData(true, true, "canceled")]
     [InlineData(false, false, "fault")]
     [InlineData(true, false, "fault")]
-    public async Task ShouldDistinguishCancellationFromFailureGivenCancelledOrFaultedRead(bool pattern, bool cancel,
-        string outcome)
+    public async Task ShouldDistinguishCancellationFromFailureGivenCancelledOrFaultedRead(
+        bool pattern,
+        bool cancel,
+        string outcome
+    )
     {
         // Arrange
         var measurements = new Measurements();
         using var listener = measurements.Listen();
         using var cancellation = new CancellationTokenSource();
+
         if (cancel)
             cancellation.Cancel();
+
         Exception failure = cancel
             ? new OperationCanceledException(cancellation.Token)
             : new IOException("read failed");
@@ -79,10 +87,12 @@ public sealed class FitzEventStoreReadTelemetryTests
         });
 
         // Assert
+
         if (cancel)
             _ = Assert.IsType<OperationCanceledException>(error);
         else
             _ = Assert.IsType<IOException>(error);
+
         Assert.Equal(outcome, Assert.Single(measurements.Durations).Outcome);
         Assert.Empty(measurements.Counts);
     }
@@ -159,6 +169,7 @@ public sealed class FitzEventStoreReadTelemetryTests
             listener.SetMeasurementEventCallback<double>((_, _, tags, _) =>
             {
                 var values = tags.ToArray();
+
                 if (Equals(values[0].Value, "read"))
                     Durations.Add(((string)values[1].Value!, (string)values[2].Value!));
             });
@@ -181,12 +192,20 @@ public sealed class FitzEventStoreReadTelemetryTests
         {
         }
 
-        public IAsyncEnumerable<StreamReadBatch> ReadAsync(string route, ulong startOffset, StreamReadMode mode,
-            StreamReadOptions? options = null, CancellationToken ct = default) =>
+        public IAsyncEnumerable<StreamReadBatch> ReadAsync(
+            string route,
+            ulong startOffset,
+            StreamReadMode mode,
+            StreamReadOptions? options = null,
+            CancellationToken ct = default
+        ) =>
             _failure is null ? new[] { _page! }.ToAsyncEnumerable() : throw _failure;
 
-        public Task<IStreamSession> BeginAsync(string route, ReadOnlyMemory<byte>? ingestMetadata = null,
-            CancellationToken ct = default) => throw new NotSupportedException();
+        public Task<IStreamSession> BeginAsync(
+            string route,
+            ReadOnlyMemory<byte>? ingestMetadata = null,
+            CancellationToken ct = default
+        ) => throw new NotSupportedException();
 
         public Task<StreamRecord?> PeekAsync(string route, CancellationToken ct = default) =>
             throw new NotSupportedException();

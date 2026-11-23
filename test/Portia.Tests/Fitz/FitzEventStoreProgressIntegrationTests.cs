@@ -72,8 +72,10 @@ public sealed class FitzEventStoreProgressIntegrationTests(FitzBrokerFixture bro
     static async Task<List<DomainEventRecord>> ReadAsync(FitzEventStore store, EventStreamPattern pattern)
     {
         var records = new List<DomainEventRecord>();
+
         await foreach (var record in store.ReadAsync(pattern, EventCursor.Start, default))
             records.Add(record);
+
         return records;
     }
 }

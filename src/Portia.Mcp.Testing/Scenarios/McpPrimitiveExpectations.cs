@@ -28,9 +28,11 @@ public sealed class McpResourceListExpectations
         var snapshots = await _task.ConfigureAwait(false);
         var actual = snapshots.Select(item => item.Uri).Order(StringComparer.Ordinal).ToArray();
         var wanted = expected.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+
         if (!actual.SequenceEqual(wanted, StringComparer.Ordinal))
             throw new InvalidOperationException(
                 $"Expected MCP resource identities [{string.Join(", ", wanted)}], but found [{string.Join(", ", actual)}].");
+
         return snapshots;
     }
 
@@ -71,9 +73,11 @@ public sealed class McpPromptListExpectations
         var snapshots = await _task.ConfigureAwait(false);
         var actual = snapshots.Select(item => item.Name).Order(StringComparer.Ordinal).ToArray();
         var wanted = expected.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToArray();
+
         if (!actual.SequenceEqual(wanted, StringComparer.Ordinal))
             throw new InvalidOperationException(
                 $"Expected MCP prompt names [{string.Join(", ", wanted)}], but found [{string.Join(", ", actual)}].");
+
         return snapshots;
     }
 

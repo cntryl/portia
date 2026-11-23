@@ -11,6 +11,7 @@ sealed class PortiaMcpHttpMarker
     {
         var previous = Current.Value;
         Current.Value = true;
+
         try
         {
             await next().ConfigureAwait(false);

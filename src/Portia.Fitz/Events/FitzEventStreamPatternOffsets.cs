@@ -25,14 +25,15 @@ static class FitzEventStreamPatternOffsets
         EventStreamPattern pattern,
         ulong resourceOffset,
         ulong? areaOffset,
-        ulong? realmOffset) => pattern.Scope switch
-        {
-            EventStreamPatternScope.Resource => resourceOffset,
-            EventStreamPatternScope.Area => areaOffset ??
-                                            throw new InvalidOperationException("Fitz did not return an area offset."),
-            EventStreamPatternScope.Realm => realmOffset ??
-                                             throw new InvalidOperationException("Fitz did not return a realm offset."),
-            _ => throw new ArgumentOutOfRangeException(nameof(pattern))
-        };
+        ulong? realmOffset
+    ) => pattern.Scope switch
+    {
+        EventStreamPatternScope.Resource => resourceOffset,
+        EventStreamPatternScope.Area => areaOffset ??
+                                        throw new InvalidOperationException("Fitz did not return an area offset."),
+        EventStreamPatternScope.Realm => realmOffset ??
+                                         throw new InvalidOperationException("Fitz did not return a realm offset."),
+        _ => throw new ArgumentOutOfRangeException(nameof(pattern))
+    };
 
 }
