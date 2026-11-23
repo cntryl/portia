@@ -1,6 +1,6 @@
+using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Security.Claims;
 using Cntryl.Portia;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Client;
@@ -110,11 +110,19 @@ sealed class EmptyOperationalStore : IOperationalStore
         => ValueTask.FromResult<OperationalProcessorState?>(null);
     public ValueTask<IReadOnlyList<OperationalProcessorState>> ListAsync(OperationalScope scope, CancellationToken ct = default)
         => ValueTask.FromResult<IReadOnlyList<OperationalProcessorState>>([]);
-    public ValueTask<bool> CompareExchangeAsync(OperationalProcessorState replacement, long expectedRevision,
-        Guid expectedOwner, CancellationToken ct = default) => throw new NotSupportedException();
+    public ValueTask<bool> CompareExchangeAsync(
+        OperationalProcessorState replacement,
+        long expectedRevision,
+        Guid expectedOwner,
+        CancellationToken ct = default
+    ) => throw new NotSupportedException();
 }
 sealed class OperationalReadPolicy : IOperationalAuthorizer
 {
-    public ValueTask<bool> AuthorizeAsync(ClaimsPrincipal actor, OperationalScope scope, OperationalAccess permission,
-        CancellationToken ct = default) => ValueTask.FromResult(scope == OperationalScope.Global && permission == OperationalAccess.Read);
+    public ValueTask<bool> AuthorizeAsync(
+        ClaimsPrincipal actor,
+        OperationalScope scope,
+        OperationalAccess permission,
+        CancellationToken ct = default
+    ) => ValueTask.FromResult(scope == OperationalScope.Global && permission == OperationalAccess.Read);
 }
