@@ -9,11 +9,42 @@ using ModelContextProtocol.Server;
 
 namespace Cntryl.Portia;
 
+/// <summary>The kind of MCP catalog entry a visibility policy is judging.</summary>
+public enum McpEntryKind
+{
+    /// <summary>A tool.</summary>
+    Tool,
+
+    /// <summary>A fixed or templated resource.</summary>
+    Resource,
+
+    /// <summary>A prompt.</summary>
+    Prompt
+}
+
+/// <summary>Identifies the MCP catalog entry a visibility policy is judging.</summary>
+/// <param name="Kind">Whether the entry is a tool, resource or prompt.</param>
+/// <param name="Name">
+/// The tool name, the prompt name, or the registered resource URI or URI template.
+/// </param>
+/// <param name="RequestType">The Portia request the entry dispatches.</param>
+public sealed record McpEntryDescriptor(McpEntryKind Kind, string Name, Type RequestType);
+
 /// <summary>Decides whether an MCP catalog entry is visible to an actor.</summary>
+/// <remarks>
+/// Override <see cref="IsVisibleAsync(ClaimsPrincipal, McpEntryDescriptor, CancellationToken)"/> to decide per entry.
+/// A policy that only overrides the actor-only member sees every entry the same way. A policy that overrides neither
+/// hides every entry.
+/// </remarks>
 public interface IMcpVisibilityPolicy
 {
-    /// <summary>Checks visibility for this invocation.</summary>
-    ValueTask<bool> IsVisibleAsync(ClaimsPrincipal actor, CancellationToken cancellationToken);
+    /// <summary>Checks visibility for this invocation without knowing which entry is judged.</summary>
+    ValueTask<bool> IsVisibleAsync(ClaimsPrincipal actor, CancellationToken cancellationToken) =>
+        ValueTask.FromResult(false);
+
+    /// <summary>Checks whether the identified entry is visible to the actor.</summary>
+    ValueTask<bool> IsVisibleAsync(ClaimsPrincipal actor, McpEntryDescriptor entry,
+        CancellationToken cancellationToken) => IsVisibleAsync(actor, cancellationToken);
 }
 
 /// <summary>Limits work accepted at MCP ingress.</summary>
@@ -173,16 +204,26 @@ abstract class McpEntry(Type requestType, McpEntryOptions options)
     internal Type RequestType { get; } = requestType;
     internal McpEntryOptions Options { get; } = options;
 
-    internal async ValueTask<bool> VisibleAsync(IServiceProvider services, ClaimsPrincipal actor, CancellationToken ct)
+    internal abstract McpEntryDescriptor Descriptor { get; }
+
+    internal ValueTask<bool> VisibleAsync(IServiceProvider services, ClaimsPrincipal actor, CancellationToken ct) =>
+        McpVisibility.IsVisibleAsync(Options.Access, Options.PolicyType, Descriptor, services, actor, ct);
+}
+
+static class McpVisibility
+{
+    /// <summary>Errors count as not visible; caller cancellation is rethrown.</summary>
+    internal static async ValueTask<bool> IsVisibleAsync(McpAccess access, Type? policyType,
+        McpEntryDescriptor descriptor, IServiceProvider services, ClaimsPrincipal actor, CancellationToken ct)
     {
         try
         {
-            return Options.Access switch
+            return access switch
             {
                 McpAccess.Public => true,
                 McpAccess.Authenticated => actor.Identity?.IsAuthenticated == true,
-                McpAccess.Policy => await ((IMcpVisibilityPolicy)services.GetRequiredService(Options.PolicyType!))
-                    .IsVisibleAsync(actor, ct).ConfigureAwait(false),
+                McpAccess.Policy => await ((IMcpVisibilityPolicy)services.GetRequiredService(policyType!))
+                    .IsVisibleAsync(actor, descriptor, ct).ConfigureAwait(false),
                 _ => false
             };
         }
@@ -204,6 +245,7 @@ abstract class McpResourceEntry(Type requestType, McpEntryOptions options, strin
     internal string Template { get; } = template;
     internal string Name { get; } = options.Name ?? template;
     internal bool IsTemplate => Template.Contains('{', StringComparison.Ordinal);
+    internal override McpEntryDescriptor Descriptor { get; } = new(McpEntryKind.Resource, template, requestType);
     internal abstract string MimeType { get; }
 
     internal abstract ValueTask<ReadResourceResult> ReadAsync(IReadOnlyDictionary<string, string> values,
@@ -285,6 +327,7 @@ abstract class McpPromptEntry(Type requestType, McpPromptOptions options, string
     : McpEntry(requestType, options)
 {
     internal string Name { get; } = name;
+    internal override McpEntryDescriptor Descriptor { get; } = new(McpEntryKind.Prompt, name, requestType);
     internal string? Title => PromptOptions.Title;
     internal string? Description => PromptOptions.Description;
     internal McpPromptOptions PromptOptions { get; } = options;

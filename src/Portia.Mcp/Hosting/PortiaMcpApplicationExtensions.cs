@@ -228,6 +228,7 @@ public static class PortiaMcpApplicationExtensions
         left.Name == right.Name && left.Description == right.Description && left.Title == right.Title
         && left.ReadOnly == right.ReadOnly && left.Destructive == right.Destructive
         && left.Idempotent == right.Idempotent && left.OpenWorld == right.OpenWorld
+        && left.Access == right.Access && left.PolicyType == right.PolicyType
         && left.PropertyDescriptions.Count == right.PropertyDescriptions.Count
         && left.PropertyDescriptions.All(pair => right.PropertyDescriptions.TryGetValue(pair.Key, out var description)
                                                  && pair.Value == description);
