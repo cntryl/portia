@@ -8,6 +8,8 @@ alerts are as breaking to change as an API.
 
 ### Added
 
+- `PORTIA213` accepts `Mcp`, `Host`, and `Shared` project roles, configurable through
+  `portia_project_role` in `.editorconfig` or `PortiaProjectRole` in MSBuild.
 - Processor status reports attempt history, retry timing, checkpoint observations, ownership evidence, and the next recovery action.
 - Operational journal retries report their wait boundaries and preserve ambiguous commit outcomes for reconciliation.
 

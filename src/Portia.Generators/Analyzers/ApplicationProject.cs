@@ -6,12 +6,12 @@ namespace Cntryl.Portia;
 
 // Application conventions are opt-in. Portia's own public namespaces and package layout are
 // framework contracts, and are not an application of the Common/Core/Api/Worker convention.
-sealed class ApplicationProject(string directory, string name, string rootNamespace, bool isTest)
+sealed class ApplicationProject(string directory, string name, string rootNamespace, bool isTest, string? explicitRole)
 {
     public string Name { get; } = name;
     public string RootNamespace { get; } = rootNamespace;
     public bool IsTest { get; } = isTest;
-    public string Role { get; } = name.Split('.').Last();
+    public string Role { get; } = explicitRole ?? name.Split('.').Last();
     public string ApplicationName { get; } = name.Contains('.') ? name.Substring(0, name.LastIndexOf('.')) : name;
 
     public static ApplicationProject? From(AnalyzerConfigOptionsProvider options)
@@ -31,8 +31,15 @@ sealed class ApplicationProject(string directory, string name, string rootNamesp
 
 
         _ = global.TryGetValue("build_property.IsTestProject", out var isTest);
+        var projectRole = global.TryGetValue("build_property.PortiaProjectRole", out var msbuildRole)
+            && !string.IsNullOrWhiteSpace(msbuildRole)
+            ? msbuildRole.Trim()
+            : global.TryGetValue("portia_project_role", out var editorConfigRole)
+                && !string.IsNullOrWhiteSpace(editorConfigRole)
+                ? editorConfigRole.Trim()
+                : null;
         return new ApplicationProject(directory.Replace('\\', '/').TrimEnd('/'), name, rootNamespace,
-            string.Equals(isTest, "true", StringComparison.OrdinalIgnoreCase));
+            string.Equals(isTest, "true", StringComparison.OrdinalIgnoreCase), projectRole);
     }
 
     public string[] RelativePath(SyntaxTree tree)

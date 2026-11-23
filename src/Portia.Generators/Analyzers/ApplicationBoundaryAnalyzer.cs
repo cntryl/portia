@@ -14,7 +14,7 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
 {
     static readonly DiagnosticDescriptor Dependency = new("PORTIA206",
         "Application dependency crosses its project boundary",
-        "Project '{0}' references '{1}'; Common owns contracts, Core depends on Common, application *.Abstractions projects, and Portia APIs, and Api/Worker configure concrete infrastructure",
+        "Project '{0}' references '{1}'; Common owns contracts, Core depends on Common, application *.Abstractions projects, and Portia APIs, and Api/Worker/Mcp configure concrete infrastructure",
         "PortiaStructure", DiagnosticSeverity.Warning, true, customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     static readonly DiagnosticDescriptor Registration = new("PORTIA207",
@@ -71,7 +71,7 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
 
     static void AnalyzeDependencies(CompilationAnalysisContext context, ApplicationProject project)
     {
-        if (project.Role is not ("Common" or "Core" or "Api" or "Worker"))
+        if (project.Role is not ("Common" or "Core" or "Api" or "Worker" or "Mcp" or "Host" or "Shared"))
             return;
 
         var references = context.Compilation.ReferencedAssemblyNames;
@@ -81,7 +81,13 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
             ? assemblyName.Substring(0, assemblyName.Length - suffix.Length)
             : project.ApplicationName;
         var cassieApi = references.Any(reference => reference.Name is "Portia.Cassie" or "Cntryl.Portia.Cassie");
-        var siblingRole = project.Role == "Api" ? "Worker" : project.Role == "Worker" ? "Api" : null;
+        var siblingRoles = project.Role switch
+        {
+            "Api" => new[] { "Worker", "Mcp" },
+            "Worker" => new[] { "Api", "Mcp" },
+            "Mcp" => new[] { "Api", "Worker" },
+            _ => []
+        };
 
         foreach (var reference in references)
         {
@@ -105,7 +111,7 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
                                      or "Portia.Communications.Twilio"
                                  || name is "Cntryl.Fitz.Core" or "Cntryl.Fitz.Extensions"
                                  || name == "Cntryl.Cassie" && !(project.Role == "Core" && cassieApi));
-            var siblingHost = siblingRole is not null && name == applicationName + "." + siblingRole;
+            var siblingHost = siblingRoles.Any(role => name == applicationName + "." + role);
 
             if (applicationDependency || commonBehavior || infrastructure || siblingHost)
                 context.ReportDiagnostic(Diagnostic.Create(Dependency, Location.None, project.Name, name));

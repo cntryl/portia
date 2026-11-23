@@ -18,10 +18,13 @@ diagnostics to accommodate a violation.
 | `{App}.Core` | Aggregates, handlers, reactors, projectors, repositories, and their feature registration. Its application project dependencies are Common and any `{App}.*.Abstractions` projects. |
 | `{App}.Api` | HTTP routes, transport mapping, host composition, transport DTOs, serializers, and provider adapters. |
 | `{App}.Worker` | Background hosting, host composition, transport DTOs, serializers, and provider adapters, calling the same Core operations. |
+| `{App}.Mcp` | MCP host composition and transport mapping, with no authored aggregates, contracts, or business components. |
+| `{App}.Shared` | Shared non-business library code used by multiple hosts or layers. |
+| `{App}.Host` | Explicit host composition outside the Api/Worker/Mcp naming convention. |
 
-Api and Worker are composition boundaries, not business-model boundaries. Keep aggregates, request and
-event contracts, and recognized Portia business components in Common or Core. Api and Worker may
-reference Common and Core, but must not reference each other. Derive the application identity from
+Api, Worker, Mcp, and Host are composition boundaries, not business-model boundaries. Keep aggregates, request and
+event contracts, and recognized Portia business components in Common or Core. Host projects may
+reference Common and Core, but must not reference sibling hosts. Derive the application identity from
 the project name (`Shop.Api`) or role-qualified assembly name (`Shop.Api`) and check sibling
 references in both directions.
 
@@ -160,6 +163,24 @@ JSON, superseded designs, and other generated residue; Git retains history.
 
 ## Analyzer setup
 
+Set a role explicitly in `.editorconfig`:
+
+```ini
+[src/Shop.Mcp/**.cs]
+portia_project_role = Mcp
+
+[src/Shared.Hosting/**.cs]
+portia_project_role = Host
+```
+
+`PortiaProjectRole` in `Directory.Build.props` is a build-time override:
+
+```xml
+<PropertyGroup>
+  <PortiaProjectRole>Shared</PortiaProjectRole>
+</PropertyGroup>
+```
+
 The application diagnostics below are implemented in the current source checkout for the next
 `Cntryl.Portia.Analyzers` release. Reference that package in application and test projects, and
 enable the convention once in the application's shared `Directory.Build.props`:
@@ -171,7 +192,8 @@ enable the convention once in the application's shared `Directory.Build.props`:
 ```
 
 The package exports the project directory, project name, root namespace, and `IsTestProject` to
-Roslyn. Application project names end in `.Common`, `.Core`, `.Api`, or `.Worker`. Test projects
+Roslyn. Application project names end in `.Common`, `.Core`, `.Api`, `.Worker`, `.Mcp`, `.Host`, or `.Shared`.
+Use `portia_project_role` or `PortiaProjectRole` for nonstandard names. Test projects
 set `IsTestProject=true`; filename and namespace checks still apply to them, while application
 role, dependency, and business-component checks do not. Generated source is excluded. Folder
 checks skip linked source outside the project because Roslyn does not expose its logical Link
@@ -204,7 +226,7 @@ retain their behavior regardless of this opt-in.
 | PORTIA210 | A request/event lacks a valid feature discriminator or explicit positive version. | Make an omitted default version explicit; never guess or change a wire identity. |
 | PORTIA211 | A command handler's implementation consists solely of throwing `NotImplementedException`. | Implement the operation or remove its surface. |
 | PORTIA212 | A query handler or reactor reaches Portia aggregate hydration/execution APIs through statically bound calls in the same compilation. | Query a repository, or send an authoritative command from the reactor. Advisory reads may reject early, but only the participant's authoritative command outcome confirms or rejects the business assumption. |
-| PORTIA213 | A production application project has an unsupported role. | Use Common, Core, Api, or Worker. |
+| PORTIA213 | A production application project has an unsupported role. | Use Common, Core, Api, Worker, Mcp, Host, or Shared. Set `portia_project_role` in `.editorconfig` or `PortiaProjectRole` in MSBuild. |
 
 Constructors for sealed Common value records may validate, normalize, and initialize state. An analyzer cannot prove that arbitrary constructor callees are pure; known infrastructure dependencies remain subject to dependency diagnostics.
 

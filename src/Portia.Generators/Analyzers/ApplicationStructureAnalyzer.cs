@@ -37,7 +37,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         "PortiaStructure", DiagnosticSeverity.Warning, true);
 
     static readonly DiagnosticDescriptor ProjectRole = new("PORTIA213", "Unsupported application project role",
-        "Application project '{0}' must end in .Common, .Core, .Api, or .Worker; mark test projects with IsTestProject",
+        "Application project '{0}' must use Common, Core, Api, Worker, Mcp, Host, or Shared, via PortiaProjectRole or portia_project_role; mark test projects with IsTestProject",
         "PortiaStructure", DiagnosticSeverity.Warning, true, customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     static readonly string[] CommonFolders = ["Commands", "Queries", "Events", "Models", "Values", "Serialization"];
@@ -64,7 +64,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             if (ApplicationProject.From(start.Options.AnalyzerConfigOptionsProvider) is not { } project)
                 return;
 
-            if (!project.IsTest && project.Role is not ("Common" or "Core" or "Api" or "Worker"))
+            if (!project.IsTest && project.Role is not ("Common" or "Core" or "Api" or "Worker" or "Mcp" or "Host" or "Shared"))
             {
                 start.RegisterCompilationEndAction(end => end.ReportDiagnostic(
                     Diagnostic.Create(ProjectRole, Location.None, project.Name)));
@@ -87,7 +87,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             .Where(node => node is BaseTypeDeclarationSyntax or DelegateDeclarationSyntax)
             .Where(node => node.Parent is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax).ToArray();
 
-        if (!project.IsTest && project.Role is "Api" or "Worker")
+        if (!project.IsTest && project.Role is "Api" or "Worker" or "Mcp")
         {
             foreach (var declaration in root.DescendantNodes().Where(node => node is BaseTypeDeclarationSyntax))
             {

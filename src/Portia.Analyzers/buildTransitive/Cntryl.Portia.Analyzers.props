@@ -8,5 +8,6 @@
     <CompilerVisibleProperty Include="MSBuildProjectName"/>
     <CompilerVisibleProperty Include="RootNamespace"/>
     <CompilerVisibleProperty Include="IsTestProject"/>
+    <CompilerVisibleProperty Include="PortiaProjectRole"/>
   </ItemGroup>
 </Project>

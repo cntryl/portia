@@ -16,7 +16,9 @@ static class ApplicationAnalyzerCompilation
         string? rootNamespace = null,
         string? projectDirectory = null,
         MetadataReference[]? references = null,
-        string? assemblyName = null
+        string? assemblyName = null,
+        string? projectRole = null,
+        string? editorConfigProjectRole = null
     )
     {
         var platformReferences = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
@@ -39,7 +41,8 @@ static class ApplicationAnalyzerCompilation
         Assert.DoesNotContain(compilation.GetDiagnostics(),
             diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         var diagnostics = compilation
-            .WithAnalyzers([analyzer], Options(projectName, directory, rootNamespace, enabled, isTest))
+            .WithAnalyzers([analyzer], Options(projectName, directory, rootNamespace, enabled, isTest, projectRole,
+                editorConfigProjectRole))
             .GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "AD0001");
         return diagnostics;
@@ -50,7 +53,9 @@ static class ApplicationAnalyzerCompilation
         string directory,
         string? rootNamespace = null,
         bool enabled = true,
-        bool isTest = false
+        bool isTest = false,
+        string? projectRole = null,
+        string? editorConfigProjectRole = null
     )
     {
         var values = new Dictionary<string, string>
@@ -60,7 +65,19 @@ static class ApplicationAnalyzerCompilation
             ["build_property.MSBuildProjectName"] = projectName,
             ["build_property.RootNamespace"] = rootNamespace ?? projectName,
             ["build_property.IsTestProject"] = isTest ? "true" : "false"
-        }.ToImmutableDictionary(StringComparer.OrdinalIgnoreCase);
-        return new AnalyzerOptions([], new ApplicationAnalyzerOptionsProvider(values));
+        };
+
+        if (projectRole is not null)
+        {
+            values["build_property.PortiaProjectRole"] = projectRole;
+        }
+
+        if (editorConfigProjectRole is not null)
+        {
+            values["portia_project_role"] = editorConfigProjectRole;
+        }
+
+        return new AnalyzerOptions([], new ApplicationAnalyzerOptionsProvider(
+            values.ToImmutableDictionary(StringComparer.OrdinalIgnoreCase)));
     }
 }
