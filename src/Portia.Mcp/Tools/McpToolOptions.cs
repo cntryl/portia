@@ -28,6 +28,10 @@ public sealed class McpToolOptions
     /// <summary>Gets or sets whether the tool may interact with entities outside a closed domain.</summary>
     internal bool? OpenWorldHint { get; private set; }
 
+    internal McpAccess Access { get; private set; }
+
+    internal Type? PolicyType { get; private set; }
+
     internal IReadOnlyDictionary<string, McpJsonPropertyDescription> PropertyDescriptions => _propertyDescriptions;
 
     /// <summary>Overrides the stable discriminator-derived tool name.</summary>
@@ -70,6 +74,35 @@ public sealed class McpToolOptions
             throw new ArgumentException($"Request property '{propertyName}' has more than one description.",
                 nameof(propertyName));
 
+        return this;
+    }
+
+    /// <summary>
+    /// Lists and allows the tool for authenticated callers only. This is the default when no visibility is chosen.
+    /// </summary>
+    public McpToolOptions Authenticated()
+    {
+        Access = McpAccess.Authenticated;
+        PolicyType = null;
+        return this;
+    }
+
+    /// <summary>Explicitly lists and allows the tool for anonymous callers.</summary>
+    public McpToolOptions Public()
+    {
+        Access = McpAccess.Public;
+        PolicyType = null;
+        return this;
+    }
+
+    /// <summary>
+    /// Lists and allows the tool only when the registered policy accepts the caller. The policy receives an
+    /// <see cref="McpEntryDescriptor"/> naming this tool.
+    /// </summary>
+    public McpToolOptions VisibleTo<TPolicy>() where TPolicy : IMcpVisibilityPolicy
+    {
+        Access = McpAccess.Policy;
+        PolicyType = typeof(TPolicy);
         return this;
     }
 

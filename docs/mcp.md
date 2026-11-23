@@ -71,6 +71,45 @@ Presentation metadata can be refined without changing the domain request:
 MCP annotations are client hints, never authorization or execution policy.
 Portia never automatically retries commands, including tools marked `Idempotent()`.
 
+## Tool visibility
+
+A tool is listed and callable only for callers its visibility allows. Choose one on the declaration:
+
+```csharp
+.AddMcpTool<GetAccount>(tool => tool.ReadOnly().VisibleTo<AccountToolPolicy>())
+.AddMcpTool<GetStatus>(tool => tool.Public())
+```
+
+- `Authenticated()` requires an authenticated caller, even on an endpoint that allows anonymous ones.
+- `Public()` exposes the tool to anonymous callers.
+- `VisibleTo<TPolicy>()` asks a registered `IMcpVisibilityPolicy`.
+
+A tool that chooses nothing stays visible to every caller its endpoint admits, which is how tools behaved
+before visibility existed. `MapPortiaMcp()` requires HTTP authentication by default, so on a default endpoint
+that means authenticated callers; choose `Authenticated()` explicitly when the endpoint allows anonymous ones.
+Resources and prompts differ: they must always choose.
+
+`tools/list` returns only visible tools, and a call to a hidden tool fails exactly as a call to an unknown
+name does, so a caller cannot learn that the tool exists. A policy that throws hides the tool; cancellation by
+the caller is not swallowed. The policy runs once per tool for each `tools/list`, and once for each
+`tools/call`, in that operation's service scope. Over stdio the caller is the actor from `IMcpActorProvider`.
+Visibility only narrows discovery and invocation. The request's authorizers still decide every dispatch.
+
+Tools, resources and prompts share one policy contract. Implement the overload that receives an
+`McpEntryDescriptor` to decide per entry from the caller's permissions:
+
+```csharp
+public sealed class AccountToolPolicy(IPermissions permissions) : IMcpVisibilityPolicy
+{
+    public ValueTask<bool> IsVisibleAsync(ClaimsPrincipal actor, McpEntryDescriptor entry, CancellationToken ct) =>
+        permissions.CanAsync(actor, entry.RequestType, ct);
+}
+```
+
+`McpEntryDescriptor` carries `Kind` (`Tool`, `Resource` or `Prompt`), `Name` (the tool name, the prompt name, or
+the registered resource URI or template) and `RequestType`. The older overload without a descriptor still
+works for policies that judge only the caller; an implementation that overrides neither hides every entry.
+
 ## Resources and prompts
 
 Resources and prompts explicitly bind strings to an `IRequest<T>` that implements `ICallable`.

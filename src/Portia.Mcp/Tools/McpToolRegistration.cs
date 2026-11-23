@@ -50,7 +50,20 @@ public abstract class McpToolRegistration
         Idempotent = options.IdempotentHint;
         OpenWorld = options.OpenWorldHint;
         Invocation = new McpInvocation(Name);
+        // A tool that chooses nothing stays visible to every caller its endpoint admits, as before visibility existed.
+        Access = options.Access == McpAccess.Unset ? McpAccess.Public : options.Access;
+        PolicyType = options.PolicyType;
+        Descriptor = new McpEntryDescriptor(McpEntryKind.Tool, Name, requestType);
     }
+
+    internal McpAccess Access { get; }
+
+    internal Type? PolicyType { get; }
+
+    internal McpEntryDescriptor Descriptor { get; }
+
+    internal ValueTask<bool> VisibleAsync(IServiceProvider services, ClaimsPrincipal actor, CancellationToken ct) =>
+        McpVisibility.IsVisibleAsync(Access, PolicyType, Descriptor, services, actor, ct);
 
     internal string RequestName { get; }
 

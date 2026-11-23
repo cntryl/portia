@@ -1,1 +1,25 @@
 #nullable enable
+Cntryl.Portia.IMcpVisibilityPolicy.IsVisibleAsync(System.Security.Claims.ClaimsPrincipal! actor, Cntryl.Portia.McpEntryDescriptor! entry, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+Cntryl.Portia.McpEntryDescriptor
+Cntryl.Portia.McpEntryDescriptor.<Clone>$() -> Cntryl.Portia.McpEntryDescriptor!
+Cntryl.Portia.McpEntryDescriptor.Deconstruct(out Cntryl.Portia.McpEntryKind Kind, out string! Name, out System.Type! RequestType) -> void
+Cntryl.Portia.McpEntryDescriptor.Equals(Cntryl.Portia.McpEntryDescriptor? other) -> bool
+Cntryl.Portia.McpEntryDescriptor.Kind.get -> Cntryl.Portia.McpEntryKind
+Cntryl.Portia.McpEntryDescriptor.Kind.init -> void
+Cntryl.Portia.McpEntryDescriptor.McpEntryDescriptor(Cntryl.Portia.McpEntryKind Kind, string! Name, System.Type! RequestType) -> void
+Cntryl.Portia.McpEntryDescriptor.Name.get -> string!
+Cntryl.Portia.McpEntryDescriptor.Name.init -> void
+Cntryl.Portia.McpEntryDescriptor.RequestType.get -> System.Type!
+Cntryl.Portia.McpEntryDescriptor.RequestType.init -> void
+Cntryl.Portia.McpEntryKind
+Cntryl.Portia.McpEntryKind.Prompt = 2 -> Cntryl.Portia.McpEntryKind
+Cntryl.Portia.McpEntryKind.Resource = 1 -> Cntryl.Portia.McpEntryKind
+Cntryl.Portia.McpEntryKind.Tool = 0 -> Cntryl.Portia.McpEntryKind
+Cntryl.Portia.McpToolOptions.Authenticated() -> Cntryl.Portia.McpToolOptions!
+Cntryl.Portia.McpToolOptions.Public() -> Cntryl.Portia.McpToolOptions!
+Cntryl.Portia.McpToolOptions.VisibleTo<TPolicy>() -> Cntryl.Portia.McpToolOptions!
+override Cntryl.Portia.McpEntryDescriptor.Equals(object? obj) -> bool
+override Cntryl.Portia.McpEntryDescriptor.GetHashCode() -> int
+override Cntryl.Portia.McpEntryDescriptor.ToString() -> string!
+static Cntryl.Portia.McpEntryDescriptor.operator !=(Cntryl.Portia.McpEntryDescriptor? left, Cntryl.Portia.McpEntryDescriptor? right) -> bool
+static Cntryl.Portia.McpEntryDescriptor.operator ==(Cntryl.Portia.McpEntryDescriptor? left, Cntryl.Portia.McpEntryDescriptor? right) -> bool
