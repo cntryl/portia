@@ -107,10 +107,14 @@ sealed class DataProtectionCrypto(IDataProtectionKeyRing keyRing) : IPayloadProt
 
         using var lease = await Required(parsed.Id, DataProtectionKeyRole.Protection, cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
-        var expected = Hash(2, lease, candidate.Span, purpose, associatedData.Span, parsed.Length);
+        Span<byte> expected = stackalloc byte[32];
 
         try
-        { return CryptographicOperations.FixedTimeEquals(expected, verificationHash.Span[parsed.Length..]); }
+        {
+            ComputeDigest(2, lease, verificationHash.Span[..parsed.Length], candidate.Span,
+                purpose, associatedData.Span, expected);
+            return CryptographicOperations.FixedTimeEquals(expected, verificationHash.Span[parsed.Length..]);
+        }
         finally { CryptographicOperations.ZeroMemory(expected); }
     }
 
@@ -129,9 +133,25 @@ sealed class DataProtectionCrypto(IDataProtectionKeyRing keyRing) : IPayloadProt
         return Hash(3, lease, identifier.Span, purpose, associatedData.Span);
     }
 
-    static byte[] Hash(byte kind, DataProtectionKeyLease lease, ReadOnlySpan<byte> value, string purpose, ReadOnlySpan<byte> context, int? headerLength = null)
+    static byte[] Hash(byte kind, DataProtectionKeyLease lease, ReadOnlySpan<byte> value, string purpose, ReadOnlySpan<byte> context)
     {
         var header = Header(kind, lease.KeyId);
+        var artifact = new byte[header.Length + 32];
+        header.CopyTo(artifact, 0);
+        ComputeDigest(kind, lease, header, value, purpose, context, artifact.AsSpan(header.Length));
+        return artifact;
+    }
+
+    static void ComputeDigest(
+        byte kind,
+        DataProtectionKeyLease lease,
+        ReadOnlySpan<byte> header,
+        ReadOnlySpan<byte> value,
+        string purpose,
+        ReadOnlySpan<byte> context,
+        Span<byte> digest
+    )
+    {
         var aad = Aad(header, context);
         var key = Derive(lease.RootKey, kind, purpose);
 
@@ -140,16 +160,7 @@ sealed class DataProtectionCrypto(IDataProtectionKeyRing keyRing) : IPayloadProt
             using var hmac = IncrementalHash.CreateHMAC(HashAlgorithmName.SHA256, key);
             hmac.AppendData(aad);
             hmac.AppendData(value);
-            var digest = hmac.GetHashAndReset();
-
-            if (headerLength is not null)
-                return digest;
-
-            var output = new byte[header.Length + digest.Length];
-            header.CopyTo(output, 0);
-            digest.CopyTo(output, header.Length);
-            CryptographicOperations.ZeroMemory(digest);
-            return output;
+            hmac.GetHashAndReset(digest);
         }
         finally { CryptographicOperations.ZeroMemory(key); CryptographicOperations.ZeroMemory(aad); }
     }
@@ -254,7 +265,7 @@ sealed class DataProtectionCrypto(IDataProtectionKeyRing keyRing) : IPayloadProt
         if (contextLength is < 1 or > MaxContext)
             throw new ArgumentOutOfRangeException(nameof(contextLength));
 
-        if (Utf8.GetByteCount(purpose) is < 1 or > 256)
+        if (purpose.Length is < 1 or > 256 || Utf8.GetByteCount(purpose) > 256)
             throw new ArgumentOutOfRangeException(nameof(purpose));
     }
 
@@ -280,7 +291,7 @@ sealed class DataProtectionCrypto(IDataProtectionKeyRing keyRing) : IPayloadProt
             return lease;
 
         lease.Dispose();
-        throw Invalid();
+        throw new DataProtectionKeyUnavailableException();
     }
 
     async ValueTask<DataProtectionKeyLease> Required(string id, DataProtectionKeyRole role, CancellationToken ct)
