@@ -4,6 +4,17 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.15.0
+
+### Added
+
+- Portia Data Protection adds authenticated payload encryption and keyed verification with
+  rotating keys. Applications can pin independent keys for identifier indexes.
+- The AWS provider stores wrapped roots in Secrets Manager and unwraps them with KMS.
+  Local Development hosts can explicitly register a persistent file key ring.
+- Portia Secrets adds a shared current-secret reader and an AWS Secrets Manager adapter, which
+  also reads the AWS data protection key ring manifest.
+
 ## 0.14.11
 
 ### Fixed

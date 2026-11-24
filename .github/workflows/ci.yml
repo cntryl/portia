@@ -100,7 +100,7 @@ jobs:
     # Integration images and settings match compose.yaml, which remains the local-run equivalent.
     services:
       sqrzl:
-        image: ghcr.io/sqrzl/sqrzl-emulator:latest
+        image: ghcr.io/sqrzl/sqrzl:latest
         credentials:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
@@ -234,6 +234,16 @@ jobs:
             --configuration Release -p:PortiaSmokePackageVersion="$portia_version"
           dotnet build smoke/Portia.Structure.PackageConsumer/Worker/Shop.Worker.csproj \
             --configuration Release -p:PortiaSmokePackageVersion="$portia_version"
+          for role in Common Core Worker; do
+            assets="smoke/Portia.Structure.PackageConsumer/$role/obj/project.assets.json"
+            jq -e '(
+              (.libraries | keys) + [.project.frameworks[] | (.frameworkReferences // {} | keys[])]
+            ) | all(test("(^|[.])AspNetCore([./]|$)"; "i") | not)' "$assets"
+          done
+          for role in Common Core; do
+            jq -e '.libraries | keys | all(test("^AWSSDK[.]"; "i") | not)' \
+              "smoke/Portia.Structure.PackageConsumer/$role/obj/project.assets.json"
+          done
           dotnet run --project smoke/Portia.Structure.PackageConsumer/Worker/Shop.Worker.csproj \
             --configuration Release --no-build
 
@@ -268,3 +278,12 @@ jobs:
             --configuration Release --runtime linux-x64 -p:PortiaSmokePackageVersion="$portia_version" \
             --output artifacts/native-mcp
           ./artifacts/native-mcp/Portia.Mcp.AspNetCore.NativeAotConsumer
+
+      - name: Publish and test packed NativeAOT data protection consumer
+        shell: bash
+        run: |
+          portia_version="$(dotnet msbuild src/Portia.DataProtection/Portia.DataProtection.csproj -getProperty:PackageVersion -nologo)"
+          dotnet publish smoke/Portia.DataProtection.PackageConsumer/Portia.DataProtection.PackageConsumer.csproj \
+            --configuration Release --runtime linux-x64 -p:PortiaSmokePackageVersion="$portia_version" \
+            --output artifacts/native-data-protection
+          ./artifacts/native-data-protection/Portia.DataProtection.PackageConsumer

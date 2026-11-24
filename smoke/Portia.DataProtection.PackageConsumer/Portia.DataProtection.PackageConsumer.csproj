@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <RestorePackagesWithLockFile>false</RestorePackagesWithLockFile>
+    <PublishAot>true</PublishAot>
+    <RuntimeIdentifiers>linux-x64;osx-arm64</RuntimeIdentifiers>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Cntryl.Portia.DataProtection" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
+    <ProjectReference Include="../../src/Portia.DataProtection/Portia.DataProtection.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
+  </ItemGroup>
+</Project>

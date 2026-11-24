@@ -1,0 +1,8 @@
+#nullable enable
+Cntryl.Portia.DataProtection.Aws.AwsDataProtectionBuilder
+Cntryl.Portia.DataProtection.Aws.AwsDataProtectionBuilder.AwsDataProtectionBuilder() -> void
+Cntryl.Portia.DataProtection.Aws.AwsDataProtectionBuilder.UseCacheLifetime(System.TimeSpan lifetime) -> Cntryl.Portia.DataProtection.Aws.AwsDataProtectionBuilder!
+Cntryl.Portia.DataProtection.Aws.AwsDataProtectionBuilder.UseClients(Amazon.SecretsManager.IAmazonSecretsManager! secretsManager, Amazon.KeyManagementService.IAmazonKeyManagementService! kms) -> Cntryl.Portia.DataProtection.Aws.AwsDataProtectionBuilder!
+Cntryl.Portia.DataProtection.Aws.AwsDataProtectionBuilder.UseKeyRing(string! secretArn, string! wrappingKeyArn, string! ringId) -> Cntryl.Portia.DataProtection.Aws.AwsDataProtectionBuilder!
+Cntryl.Portia.DataProtection.Aws.AwsDataProtectionServiceCollectionExtensions
+static Cntryl.Portia.DataProtection.Aws.AwsDataProtectionServiceCollectionExtensions.AddAwsDataProtection(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<Cntryl.Portia.DataProtection.Aws.AwsDataProtectionBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

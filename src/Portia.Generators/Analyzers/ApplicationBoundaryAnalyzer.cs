@@ -110,13 +110,15 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
             var commonBehavior =
                 project.Role == "Common" && frameworkName.StartsWith("Portia.", StringComparison.Ordinal)
                                          && frameworkName is not ("Portia.Abstractions" or "Portia.Storage.Abstractions"
-                                             or "Portia.Communications.Abstractions");
+                                             or "Portia.Communications.Abstractions" or "Portia.DataProtection.Abstractions"
+                                             or "Portia.Secrets.Abstractions");
             var infrastructure = project.Role is "Common" or "Core"
                                  && (frameworkName is "Portia.Fitz" or "Portia.AspNetCore" or "Portia.Mcp.AspNetCore"
                                      or "Portia.Admin.Mcp.AspNetCore" or "Portia.Storage.Aws" or "Portia.Storage.Azure"
                                      or "Portia.Storage.Gcp"
                                      or "Portia.Communications.Aws" or "Portia.Communications.Azure"
-                                     or "Portia.Communications.Twilio"
+                                     or "Portia.Communications.Twilio" or "Portia.DataProtection"
+                                     or "Portia.DataProtection.Aws" or "Portia.Secrets.Aws"
                                  || name is "Cntryl.Fitz.Core" or "Cntryl.Fitz.Extensions"
                                  || name == "Cntryl.Cassie" && !(project.Role == "Core" && cassieApi));
             var siblingHost = siblingRoles.Any(role => name == applicationName + "." + role);

@@ -1,0 +1,6 @@
+#nullable enable
+Cntryl.Portia.Secrets.Aws.AwsSecretReader
+Cntryl.Portia.Secrets.Aws.AwsSecretReader.AwsSecretReader(Amazon.SecretsManager.IAmazonSecretsManager! client) -> void
+Cntryl.Portia.Secrets.Aws.AwsSecretReader.ReadCurrentAsync(string! secretId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Secrets.SecretValue!>
+Cntryl.Portia.Secrets.Aws.AwsSecretsManagerServiceCollectionExtensions
+static Cntryl.Portia.Secrets.Aws.AwsSecretsManagerServiceCollectionExtensions.AddAwsSecretsManager(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Amazon.SecretsManager.IAmazonSecretsManager! client) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

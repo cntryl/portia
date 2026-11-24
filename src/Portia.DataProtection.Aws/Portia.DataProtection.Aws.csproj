@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>AWS Secrets Manager and KMS key ring provider for Portia data protection.</Description>
+    <LangVersion>15</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.KeyManagementService" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Portia.DataProtection/Portia.DataProtection.csproj" />
+    <ProjectReference Include="../Portia.Secrets.Aws/Portia.Secrets.Aws.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Portia.Tests" />
+  </ItemGroup>
+</Project>

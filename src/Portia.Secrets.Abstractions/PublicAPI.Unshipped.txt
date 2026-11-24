@@ -1,0 +1,10 @@
+#nullable enable
+Cntryl.Portia.Secrets.ISecretReader
+Cntryl.Portia.Secrets.ISecretReader.ReadCurrentAsync(string! secretId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.Secrets.SecretValue!>
+Cntryl.Portia.Secrets.SecretUnavailableException
+Cntryl.Portia.Secrets.SecretUnavailableException.SecretUnavailableException() -> void
+Cntryl.Portia.Secrets.SecretValue
+Cntryl.Portia.Secrets.SecretValue.Bytes.get -> System.ReadOnlyMemory<byte>
+Cntryl.Portia.Secrets.SecretValue.Dispose() -> void
+Cntryl.Portia.Secrets.SecretValue.SecretValue(string! versionId, byte[]! bytes) -> void
+Cntryl.Portia.Secrets.SecretValue.VersionId.get -> string!

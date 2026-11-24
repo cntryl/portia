@@ -137,7 +137,8 @@ details.
   events:** [projectors and reactors](docs/projectors-and-reactors.md), [processor operations](docs/operations.md),
   [Fitz integration](docs/fitz.md), and [Cassie repositories](docs/cassie-projections.md).
 - **Coordinate business outcomes:** [choreograph a reservation](docs/validation-authority.md#implementing-the-order-and-inventory-workflow).
-- **Connect services:** [object storage](docs/object-storage.md), [mail and SMS](docs/communications.md),
+- **Connect services:** [data protection](docs/data-protection.md), [secrets](docs/secrets.md), [object storage](docs/object-storage.md),
+  [mail and SMS](docs/communications.md),
   and [MCP tools, resources, and prompts](docs/mcp.md).
 - **Qualify and operate:** [testing](docs/testing.md), [observability](docs/observability.md),
   [performance and scaling](docs/performance-and-scaling.md), and [NativeAOT](docs/native-aot.md).

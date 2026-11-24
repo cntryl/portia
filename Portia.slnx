@@ -11,6 +11,9 @@
     <Project Path="src/Portia.Generators/Portia.Generators.csproj"/>
     <Project Path="src/Portia.AspNetCore.Generators/Portia.AspNetCore.Generators.csproj"/>
     <Project Path="src/Portia.Core/Portia.Core.csproj"/>
+    <Project Path="src/Portia.DataProtection.Abstractions/Portia.DataProtection.Abstractions.csproj"/>
+    <Project Path="src/Portia.DataProtection.Aws/Portia.DataProtection.Aws.csproj"/>
+    <Project Path="src/Portia.DataProtection/Portia.DataProtection.csproj"/>
     <Project Path="src/Portia.Cassie/Portia.Cassie.csproj"/>
     <Project Path="src/Portia.Testing/Portia.Testing.csproj"/>
     <Project Path="src/Portia.Telemetry/Portia.Telemetry.csproj"/>
@@ -20,6 +23,8 @@
     <Project Path="src/Portia.Communications.Aws/Portia.Communications.Aws.csproj"/>
     <Project Path="src/Portia.Communications.Azure/Portia.Communications.Azure.csproj"/>
     <Project Path="src/Portia.Communications.Twilio/Portia.Communications.Twilio.csproj"/>
+    <Project Path="src/Portia.Secrets.Abstractions/Portia.Secrets.Abstractions.csproj"/>
+    <Project Path="src/Portia.Secrets.Aws/Portia.Secrets.Aws.csproj"/>
     <Project Path="src/Portia.Storage.Abstractions/Portia.Storage.Abstractions.csproj"/>
     <Project Path="src/Portia.Storage.Aws/Portia.Storage.Aws.csproj"/>
     <Project Path="src/Portia.Storage.Azure/Portia.Storage.Azure.csproj"/>

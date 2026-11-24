@@ -30,6 +30,9 @@
   <ItemGroup>
     <ProjectReference Include="../Portia.Operations.TestWorker/Portia.Operations.TestWorker.csproj" ReferenceOutputAssembly="false"/>
     <ProjectReference Include="../../src/Portia.Core/Portia.Core.csproj"/>
+    <ProjectReference Include="../../src/Portia.DataProtection/Portia.DataProtection.csproj"/>
+    <ProjectReference Include="../../src/Portia.DataProtection.Aws/Portia.DataProtection.Aws.csproj"/>
+    <ProjectReference Include="../../src/Portia.Secrets.Aws/Portia.Secrets.Aws.csproj"/>
     <ProjectReference Include="../../src/Portia.Cassie/Portia.Cassie.csproj"/>
     <ProjectReference Include="../../src/Portia.Testing/Portia.Testing.csproj"/>
     <ProjectReference Include="../../src/Portia.Storage.Aws/Portia.Storage.Aws.csproj"/>
