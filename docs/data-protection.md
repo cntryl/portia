@@ -96,3 +96,19 @@ inside the application's authoritative write boundary during the transition.
 The artifact format uses Portia key IDs. A move to another wrapping provider requires securely
 rewrapping all required roots, including pinned index roots, with their existing Portia IDs.
 A cloud wrapping-key rotation and a Portia protection-root rotation have separate lifecycles.
+
+## Artifact format
+
+The v1 binary header contains the ASCII bytes `PDP`, the version byte `1`, the artifact kind
+(`1` for ciphertext, `2` for verification, `3` for an index), an unsigned key ID length byte,
+and the ASCII key ID. Key IDs contain 1–64 letters, digits, underscores, or hyphens.
+
+For AES-256-GCM, the body contains a random 12-byte nonce, the ciphertext, and a 16-byte tag.
+The associated data is the header, the context length as a big-endian 32-bit integer, and
+the caller's context. Hash artifacts contain a 32-byte HMAC-SHA256 digest over that same framing
+followed by the value. Keep the whole artifact, including its header, when storing hashes.
+
+The 32-byte subkey is HKDF-SHA256 over the selected root with an empty salt. Its info contains
+ASCII `Portia.DataProtection`, the version and kind bytes, the purpose byte count as a
+big-endian 16-bit integer, and the exact UTF-8 purpose bytes. Values may contain up to 1 MiB.
+Purpose and context are required and bounded at 256 UTF-8 bytes and 4 KiB, respectively.

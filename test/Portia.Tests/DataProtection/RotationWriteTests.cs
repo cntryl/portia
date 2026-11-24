@@ -14,6 +14,27 @@ namespace Cntryl.Portia.Tests.DataProtection;
 public sealed class RotationWriteTests
 {
     [Fact]
+    public async Task ShouldFlagLateWriteGivenWriterPreparedBeforeActivation()
+    {
+        // Arrange
+        var token = TestContext.Current.CancellationToken;
+        var ring = new RotationRing();
+        using var services = new ServiceCollection().AddSingleton<IDataProtectionKeyRing>(ring)
+            .AddPortiaDataProtection().BuildServiceProvider();
+        var protector = services.GetRequiredService<IPayloadProtector>();
+        var context = "tenant-7/customer-42/tax-id"u8.ToArray();
+        var beforeActivation = await protector.ProtectAsync("in-flight"u8.ToArray(), "tax-id", context, token);
+        ring.ActiveId = "b";
+
+        // Act
+        using var afterCommit = await protector.UnprotectAsync(beforeActivation, "tax-id", context, token);
+
+        // Assert
+        Assert.Equal("a", afterCommit.KeyId);
+        Assert.True(afterCommit.NeedsRotation);
+    }
+
+    [Fact]
     public async Task ShouldPreserveNewerWriteGivenRotationLosesConditionalUpdate()
     {
         // Arrange
