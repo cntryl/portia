@@ -20,6 +20,7 @@ using Xunit;
 
 namespace Cntryl.Portia.Tests.DataProtection;
 
+/// <summary>Exercises the same artifacts across independent key-ring providers.</summary>
 public sealed class ProviderPortabilityTests
 {
     const string SecretArn = "arn:aws:secretsmanager:us-east-1:123456789012:secret:portia-test-AbCdEf";
@@ -27,6 +28,7 @@ public sealed class ProviderPortabilityTests
     static readonly byte[] ProtectionRoot = Enumerable.Repeat((byte)0x12, 32).ToArray();
     static readonly byte[] IndexRoot = Enumerable.Repeat((byte)0x34, 32).ToArray();
 
+    /// <summary>Reads ciphertext, verification hashes, and indexes with the same roots and IDs.</summary>
     [Fact]
     public async Task ShouldReadAwsArtifactsGivenIndependentProviderWithSameKeys()
     {

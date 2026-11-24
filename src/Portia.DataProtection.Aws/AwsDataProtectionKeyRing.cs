@@ -17,9 +17,6 @@ namespace Cntryl.Portia.DataProtection.Aws;
 /// <summary>Registers an AWS Secrets Manager and KMS backed Portia key ring.</summary>
 public static class AwsDataProtectionKeyRingRegistration
 {
-    static bool IsValidId(string value) =>
-        value.Length <= 64 &&
-        !Array.Exists(value.ToCharArray(), c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_'));
 
     /// <summary>Registers the AWS key ring. Add Portia's payload services separately.</summary>
     public static IServiceCollection AddAwsDataProtectionKeyRing(
@@ -39,7 +36,7 @@ public static class AwsDataProtectionKeyRingRegistration
         ArgumentException.ThrowIfNullOrWhiteSpace(wrappingKeyArn);
         ArgumentException.ThrowIfNullOrWhiteSpace(ringId);
 
-        if (!IsValidId(ringId))
+        if (!DataProtectionKeyIds.IsValid(ringId))
             throw new ArgumentException("Ring ID must use at most 64 ASCII letters, digits, hyphens, or underscores.", nameof(ringId));
 
         var lifetime = cacheLifetime ?? TimeSpan.FromMinutes(5);
@@ -300,14 +297,10 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
 
     static void ValidateId(string? value, string field)
     {
-        if (!IsValidId(value))
+        if (!DataProtectionKeyIds.IsValid(value))
             throw new InvalidOperationException($"AWS key manifest {field} is invalid.");
     }
 
-    static bool IsValidId(string? value) =>
-        !string.IsNullOrWhiteSpace(value) &&
-        value.Length <= 64 &&
-        !Array.Exists(value.ToCharArray(), c => !char.IsAsciiLetterOrDigit(c) && c is not ('-' or '_'));
     static void RequireObjectProperties(JsonElement element, params string[] expected)
     {
         if (element.ValueKind != JsonValueKind.Object)
@@ -517,12 +510,6 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
                     return _root;
                 }
             }
-            catch
-            {
-                lock (snapshot.Sync)
-                    _rootLoad = null;
-                throw;
-            }
             finally
             {
                 CryptographicOperations.ZeroMemory(encrypted);
@@ -541,6 +528,7 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
             {
                 stream.Position = 0;
                 Span<byte> zeros = stackalloc byte[256];
+                zeros.Clear();
 
                 while (stream.Position < stream.Length)
                 {

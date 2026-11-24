@@ -11,8 +11,10 @@ using Xunit;
 
 namespace Cntryl.Portia.Tests.DataProtection;
 
+/// <summary>Exercises conditional application writes during key rotation.</summary>
 public sealed class RotationWriteTests
 {
+    /// <summary>Identifies a write prepared under the prior active key.</summary>
     [Fact]
     public async Task ShouldFlagLateWriteGivenWriterPreparedBeforeActivation()
     {
@@ -34,6 +36,7 @@ public sealed class RotationWriteTests
         Assert.True(afterCommit.NeedsRotation);
     }
 
+    /// <summary>Preserves a newer value when the rotation update loses the write race.</summary>
     [Fact]
     public async Task ShouldPreserveNewerWriteGivenRotationLosesConditionalUpdate()
     {
@@ -63,6 +66,7 @@ public sealed class RotationWriteTests
         Assert.False(readback.NeedsRotation);
     }
 
+    /// <summary>Checks that retrying an already rotated record performs no write.</summary>
     [Fact]
     public async Task ShouldSkipWriteGivenAlreadyRotatedRecord()
     {

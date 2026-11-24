@@ -11,6 +11,7 @@ using Xunit;
 
 namespace Cntryl.Portia.Tests.DataProtection;
 
+/// <summary>Checks the portable v1 artifact bytes against independent vectors.</summary>
 public sealed class ArtifactFormatTests
 {
     static readonly byte[] Value = "synthetic value"u8.ToArray();
@@ -18,6 +19,7 @@ public sealed class ArtifactFormatTests
     const string Purpose = "example";
 
     // Fixed vectors produced independently with Node's crypto module.
+    /// <summary>Authenticates a fixed AES-GCM payload generated independently.</summary>
     [Fact]
     public async Task ShouldDecryptGivenVersionOnePayloadVector()
     {
@@ -36,6 +38,7 @@ public sealed class ArtifactFormatTests
         Assert.False(opened.NeedsRotation);
     }
 
+    /// <summary>Checks the rotating HMAC envelope against fixed expected bytes.</summary>
     [Fact]
     public async Task ShouldProduceExpectedBytesGivenVersionOneVerificationVector()
     {
@@ -51,6 +54,7 @@ public sealed class ArtifactFormatTests
         Assert.Equal(expected, hash);
     }
 
+    /// <summary>Checks the pinned index envelope against fixed expected bytes.</summary>
     [Fact]
     public async Task ShouldProduceExpectedBytesGivenVersionOneIndexVector()
     {
