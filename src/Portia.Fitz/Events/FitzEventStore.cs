@@ -740,6 +740,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
         Exception? _failure;
         bool _closed;
         Task? _closeTask;
+        TaskCompletionSource? _pump;
         Task _run = Task.CompletedTask;
         long _version;
         TaskCompletionSource _changed = NewSignal();
@@ -866,20 +867,6 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
                 }
 
                 _ = _started.TrySetResult();
-
-                while (true)
-                {
-                    try
-                    {
-                        await wakeups.WaitAsync(_lifetime.Token).ConfigureAwait(false);
-                    }
-                    catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
-                    {
-                        return;
-                    }
-
-                    Broadcast();
-                }
             }
             catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
             {
@@ -892,6 +879,54 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
         }
 
         public ValueTask DisposeAsync() => new(Close());
+
+        void EnsurePump()
+        {
+            TaskCompletionSource? reservation;
+
+            lock (_gate)
+            {
+                if (_pump is not null || _closed || _failure is not null)
+                    return;
+
+                _pump = reservation = NewSignal();
+            }
+
+            _ = PumpAsync(reservation);
+        }
+
+        async Task PumpAsync(TaskCompletionSource reservation)
+        {
+            try
+            {
+                FitzWakeupSubscription<StreamCommitEvent>? wakeups;
+                lock (_gate)
+                    wakeups = _wakeups;
+
+                if (wakeups is null)
+                    return;
+
+                await wakeups.WaitAsync(_lifetime.Token).ConfigureAwait(false);
+                Broadcast();
+            }
+            catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+            {
+            }
+            catch (Exception exception)
+            {
+                Fail(exception);
+            }
+            finally
+            {
+                lock (_gate)
+                {
+                    if (ReferenceEquals(_pump, reservation))
+                        _pump = null;
+                }
+
+                _ = reservation.TrySetResult();
+            }
+        }
 
         void Broadcast()
         {
@@ -940,7 +975,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
 
                 if (_closed)
                 {
-                    changed = _run;
+                    changed = _pump?.Task ?? _closeTask ?? _run;
                     return;
                 }
 
@@ -951,8 +986,12 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
                     return;
                 }
 
-                changed = _changed.Task;
+                changed = _pump is null
+                    ? _changed.Task
+                    : Task.WhenAny(_changed.Task, _pump.Task);
             }
+
+            EnsurePump();
         }
 
         static TaskCompletionSource NewSignal() =>
