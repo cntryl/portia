@@ -32,6 +32,7 @@ public sealed class UnprotectedPayload : IDisposable
     public void Dispose()
     {
         var plaintext = Interlocked.Exchange(ref _plaintext, null);
+
         if (plaintext is not null)
             CryptographicOperations.ZeroMemory(plaintext);
     }

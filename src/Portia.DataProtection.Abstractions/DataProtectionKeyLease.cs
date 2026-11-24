@@ -13,12 +13,16 @@ public sealed class DataProtectionKeyLease : IDisposable
     public DataProtectionKeyLease(string keyId, DataProtectionKeyRole role, bool isActive, ReadOnlySpan<byte> rootKey)
     {
         ArgumentException.ThrowIfNullOrEmpty(keyId);
+
         if (rootKey.Length != 32)
             throw new ArgumentException("A data protection root must contain 32 bytes.", nameof(rootKey));
+
         if (role is not (DataProtectionKeyRole.Protection or DataProtectionKeyRole.Index))
             throw new ArgumentOutOfRangeException(nameof(role));
+
         if (isActive && role != DataProtectionKeyRole.Protection)
             throw new ArgumentException("Only protection roots can be active.", nameof(isActive));
+
 
         KeyId = keyId;
         Role = role;
@@ -42,6 +46,7 @@ public sealed class DataProtectionKeyLease : IDisposable
     public void Dispose()
     {
         var root = Interlocked.Exchange(ref _rootKey, null);
+
         if (root is not null)
             CryptographicOperations.ZeroMemory(root);
     }

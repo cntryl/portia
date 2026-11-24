@@ -1,1 +1,29 @@
 #nullable enable
+Cntryl.Portia.DataProtection.DataProtectionKeyLease
+Cntryl.Portia.DataProtection.DataProtectionKeyLease.DataProtectionKeyLease(string! keyId, Cntryl.Portia.DataProtection.DataProtectionKeyRole role, bool isActive, System.ReadOnlySpan<byte> rootKey) -> void
+Cntryl.Portia.DataProtection.DataProtectionKeyLease.Dispose() -> void
+Cntryl.Portia.DataProtection.DataProtectionKeyLease.IsActive.get -> bool
+Cntryl.Portia.DataProtection.DataProtectionKeyLease.KeyId.get -> string!
+Cntryl.Portia.DataProtection.DataProtectionKeyLease.Role.get -> Cntryl.Portia.DataProtection.DataProtectionKeyRole
+Cntryl.Portia.DataProtection.DataProtectionKeyLease.RootKey.get -> System.ReadOnlySpan<byte>
+Cntryl.Portia.DataProtection.DataProtectionKeyRole
+Cntryl.Portia.DataProtection.DataProtectionKeyRole.Index = 1 -> Cntryl.Portia.DataProtection.DataProtectionKeyRole
+Cntryl.Portia.DataProtection.DataProtectionKeyRole.Protection = 0 -> Cntryl.Portia.DataProtection.DataProtectionKeyRole
+Cntryl.Portia.DataProtection.DataProtectionKeyUnavailableException
+Cntryl.Portia.DataProtection.DataProtectionKeyUnavailableException.DataProtectionKeyUnavailableException() -> void
+Cntryl.Portia.DataProtection.IDataProtectionKeyRing
+Cntryl.Portia.DataProtection.IDataProtectionKeyRing.AcquireActiveAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.DataProtection.DataProtectionKeyLease!>
+Cntryl.Portia.DataProtection.IDataProtectionKeyRing.AcquireAsync(string! keyId, Cntryl.Portia.DataProtection.DataProtectionKeyRole role, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.DataProtection.DataProtectionKeyLease?>
+Cntryl.Portia.DataProtection.IKeyedHasher
+Cntryl.Portia.DataProtection.IKeyedHasher.ComputeIndexHashAsync(System.ReadOnlyMemory<byte> identifier, string! purpose, System.ReadOnlyMemory<byte> associatedData, string! indexKeyId, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<byte[]!>
+Cntryl.Portia.DataProtection.IKeyedHasher.CreateVerificationHashAsync(System.ReadOnlyMemory<byte> value, string! purpose, System.ReadOnlyMemory<byte> associatedData, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<byte[]!>
+Cntryl.Portia.DataProtection.IKeyedHasher.VerifyAsync(System.ReadOnlyMemory<byte> verificationHash, System.ReadOnlyMemory<byte> candidate, string! purpose, System.ReadOnlyMemory<byte> associatedData, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<bool>
+Cntryl.Portia.DataProtection.IPayloadProtector
+Cntryl.Portia.DataProtection.IPayloadProtector.ProtectAsync(System.ReadOnlyMemory<byte> plaintext, string! purpose, System.ReadOnlyMemory<byte> associatedData, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<byte[]!>
+Cntryl.Portia.DataProtection.IPayloadProtector.UnprotectAsync(System.ReadOnlyMemory<byte> payload, string! purpose, System.ReadOnlyMemory<byte> associatedData, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<Cntryl.Portia.DataProtection.UnprotectedPayload!>
+Cntryl.Portia.DataProtection.UnprotectedPayload
+Cntryl.Portia.DataProtection.UnprotectedPayload.Dispose() -> void
+Cntryl.Portia.DataProtection.UnprotectedPayload.KeyId.get -> string!
+Cntryl.Portia.DataProtection.UnprotectedPayload.NeedsRotation.get -> bool
+Cntryl.Portia.DataProtection.UnprotectedPayload.Plaintext.get -> System.ReadOnlyMemory<byte>
+Cntryl.Portia.DataProtection.UnprotectedPayload.UnprotectedPayload(byte[]! plaintext, string! keyId, bool needsRotation) -> void
