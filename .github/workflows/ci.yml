@@ -100,7 +100,7 @@ jobs:
     # Integration images and settings match compose.yaml, which remains the local-run equivalent.
     services:
       sqrzl:
-        image: ghcr.io/sqrzl/sqrzl-emulator:latest
+        image: ghcr.io/sqrzl/sqrzl:latest
         credentials:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
