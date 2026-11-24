@@ -12,7 +12,8 @@ public sealed class DataProtectionKeyLease : IDisposable
     /// <summary>Copies a 32-byte root into an operation-scoped lease.</summary>
     public DataProtectionKeyLease(string keyId, DataProtectionKeyRole role, bool isActive, ReadOnlySpan<byte> rootKey)
     {
-        ArgumentException.ThrowIfNullOrEmpty(keyId);
+        if (!DataProtectionKeyIds.IsValid(keyId))
+            throw new ArgumentException("A key ID must contain 1–64 ASCII letters, digits, underscores, or hyphens.", nameof(keyId));
 
         if (rootKey.Length != 32)
             throw new ArgumentException("A data protection root must contain 32 bytes.", nameof(rootKey));

@@ -211,7 +211,7 @@ sealed class DataProtectionCrypto(IDataProtectionKeyRing keyRing) : IPayloadProt
 
     static byte[] Header(byte kind, string id)
     {
-        if (!ValidId(id))
+        if (!DataProtectionKeyIds.IsValid(id))
             throw new DataProtectionKeyUnavailableException();
 
         var result = new byte[6 + id.Length];
@@ -232,28 +232,15 @@ sealed class DataProtectionCrypto(IDataProtectionKeyRing keyRing) : IPayloadProt
 
         var idLength = bytes[5];
 
-        if (idLength is 0 or > 64 || bytes.Length < 6 + idLength)
+        if (idLength is 0 or > DataProtectionKeyIds.MaxLength || bytes.Length < 6 + idLength)
             throw Invalid();
 
-        var idBytes = bytes.Slice(6, idLength);
+        var id = Encoding.ASCII.GetString(bytes.Slice(6, idLength));
 
-        foreach (var b in idBytes)
-            if (!(b is >= (byte)'A' and <= (byte)'Z' or >= (byte)'a' and <= (byte)'z' or >= (byte)'0' and <= (byte)'9' or (byte)'_' or (byte)'-'))
-                throw Invalid();
+        if (!DataProtectionKeyIds.IsValid(id))
+            throw Invalid();
 
-        return (6 + idLength, Encoding.ASCII.GetString(idBytes));
-    }
-
-    static bool ValidId(string id)
-    {
-        if (id.Length is < 1 or > 64)
-            return false;
-
-        foreach (var c in id)
-            if (!(c is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9' or '_' or '-'))
-                return false;
-
-        return true;
+        return (6 + idLength, id);
     }
 
     static void Validate(int length, string purpose, int contextLength)

@@ -2,4 +2,8 @@
   <PropertyGroup>
     <Description>Vendor-neutral data protection and key ring contracts for Portia.</Description>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Portia.DataProtection"/>
+    <InternalsVisibleTo Include="Portia.DataProtection.Aws"/>
+  </ItemGroup>
 </Project>
