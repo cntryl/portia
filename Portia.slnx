@@ -11,6 +11,9 @@
     <Project Path="src/Portia.Generators/Portia.Generators.csproj"/>
     <Project Path="src/Portia.AspNetCore.Generators/Portia.AspNetCore.Generators.csproj"/>
     <Project Path="src/Portia.Core/Portia.Core.csproj"/>
+    <Project Path="src/Portia.DataProtection.Abstractions/Portia.DataProtection.Abstractions.csproj"/>
+    <Project Path="src/Portia.DataProtection.Aws/Portia.DataProtection.Aws.csproj"/>
+    <Project Path="src/Portia.DataProtection/Portia.DataProtection.csproj"/>
     <Project Path="src/Portia.Cassie/Portia.Cassie.csproj"/>
     <Project Path="src/Portia.Testing/Portia.Testing.csproj"/>
     <Project Path="src/Portia.Telemetry/Portia.Telemetry.csproj"/>
