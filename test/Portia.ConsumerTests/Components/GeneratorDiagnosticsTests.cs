@@ -151,11 +151,14 @@ public sealed class GeneratorDiagnosticsTests
                 },
                 ImmutableDictionary<string, string>.Empty.Add("portia_reactor_allowed_dependencies",
                     "IApplicationGateway"),
-                new ComponentPracticeAnalyzer())
+                new ComponentPracticeAnalyzer());
+        var defaultDiagnostics = GeneratorCompilation.DiagnosticsWithSeverity(
+                source, "PORTIA110", ReportDiagnostic.Warn, new ComponentPracticeAnalyzer())
             .Where(diagnostic => diagnostic.Id == "PORTIA110");
 
         // Assert
-        Assert.Empty(diagnostics);
+        _ = Assert.Single(defaultDiagnostics);
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA110");
     }
 
     [Fact]
