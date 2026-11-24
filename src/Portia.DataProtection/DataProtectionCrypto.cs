@@ -264,7 +264,7 @@ sealed class DataProtectionCrypto(IDataProtectionKeyRing keyRing) : IPayloadProt
 
         try
         { lease = await keyRing.AcquireActiveAsync(ct).ConfigureAwait(false); }
-        catch (OperationCanceledException) { throw; }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (DataProtectionKeyUnavailableException) { throw; }
         catch { throw new DataProtectionKeyUnavailableException(); }
 
@@ -287,7 +287,7 @@ sealed class DataProtectionCrypto(IDataProtectionKeyRing keyRing) : IPayloadProt
 
         try
         { lease = await keyRing.AcquireAsync(id, role, ct).ConfigureAwait(false); }
-        catch (OperationCanceledException) { throw; }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (DataProtectionKeyUnavailableException) { throw; }
         catch { throw new DataProtectionKeyUnavailableException(); }
 

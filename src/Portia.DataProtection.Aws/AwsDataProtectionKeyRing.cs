@@ -506,6 +506,12 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
                         throw new TimeoutException("AWS key snapshot expired before key unwrap completed.");
                     }
 
+                    if (cts.IsCancellationRequested)
+                    {
+                        CryptographicOperations.ZeroMemory(clear);
+                        cts.Token.ThrowIfCancellationRequested();
+                    }
+
                     _root = clear;
                     return _root;
                 }

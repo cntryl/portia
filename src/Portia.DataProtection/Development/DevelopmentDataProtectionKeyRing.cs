@@ -1,4 +1,5 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -53,27 +54,21 @@ sealed class DevelopmentDataProtectionKeyRing(string path) : IDataProtectionKeyR
 
 
         ValidatePermissions(path);
-        var info = new FileInfo(path);
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete, bufferSize: 1);
 
-        if (info.Length is <= 0 or > MaximumFileBytes)
+        if (stream.Length is <= 0 or > MaximumFileBytes)
             throw new InvalidDataException("The development data protection key ring has an invalid size.");
 
-
-        var buffer = new byte[(int)info.Length];
+        var buffer = new byte[(int)stream.Length];
 
         try
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-
-            if (stream.Length != buffer.Length)
-                throw new InvalidDataException("The development data protection key ring changed while being read.");
-
             stream.ReadExactly(buffer);
             return Parse(buffer);
         }
-        catch (JsonException exception)
+        catch (Exception exception) when (exception is JsonException or FormatException or KeyNotFoundException or InvalidOperationException)
         {
-            throw new InvalidDataException("The development data protection key ring is malformed.", exception);
+            throw new InvalidDataException("The development data protection key ring is malformed.");
         }
         finally
         {
@@ -81,10 +76,13 @@ sealed class DevelopmentDataProtectionKeyRing(string path) : IDataProtectionKeyR
         }
     }
 
-    internal static void WriteAtomically(string path, RingDocument document)
+    internal static void WriteAtomically(string path, RingDocument document, bool overwrite)
     {
         EnsureSupportedPlatform();
-        ValidatePermissions(path);
+
+        if (overwrite)
+            ValidatePermissions(path);
+
         var temporaryPath = Path.Combine(Path.GetDirectoryName(path)!, $".{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
         var bytes = SerializeDocument(document);
 
@@ -96,7 +94,7 @@ sealed class DevelopmentDataProtectionKeyRing(string path) : IDataProtectionKeyR
                 stream.Flush(true);
             }
 
-            File.Move(temporaryPath, path, true);
+            File.Move(temporaryPath, path, overwrite);
         }
         finally
         {
@@ -113,103 +111,109 @@ sealed class DevelopmentDataProtectionKeyRing(string path) : IDataProtectionKeyR
             throw new PlatformNotSupportedException("The development data protection key ring supports macOS and Linux only.");
     }
 
-    static RingDocument Parse(ReadOnlySpan<byte> data)
+    static RingDocument Parse(ReadOnlyMemory<byte> data)
     {
-        var active = string.Empty;
-        var protection = new List<RingKey>();
-        var indexes = new List<RingKey>();
-        var reader = new Utf8JsonReader(data);
+        using var json = JsonDocument.Parse(data);
+        var root = json.RootElement;
+        ValidateProperties(root, "Version", "ActiveProtectionKeyId", "ProtectionKeys", "IndexKeys");
 
-        while (reader.Read())
-        {
-            if (reader.TokenType != JsonTokenType.PropertyName)
-                continue;
+        if (root.GetProperty("Version").GetInt32() != 1)
+            throw new InvalidDataException("The development data protection key ring version is unsupported.");
 
-            if (reader.ValueTextEquals("ActiveProtectionKeyId"))
-            {
-                reader.Read();
-                active = reader.GetString() ?? string.Empty;
-            }
-            else if (reader.ValueTextEquals("ProtectionKeys"))
-            {
-                ReadKeys(ref reader, protection);
-            }
-            else if (reader.ValueTextEquals("IndexKeys"))
-            {
-                ReadKeys(ref reader, indexes);
-            }
-        }
+        var active = root.GetProperty("ActiveProtectionKeyId").GetString();
 
+        if (!DataProtectionKeyIds.IsValid(active))
+            throw new InvalidDataException("The active development data protection key ID is invalid.");
 
-        var document = new RingDocument(active, protection.ToArray(), indexes.ToArray());
-        ValidateDocument(document);
-        return document;
-    }
-
-    static void ReadKeys(ref Utf8JsonReader reader, List<RingKey> keys)
-    {
-        if (!reader.Read() || reader.TokenType != JsonTokenType.StartArray)
-            throw new InvalidDataException("The development data protection key ring key list is invalid.");
-
-        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
-        {
-            if (reader.TokenType != JsonTokenType.StartObject)
-                throw new InvalidDataException("The development data protection key ring key is invalid.");
-
-            var id = string.Empty;
-            var root = Array.Empty<byte>();
-
-            while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
-            {
-                if (reader.TokenType != JsonTokenType.PropertyName)
-                    continue;
-
-                if (reader.ValueTextEquals("Id"))
-                {
-                    reader.Read();
-                    id = reader.GetString() ?? string.Empty;
-                }
-                else if (reader.ValueTextEquals("Key"))
-                {
-                    reader.Read();
-                    root = reader.GetBytesFromBase64();
-                }
-                else
-                {
-                    reader.Read();
-                    reader.Skip();
-                }
-            }
-
-
-            keys.Add(new RingKey(id, root));
-
-            if (keys.Count > MaximumKeys)
-                throw new InvalidDataException("The development data protection key ring contains too many keys.");
-        }
-    }
-
-    internal static byte[] SerializeDocument(RingDocument document)
-    {
-        using var stream = new MemoryStream();
+        var roots = new List<byte[]>();
 
         try
         {
-            using (var writer = new Utf8JsonWriter(stream))
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            var protection = ReadKeys(root.GetProperty("ProtectionKeys"), ids, roots);
+            var indexes = ReadKeys(root.GetProperty("IndexKeys"), ids, roots);
+
+            if (!protection.Any(key => key.Id == active))
+                throw new InvalidDataException("The active protection key is missing from the key ring.");
+
+            return new RingDocument(active!, protection, indexes);
+        }
+        catch
+        {
+            foreach (var bytes in roots)
+                CryptographicOperations.ZeroMemory(bytes);
+
+            throw;
+        }
+    }
+
+    static RingKey[] ReadKeys(JsonElement value, HashSet<string> ids, List<byte[]> roots)
+    {
+        if (value.ValueKind != JsonValueKind.Array || value.GetArrayLength() is < 1 or > MaximumKeys)
+            throw new InvalidDataException("The development data protection key list is invalid.");
+
+        var keys = new RingKey[value.GetArrayLength()];
+        var index = 0;
+
+        foreach (var item in value.EnumerateArray())
+        {
+            ValidateProperties(item, "Id", "Key");
+            var id = item.GetProperty("Id").GetString();
+
+            if (!DataProtectionKeyIds.IsValid(id) || !ids.Add(id!))
+                throw new InvalidDataException("The development data protection key ring contains invalid or duplicate key IDs.");
+
+            var root = item.GetProperty("Key").GetBytesFromBase64();
+            roots.Add(root);
+
+            if (root.Length != 32)
+                throw new InvalidDataException("A development data protection root must contain 32 bytes.");
+
+            keys[index++] = new RingKey(id!, root);
+        }
+
+        return keys;
+    }
+
+    static void ValidateProperties(JsonElement value, params string[] expected)
+    {
+        if (value.ValueKind != JsonValueKind.Object)
+            throw new InvalidDataException("The development data protection key ring is malformed.");
+
+        var remaining = new HashSet<string>(expected, StringComparer.Ordinal);
+
+        foreach (var property in value.EnumerateObject())
+        {
+            if (!remaining.Remove(property.Name))
+                throw new InvalidDataException("The development data protection key ring contains an invalid property.");
+        }
+
+        if (remaining.Count != 0)
+            throw new InvalidDataException("The development data protection key ring is missing a property.");
+    }
+
+    static byte[] SerializeDocument(RingDocument document)
+    {
+        // Allocate room for the largest accepted ring so the buffer never grows while it holds keys.
+        var buffer = new ArrayBufferWriter<byte>(24 * 1024);
+
+        try
+        {
+            using (var writer = new Utf8JsonWriter(buffer))
             {
                 writer.WriteStartObject();
+                writer.WriteNumber("Version", 1);
                 writer.WriteString("ActiveProtectionKeyId", document.ActiveProtectionKeyId);
                 WriteKeys(writer, "ProtectionKeys", document.ProtectionKeys);
                 WriteKeys(writer, "IndexKeys", document.IndexKeys);
                 writer.WriteEndObject();
             }
 
-            return stream.ToArray();
+            return buffer.WrittenSpan.ToArray();
         }
         finally
         {
-            if (stream.TryGetBuffer(out var buffer))
-                CryptographicOperations.ZeroMemory(buffer.AsSpan(0, (int)stream.Length));
+            buffer.Clear();
         }
     }
 
@@ -229,30 +233,6 @@ sealed class DevelopmentDataProtectionKeyRing(string path) : IDataProtectionKeyR
         writer.WriteEndArray();
     }
 
-    static void ValidateDocument(RingDocument document)
-    {
-        if (string.IsNullOrWhiteSpace(document.ActiveProtectionKeyId) || document.ProtectionKeys.Length == 0 || document.IndexKeys.Length == 0)
-            throw new InvalidDataException("The development data protection key ring is incomplete.");
-
-        if (!document.ProtectionKeys.Any(key => key.Id == document.ActiveProtectionKeyId))
-            throw new InvalidDataException("The active protection key is missing from the key ring.");
-
-        var ids = document.ProtectionKeys.Select(key => key.Id).Concat(document.IndexKeys.Select(key => key.Id)).ToArray();
-
-        if (ids.Any(id => !IsValidKeyId(id)) || !IsValidKeyId(document.ActiveProtectionKeyId) || ids.Distinct(StringComparer.Ordinal).Count() != ids.Length)
-            throw new InvalidDataException("The development data protection key ring contains invalid or duplicate key IDs.");
-
-
-        foreach (var key in document.ProtectionKeys.Concat(document.IndexKeys))
-        {
-            if (key.Root.Length != 32)
-                throw new InvalidDataException("A development data protection root must contain 32 bytes.");
-        }
-    }
-
-    static bool IsValidKeyId(string id) => id.Length is > 0 and <= 64 &&
-        id.All(character => char.IsAsciiLetterOrDigit(character) || character is '_' or '-');
-
     static FileStream CreatePrivateFile(string path, FileMode mode)
     {
         var options = new FileStreamOptions
@@ -260,6 +240,7 @@ sealed class DevelopmentDataProtectionKeyRing(string path) : IDataProtectionKeyR
             Mode = mode,
             Access = FileAccess.Write,
             Share = FileShare.None,
+            BufferSize = 1,
             Options = FileOptions.WriteThrough,
         };
 

@@ -38,7 +38,7 @@ public static class DevelopmentDataProtectionKeyRingInitializer
         try
         {
             using var gate = AcquireRotationGate(absolutePath);
-            WriteNewFile(absolutePath, document);
+            DevelopmentDataProtectionKeyRing.WriteAtomically(absolutePath, document, overwrite: false);
         }
         finally
         {
@@ -50,6 +50,7 @@ public static class DevelopmentDataProtectionKeyRingInitializer
     public static void RotateProtectionKey(string absolutePath, IHostEnvironment environment)
     {
         ValidatePathAndEnvironment(absolutePath, environment);
+        ValidateDirectoryPermissions(Path.GetDirectoryName(absolutePath)!);
         using var gate = AcquireRotationGate(absolutePath);
         using var document = DevelopmentDataProtectionKeyRing.ReadDocument(absolutePath);
 
@@ -66,39 +67,11 @@ public static class DevelopmentDataProtectionKeyRingInitializer
 
         try
         {
-            DevelopmentDataProtectionKeyRing.WriteAtomically(absolutePath, updated);
+            DevelopmentDataProtectionKeyRing.WriteAtomically(absolutePath, updated, overwrite: true);
         }
         finally
         {
             updated.Dispose();
-        }
-    }
-
-    static void WriteNewFile(string path, DevelopmentDataProtectionKeyRing.RingDocument document)
-    {
-        var bytes = DevelopmentDataProtectionKeyRing.SerializeDocument(document);
-
-        try
-        {
-            var options = new FileStreamOptions
-            {
-                Mode = FileMode.CreateNew,
-                Access = FileAccess.Write,
-                Share = FileShare.None,
-                Options = FileOptions.WriteThrough,
-            };
-
-            if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-                options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
-
-
-            using var stream = new FileStream(path, options);
-            stream.Write(bytes);
-            stream.Flush(true);
-        }
-        finally
-        {
-            CryptographicOperations.ZeroMemory(bytes);
         }
     }
 

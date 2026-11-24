@@ -17,8 +17,9 @@ In Development on macOS or Linux, register `AddDevelopmentDataProtectionKeyRing(
 absolute path to a key file in a dedicated private directory outside the repository. Initialize it
 explicitly with `DevelopmentDataProtectionKeyRingInitializer.Initialize` and a Development
 `IHostEnvironment`. Keep the directory owner-only and point API and worker hosts at the same file.
-Restart the hosts after rotation to load the updated file. Keep the local ring across restarts
-and protect any backups of the file because it contains the local key bytes.
+Use `DevelopmentDataProtectionKeyRingInitializer.RotateProtectionKey` to publish a new active
+root atomically. Hosts read the current file on each operation. Keep the local ring across
+restarts and protect any backups of the file because it contains the local key bytes.
 
 ## Protect and verify
 
@@ -36,8 +37,9 @@ using var opened = await protector.UnprotectAsync(
 UseValue(opened.Plaintext);
 ```
 
-Dispose the result as soon as the caller finishes with its plaintext. Clear caller-owned input
-and any caller-created plaintext copies after use. Persist the protected bytes or encode them as
+Keep input buffers stable until each operation completes. Dispose the result as soon as the caller
+finishes with its plaintext. Clear caller-owned input and any caller-created plaintext copies
+after use. Persist the protected bytes or encode them as
 Base64 for a text store. Treat malformed, unsupported, and unknown-key artifacts as invalid.
 A `DataProtectionKeyUnavailableException` indicates a provider failure. Preserve the pending
 operation and handle or retry that failure separately from a verification mismatch.

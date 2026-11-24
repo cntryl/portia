@@ -8,10 +8,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 var environment = new DevelopmentHostEnvironment();
+
 if (args.Length > 0)
 {
     var path = GetExplicitPath();
     var commandEnvironment = Host.CreateApplicationBuilder(args).Environment;
+
     if (args.Length != 1)
         throw new ArgumentException("Use exactly one command: init or rotate.");
 
@@ -28,17 +30,19 @@ if (args.Length > 0)
     }
 }
 
-var root = Path.Combine(Path.GetTempPath(), $"portia-data-protection-consumer-{Guid.NewGuid():N}");
+var root = Directory.CreateTempSubdirectory("portia-data-protection-consumer-").FullName;
 var ringPath = Path.Combine(root, "key-ring", "keys.json");
+
 try
 {
     DevelopmentDataProtectionKeyRingInitializer.Initialize(ringPath, environment);
-    var firstHost = BuildHost(ringPath, environment);
+    using var firstHost = BuildHost(ringPath, environment);
     await firstHost.StartAsync();
     byte[] payload;
     byte[] verification;
     byte[] pinnedIndex;
     string originalKeyId;
+
     try
     {
         var protector = firstHost.Services.GetRequiredService<IPayloadProtector>();
@@ -56,12 +60,12 @@ try
     finally
     {
         await firstHost.StopAsync();
-        firstHost.Dispose();
     }
 
     DevelopmentDataProtectionKeyRingInitializer.RotateProtectionKey(ringPath, environment);
-    var restartedHost = BuildHost(ringPath, environment);
+    using var restartedHost = BuildHost(ringPath, environment);
     await restartedHost.StartAsync();
+
     try
     {
         var protector = restartedHost.Services.GetRequiredService<IPayloadProtector>();
@@ -74,8 +78,11 @@ try
         var indexAfterRotation = await hasher.ComputeIndexHashAsync(value, "customer-index", context,
             DevelopmentDataProtectionKeyRingInitializer.DevelopmentIndexKeyId);
         using var active = await ring.AcquireActiveAsync();
+        var replacement = await protector.ProtectAsync(recovered.Plaintext, "consumer-example", context);
+        using var reprotected = await protector.UnprotectAsync(replacement, "consumer-example", context);
 
-        if (!recovered.NeedsRotation || !verified || active.KeyId == originalKeyId ||
+        if (!recovered.NeedsRotation || !verified || active.KeyId == originalKeyId || reprotected.NeedsRotation ||
+            !reprotected.Plaintext.Span.SequenceEqual(value) ||
             !CryptographicOperations.FixedTimeEquals(pinnedIndex, indexAfterRotation))
             throw new InvalidOperationException("The development data protection consumer exercise failed.");
 
@@ -84,7 +91,6 @@ try
     finally
     {
         await restartedHost.StopAsync();
-        restartedHost.Dispose();
         CryptographicOperations.ZeroMemory(payload);
         CryptographicOperations.ZeroMemory(verification);
         CryptographicOperations.ZeroMemory(pinnedIndex);
@@ -107,8 +113,10 @@ static IHost BuildHost(string path, IHostEnvironment environment)
 static string GetExplicitPath()
 {
     var path = Environment.GetEnvironmentVariable("PORTIA_DEVELOPMENT_KEY_RING");
+
     if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path))
         throw new InvalidOperationException("Set PORTIA_DEVELOPMENT_KEY_RING to an absolute key-ring file path for init or rotate.");
+
     return path;
 }
 
