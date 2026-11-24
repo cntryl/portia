@@ -55,8 +55,9 @@ non-sensitive identifiers because the context can appear in CloudTrail.
 The secret's current JSON version contains `version` (1), `ringId`, a positive increasing
 `revision`, `activeKeyId`, and `keys`. Each key has `keyId`, `role` (`protection` or
 `index`), and `wrappedRoot` (Base64 KMS ciphertext). The active entry must have the protection
-role. Give every new root a new Portia ID. An index root is provisioned independently and pinned
-by ID in application configuration.
+role. Give every new root a new Portia ID and carry the existing wrapped bytes forward for all
+retained IDs during routine rotation. An index root is provisioned independently and pinned by
+ID in application configuration.
 
 Give the runtime `secretsmanager:GetSecretValue` on that secret and `kms:Decrypt` on that
 wrapping key, restricted to its ring context. Reserve provisioning and secret updates for

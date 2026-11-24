@@ -68,6 +68,31 @@ public sealed class AwsDataProtectionKeyRingTests
         Assert.Equal(1, kms.Calls);
     }
 
+    /// <summary>Enforces the snapshot deadline even when the expiry timer has yet to run.</summary>
+    [Fact]
+    public async Task ShouldRejectCachedRootGivenDeadlinePassesBeforeLeasing()
+    {
+        // Arrange
+        using var time = new ManualTimeProvider();
+        using var secrets = new FakeSecrets(Manifest(1));
+        using var kms = new FakeKms();
+        using var ring = new AwsDataProtectionKeyRing(secrets, kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromSeconds(5), time);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var warmLease = await ring.AcquireActiveAsync(cancellationToken);
+        time.AdvanceAfterNextRead(TimeSpan.FromSeconds(5));
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            using var lease = await ring.AcquireActiveAsync(cancellationToken);
+        });
+
+        // Assert
+        Assert.IsType<TimeoutException>(exception);
+        Assert.Equal(1, secrets.Calls);
+        Assert.Equal(1, kms.Calls);
+    }
+
     /// <summary>Keeps the shared unwrap alive when one caller cancels.</summary>
     [Fact]
     public async Task ShouldPreserveSharedUnwrapGivenCancelledWaiter()
@@ -224,9 +249,18 @@ public sealed class AwsDataProtectionKeyRingTests
     sealed class ManualTimeProvider : TimeProvider, IDisposable
     {
         long _ticks;
+        long _advanceAfterRead;
         ManualTimer? _timer;
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;
-        public override long GetTimestamp() => Interlocked.Read(ref _ticks);
+        public override long GetTimestamp()
+        {
+            var current = Interlocked.Read(ref _ticks);
+            Interlocked.Add(ref _ticks, Interlocked.Exchange(ref _advanceAfterRead, 0));
+            return current;
+        }
+
+        public void AdvanceAfterNextRead(TimeSpan amount) => Interlocked.Exchange(ref _advanceAfterRead, amount.Ticks);
+
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
         {
             _timer = new ManualTimer(this, callback, state, dueTime);

@@ -178,7 +178,14 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
             keyId = snapshot.ActiveKeyId;
 
         if (!snapshot.Entries.TryGetValue((keyId!, role), out var entry))
-            return null;
+        {
+            lock (snapshot.Sync)
+            {
+                callerToken.ThrowIfCancellationRequested();
+                snapshot.ValidateLeaseDeadline(_time);
+                return null;
+            }
+        }
 
         return await entry.GetLeaseAsync(snapshot, _kms, _wrappingKeyArn, _ringId, keyId!, role,
             role == DataProtectionKeyRole.Protection && keyId == snapshot.ActiveKeyId,
@@ -351,6 +358,14 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
         public object Sync => _sync;
         public bool IsDisposed { get { lock (_sync) return _disposed; } }
 
+        public void ValidateLeaseDeadline(TimeProvider time)
+        {
+            if (time.GetTimestamp() >= ExpiresAt)
+                throw new TimeoutException("AWS key snapshot expired before a lease could be created.");
+
+            ObjectDisposedException.ThrowIf(IsDisposed, this);
+        }
+
         public void Dispose()
         {
             lock (_sync)
@@ -395,7 +410,8 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
             TaskCompletionSource<byte[]>? producer = null;
             lock (snapshot.Sync)
             {
-                ObjectDisposedException.ThrowIf(snapshot.IsDisposed, snapshot);
+                callerToken.ThrowIfCancellationRequested();
+                snapshot.ValidateLeaseDeadline(time);
 
                 if (_root is not null)
                     return new DataProtectionKeyLease(leaseKeyId, role, active, _root);
@@ -417,10 +433,11 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
 
             lock (snapshot.Sync)
             {
-                ObjectDisposedException.ThrowIf(snapshot.IsDisposed, snapshot);
+                callerToken.ThrowIfCancellationRequested();
+                snapshot.ValidateLeaseDeadline(time);
 
-                if (time.GetTimestamp() >= snapshot.ExpiresAt || _root is null)
-                    throw new TimeoutException("AWS key snapshot expired before a lease could be created.");
+                if (_root is null)
+                    throw new DataProtectionKeyUnavailableException();
 
                 return new DataProtectionKeyLease(leaseKeyId, role, active, _root);
             }
