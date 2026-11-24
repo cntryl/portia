@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Reflection;
 using System.Runtime.Loader;
 using Microsoft.CodeAnalysis;
@@ -77,6 +78,29 @@ static class GeneratorCompilation
             CSharpSyntaxTree.ParseText(source, parseOptions, "DiagnosticScenario.cs")
         ], references, compilationOptions);
         return compilation.WithAnalyzers([.. analyzers]).GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
+    }
+
+    public static IReadOnlyList<Diagnostic> DiagnosticsWithOptions(
+        string source,
+        IReadOnlyDictionary<string, ReportDiagnostic> severities,
+        ImmutableDictionary<string, string> analyzerOptions,
+        params DiagnosticAnalyzer[] analyzers
+    )
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
+            [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
+        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            .Append(typeof(Aggregate).Assembly.Location)
+            .Append(typeof(IRemoteRequestSender).Assembly.Location)
+            .Distinct(StringComparer.Ordinal)
+            .Select(path => MetadataReference.CreateFromFile(path));
+        var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
+            specificDiagnosticOptions: severities);
+        var compilation = CSharpCompilation.Create("Diagnostics", [
+            CSharpSyntaxTree.ParseText(source, parseOptions, "DiagnosticScenario.cs")
+        ], references, compilationOptions);
+        var options = new AnalyzerOptions([], new ApplicationAnalyzerOptionsProvider(analyzerOptions));
+        return compilation.WithAnalyzers([.. analyzers], options).GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
     }
 
     // Analyzers report through the compiler's analyzer driver, which is also what applies their severity

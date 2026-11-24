@@ -116,6 +116,12 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         "Cntryl.Portia.IProjectionCheckpointStore"
     ];
 
+    static readonly string[] DefaultReactorDependencies =
+    [
+        "Cntryl.Portia.IRequestBus",
+        "Cntryl.Portia.IProjectionCheckpointStore"
+    ];
+
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
     [
@@ -200,7 +206,11 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
             if (node.BaseList is null && !node.Modifiers.Any(SyntaxKind.PartialKeyword))
                 return;
 
-            foreach (var finding in Analyze(node, syntaxContext.SemanticModel, syntaxContext.CancellationToken))
+            var allowedReactorDependencies = ReactorDependencies(
+                syntaxContext.Options.AnalyzerConfigOptionsProvider, node.SyntaxTree);
+
+            foreach (var finding in Analyze(node, syntaxContext.SemanticModel, allowedReactorDependencies,
+                         syntaxContext.CancellationToken))
             {
                 syntaxContext.ReportDiagnostic(Diagnostic.Create(Descriptor(finding.Kind), finding.Location,
                     finding.Arguments));
@@ -208,7 +218,12 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         }, SyntaxKind.ClassDeclaration, SyntaxKind.RecordDeclaration, SyntaxKind.RecordStructDeclaration);
     }
 
-    static Finding[] Analyze(TypeDeclarationSyntax node, SemanticModel semanticModel, CancellationToken ct)
+    static Finding[] Analyze(
+        TypeDeclarationSyntax node,
+        SemanticModel semanticModel,
+        string[] allowedReactorDependencies,
+        CancellationToken ct
+    )
     {
         if (semanticModel.GetDeclaredSymbol(node, ct) is not { IsAbstract: false } symbol)
             return [];
@@ -216,7 +231,7 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         var findings = new List<Finding>();
         var parameters = DeclaredParameters(symbol, node);
         ReportProjectorEffects(findings, symbol, parameters);
-        ReportReactorPurity(findings, symbol, parameters);
+        ReportReactorPurity(findings, symbol, parameters, allowedReactorDependencies);
         ReportReactorBodyPurity(findings, symbol, node, semanticModel, ct);
         ReportAggregateServices(findings, symbol, parameters);
         ReportPreflightEffects(findings, symbol, parameters);
@@ -225,16 +240,18 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         return [.. findings];
     }
 
-    static void ReportReactorPurity(List<Finding> findings, INamedTypeSymbol symbol, IParameterSymbol[] parameters)
+    static void ReportReactorPurity(
+        List<Finding> findings,
+        INamedTypeSymbol symbol,
+        IParameterSymbol[] parameters,
+        string[] allowedReactorDependencies
+    )
     {
         if (!ApplicationProject.IsReactor(symbol))
             return;
 
         foreach (var parameter in parameters.Where(parameter =>
-                     !Matches(parameter.Type, [
-                         "Cntryl.Portia.IRequestBus",
-                         "Cntryl.Portia.IProjectionCheckpointStore"
-                     ])))
+                     !Matches(parameter.Type, allowedReactorDependencies)))
             findings.Add(Finding.Create(Kind.ReactorPurity, Location(parameter), symbol.Name,
                 Display(parameter)));
     }
@@ -308,6 +325,23 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
             .SelectMany(iface => iface.GetMembers("HandleAsync").OfType<IMethodSymbol>())
             .Select(reactor.FindImplementationForInterfaceMember)
             .Any(implementation => SymbolEqualityComparer.Default.Equals(implementation, method));
+
+    static string[] ReactorDependencies(
+        AnalyzerConfigOptionsProvider options,
+        SyntaxTree tree
+    )
+    {
+        if (!options.GetOptions(tree).TryGetValue("portia_reactor_allowed_dependencies", out var configured)
+            || string.IsNullOrWhiteSpace(configured))
+            return DefaultReactorDependencies;
+
+        var configuredTypes = configured.Split(',')
+            .Select(type => type.Trim())
+            .Where(type => type.Length != 0)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        return configuredTypes.Length == 0 ? DefaultReactorDependencies : configuredTypes;
+    }
 
     static bool? ActionFor(string name, out string resource)
     {

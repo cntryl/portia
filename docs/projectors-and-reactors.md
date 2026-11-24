@@ -42,7 +42,9 @@ ordering barrier. The opt-in `PORTIA109` rule recognizes direct, statically visi
 `SendReactionAsync` calls that send complementary `CreateX` and `CancelX` commands from
 different reactors and recommends consolidation. Applications that opt into `PORTIA110` also
 receive a constructor-dependency check for known effect types, helping keep reaction handlers
-limited to deterministic command dispatch. Both rules are intentionally conservative; arbitrary
+limited to deterministic command dispatch. The default allowed dependencies are `IRequestBus` and
+`IProjectionCheckpointStore`; replace that list per file with the comma-separated
+`portia_reactor_allowed_dependencies` `.editorconfig` option. Both rules are intentionally conservative; arbitrary
 application gateways and indirect command flow still require architectural review.
 
 ## Constructor-injected repository

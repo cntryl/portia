@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Globalization;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -117,6 +118,39 @@ public sealed class GeneratorDiagnosticsTests
 
         // Act
         var diagnostics = GeneratorCompilation.DiagnosticsWithSeverity(source, "PORTIA110", ReportDiagnostic.Warn,
+                new ComponentPracticeAnalyzer())
+            .Where(diagnostic => diagnostic.Id == "PORTIA110");
+
+        // Assert
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void ShouldHonorConfiguredReactorDependencyAllowListGivenPurityEnabled()
+    {
+        // Arrange
+        const string source = """
+                              using Cntryl.Portia;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              public interface IApplicationGateway;
+                              public sealed record Changed : DomainEvent;
+                              public sealed class Reaction(IApplicationGateway gateway) : IReactorHandler<Changed>
+                              {
+                                  public ValueTask<Result> HandleAsync(
+                                      IReactorContext<Changed> context, CancellationToken ct) => default;
+                              }
+                              """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.DiagnosticsWithOptions(
+                source,
+                new Dictionary<string, ReportDiagnostic>
+                {
+                    ["PORTIA110"] = ReportDiagnostic.Warn
+                },
+                ImmutableDictionary<string, string>.Empty.Add("portia_reactor_allowed_dependencies",
+                    "IApplicationGateway"),
                 new ComponentPracticeAnalyzer())
             .Where(diagnostic => diagnostic.Id == "PORTIA110");
 
