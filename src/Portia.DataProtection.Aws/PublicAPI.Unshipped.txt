@@ -1,1 +1,3 @@
 #nullable enable
+Cntryl.Portia.DataProtection.Aws.AwsDataProtectionKeyRingRegistration
+static Cntryl.Portia.DataProtection.Aws.AwsDataProtectionKeyRingRegistration.AddAwsDataProtectionKeyRing(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Amazon.SecretsManager.IAmazonSecretsManager! secretsManager, Amazon.KeyManagementService.IAmazonKeyManagementService! keyManagementService, string! secretArn, string! wrappingKeyArn, string! ringId, System.TimeSpan? cacheLifetime = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

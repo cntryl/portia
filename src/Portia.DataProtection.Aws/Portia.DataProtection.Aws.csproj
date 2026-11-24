@@ -10,4 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="../Portia.DataProtection.Abstractions/Portia.DataProtection.Abstractions.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Portia.Tests" />
+  </ItemGroup>
 </Project>
