@@ -88,7 +88,7 @@ public sealed class DevelopmentDataProtectionKeyRingTests
         using var directory = new TemporaryDirectory();
         var services = new ServiceCollection();
         services.AddSingleton<IHostEnvironment>(new TestHostEnvironment(Environments.Production));
-        services.AddDevelopmentDataProtectionKeyRing(Path.Combine(directory.Path, "private", "keys.json"));
+        services.AddDevelopmentDataProtection(Path.Combine(directory.Path, "private", "keys.json"));
         using var provider = services.BuildServiceProvider();
 
         // Act
@@ -112,7 +112,7 @@ public sealed class DevelopmentDataProtectionKeyRingTests
 
         var ring = new ServiceCollection()
             .AddSingleton<IHostEnvironment>(new TestHostEnvironment(Environments.Development))
-            .AddDevelopmentDataProtectionKeyRing(path)
+            .AddDevelopmentDataProtection(path)
             .BuildServiceProvider().GetRequiredService<IDataProtectionKeyRing>();
 
         // Act
@@ -214,7 +214,7 @@ public sealed class DevelopmentDataProtectionKeyRingTests
 
     static ServiceProvider BuildProvider(string path, IHostEnvironment environment) => new ServiceCollection()
         .AddSingleton<IHostEnvironment>(environment)
-        .AddDevelopmentDataProtectionKeyRing(path)
+        .AddDevelopmentDataProtection(path)
         .BuildServiceProvider();
 
     sealed class TemporaryDirectory : IDisposable

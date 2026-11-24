@@ -42,7 +42,7 @@ try
     });
     var path = Path.Combine(directory.FullName, "private", "keys.json");
     DevelopmentDataProtectionKeyRingInitializer.Initialize(path, builder.Environment);
-    builder.Services.AddDevelopmentDataProtectionKeyRing(path).AddPortiaDataProtection();
+    builder.Services.AddDevelopmentDataProtection(path);
     builder.Services.AddPortia().AddOrders();
 
     using var host = builder.Build();

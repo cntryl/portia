@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,7 +27,6 @@ public sealed class CoreCryptoTests
         var plaintext = new byte[] { 1, 2, 3, 4 };
         var context = new byte[] { 9, 8 };
         var payload = await crypto.ProtectAsync(plaintext, "test", context, TestContext.Current.CancellationToken);
-        ring.ActiveId = "current";
         ring.ActiveId = "current";
 
         // Act
@@ -105,10 +105,35 @@ public sealed class CoreCryptoTests
         Assert.Equal(Convert.FromHexString("5044500102036b657990f34be72ddfc2747761b3843716ce79fdf3e7b6bd4e8947f06efbfd34fdfea9"), hash);
     }
 
+    /// <summary>Reports a provider failure separately from a rejected candidate.</summary>
+    [Fact]
+    public async Task ShouldDistinguishUnavailableKeyGivenVerificationArtifact()
+    {
+        // Arrange
+        var ring = new TestRing(new DataProtectionKeyLease("key", DataProtectionKeyRole.Protection, true, new byte[32]));
+        using var provider = BuildProvider(ring);
+        var hasher = provider.GetRequiredService<IKeyedHasher>();
+        var context = "challenge"u8.ToArray();
+        var candidate = "different-code"u8.ToArray();
+        var ct = TestContext.Current.CancellationToken;
+        var artifact = await hasher.CreateVerificationHashAsync("issued-code"u8.ToArray(), "verify-email", context, ct);
+
+        // Act
+        var matched = await hasher.VerifyAsync(artifact, candidate, "verify-email", context, ct);
+        ring.Unavailable = true;
+        var outage = await Record.ExceptionAsync(async () =>
+            await hasher.VerifyAsync(artifact, candidate, "verify-email", context, ct));
+
+        // Assert
+        Assert.False(matched);
+        Assert.IsType<DataProtectionKeyUnavailableException>(outage);
+    }
+
     sealed class TestRing(params DataProtectionKeyLease[] leases) : IDataProtectionKeyRing
     {
         readonly DataProtectionKeyLease[] _leases = leases;
         public string ActiveId { get; set; } = leases.Single(static lease => lease.IsActive).KeyId;
+        public bool Unavailable { get; set; }
 
         public ValueTask<DataProtectionKeyLease> AcquireActiveAsync(CancellationToken cancellationToken = default)
         {
@@ -124,6 +149,10 @@ public sealed class CoreCryptoTests
         )
         {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (Unavailable)
+                return ValueTask.FromException<DataProtectionKeyLease?>(new IOException("Simulated provider outage."));
+
             var source = _leases.SingleOrDefault(lease => lease.KeyId == keyId && lease.Role == role);
             return ValueTask.FromResult(source is null ? null : new DataProtectionKeyLease(source.KeyId, source.Role,
                 source.Role == DataProtectionKeyRole.Protection && source.KeyId == ActiveId, source.RootKey));

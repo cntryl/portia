@@ -82,7 +82,7 @@ pass `mapInboundClaims: false` when the API turns that mapping off, whether thro
 When an API and a worker share protected records, register the protector, hasher, and chosen
 key ring in their shared setup. Handlers take `IPayloadProtector` or `IKeyedHasher` through normal
 constructor injection and reference `Cntryl.Portia.DataProtection.Abstractions`. The host
-references and configures the implementation and provider. See [data protection](data-protection.md)
+chooses its provider with `AddAwsDataProtection` or `AddDevelopmentDataProtection`. See [data protection](data-protection.md)
 for AWS and Development registration and rotation.
 
 ## API deployment

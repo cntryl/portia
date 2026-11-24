@@ -1,9 +1,9 @@
 #nullable enable
-Cntryl.Portia.DataProtection.DevelopmentDataProtectionKeyRingExtensions
+Cntryl.Portia.DataProtection.DevelopmentDataProtectionServiceCollectionExtensions
 Cntryl.Portia.DataProtection.DevelopmentDataProtectionKeyRingInitializer
 Cntryl.Portia.DataProtection.PortiaDataProtectionServiceCollectionExtensions
 const Cntryl.Portia.DataProtection.DevelopmentDataProtectionKeyRingInitializer.DevelopmentIndexKeyId = "development-index-1" -> string!
-static Cntryl.Portia.DataProtection.DevelopmentDataProtectionKeyRingExtensions.AddDevelopmentDataProtectionKeyRing(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! absolutePath) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static Cntryl.Portia.DataProtection.DevelopmentDataProtectionServiceCollectionExtensions.AddDevelopmentDataProtection(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, string! absolutePath) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static Cntryl.Portia.DataProtection.DevelopmentDataProtectionKeyRingInitializer.Initialize(string! absolutePath, Microsoft.Extensions.Hosting.IHostEnvironment! environment) -> void
 static Cntryl.Portia.DataProtection.DevelopmentDataProtectionKeyRingInitializer.RotateProtectionKey(string! absolutePath, Microsoft.Extensions.Hosting.IHostEnvironment! environment) -> void
 static Cntryl.Portia.DataProtection.PortiaDataProtectionServiceCollectionExtensions.AddPortiaDataProtection(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!

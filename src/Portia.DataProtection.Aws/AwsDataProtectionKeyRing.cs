@@ -10,45 +10,8 @@ using Amazon.KeyManagementService.Model;
 using Amazon.SecretsManager;
 using Amazon.SecretsManager.Model;
 using Cntryl.Portia.DataProtection;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Cntryl.Portia.DataProtection.Aws;
-
-/// <summary>Registers an AWS Secrets Manager and KMS backed Portia key ring.</summary>
-public static class AwsDataProtectionKeyRingRegistration
-{
-
-    /// <summary>Registers the AWS key ring. Add Portia's payload services separately.</summary>
-    public static IServiceCollection AddAwsDataProtectionKeyRing(
-        this IServiceCollection services,
-        IAmazonSecretsManager secretsManager,
-        IAmazonKeyManagementService keyManagementService,
-        string secretArn,
-        string wrappingKeyArn,
-        string ringId,
-        TimeSpan? cacheLifetime = null
-    )
-    {
-        ArgumentNullException.ThrowIfNull(services);
-        ArgumentNullException.ThrowIfNull(secretsManager);
-        ArgumentNullException.ThrowIfNull(keyManagementService);
-        ArgumentException.ThrowIfNullOrWhiteSpace(secretArn);
-        ArgumentException.ThrowIfNullOrWhiteSpace(wrappingKeyArn);
-        ArgumentException.ThrowIfNullOrWhiteSpace(ringId);
-
-        if (!DataProtectionKeyIds.IsValid(ringId))
-            throw new ArgumentException("Ring ID must use at most 64 ASCII letters, digits, hyphens, or underscores.", nameof(ringId));
-
-        var lifetime = cacheLifetime ?? TimeSpan.FromMinutes(5);
-
-        if (lifetime <= TimeSpan.Zero || lifetime > TimeSpan.FromHours(1))
-            throw new ArgumentOutOfRangeException(nameof(cacheLifetime), "Cache lifetime must be positive and no more than one hour.");
-
-        services.AddSingleton<IDataProtectionKeyRing>(_ => new AwsDataProtectionKeyRing(
-            secretsManager, keyManagementService, secretArn, wrappingKeyArn, ringId, lifetime, TimeProvider.System));
-        return services;
-    }
-}
 
 sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
 {

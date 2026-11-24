@@ -105,8 +105,7 @@ static IHost BuildHost(string path, IHostEnvironment environment)
 {
     var builder = Host.CreateApplicationBuilder();
     builder.Environment.EnvironmentName = environment.EnvironmentName;
-    builder.Services.AddDevelopmentDataProtectionKeyRing(path);
-    builder.Services.AddPortiaDataProtection();
+    builder.Services.AddDevelopmentDataProtection(path);
     return builder.Build();
 }
 

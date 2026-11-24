@@ -2,23 +2,25 @@
 
 Portia protects long-lived values with authenticated encryption and creates keyed hashes for
 short-lived verification and deterministic identifier lookup. Reference
-`Cntryl.Portia.DataProtection.Abstractions` from code that consumes these services. The host
-references `Cntryl.Portia.DataProtection` and registers exactly one key ring.
+`Cntryl.Portia.DataProtection.Abstractions` from handlers and repositories that consume these
+services. Each host explicitly chooses one provider. The contracts and implementation work with
+the generic .NET host, including a Worker.
 
 ## Host registration
 
-Add the shared services with `AddPortiaDataProtection()`. In AWS, reference
-`Cntryl.Portia.DataProtection.Aws` and register `AddAwsDataProtectionKeyRing` with a Secrets Manager client,
-a KMS client, the full secret and wrapping key ARNs, and a stable ring identifier. Use the same
+In AWS, reference `Cntryl.Portia.DataProtection.Aws` and call `AddAwsDataProtection` with a
+Secrets Manager client, a KMS client, the full secret and wrapping key ARNs, and a stable ring identifier. Use the same
 ring for hosts that need to read each other's artifacts. Configure credential resolution through
 the host's AWS SDK clients and keep SDK response-body logging disabled.
 
 ```csharp
-services.AddAwsDataProtectionKeyRing(secretsManager, kms, secretArn, wrappingKeyArn, ringId)
-    .AddPortiaDataProtection();
+services.AddAwsDataProtection(aws => aws
+    .UseClients(secretsManager, kms)
+    .UseKeyRing(secretArn, wrappingKeyArn, ringId));
 ```
 
-In Development on macOS or Linux, register `AddDevelopmentDataProtectionKeyRing(path)` with the
+In Development on macOS or Linux, reference `Cntryl.Portia.DataProtection` and call
+`AddDevelopmentDataProtection(path)` with the
 absolute path to a key file in a dedicated private directory outside the repository. Initialize it
 explicitly with `DevelopmentDataProtectionKeyRingInitializer.Initialize` and a Development
 `IHostEnvironment`. Keep the directory owner-only and point API and worker hosts at the same file.
@@ -27,9 +29,11 @@ root atomically. Hosts read the current file on each operation. Keep the local r
 restarts and protect any backups of the file because it contains the local key bytes.
 
 ```csharp
-services.AddDevelopmentDataProtectionKeyRing(keyRingPath)
-    .AddPortiaDataProtection();
+services.AddDevelopmentDataProtection(keyRingPath);
 ```
+
+For an application-supplied provider, register its `IDataProtectionKeyRing` and call
+`AddPortiaDataProtection()`.
 
 Put provider registration in the [shared application setup](application-setup.md#protecting-application-data).
 Inject the protector or hasher into the handler that owns the operation. ASP.NET Core's

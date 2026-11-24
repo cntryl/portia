@@ -37,8 +37,8 @@ public sealed class ProviderPortabilityTests
         using var secrets = new FixtureSecrets();
         using var kms = new FixtureKms();
         using var aws = new ServiceCollection()
-            .AddAwsDataProtectionKeyRing(secrets, kms, SecretArn, WrappingKeyArn, "portia-fixture")
-            .AddPortiaDataProtection()
+            .AddAwsDataProtection(settings => settings.UseClients(secrets, kms)
+                .UseKeyRing(SecretArn, WrappingKeyArn, "portia-fixture"))
             .BuildServiceProvider();
         using var other = new ServiceCollection()
             .AddSingleton<IDataProtectionKeyRing, FixtureRing>()

@@ -6,10 +6,10 @@ using Microsoft.Extensions.Hosting;
 namespace Cntryl.Portia.DataProtection;
 
 /// <summary>Registers the file-backed key ring intended for local development.</summary>
-public static class DevelopmentDataProtectionKeyRingExtensions
+public static class DevelopmentDataProtectionServiceCollectionExtensions
 {
-    /// <summary>Registers a persistent development key ring at an absolute path.</summary>
-    public static IServiceCollection AddDevelopmentDataProtectionKeyRing(this IServiceCollection services, string absolutePath)
+    /// <summary>Registers the protector and hasher with a persistent Development key ring at the configured path.</summary>
+    public static IServiceCollection AddDevelopmentDataProtection(this IServiceCollection services, string absolutePath)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(absolutePath);
@@ -29,6 +29,6 @@ public static class DevelopmentDataProtectionKeyRingExtensions
 
             return new DevelopmentDataProtectionKeyRing(absolutePath);
         });
-        return services;
+        return services.AddPortiaDataProtection();
     }
 }

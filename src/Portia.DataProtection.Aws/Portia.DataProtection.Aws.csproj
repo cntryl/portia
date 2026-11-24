@@ -8,7 +8,7 @@
     <PackageReference Include="AWSSDK.SecretsManager" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../Portia.DataProtection.Abstractions/Portia.DataProtection.Abstractions.csproj" />
+    <ProjectReference Include="../Portia.DataProtection/Portia.DataProtection.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Portia.Tests" />

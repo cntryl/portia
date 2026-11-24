@@ -234,6 +234,16 @@ jobs:
             --configuration Release -p:PortiaSmokePackageVersion="$portia_version"
           dotnet build smoke/Portia.Structure.PackageConsumer/Worker/Shop.Worker.csproj \
             --configuration Release -p:PortiaSmokePackageVersion="$portia_version"
+          for role in Common Core Worker; do
+            assets="smoke/Portia.Structure.PackageConsumer/$role/obj/project.assets.json"
+            jq -e '(
+              (.libraries | keys) + [.project.frameworks[] | (.frameworkReferences // {} | keys[])]
+            ) | all(test("(^|[.])AspNetCore([./]|$)"; "i") | not)' "$assets"
+          done
+          for role in Common Core; do
+            jq -e '.libraries | keys | all(test("^AWSSDK[.]"; "i") | not)' \
+              "smoke/Portia.Structure.PackageConsumer/$role/obj/project.assets.json"
+          done
           dotnet run --project smoke/Portia.Structure.PackageConsumer/Worker/Shop.Worker.csproj \
             --configuration Release --no-build
 
