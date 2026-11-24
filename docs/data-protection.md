@@ -13,6 +13,11 @@ a KMS client, the full secret and wrapping key ARNs, and a stable ring identifie
 ring for hosts that need to read each other's artifacts. Configure credential resolution through
 the host's AWS SDK clients and keep SDK response-body logging disabled.
 
+```csharp
+services.AddAwsDataProtectionKeyRing(secretsManager, kms, secretArn, wrappingKeyArn, ringId)
+    .AddPortiaDataProtection();
+```
+
 In Development on macOS or Linux, register `AddDevelopmentDataProtectionKeyRing(path)` with the
 absolute path to a key file in a dedicated private directory outside the repository. Initialize it
 explicitly with `DevelopmentDataProtectionKeyRingInitializer.Initialize` and a Development
@@ -20,6 +25,15 @@ explicitly with `DevelopmentDataProtectionKeyRingInitializer.Initialize` and a D
 Use `DevelopmentDataProtectionKeyRingInitializer.RotateProtectionKey` to publish a new active
 root atomically. Hosts read the current file on each operation. Keep the local ring across
 restarts and protect any backups of the file because it contains the local key bytes.
+
+```csharp
+services.AddDevelopmentDataProtectionKeyRing(keyRingPath)
+    .AddPortiaDataProtection();
+```
+
+Put provider registration in the [shared application setup](application-setup.md#protecting-application-data).
+Inject the protector or hasher into the handler that owns the operation. ASP.NET Core's
+`AddDataProtection()` serves framework tokens such as Storage upload sessions.
 
 ## Protect and verify
 

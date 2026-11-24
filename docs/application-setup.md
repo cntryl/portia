@@ -77,6 +77,14 @@ For JWT actors, `Cntryl.Portia.Jwt` supplies `JwtRequestActorValidator`. Give it
 pass `mapInboundClaims: false` when the API turns that mapping off, whether through
 `MapInboundClaims = false` or globally through `JwtSecurityTokenHandler.DefaultMapInboundClaims = false`.
 
+## Protecting application data
+
+When an API and a worker share protected records, register the protector, hasher, and chosen
+key ring in their shared setup. Handlers take `IPayloadProtector` or `IKeyedHasher` through normal
+constructor injection and reference `Cntryl.Portia.DataProtection.Abstractions`. The host
+references and configures the implementation and provider. See [data protection](data-protection.md)
+for AWS and Development registration and rotation.
+
 ## API deployment
 
 Reference the shared project and `Cntryl.Portia.AspNetCore`. The HTTP package depends directly on
