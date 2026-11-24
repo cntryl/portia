@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -26,6 +27,14 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         "Aggregate '{0}' takes '{1}'. An aggregate receives data and an optional IDomainEventMetadataFactory; loading and persisting are the repository's job, and a service dependency makes the aggregate impossible to replay in isolation.",
         "Portia", DiagnosticSeverity.Warning, true);
 
+    static readonly DiagnosticDescriptor ReactorPurity = new("PORTIA110", "Reactor dependency is outside its allow-list",
+        "Reactor '{0}' takes '{1}'. This opt-in rule permits only IRequestBus and IProjectionCheckpointStore so reactions pivot through commands instead of reading or writing directly.",
+        "Portia", DiagnosticSeverity.Warning, false);
+
+    static readonly DiagnosticDescriptor ReactorBodyPurity = new("PORTIA111", "Reactor performs work beyond command dispatch",
+        "Reactor '{0}' calls '{1}' in a handler. Read the trigger and send a command through IRequestBus; move every read, decision, and external effect into the command handler.",
+        "Portia", DiagnosticSeverity.Warning, false);
+
     static readonly DiagnosticDescriptor CaughtExceptionAsResult = new("PORTIA104",
         "Unexpected failure converted to a Result",
         "'{0}' catches Exception and returns a failed Result. Result describes failures a handler anticipates; an unrecognized failure must stay an exception so transports can tell 'this request is invalid' from 'this call broke'.",
@@ -40,6 +49,11 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         "Request authorizer takes effect-capable dependency",
         "Request authorizer '{0}' takes effect-capable dependency '{1}'; {2}. Authorizers decide whether an actor may attempt a request and must not change state.",
         "Portia", DiagnosticSeverity.Warning, true);
+
+    static readonly DiagnosticDescriptor SplitDependentReactions = new("PORTIA109",
+        "Dependent reactions are split across reactors",
+        "Reactor '{0}' sends '{1}' and reactor '{2}' sends '{3}' for the same '{4}' lifecycle. Consolidate these dependent reactions in one reactor so their checkpoints cannot put cancellation before creation.",
+        "Portia", DiagnosticSeverity.Warning, false);
 
     // Anything that reaches outside the component's own unit of work.
     static readonly string[] EffectTypes =
@@ -104,7 +118,10 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
 
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
-        [ProjectorEffect, ServiceLocation, AggregateService, CaughtExceptionAsResult, GuardEffect, AuthorizerEffect];
+    [
+        ProjectorEffect, ServiceLocation, AggregateService, ReactorPurity, CaughtExceptionAsResult, GuardEffect,
+        AuthorizerEffect, SplitDependentReactions, ReactorBodyPurity
+    ];
 
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)
@@ -114,6 +131,66 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze |
                                                GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.EnableConcurrentExecution();
+        context.RegisterCompilationStartAction(static start =>
+        {
+            var reactions = new ConcurrentBag<ReactionHandlers>();
+            var reported = new ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
+            start.RegisterSyntaxNodeAction(nodeContext =>
+            {
+                var invocation = (InvocationExpressionSyntax)nodeContext.Node;
+
+                if (nodeContext.SemanticModel.GetSymbolInfo(invocation, nodeContext.CancellationToken).Symbol is not
+                    IMethodSymbol target
+                    || !IsReactionDispatch(target)
+                    || invocation.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() is not { } declaration
+                    || nodeContext.SemanticModel.GetDeclaredSymbol(declaration, nodeContext.CancellationToken) is not
+                    { IsAbstract: false } reactor
+                    || invocation.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault() is not
+                    { } handlerSyntax
+                    || nodeContext.SemanticModel.GetDeclaredSymbol(handlerSyntax, nodeContext.CancellationToken) is not
+                        IMethodSymbol handler
+                    || !IsReactorHandlerImplementation(reactor, handler)
+                    || !ApplicationProject.IsReactor(reactor))
+                    return;
+
+                var command = invocation.ArgumentList.Arguments
+                    .Select(argument => nodeContext.SemanticModel.GetTypeInfo(argument.Expression,
+                        nodeContext.CancellationToken).Type)
+                    .OfType<INamedTypeSymbol>()
+                    .FirstOrDefault(ApplicationProject.IsRequest);
+
+                if (command is null)
+                    return;
+
+                var current = new ReactionHandlers(reactor, [command]);
+                reactions.Add(current);
+
+                foreach (var other in reactions)
+                {
+                    if (SymbolEqualityComparer.Default.Equals(other.Reactor, reactor))
+                        continue;
+
+                    var lifecycle = LifecyclePair(command, other.Commands[0]);
+
+                    if (lifecycle is null)
+                        continue;
+
+                    var left = reactor.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    var right = other.Reactor.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    var key = StringComparer.Ordinal.Compare(left, right) < 0
+                        ? left + "|" + right
+                        : right + "|" + left;
+
+                    if (reported.TryAdd(key, 0))
+                        nodeContext.ReportDiagnostic(Diagnostic.Create(SplitDependentReactions,
+                            reactor.Locations.FirstOrDefault(), reactor.Name,
+                            command.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                            other.Reactor.Name,
+                            other.Commands[0].ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                            lifecycle));
+                }
+            }, SyntaxKind.InvocationExpression);
+        });
         context.RegisterSyntaxNodeAction(static syntaxContext =>
         {
             // Every rule concerns a type that derives from or implements something. A partial part without a
@@ -139,6 +216,8 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         var findings = new List<Finding>();
         var parameters = DeclaredParameters(symbol, node);
         ReportProjectorEffects(findings, symbol, parameters);
+        ReportReactorPurity(findings, symbol, parameters);
+        ReportReactorBodyPurity(findings, symbol, node, semanticModel, ct);
         ReportAggregateServices(findings, symbol, parameters);
         ReportPreflightEffects(findings, symbol, parameters);
         ReportServiceLocation(findings, symbol, node, semanticModel, parameters);
@@ -146,6 +225,104 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         return [.. findings];
     }
 
+    static void ReportReactorPurity(List<Finding> findings, INamedTypeSymbol symbol, IParameterSymbol[] parameters)
+    {
+        if (!ApplicationProject.IsReactor(symbol))
+            return;
+
+        foreach (var parameter in parameters.Where(parameter =>
+                     !Matches(parameter.Type, [
+                         "Cntryl.Portia.IRequestBus",
+                         "Cntryl.Portia.IProjectionCheckpointStore"
+                     ])))
+            findings.Add(Finding.Create(Kind.ReactorPurity, Location(parameter), symbol.Name,
+                Display(parameter)));
+    }
+
+    static void ReportReactorBodyPurity(
+        List<Finding> findings,
+        INamedTypeSymbol symbol,
+        TypeDeclarationSyntax node,
+        SemanticModel semanticModel,
+        CancellationToken ct
+    )
+    {
+        if (!ApplicationProject.IsReactor(symbol))
+            return;
+
+        var handlerMethods = symbol.AllInterfaces
+            .Where(iface => SymbolNames.Is(iface, "Cntryl.Portia.IReactorHandler`1")
+                            || SymbolNames.Is(iface, "Cntryl.Portia.IBatchReactorHandler`1"))
+            .SelectMany(iface => iface.GetMembers("HandleAsync").OfType<IMethodSymbol>())
+            .Select(symbol.FindImplementationForInterfaceMember)
+            .OfType<IMethodSymbol>()
+            .Where(method => SymbolEqualityComparer.Default.Equals(method.ContainingType, symbol));
+
+        foreach (var implementation in handlerMethods)
+            foreach (var reference in implementation.DeclaringSyntaxReferences)
+            {
+                if (reference.SyntaxTree != node.SyntaxTree
+                    || reference.GetSyntax(ct) is not MethodDeclarationSyntax method
+                    || !method.Ancestors().Contains(node))
+                    continue;
+
+                foreach (var invocation in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                {
+                    if (semanticModel.GetSymbolInfo(invocation, ct).Symbol is not IMethodSymbol target
+                        || IsReactionDispatch(target)
+                        || target.IsImplicitlyDeclared)
+                        continue;
+
+                    findings.Add(Finding.Create(Kind.ReactorBodyPurity, invocation.GetLocation(), symbol.Name,
+                        target.Name));
+                }
+            }
+    }
+
+    static string? LifecyclePair(INamedTypeSymbol left, INamedTypeSymbol right)
+    {
+        if (!SymbolEqualityComparer.Default.Equals(left.ContainingNamespace, right.ContainingNamespace))
+            return null;
+
+        var leftAction = ActionFor(left.Name, out var leftResource);
+        var rightAction = ActionFor(right.Name, out var rightResource);
+
+        return leftAction.HasValue && rightAction.HasValue
+                                  && leftAction != rightAction
+                                  && string.Equals(leftResource, rightResource, StringComparison.Ordinal)
+            ? rightResource
+            : null;
+    }
+
+    static bool IsReactionDispatch(IMethodSymbol method)
+    {
+        method = method.ReducedFrom ?? method;
+        return method.Name == "SendReactionAsync"
+               && SymbolNames.Is(method.ContainingType, "Cntryl.Portia.RequestBusExtensions");
+    }
+
+    static bool IsReactorHandlerImplementation(INamedTypeSymbol reactor, IMethodSymbol method) =>
+        reactor.AllInterfaces
+            .Where(iface => SymbolNames.Is(iface, "Cntryl.Portia.IReactorHandler`1")
+                            || SymbolNames.Is(iface, "Cntryl.Portia.IBatchReactorHandler`1"))
+            .SelectMany(iface => iface.GetMembers("HandleAsync").OfType<IMethodSymbol>())
+            .Select(reactor.FindImplementationForInterfaceMember)
+            .Any(implementation => SymbolEqualityComparer.Default.Equals(implementation, method));
+
+    static bool? ActionFor(string name, out string resource)
+    {
+        foreach (var prefix in new[] { "Create", "Cancel" })
+        {
+            if (!name.StartsWith(prefix, StringComparison.Ordinal) || name.Length == prefix.Length)
+                continue;
+
+            resource = name.Substring(prefix.Length);
+            return prefix == "Create";
+        }
+
+        resource = "";
+        return null;
+    }
     static void ReportProjectorEffects(List<Finding> findings, INamedTypeSymbol symbol, IParameterSymbol[] parameters)
     {
         if (!ApplicationProject.IsProjector(symbol))
@@ -440,9 +617,11 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         Kind.ProjectorEffect => ProjectorEffect,
         Kind.ServiceLocation => ServiceLocation,
         Kind.AggregateService => AggregateService,
+        Kind.ReactorPurity => ReactorPurity,
         Kind.CaughtExceptionAsResult => CaughtExceptionAsResult,
         Kind.GuardEffect => GuardEffect,
         Kind.AuthorizerEffect => AuthorizerEffect,
+        Kind.ReactorBodyPurity => ReactorBodyPurity,
         _ => throw new ArgumentOutOfRangeException(nameof(kind))
     };
 
@@ -451,10 +630,16 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         ProjectorEffect,
         ServiceLocation,
         AggregateService,
+        ReactorPurity,
         CaughtExceptionAsResult,
         GuardEffect,
-        AuthorizerEffect
+        AuthorizerEffect,
+        ReactorBodyPurity
     }
+
+    sealed record ReactionHandlers(
+        INamedTypeSymbol Reactor,
+        INamedTypeSymbol[] Commands);
 
     sealed class Finding(Kind kind, Location location, object[] arguments)
     {

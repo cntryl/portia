@@ -65,6 +65,202 @@ public sealed class GeneratorDiagnosticsTests
     }
 
     [Fact]
+    public void ShouldReportOptInReactorPurityGivenKnownEffectDependency()
+    {
+        // Arrange
+        const string source = """
+                              using Cntryl.Portia;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              public sealed record Changed : DomainEvent;
+                              public sealed class Reaction(System.Net.Http.HttpClient client) : IReactorHandler<Changed>
+                              {
+                                  public ValueTask<Result> HandleAsync(
+                                      IReactorContext<Changed> context, CancellationToken ct) => default;
+                              }
+                              """;
+
+        // Act
+        var disabled = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer())
+            .Where(diagnostic => diagnostic.Id == "PORTIA110").ToArray();
+        var enabled = GeneratorCompilation.DiagnosticsWithSeverity(source, "PORTIA110", ReportDiagnostic.Warn,
+                new ComponentPracticeAnalyzer())
+            .Where(diagnostic => diagnostic.Id == "PORTIA110").ToArray();
+
+        // Assert
+        Assert.Empty(disabled);
+        var diagnostic = Assert.Single(enabled);
+        var message = diagnostic.GetMessage(CultureInfo.InvariantCulture);
+        Assert.Contains("Reactor", message, StringComparison.Ordinal);
+        Assert.Contains("IRequestBus", message, StringComparison.Ordinal);
+        Assert.Equal("client",
+            source.Substring(diagnostic.Location.SourceSpan.Start, diagnostic.Location.SourceSpan.Length));
+    }
+
+    [Fact]
+    public void ShouldAllowReactorDispatchAndCheckpointDependenciesGivenPurityEnabled()
+    {
+        // Arrange
+        const string source = """
+                              using Cntryl.Portia;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              public sealed record Changed : DomainEvent;
+                              public sealed class Reaction(
+                                  IRequestBus bus,
+                                  IProjectionCheckpointStore checkpoints) : IReactorHandler<Changed>
+                              {
+                                  public ValueTask<Result> HandleAsync(
+                                      IReactorContext<Changed> context, CancellationToken ct) => default;
+                              }
+                              """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.DiagnosticsWithSeverity(source, "PORTIA110", ReportDiagnostic.Warn,
+                new ComponentPracticeAnalyzer())
+            .Where(diagnostic => diagnostic.Id == "PORTIA110");
+
+        // Assert
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void ShouldReportOptInReactorBodyPurityGivenEnabledRule()
+    {
+        // Arrange
+        const string source = """
+                              using Cntryl.Portia;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              public sealed record Changed : DomainEvent;
+                              public sealed class Reaction(IRequestBus bus) : IReactorHandler<Changed>
+                              {
+                                  public ValueTask<Result> HandleAsync(
+                                      IReactorContext<Changed> context, CancellationToken ct)
+                                  {
+                                      _ = System.Guid.NewGuid();
+                                      return default;
+                                  }
+                              }
+                              """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.DiagnosticsWithSeverity(source, "PORTIA111", ReportDiagnostic.Warn,
+                new ComponentPracticeAnalyzer())
+            .Where(diagnostic => diagnostic.Id is "PORTIA110" or "PORTIA111").ToArray();
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal("PORTIA111", diagnostic.Id);
+        Assert.Contains("NewGuid", diagnostic.GetMessage(CultureInfo.InvariantCulture),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShouldPreserveIndependentReactorsGivenUnrelatedEventReactions()
+    {
+        // Arrange
+        const string source = """
+                              using Cntryl.Portia;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              public sealed record Placed : DomainEvent;
+                              public sealed record InventoryReserved : DomainEvent;
+                              public sealed class OrderPlacedReaction : IReactorHandler<Placed>
+                              {
+                                  public ValueTask<Result> HandleAsync(
+                                      IReactorContext<Placed> context, CancellationToken ct) => default;
+                              }
+                              public sealed class InventoryReaction : IReactorHandler<InventoryReserved>
+                              {
+                                  public ValueTask<Result> HandleAsync(
+                                      IReactorContext<InventoryReserved> context, CancellationToken ct) => default;
+                              }
+                              """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new ComponentPracticeAnalyzer());
+
+        // Assert
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA109");
+    }
+
+    [Fact]
+    public void ShouldPreserveApplicationSendReactionMethodGivenOptInSplitRule()
+    {
+        // Arrange
+        const string source = """
+                              using Cntryl.Portia;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              public sealed record Changed : DomainEvent;
+                              public sealed record CreateFulfillment : IRequest;
+                              public sealed class Reaction : IReactorHandler<Changed>
+                              {
+                                  public ValueTask<Result> HandleAsync(
+                                      IReactorContext<Changed> context, CancellationToken ct) =>
+                                      SendReactionAsync(new CreateFulfillment());
+                                  static ValueTask<Result> SendReactionAsync(CreateFulfillment command) => default;
+                              }
+                              public sealed record CancelFulfillment : IRequest;
+                              public sealed class OtherReaction : IReactorHandler<Changed>
+                              {
+                                  public ValueTask<Result> HandleAsync(
+                                      IReactorContext<Changed> context, CancellationToken ct) =>
+                                      SendReactionAsync(new CancelFulfillment());
+                                  static ValueTask<Result> SendReactionAsync(CancelFulfillment command) => default;
+                              }
+                              """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.DiagnosticsWithSeverity(source, "PORTIA109", ReportDiagnostic.Warn,
+            new ComponentPracticeAnalyzer());
+
+        // Assert
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA109");
+    }
+
+    [Fact]
+    public void ShouldRecommendConsolidationGivenDependentReactionsSplitAcrossReactors()
+    {
+        // Arrange
+        const string source = """
+                              using Cntryl.Portia;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              public record FulfillmentChanged : DomainEvent;
+                              public sealed record FulfillmentCompleted : FulfillmentChanged;
+                              public sealed record CreateFulfillment : IRequest;
+                              public sealed record CancelFulfillment : IRequest;
+                              public sealed class FulfillmentReaction(IRequestBus bus)
+                                  : IReactorHandler<FulfillmentChanged>
+                              {
+                                  public ValueTask<Result> HandleAsync(
+                                      IReactorContext<FulfillmentChanged> context, CancellationToken ct) =>
+                                      bus.SendReactionAsync(new CreateFulfillment(), context, ct);
+                              }
+                              public sealed class FulfillmentCompletedReaction(IRequestBus bus)
+                                  : IReactorHandler<FulfillmentCompleted>
+                              {
+                                  public ValueTask<Result> HandleAsync(
+                                      IReactorContext<FulfillmentCompleted> context, CancellationToken ct) =>
+                                      bus.SendReactionAsync(new CancelFulfillment(), context, ct);
+                              }
+                              """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.DiagnosticsWithSeverity(source, "PORTIA109", ReportDiagnostic.Warn,
+            new ComponentPracticeAnalyzer());
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA109");
+        var message = diagnostic.GetMessage(CultureInfo.InvariantCulture);
+        Assert.Contains("Consolidate", message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("checkpoint", message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Fulfillment", message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ShouldReportPortia102GivenAggregateReaderWriterAndExecutorDependencies()
     {
         // Arrange
@@ -922,7 +1118,7 @@ public sealed class GeneratorDiagnosticsTests
         // Assert
         _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA101");
         // One type may handle several requests, as a test double often does; that is a design choice, not a defect.
-        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA103");
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA110");
     }
 
     /// <summary>

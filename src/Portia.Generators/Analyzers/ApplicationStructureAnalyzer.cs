@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -32,9 +33,10 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         "Handler '{0}' handles more than one request; use one handler per command or query", "PortiaStructure",
         DiagnosticSeverity.Warning, true);
 
-    static readonly DiagnosticDescriptor AggregateSize = new("PORTIA208", "Aggregate file exceeds the review budget",
-        "Aggregate file '{0}' exceeds 400 lines; start with invariants and their owners, then compose or extract a child with its own identity and lifecycle when it shares an atomic rule with the root",
-        "PortiaStructure", DiagnosticSeverity.Warning, true);
+    static readonly DiagnosticDescriptor AggregateSize = new("PORTIA208", "Aggregate spans too many semantic responsibilities",
+        "Aggregate '{0}' has {1} command/event responsibilities, exceeding the configured review budget of {2}; split independent command intentions and event lifecycles across clear aggregate boundaries while preserving each atomic invariant",
+        "PortiaStructure", DiagnosticSeverity.Warning, true,
+        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     static readonly DiagnosticDescriptor ProjectRole = new("PORTIA213", "Unsupported application project role",
         "Application project '{0}' must use Common, Core, Api, Worker, Mcp, Host, or Shared, via PortiaProjectRole or portia_project_role; mark test projects with IsTestProject",
@@ -71,14 +73,21 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             }
 
             var aggregateOwnership = new AggregateOwnershipIndex(start.Compilation, project);
-            start.RegisterSemanticModelAction(model => AnalyzeFile(model, project, aggregateOwnership));
+            var aggregateResponsibilities = new ConcurrentBag<AggregateResponsibility>();
+            start.RegisterCompilationEndAction(end =>
+                ReportAggregateResponsibilities(end, aggregateResponsibilities));
+            start.RegisterSemanticModelAction(model =>
+                AnalyzeFile(model, project, aggregateOwnership, start.Options.AnalyzerConfigOptionsProvider,
+                    aggregateResponsibilities));
         });
     }
 
     static void AnalyzeFile(
         SemanticModelAnalysisContext context,
         ApplicationProject project,
-        AggregateOwnershipIndex aggregateOwnership
+        AggregateOwnershipIndex aggregateOwnership,
+        AnalyzerConfigOptionsProvider options,
+        ConcurrentBag<AggregateResponsibility> aggregateResponsibilities
     )
     {
         var tree = context.SemanticModel.SyntaxTree;
@@ -240,12 +249,62 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
 
             if (!project.IsTest && ApplicationProject.DerivesFrom(symbol, "Aggregate"))
             {
-                var text = tree.GetText(context.CancellationToken);
-                var lines = text.Lines.Count - (text.Lines[text.Lines.Count - 1].Span.Length == 0 ? 1 : 0);
-
-                if (lines > 400)
-                    context.ReportDiagnostic(Diagnostic.Create(AggregateSize, identifier.GetLocation(), filename));
+                var isFirstDeclaration = symbol.DeclaringSyntaxReferences.FirstOrDefault() is { } first
+                                         && first.SyntaxTree == tree
+                                         && first.Span == declaration.Span;
+                var commandMethods = symbol.GetMembers().OfType<IMethodSymbol>()
+                    .Where(method => method is
+                    {
+                        IsImplicitlyDeclared: false,
+                        IsStatic: false,
+                        IsOverride: false,
+                        MethodKind: MethodKind.Ordinary,
+                        DeclaredAccessibility: Accessibility.Public
+                    })
+                    .Select(method => method.Name)
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+                var eventTypes = declaration.DescendantNodes().OfType<GenericNameSyntax>()
+                    .Where(name => name.Identifier.ValueText == "On"
+                                   && name.TypeArgumentList.Arguments.Count == 1
+                                   && context.SemanticModel.GetSymbolInfo(name, context.CancellationToken).Symbol is
+                                       IMethodSymbol { TypeArguments.Length: 1 } method
+                                   && SymbolNames.Is(method.ContainingType, "Cntryl.Portia.Aggregate"))
+                    .Select(name => context.SemanticModel.GetTypeInfo(name.TypeArgumentList.Arguments[0],
+                        context.CancellationToken).Type)
+                    .OfType<INamedTypeSymbol>()
+                    .Select(type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                    .Distinct(StringComparer.Ordinal);
+                var budget = ApplicationProject.AggregateSemanticBudgetFor(options, tree,
+                    project.AggregateSemanticBudget);
+                aggregateResponsibilities.Add(new AggregateResponsibility(symbol, eventTypes.ToArray(),
+                    isFirstDeclaration ? commandMethods.Length : 0,
+                    isFirstDeclaration ? identifier.GetLocation() : null,
+                    isFirstDeclaration ? budget : 0));
             }
+        }
+    }
+
+    static void ReportAggregateResponsibilities(
+        CompilationAnalysisContext context,
+        ConcurrentBag<AggregateResponsibility> responsibilities
+    )
+    {
+        foreach (var aggregate in responsibilities.GroupBy(item => item.Symbol, SymbolEqualityComparer.Default))
+        {
+            var primary = aggregate.FirstOrDefault(item => item.Location is not null);
+
+            if (primary is null)
+                continue;
+
+            var eventCount = aggregate.SelectMany(item => item.EventTypes)
+                .Distinct(StringComparer.Ordinal)
+                .Count();
+            var count = primary.CommandCount + eventCount;
+
+            if (count > primary.Budget)
+                context.ReportDiagnostic(Diagnostic.Create(AggregateSize, primary.Location, primary.Symbol.Name,
+                    count, primary.Budget));
         }
     }
 
@@ -255,6 +314,13 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         DelegateDeclarationSyntax @delegate => @delegate.Identifier,
         _ => throw new ArgumentException("Expected a type declaration", nameof(declaration))
     };
+
+    sealed record AggregateResponsibility(
+        INamedTypeSymbol Symbol,
+        string[] EventTypes,
+        int CommandCount,
+        Location? Location,
+        int Budget);
 
     static string Filename(string name, int arity)
     {

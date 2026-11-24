@@ -12,3 +12,8 @@
 
  Rule ID   | Category | Severity | Notes
 -----------|----------|----------|------
+ PORTIA032 | Portia | Error | Internal system requests must be unary request/response commands, not streams.
+ PORTIA109 | Portia   | Disabled | Reactors sending complementary create/cancel commands for one resource should be consolidated.
+ PORTIA110 | Portia   | Disabled | Reactors can opt in to direct-effect purity guidance without changing default builds.
+ PORTIA111 | Portia   | Disabled | Opt-in reactors can only read the trigger and send one or more commands.
+ PORTIA214 | PortiaStructure | Warning | Internal system request handlers must be registered by the owning feature.

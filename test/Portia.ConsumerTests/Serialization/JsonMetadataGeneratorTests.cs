@@ -5,6 +5,65 @@ namespace Cntryl.Portia.Consumer;
 
 public sealed class JsonMetadataGeneratorTests
 {
+    [Fact]
+    public void ShouldRequireRequestAndResultJsonMetadataGivenInternalSystemRequest()
+    {
+        // Arrange
+        const string source = """
+                              using Cntryl.Portia;
+                              [Discriminator("portia.system_probe", 1)]
+                              [RequestRoute("*", "*", "*", "probe")]
+                              internal sealed record SystemProbe : IRequest<SystemProbeResult>, Cntryl.Portia.ISystemRequest;
+                              internal sealed record SystemProbeResult;
+                              """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
+
+        // Assert
+        Assert.Equal(["SystemProbe", "SystemProbeResult"], diagnostics.Where(d => d.Id == "PORTIA025")
+            .Select(d => d.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void ShouldGenerateTransportRegistrationGivenInternalSystemRequest()
+    {
+        // Arrange
+        const string source = """
+                              using Cntryl.Portia;
+                              [Discriminator("portia.system_probe", 1)]
+                              [RequestRoute("*", "*", "*", "probe")]
+                              internal sealed record SystemProbe : IRequest<SystemProbeResult>, Cntryl.Portia.ISystemRequest;
+                              internal sealed record SystemProbeResult;
+                              """;
+
+        // Act
+        var generated = GeneratorCompilation.GeneratedSource(source, new PortiaServiceRegistrationGenerator());
+
+        // Assert
+        Assert.Contains("typeof(global::SystemProbe)", generated, StringComparison.Ordinal);
+        Assert.Contains("AddGeneratedRequest", generated, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ShouldRejectSystemMarkerGivenStreamRequest()
+    {
+        // Arrange
+        const string source = """
+                              using Cntryl.Portia;
+                              [Discriminator("portia.system_stream", 1)]
+                              [RequestRoute("*", "*", "*", "stream")]
+                              internal sealed record SystemStream : IStreamRequest<SystemItem>, ISystemRequest;
+                              internal sealed record SystemItem;
+                              """;
+
+        // Act
+        var diagnostics = GeneratorCompilation.Diagnostics(source, new PortiaServiceRegistrationGenerator());
+
+        // Assert
+        _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA032");
+    }
+
     [Theory]
     [InlineData(
         "publisher.EnqueueWithOptionsAsync(new Queued(), RequestRouteValues.None, null, new RequestQueueOptions(TtlHours: 1))")]

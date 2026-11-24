@@ -85,7 +85,7 @@ ordinary top-level `Program.cs` composition root.
 
 | Core folder | Responsibility |
 | --- | --- |
-| Aggregates | Aggregate roots and directly owned rule or state collaborators. Keep local invariants visible and prefer composition as an aggregate grows beyond 400 lines. Child entities with their own identity and lifecycle live in `Aggregates/Entities/`. |
+| Aggregates | Aggregate roots and directly owned rule or state collaborators. Keep local invariants visible and prefer composition as an aggregate grows beyond the configured semantic responsibility budget (12 by default). Child entities with their own identity and lifecycle live in `Aggregates/Entities/`. |
 | Handlers | One handler per command or query; keep unrelated types elsewhere. |
 | Reactors | Map committed facts to commands and send them. Do not hydrate aggregates or re-verify the source fact. |
 | Projectors | Write read models through repositories. |
@@ -99,8 +99,11 @@ Start aggregate sizing decisions with the invariants and their owners. Extract a
 its own identity and lifecycle and participates in an atomic rule with its root. Entity methods may
 propose facts about the entity's own lifecycle; the root decides whether those facts fit
 aggregate-wide invariants and emits them on the root stream. Replay handlers rebuild both root and
-child state from those facts. Keep the 400-line `PORTIA208` review threshold as a prompt to inspect
-these boundaries rather than as a target line count.
+child state from those facts. `PORTIA208` counts declared public command methods and distinct `On<TEvent>` replay/event
+responsibilities rather than physical lines, so formatting and comments do not change the result.
+Its default review budget is 12 responsibilities; set
+`portia_aggregate_semantic_budget` in `.editorconfig` for a stricter or looser boundary. Treat the
+threshold as a prompt to inspect these boundaries rather than as a target.
 
 Composition is the way to keep a large aggregate reviewable. Aggregate collaborators must be directly referenced by an aggregate in the feature. Models have data-only shapes, values have immutable value shapes, and repository implementations satisfy a persistence contract or an interface declared in the feature. Concept budgets and helper-chain quality remain review responsibilities.
 
@@ -171,6 +174,9 @@ portia_project_role = Mcp
 
 [src/Shared.Hosting/**.cs]
 portia_project_role = Host
+
+[src/Shop.Core/**.cs]
+portia_aggregate_semantic_budget = 10
 ```
 
 `PortiaProjectRole` in `Directory.Build.props` is a build-time override:
@@ -221,7 +227,7 @@ retain their behavior regardless of this opt-in.
 | PORTIA205 | One handler implements contracts for multiple requests. | Separate the operations deliberately. |
 | PORTIA206 | Common references another application project, or Core references one other than Common or a `*.Abstractions` project; either references a known infrastructure adapter; Cassie connection setup occurs outside Api/Worker; Api and Worker reference each other. | Move composition to a root; Core's Cassie repository API is allowed. |
 | PORTIA207 | Core component registration occurs outside its feature registration file. | Diagnostic names the destination file. |
-| PORTIA208 | An aggregate file exceeds 400 lines. | Start with each invariant and its owner; extract a child entity when it has its own identity and lifecycle within an atomic root rule. |
+| PORTIA208 | An aggregate exceeds the semantic responsibility budget (12 by default). | Formatting and comments do not affect the count. Start with each command/event lifecycle and its owner; extract a child entity when it has its own identity and lifecycle within an atomic root rule. |
 | PORTIA209 | Common declares executable members, except construction of sealed record values in Values. | Move other behavior into Core. |
 | PORTIA210 | A request/event lacks a valid feature discriminator or explicit positive version. | Make an omitted default version explicit; never guess or change a wire identity. |
 | PORTIA211 | A command handler's implementation consists solely of throwing `NotImplementedException`. | Implement the operation or remove its surface. |

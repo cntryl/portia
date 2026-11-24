@@ -46,6 +46,11 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
             .Where(static root => root is not null)
             .Select(static (root, _) => root!)
             .Collect();
+        var systemRequests = context.SyntaxProvider.CreateSyntaxProvider(
+                static (node, _) => SyntaxFilters.HasBaseList(node),
+                static (ctx, ct) => SystemRequestRoots(ctx, ct))
+            .SelectMany(static (roots, _) => roots)
+            .Collect();
         var declaredCoverage = context.SyntaxProvider.ForAttributeWithMetadataName(
                 "Cntryl.Portia.PortiaJsonContextAttribute",
                 static (node, _) => node is TypeDeclarationSyntax,
@@ -57,8 +62,12 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
                 ? null
                 : string.Join("\n", ReferencedCoverage(compilation, ct)));
 
-        context.RegisterSourceOutput(events.Combine(calls).Combine(declaredCoverage).Combine(referencedCoverage),
-            static (output, input) => Report(output, input.Left.Left.Left.AddRange(input.Left.Left.Right),
+        context.RegisterSourceOutput(events.Combine(calls).Combine(systemRequests).Combine(declaredCoverage)
+                .Combine(referencedCoverage),
+            static (output, input) => Report(output,
+                input.Left.Left.Left.Left
+                    .AddRange(input.Left.Left.Left.Right)
+                    .AddRange(input.Left.Left.Right),
                 input.Left.Right, input.Right));
     }
 
@@ -109,6 +118,32 @@ public sealed class JsonMetadataDiagnosticGenerator : IIncrementalGenerator
         && IsConcreteDomainEvent(type) && HasDiscriminator(type)
             ? Use(type, type.Locations.FirstOrDefault(), context.SemanticModel.Compilation)
             : null;
+
+    static ImmutableArray<RootUse> SystemRequestRoots(GeneratorSyntaxContext context, CancellationToken ct)
+    {
+        if (context.SemanticModel.GetDeclaredSymbol(context.Node, ct) is not INamedTypeSymbol type
+            || type.IsAbstract
+            || !type.AllInterfaces.Any(iface =>
+                SymbolNames.Is(iface, "Cntryl.Portia.ISystemRequest")))
+        {
+            return [];
+        }
+
+        var roots = ImmutableArray.CreateBuilder<RootUse>();
+        Add(type);
+
+        foreach (var request in type.AllInterfaces.Where(iface =>
+                     iface.OriginalDefinition.ToDisplayString() is "Cntryl.Portia.IRequest<TOut>"))
+            Add(request.TypeArguments[0]);
+
+        return roots.ToImmutable();
+
+        void Add(ITypeSymbol root)
+        {
+            if (Use(root, type.Locations.FirstOrDefault(), context.SemanticModel.Compilation) is { } use)
+                roots.Add(use);
+        }
+    }
 
     static ImmutableArray<RootUse> CallRoots(GeneratorSyntaxContext context, CancellationToken ct)
     {

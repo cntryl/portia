@@ -12,8 +12,8 @@
     <ProjectReference Include="../Portia.Accounts.Application/Portia.Accounts.Application.csproj" />
     <PackageReference Include="Cntryl.Portia.Testing" Version="$(PortiaSmokePackageVersion)" Condition="'$(PortiaSmokePackageVersion)' != ''" />
     <ProjectReference Include="../../../src/Portia.Testing/Portia.Testing.csproj" Condition="'$(PortiaSmokePackageVersion)' == ''" />
-    <PackageReference Include="Cntryl.Conventions.Testing.Analyzers" Version="1.0.2" PrivateAssets="all" />
-    <PackageReference Include="Cntryl.Conventions.Testing.CodeFixes" Version="1.0.2" PrivateAssets="all" />
+    <PackageReference Include="Cntryl.Conventions.Testing.Analyzers" Version="1.0.5" PrivateAssets="all" />
+    <PackageReference Include="Cntryl.Conventions.Testing.CodeFixes" Version="1.0.5" PrivateAssets="all" />
     <PackageReference Include="xunit.v3" Version="4.0.3" />
   </ItemGroup>
 </Project>

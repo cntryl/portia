@@ -57,6 +57,28 @@ static class GeneratorCompilation
     public static IReadOnlyList<Diagnostic> Diagnostics(string source, params DiagnosticAnalyzer[] analyzers)
         => Diagnostics(source, [], analyzers);
 
+    public static IReadOnlyList<Diagnostic> DiagnosticsWithSeverity(
+        string source,
+        string diagnosticId,
+        ReportDiagnostic severity,
+        params DiagnosticAnalyzer[] analyzers
+    )
+    {
+        var parseOptions = new CSharpParseOptions(LanguageVersion.Latest).WithFeatures(
+            [new KeyValuePair<string, string>("InterceptorsNamespaces", "Cntryl.Portia.Generated")]);
+        var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
+            .Append(typeof(Aggregate).Assembly.Location)
+            .Append(typeof(IRemoteRequestSender).Assembly.Location)
+            .Distinct(StringComparer.Ordinal)
+            .Select(path => MetadataReference.CreateFromFile(path));
+        var compilationOptions = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary,
+            specificDiagnosticOptions: new[] { KeyValuePair.Create(diagnosticId, severity) });
+        var compilation = CSharpCompilation.Create("Diagnostics", [
+            CSharpSyntaxTree.ParseText(source, parseOptions, "DiagnosticScenario.cs")
+        ], references, compilationOptions);
+        return compilation.WithAnalyzers([.. analyzers]).GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
+    }
+
     // Analyzers report through the compiler's analyzer driver, which is also what applies their severity
     // configuration and pragma suppressions.
     public static IReadOnlyList<Diagnostic> Diagnostics(

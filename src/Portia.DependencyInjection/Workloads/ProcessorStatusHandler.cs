@@ -120,7 +120,8 @@ sealed class ProcessorStatusHandler(
             failureAttempt.FailureKind, failureAttempt.IsTransient, state!.ConsecutiveFailures,
             blockedAttempt is not null, failureAttempt.CompletedAt);
         var repair = Repair(state, blockedAttempt, progress);
-        var execution = Execution(registration.FailureAttemptLimit, live, owner, progress, attempt, failure,
+        var retryAt = RetryAt(state, failure);
+        var execution = Execution(registration.FailureAttemptLimit, live, owner, progress, attempt, failure, retryAt,
             repair, checkpoint.Error, sourceError, journalObservation?.Error, _clock.GetUtcNow());
         return new ProcessorStatus(registration.Name, registration.Descriptor.Kind, tenant?.Value,
             pattern.ToString(), registration.Processing.RebuildId, progress, failure, sourceError, journalObservation?.Error)
@@ -160,6 +161,23 @@ sealed class ProcessorStatusHandler(
         return new ProcessorRepairStatus(null, action, "approval_required");
     }
 
+    static DateTimeOffset? RetryAt(OperationalProcessorState? state, ProcessorStatusFailure? failure)
+    {
+        if (state is null || failure is not { IsBlocked: false, IsTransient: true, FailedAt: { } completed }
+            || state.Block is not null || state.ConsecutiveFailures <= 0 || state.Attempts.Count == 0
+            || state.Attempts[^1] is not
+            {
+                Outcome: OperationalAttemptOutcomes.Failed or OperationalAttemptOutcomes.Indeterminate
+            } latest
+            || latest.ExpectedCheckpoint != state.Checkpoint)
+            return null;
+
+        return completed + WorkloadFailureBackoff.Delay(
+            TimeSpan.FromTicks(state.Settings.PollIntervalTicks),
+            TimeSpan.FromTicks(state.Settings.MaximumFailureDelayTicks),
+            state.ConsecutiveFailures);
+    }
+
     static ProcessorExecutionStatus Execution(
         int attemptLimit,
         ProcessorExecutionStatus? live,
@@ -167,6 +185,7 @@ sealed class ProcessorStatusHandler(
         EventStreamProgress? progress,
         OperationalAttempt? attempt,
         ProcessorStatusFailure? failure,
+        DateTimeOffset? retryAt,
         ProcessorRepairStatus? repair,
         string? checkpointError,
         string? sourceError,
@@ -182,6 +201,10 @@ sealed class ProcessorStatusHandler(
                 repair?.Status == OperationalRepairStatuses.Queued ? "wait_for_repair" : "preview_and_approve_repair",
                 null, failure.ConsecutiveFailures, attemptLimit);
 
+        if (owner.Error is { } ownerError)
+            return new ProcessorExecutionStatus("observation_unavailable", null, "owner", ownerError,
+                "restore_dependency", null, null, attemptLimit);
+
         if (live is not null && live.Phase != "idle")
         {
             return live with
@@ -191,10 +214,13 @@ sealed class ProcessorStatusHandler(
             };
         }
 
-
         if (owner.HasOwner is false)
             return new ProcessorExecutionStatus("owner_unavailable", null, null, null, "restore_worker",
                 null, null, attemptLimit);
+
+        if (retryAt is not null)
+            return new ProcessorExecutionStatus("retry_wait", failure!.FailedAt, failure.Stage, failure.Kind,
+                "retry_processing", retryAt, failure.ConsecutiveFailures, attemptLimit);
 
         if (attempt?.Outcome is OperationalAttemptOutcomes.Running or OperationalAttemptOutcomes.Interrupted
             or OperationalAttemptOutcomes.Indeterminate)
@@ -203,7 +229,8 @@ sealed class ProcessorStatusHandler(
 
         if ((checkpointError ?? sourceError ?? journalError) is { } error)
             return new ProcessorExecutionStatus("observation_unavailable", null,
-                checkpointError is not null ? "checkpoint" : sourceError is not null ? "source" : "journal",
+                checkpointError is not null ? "checkpoint" :
+                sourceError is not null ? "source" : "journal",
                 error, "restore_dependency", null, null, attemptLimit);
 
         return new ProcessorExecutionStatus(progress?.IsCaughtUp == true ? "caught_up" : live?.Phase ?? "unknown",

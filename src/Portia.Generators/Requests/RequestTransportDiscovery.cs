@@ -45,7 +45,8 @@ static class RequestTransportDiscovery
                 component.DiscriminatorName, component.DiscriminatorVersion, location);
         return new Analysis(component, duplicateCandidate,
             GetInvalidRequestDiscriminator(context, declaration, symbol), GetInvalidRoute(context, declaration, symbol),
-            GetInvalidTransportId(context, declaration, symbol), GetInaccessibleRequest(declaration, symbol));
+            GetInvalidTransportId(context, declaration, symbol), GetInaccessibleRequest(declaration, symbol),
+            GetInvalidSystemRequest(declaration, symbol));
     }
 
     internal sealed record Analysis(
@@ -54,13 +55,26 @@ static class RequestTransportDiscovery
         InvalidDiscriminator? Discriminator,
         InvalidRoute? Route,
         InvalidTransportId? TransportId,
-        InaccessibleRequest? Inaccessible);
+        InaccessibleRequest? Inaccessible,
+        InvalidSystemRequest? SystemRequest);
 
     internal sealed record DuplicateDiscriminatorCandidate(
         string TypeName,
         string DiscriminatorName,
         int DiscriminatorVersion,
         DiagnosticLocation Location);
+
+    internal sealed record InvalidSystemRequest(string TypeName, DiagnosticLocation Location);
+
+    static InvalidSystemRequest? GetInvalidSystemRequest(
+        TypeDeclarationSyntax declaration,
+        INamedTypeSymbol symbol
+    ) =>
+        IsStream(symbol) && symbol.AllInterfaces.Any(iface =>
+            SymbolNames.Is(iface, "Cntryl.Portia.ISystemRequest"))
+            ? new InvalidSystemRequest(symbol.ToDisplayString(),
+                DiagnosticLocation.From(declaration.Identifier.GetLocation()))
+            : null;
 
     static InvalidDiscriminator? GetInvalidRequestDiscriminator(
         GeneratorSyntaxContext context,
@@ -251,16 +265,25 @@ static class RequestTransportDiscovery
 
     static bool HasTransportMarker(INamedTypeSymbol symbol) => GetTransportIds(symbol).Length != 0;
 
-    static string[] GetTransportIds(INamedTypeSymbol symbol) => symbol.AllInterfaces
-        .SelectMany(iface => iface.GetAttributes())
-        .Where(attribute => attribute.AttributeClass is { } attributeType &&
-                            SymbolNames.Is(attributeType, RequestTransportAttributeMetadataName))
-        .Select(attribute => attribute.ConstructorArguments.ElementAtOrDefault(0).Value as string)
-        .Where(static id => !string.IsNullOrWhiteSpace(id))
-        .Select(static id => id!)
-        .Distinct(StringComparer.Ordinal)
-        .OrderBy(static id => id, StringComparer.Ordinal)
-        .ToArray();
+    static string[] GetTransportIds(INamedTypeSymbol symbol)
+    {
+        var transports = symbol.AllInterfaces
+            .SelectMany(iface => iface.GetAttributes())
+            .Where(attribute => attribute.AttributeClass is { } attributeType &&
+                                SymbolNames.Is(attributeType, RequestTransportAttributeMetadataName))
+            .Select(attribute => attribute.ConstructorArguments.ElementAtOrDefault(0).Value as string)
+            .Where(static id => !string.IsNullOrWhiteSpace(id))
+            .Select(static id => id!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(static id => id, StringComparer.Ordinal)
+            .ToArray();
+
+        return transports.Length == 0
+               && symbol.AllInterfaces.Any(iface =>
+                   SymbolNames.Is(iface, "Cntryl.Portia.ISystemRequest"))
+            ? ["callable"]
+            : transports;
+    }
 
     static bool IsValidRouteSegment(string? segment) => !string.IsNullOrWhiteSpace(segment)
                                                         && (segment == "*" || segment.All(character =>
