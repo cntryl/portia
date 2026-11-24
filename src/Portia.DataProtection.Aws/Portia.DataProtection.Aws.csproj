@@ -5,10 +5,10 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="AWSSDK.KeyManagementService" />
-    <PackageReference Include="AWSSDK.SecretsManager" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../Portia.DataProtection/Portia.DataProtection.csproj" />
+    <ProjectReference Include="../Portia.Secrets.Aws/Portia.Secrets.Aws.csproj" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Portia.Tests" />

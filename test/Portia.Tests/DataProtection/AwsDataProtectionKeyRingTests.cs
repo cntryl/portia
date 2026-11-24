@@ -11,6 +11,7 @@ using Amazon.SecretsManager;
 using Amazon.SecretsManager.Model;
 using Cntryl.Portia.DataProtection;
 using Cntryl.Portia.DataProtection.Aws;
+using Cntryl.Portia.Secrets.Aws;
 using Xunit;
 
 namespace Cntryl.Portia.Tests.DataProtection;
@@ -26,7 +27,7 @@ public sealed class AwsDataProtectionKeyRingTests
         var time = new ManualTimeProvider();
         var secrets = new FakeSecrets(Manifest(1));
         var kms = new FakeKms { Block = true };
-        using var ring = new AwsDataProtectionKeyRing(secrets, kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromMinutes(5), time);
+        using var ring = new AwsDataProtectionKeyRing(new AwsSecretReader(secrets), kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromMinutes(5), time);
 
         // Act
         var first = ring.AcquireActiveAsync(TestContext.Current.CancellationToken).AsTask();
@@ -53,7 +54,7 @@ public sealed class AwsDataProtectionKeyRingTests
         var time = new ManualTimeProvider();
         var secrets = new FakeSecrets(Manifest(1));
         var kms = new FakeKms { Block = true };
-        using var ring = new AwsDataProtectionKeyRing(secrets, kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromSeconds(5), time);
+        using var ring = new AwsDataProtectionKeyRing(new AwsSecretReader(secrets), kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromSeconds(5), time);
         var acquisition = ring.AcquireActiveAsync(TestContext.Current.CancellationToken).AsTask();
         await kms.Started.Task.WaitAsync(TestContext.Current.CancellationToken);
 
@@ -76,7 +77,7 @@ public sealed class AwsDataProtectionKeyRingTests
         using var time = new ManualTimeProvider();
         using var secrets = new FakeSecrets(Manifest(1));
         using var kms = new FakeKms();
-        using var ring = new AwsDataProtectionKeyRing(secrets, kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromSeconds(5), time);
+        using var ring = new AwsDataProtectionKeyRing(new AwsSecretReader(secrets), kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromSeconds(5), time);
         var cancellationToken = TestContext.Current.CancellationToken;
         using var warmLease = await ring.AcquireActiveAsync(cancellationToken);
         time.AdvanceAfterNextRead(TimeSpan.FromSeconds(5));
@@ -101,7 +102,7 @@ public sealed class AwsDataProtectionKeyRingTests
         var time = new ManualTimeProvider();
         var secrets = new FakeSecrets(Manifest(1));
         var kms = new FakeKms { Block = true };
-        using var ring = new AwsDataProtectionKeyRing(secrets, kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromMinutes(5), time);
+        using var ring = new AwsDataProtectionKeyRing(new AwsSecretReader(secrets), kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromMinutes(5), time);
         using var cancellation = new CancellationTokenSource();
         var canceledWaiter = ring.AcquireActiveAsync(cancellation.Token).AsTask();
         await kms.Started.Task.WaitAsync(TestContext.Current.CancellationToken);
@@ -128,7 +129,7 @@ public sealed class AwsDataProtectionKeyRingTests
         var time = new ManualTimeProvider();
         var secrets = new FakeSecrets(Manifest(2), Manifest(1));
         var kms = new FakeKms();
-        using var ring = new AwsDataProtectionKeyRing(secrets, kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromSeconds(1), time);
+        using var ring = new AwsDataProtectionKeyRing(new AwsSecretReader(secrets), kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromSeconds(1), time);
         using (var lease = await ring.AcquireActiveAsync(TestContext.Current.CancellationToken))
         { }
 
@@ -149,7 +150,7 @@ public sealed class AwsDataProtectionKeyRingTests
         var time = new ManualTimeProvider();
         var secrets = new FakeSecrets(Manifest(1));
         var kms = new FakeKms { FailuresRemaining = 1 };
-        using var ring = new AwsDataProtectionKeyRing(secrets, kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromMinutes(5), time);
+        using var ring = new AwsDataProtectionKeyRing(new AwsSecretReader(secrets), kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromMinutes(5), time);
 
         // Act
         var firstException = await Record.ExceptionAsync(async () => await ring.AcquireActiveAsync(TestContext.Current.CancellationToken));
@@ -170,7 +171,7 @@ public sealed class AwsDataProtectionKeyRingTests
         var time = new ManualTimeProvider();
         var secrets = new FakeSecrets(Manifest(1), Manifest(1, wrappedRoot: 8));
         var kms = new FakeKms();
-        using var ring = new AwsDataProtectionKeyRing(secrets, kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromSeconds(1), time);
+        using var ring = new AwsDataProtectionKeyRing(new AwsSecretReader(secrets), kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromSeconds(1), time);
         using (var lease = await ring.AcquireActiveAsync(TestContext.Current.CancellationToken))
         { }
 

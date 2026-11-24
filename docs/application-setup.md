@@ -85,6 +85,12 @@ constructor injection and reference `Cntryl.Portia.DataProtection.Abstractions`.
 chooses its provider with `AddAwsDataProtection` or `AddDevelopmentDataProtection`. See [data protection](data-protection.md)
 for AWS and Development registration and rotation.
 
+## Reading application secrets
+
+Register the chosen secret reader in shared setup for the hosts that use it. Code that reads
+secrets takes `ISecretReader` and references `Cntryl.Portia.Secrets.Abstractions`. AWS hosts can
+register the adapter with `AddAwsSecretsManager`. See [secrets](secrets.md).
+
 ## API deployment
 
 Reference the shared project and `Cntryl.Portia.AspNetCore`. The HTTP package depends directly on

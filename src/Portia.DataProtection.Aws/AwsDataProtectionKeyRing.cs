@@ -7,9 +7,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Amazon.KeyManagementService;
 using Amazon.KeyManagementService.Model;
-using Amazon.SecretsManager;
-using Amazon.SecretsManager.Model;
 using Cntryl.Portia.DataProtection;
+using Cntryl.Portia.Secrets;
 
 namespace Cntryl.Portia.DataProtection.Aws;
 
@@ -18,7 +17,7 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
     const int MaxManifestBytes = 1_048_576;
     const int MaxKeys = 128;
     static readonly TimeSpan OperationTimeout = TimeSpan.FromSeconds(30);
-    readonly IAmazonSecretsManager _secrets;
+    readonly ISecretReader _secrets;
     readonly IAmazonKeyManagementService _kms;
     readonly string _secretArn, _wrappingKeyArn, _ringId;
     readonly TimeSpan _lifetime;
@@ -34,7 +33,7 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
     int _disposed;
 
     public AwsDataProtectionKeyRing(
-        IAmazonSecretsManager secrets,
+        ISecretReader secrets,
         IAmazonKeyManagementService kms,
         string secretArn,
         string wrappingKeyArn,
@@ -159,20 +158,12 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
         timeout.CancelAfter(OperationTimeout);
-        byte[]? manifestBytes = null;
         Dictionary<(string, DataProtectionKeyRole), KeyEntry>? entries = null;
 
         try
         {
-            var response = await _secrets.GetSecretValueAsync(new GetSecretValueRequest { SecretId = _secretArn, VersionStage = "AWSCURRENT" }, timeout.Token).ConfigureAwait(false);
-
-            if (response.SecretString is null)
-                throw new InvalidOperationException("AWS key manifest must be stored as SecretString.");
-
-            if (string.IsNullOrWhiteSpace(response.VersionId))
-                throw new InvalidOperationException("AWS key manifest has no Secrets Manager version ID.");
-
-            manifestBytes = System.Text.Encoding.UTF8.GetBytes(response.SecretString);
+            using var manifest = await _secrets.ReadCurrentAsync(_secretArn, timeout.Token).ConfigureAwait(false);
+            var manifestBytes = manifest.Bytes;
 
             if (manifestBytes.Length > MaxManifestBytes)
                 throw new InvalidOperationException("AWS key manifest exceeds the supported size.");
@@ -196,7 +187,7 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
             if (revision < Volatile.Read(ref _lastRevision))
                 throw new InvalidOperationException("AWS key manifest revision cannot move backwards.");
 
-            var manifestDigest = Convert.ToHexString(SHA256.HashData(manifestBytes));
+            var manifestDigest = Convert.ToHexString(SHA256.HashData(manifestBytes.Span));
 
             var activeId = root.GetProperty("activeKeyId").GetString();
             ValidateId(activeId, "activeKeyId");
@@ -241,12 +232,12 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
             lock (_sync)
             {
                 if (revision == _lastRevision &&
-                    (!StringComparer.Ordinal.Equals(response.VersionId, _lastVersionId) ||
+                    (!StringComparer.Ordinal.Equals(manifest.VersionId, _lastVersionId) ||
                      !StringComparer.Ordinal.Equals(manifestDigest, _lastManifestDigest)))
                     throw new InvalidOperationException("AWS key manifest revision was reused for different content or a different Secrets Manager version.");
 
                 _lastRevision = revision;
-                _lastVersionId = response.VersionId;
+                _lastVersionId = manifest.VersionId;
                 _lastManifestDigest = manifestDigest;
             }
 
@@ -262,7 +253,6 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
 
             throw;
         }
-        finally { if (manifestBytes is not null) CryptographicOperations.ZeroMemory(manifestBytes); }
     }
 
     static void ValidateId(string? value, string field)

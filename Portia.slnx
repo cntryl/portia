@@ -23,6 +23,8 @@
     <Project Path="src/Portia.Communications.Aws/Portia.Communications.Aws.csproj"/>
     <Project Path="src/Portia.Communications.Azure/Portia.Communications.Azure.csproj"/>
     <Project Path="src/Portia.Communications.Twilio/Portia.Communications.Twilio.csproj"/>
+    <Project Path="src/Portia.Secrets.Abstractions/Portia.Secrets.Abstractions.csproj"/>
+    <Project Path="src/Portia.Secrets.Aws/Portia.Secrets.Aws.csproj"/>
     <Project Path="src/Portia.Storage.Abstractions/Portia.Storage.Abstractions.csproj"/>
     <Project Path="src/Portia.Storage.Aws/Portia.Storage.Aws.csproj"/>
     <Project Path="src/Portia.Storage.Azure/Portia.Storage.Azure.csproj"/>

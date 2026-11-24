@@ -70,7 +70,8 @@ A provisioning identity generates each independent 32-byte root with
 context with the exact `portia:ring`, `portia:key`, and `portia:role` values. Use opaque,
 non-sensitive identifiers because the context can appear in CloudTrail.
 
-The secret's current JSON version contains `version` (1), `ringId`, a positive increasing
+The AWS key ring reads the current secret through the [Portia Secrets reader](secrets.md).
+The current value is a UTF-8 JSON manifest containing `version` (1), `ringId`, a positive increasing
 `revision`, `activeKeyId`, and `keys`. Each key has `keyId`, `role` (`protection` or
 `index`), and `wrappedRoot` (Base64 KMS ciphertext). The active entry must have the protection
 role. Give every new root a new Portia ID and carry the existing wrapped bytes forward for all
