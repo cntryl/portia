@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Vendor-neutral data protection and key ring contracts for Portia.</Description>
+  </PropertyGroup>
+</Project>

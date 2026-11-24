@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Authenticated payload protection and keyed hashing for Portia.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Portia.DataProtection.Abstractions/Portia.DataProtection.Abstractions.csproj"/>
+    <PackageReference Include="Microsoft.Extensions.Hosting"/>
+  </ItemGroup>
+</Project>
