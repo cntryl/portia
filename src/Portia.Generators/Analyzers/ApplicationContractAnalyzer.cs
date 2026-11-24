@@ -1,7 +1,6 @@
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -21,9 +20,6 @@ public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
         "Contract requires an explicit feature discriminator",
         "Contract '{0}' needs [Discriminator(\"{1}.name\", version)] with two snake_case parts and an explicit positive schema version",
         "PortiaStructure", DiagnosticSeverity.Warning, true);
-
-    static readonly Regex WireName = new("\\A[a-z][a-z0-9]*(?:_[a-z0-9]+)*\\.[a-z][a-z0-9]*(?:_[a-z0-9]+)*\\z",
-        RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
 
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } = [Behavior, Discriminator];
@@ -163,7 +159,7 @@ public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
         var version = constructorArguments.Length > 1 && constructorArguments[1].Value is int value ? value : 0;
         var identityValid = version > 0 && name is not null
                                         && name.StartsWith(feature + ".", StringComparison.Ordinal) &&
-                                        WireName.IsMatch(name);
+                                        IsWireName(name);
 
         if (!identityValid || !explicitVersion)
         {
@@ -174,6 +170,35 @@ public sealed class ApplicationContractAnalyzer : DiagnosticAnalyzer
             context.ReportDiagnostic(Diagnostic.Create(Discriminator, syntax?.GetLocation() ?? symbol.Locations[0],
                 properties, symbol.Name, feature));
         }
+    }
+
+    static bool IsWireName(string value)
+    {
+        var separator = value.IndexOf('.');
+
+        return separator > 0 && value.IndexOf('.', separator + 1) < 0
+                            && IsSnakeCasePart(value.AsSpan(0, separator))
+                            && IsSnakeCasePart(value.AsSpan(separator + 1));
+    }
+
+    static bool IsSnakeCasePart(ReadOnlySpan<char> value)
+    {
+        if (value.IsEmpty || value[0] is < 'a' or > 'z')
+            return false;
+
+        for (var index = 1; index < value.Length; index++)
+        {
+            var current = value[index];
+
+            if (current is >= 'a' and <= 'z' or >= '0' and <= '9')
+                continue;
+
+            if (current != '_' || index + 1 == value.Length
+                               || value[index + 1] is not (>= 'a' and <= 'z' or >= '0' and <= '9'))
+                return false;
+        }
+
+        return true;
     }
 
     static string SnakeCase(string feature)

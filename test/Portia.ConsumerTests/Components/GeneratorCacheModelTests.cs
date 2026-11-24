@@ -238,6 +238,66 @@ public sealed class GeneratorCacheModelTests
     }
 
     [Fact]
+    public void ShouldReuseJsonRootEmissionGivenRootAttributeReorderingWhenSemanticRootsChange()
+    {
+        // Arrange
+        const string original = """
+                                using Cntryl.Portia;
+                                using System.Text.Json.Serialization;
+                                [PortiaJsonContext]
+                                [JsonSerializable(typeof(string))]
+                                [JsonSerializable(typeof(int))]
+                                public partial class ExampleContext : JsonSerializerContext;
+                                """;
+        const string reordered = """
+                                 using Cntryl.Portia;
+                                 using System.Text.Json.Serialization;
+                                 [PortiaJsonContext]
+                                 [JsonSerializable(typeof(int))]
+                                 [JsonSerializable(typeof(string))]
+                                 public partial class ExampleContext : JsonSerializerContext;
+                                 """;
+        const string changed = """
+                               using Cntryl.Portia;
+                               using System.Text.Json.Serialization;
+                               [PortiaJsonContext]
+                               [JsonSerializable(typeof(decimal))]
+                               [JsonSerializable(typeof(string))]
+                               public partial class ExampleContext : JsonSerializerContext;
+                               """;
+        var options = new CSharpParseOptions(LanguageVersion.Preview);
+        var tree = CSharpSyntaxTree.ParseText(original, options, "Example.cs",
+            cancellationToken: TestContext.Current.CancellationToken);
+        var compilation = CSharpCompilation.Create("GeneratorCache", [tree], References(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            [new JsonRootMarkerGenerator().AsSourceGenerator()], parseOptions: options,
+            driverOptions: new GeneratorDriverOptions(default, true));
+        driver = driver.RunGenerators(compilation, TestContext.Current.CancellationToken);
+
+        // Act
+        var reorderedTree = CSharpSyntaxTree.ParseText(reordered, options, "Example.cs",
+            cancellationToken: TestContext.Current.CancellationToken);
+        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree, reorderedTree),
+            TestContext.Current.CancellationToken);
+        var reorderReasons = driver.GetRunResult().Results.Single().TrackedSteps["PortiaJsonRootEmission"]
+            .SelectMany(step => step.Outputs).Select(output => output.Reason).ToArray();
+        var changedTree = CSharpSyntaxTree.ParseText(changed, options, "Example.cs",
+            cancellationToken: TestContext.Current.CancellationToken);
+        driver = driver.RunGenerators(compilation.ReplaceSyntaxTree(tree, changedTree),
+            TestContext.Current.CancellationToken);
+        var changeReasons = driver.GetRunResult().Results.Single().TrackedSteps["PortiaJsonRootEmission"]
+            .SelectMany(step => step.Outputs).Select(output => output.Reason).ToArray();
+
+        // Assert
+        Assert.NotEmpty(reorderReasons);
+        Assert.All(reorderReasons, reason =>
+            Assert.True(reason is IncrementalStepRunReason.Cached or IncrementalStepRunReason.Unchanged,
+                $"Semantically equivalent roots were {reason} after attribute reordering."));
+        Assert.Contains(IncrementalStepRunReason.Modified, changeReasons);
+    }
+
+    [Fact]
     public void ShouldKeepPortableGeneratorModelsCachedGivenChangedSuppressionState()
     {
         // Arrange

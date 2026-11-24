@@ -15,8 +15,9 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
     const ulong ProgressReadByteBudget = 256 * 1024;
     readonly ILogger<FitzEventStore>? _logger;
     readonly IDomainEventSerializer _serializer;
-
     readonly IStreamClient _streams;
+    readonly Lock _subscriptionsGate = new();
+    readonly Dictionary<string, SharedWakeupSubscription> _subscriptions = [];
 
     /// <summary>
     ///     Creates a Fitz-backed event store.
@@ -56,11 +57,62 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
     {
         ArgumentNullException.ThrowIfNull(pattern);
         var route = pattern.ToString();
-        var wakeups = await FitzWakeupSubscription<StreamCommitEvent>.SubscribeAsync(
-                async token => await _streams.SubscribeAsync(route, token).ConfigureAwait(false),
-                "The Fitz stream subscription ended without cancellation.", ct)
-            .ConfigureAwait(false);
-        return new FitzDomainEventSubscription(wakeups);
+
+        while (true)
+        {
+            SharedWakeupSubscription.Subscription subscription;
+            SharedWakeupSubscription? start = null;
+            Task? closing = null;
+
+            lock (_subscriptionsGate)
+            {
+                if (_subscriptions.TryGetValue(route, out var wakeups))
+                {
+                    if (!wakeups.TrySubscribe(out subscription, out closing) && closing is null)
+                    {
+                        wakeups = new SharedWakeupSubscription(this, route);
+                        _subscriptions[route] = wakeups;
+                        subscription = wakeups.Subscribe();
+                        start = wakeups;
+                    }
+                }
+                else
+                {
+                    wakeups = new SharedWakeupSubscription(this, route);
+                    _subscriptions[route] = wakeups;
+                    subscription = wakeups.Subscribe();
+                    start = wakeups;
+                }
+            }
+
+            if (closing is not null)
+            {
+                await closing.WaitAsync(ct).ConfigureAwait(false);
+                lock (_subscriptionsGate)
+                {
+                    if (_subscriptions.TryGetValue(route, out var wakeups) &&
+                        wakeups.Closed == closing)
+                    {
+                        _ = _subscriptions.Remove(route);
+                    }
+                }
+
+                continue;
+            }
+
+            start?.Start();
+
+            try
+            {
+                await subscription.StartedAsync(ct).ConfigureAwait(false);
+                return subscription;
+            }
+            catch
+            {
+                await subscription.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
+        }
     }
 
     /// <inheritdoc />
@@ -645,14 +697,359 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
         }
     }
 
-    // The token bounds one wait, not the subscription: a caller that polls with a backstop must
-    // still receive the next commit. Only disposal ends the subscription. A workload that keeps
-    // finding work skips its waits, so each wait drains every commit buffered meanwhile.
-    sealed class FitzDomainEventSubscription(FitzWakeupSubscription<StreamCommitEvent> wakeups)
-        : IDomainEventSubscription
+    Task Release(SharedWakeupSubscription wakeups)
     {
-        public ValueTask WaitAsync(CancellationToken ct = default) => wakeups.WaitAsync(ct);
+        Task closing;
 
-        public ValueTask DisposeAsync() => wakeups.DisposeAsync();
+        lock (_subscriptionsGate)
+        {
+            if (!wakeups.Release())
+                return Task.CompletedTask;
+
+            closing = wakeups.Close();
+        }
+
+        return RemoveAfterCloseAsync(wakeups, closing);
+    }
+
+    async Task RemoveAfterCloseAsync(SharedWakeupSubscription wakeups, Task closing)
+    {
+        try
+        {
+            await closing.ConfigureAwait(false);
+        }
+        finally
+        {
+            lock (_subscriptionsGate)
+            {
+                if (_subscriptions.TryGetValue(wakeups.Pattern, out var current) &&
+                    ReferenceEquals(current, wakeups))
+                {
+                    _ = _subscriptions.Remove(wakeups.Pattern);
+                }
+            }
+        }
+    }
+
+    sealed class SharedWakeupSubscription : IAsyncDisposable
+    {
+        readonly CancellationTokenSource _lifetime = new();
+        readonly FitzEventStore _owner;
+        readonly Lock _gate = new();
+        readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        Exception? _failure;
+        bool _closed;
+        Task? _closeTask;
+        TaskCompletionSource? _pump;
+        Task _run = Task.CompletedTask;
+        long _version;
+        TaskCompletionSource _changed = NewSignal();
+        FitzWakeupSubscription<StreamCommitEvent>? _wakeups;
+
+        public SharedWakeupSubscription(FitzEventStore owner, string pattern)
+        {
+            _owner = owner;
+            Pattern = pattern;
+        }
+
+        public string Pattern { get; }
+
+        public void Start()
+        {
+            lock (_gate)
+                _run = RunAsync();
+        }
+
+        public Subscription Subscribe()
+        {
+            lock (_gate)
+            {
+                if (_closed || _failure is not null)
+                    throw new InvalidOperationException("The shared Fitz subscription is no longer available.");
+
+                return new Subscription(this, _version);
+            }
+        }
+
+        public Task? Closed
+        {
+            get
+            {
+                lock (_gate)
+                    return _closed ? _closeTask : null;
+            }
+        }
+
+        public bool TrySubscribe(out Subscription subscription, out Task? closing)
+        {
+            lock (_gate)
+            {
+                if (!_closed && _failure is null)
+                {
+                    subscription = new Subscription(this, _version);
+                    closing = null;
+                    return true;
+                }
+
+                subscription = null!;
+                closing = _closed ? _closeTask : null;
+                return false;
+            }
+        }
+
+        public bool Release()
+        {
+            lock (_gate)
+            {
+                if (_closed)
+                    return false;
+
+                _ = Interlocked.Decrement(ref _logicalSubscribers);
+
+                if (Volatile.Read(ref _logicalSubscribers) != 0)
+                    return false;
+
+                _closed = true;
+                _ = _changed.TrySetResult();
+                return true;
+            }
+        }
+
+        int _logicalSubscribers;
+
+        public Task StartedAsync(CancellationToken ct) => _started.Task.WaitAsync(ct);
+
+        public Task Close()
+        {
+            lock (_gate)
+                return _closeTask ??= CloseAsync();
+        }
+
+        async Task CloseAsync()
+        {
+            await _lifetime.CancelAsync().ConfigureAwait(false);
+
+            FitzWakeupSubscription<StreamCommitEvent>? wakeups;
+            lock (_gate)
+                wakeups = _wakeups;
+
+            if (wakeups is not null)
+                await wakeups.DisposeAsync().ConfigureAwait(false);
+            else
+                await _run.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        }
+
+        async Task RunAsync()
+        {
+            FitzWakeupSubscription<StreamCommitEvent>? wakeups = null;
+
+            try
+            {
+                wakeups = await FitzWakeupSubscription<StreamCommitEvent>.SubscribeAsync(
+                        async token => await _owner._streams.SubscribeAsync(Pattern, token).ConfigureAwait(false),
+                        "The Fitz stream subscription ended without cancellation.", _lifetime.Token)
+                    .ConfigureAwait(false);
+                bool closed;
+
+                lock (_gate)
+                {
+                    closed = _closed;
+
+                    if (!closed)
+                        _wakeups = wakeups;
+                }
+
+                if (closed)
+                {
+                    await wakeups.DisposeAsync().ConfigureAwait(false);
+                    _ = _started.TrySetCanceled(_lifetime.Token);
+                    return;
+                }
+
+                _ = _started.TrySetResult();
+            }
+            catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+            {
+                _ = _started.TrySetCanceled(_lifetime.Token);
+            }
+            catch (Exception exception)
+            {
+                Fail(exception);
+            }
+        }
+
+        public ValueTask DisposeAsync() => new(Close());
+
+        void EnsurePump()
+        {
+            TaskCompletionSource? reservation;
+
+            lock (_gate)
+            {
+                if (_pump is not null || _closed || _failure is not null)
+                    return;
+
+                _pump = reservation = NewSignal();
+            }
+
+            _ = PumpAsync(reservation);
+        }
+
+        async Task PumpAsync(TaskCompletionSource reservation)
+        {
+            try
+            {
+                FitzWakeupSubscription<StreamCommitEvent>? wakeups;
+                lock (_gate)
+                    wakeups = _wakeups;
+
+                if (wakeups is null)
+                    return;
+
+                await wakeups.WaitAsync(_lifetime.Token).ConfigureAwait(false);
+                Broadcast();
+            }
+            catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+            {
+            }
+            catch (Exception exception)
+            {
+                Fail(exception);
+            }
+            finally
+            {
+                lock (_gate)
+                {
+                    if (ReferenceEquals(_pump, reservation))
+                        _pump = null;
+                }
+
+                _ = reservation.TrySetResult();
+            }
+        }
+
+        void Broadcast()
+        {
+            TaskCompletionSource changed;
+
+            lock (_gate)
+            {
+                if (_closed)
+                    return;
+
+                checked
+                {
+                    _version++;
+                }
+
+                changed = _changed;
+                _changed = NewSignal();
+            }
+
+            _ = changed.TrySetResult();
+        }
+
+        void Fail(Exception exception)
+        {
+            TaskCompletionSource changed;
+
+            lock (_gate)
+            {
+                if (_closed)
+                    return;
+
+                _failure = exception;
+                changed = _changed;
+            }
+
+            _ = _started.TrySetException(exception);
+            _ = changed.TrySetResult();
+        }
+
+        public void Wait(ref long version, out Task changed, out Exception? failure, out bool closed)
+        {
+            lock (_gate)
+            {
+                failure = _failure;
+                closed = _closed;
+
+                if (_closed)
+                {
+                    changed = _pump?.Task ?? _closeTask ?? _run;
+                    return;
+                }
+
+                if (version < _version)
+                {
+                    version = _version;
+                    changed = Task.CompletedTask;
+                    return;
+                }
+
+                changed = _pump is null
+                    ? _changed.Task
+                    : Task.WhenAny(_changed.Task, _pump.Task);
+            }
+
+            EnsurePump();
+        }
+
+        static TaskCompletionSource NewSignal() =>
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public sealed class Subscription : IDomainEventSubscription
+        {
+            readonly SharedWakeupSubscription _owner;
+            readonly SemaphoreSlim _wait = new(1, 1);
+            long _observedVersion;
+            int _disposed;
+            public Subscription(SharedWakeupSubscription owner, long observedVersion)
+            {
+                _owner = owner;
+                _observedVersion = observedVersion;
+                _ = Interlocked.Increment(ref _owner._logicalSubscribers);
+            }
+
+            public Task StartedAsync(CancellationToken ct) => _owner.StartedAsync(ct);
+
+            public async ValueTask WaitAsync(CancellationToken ct = default)
+            {
+                await _wait.WaitAsync(ct).ConfigureAwait(false);
+
+                try
+                {
+                    while (true)
+                    {
+                        _owner.Wait(ref _observedVersion, out var changed, out var failure, out var closed);
+
+                        if (closed)
+                        {
+                            await changed.ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+                            return;
+                        }
+
+                        if (ReferenceEquals(changed, Task.CompletedTask))
+                            return;
+
+                        if (failure is not null)
+                            ExceptionDispatchInfo.Capture(failure).Throw();
+
+                        await changed.WaitAsync(ct).ConfigureAwait(false);
+                    }
+                }
+                finally
+                {
+                    _ = _wait.Release();
+                }
+            }
+
+            public ValueTask DisposeAsync()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) != 0)
+                    return ValueTask.CompletedTask;
+
+                return new ValueTask(_owner._owner.Release(_owner));
+            }
+        }
     }
 }

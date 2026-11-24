@@ -35,6 +35,18 @@ Each event gets its own context, including in batch handlers. The shared non-gen
 `IProjectorContext` describes the batch and contains no event or execution authority.
 Reactor contexts carry independent system execution authority for each triggering event.
 
+A dependent reaction sequence has one checkpoint. If creation and cancellation of the same
+resource must occur in order, put both reactions in one reactor. Different reactors have
+independent checkpoints and may run concurrently, so Portia does not offer a cross-reactor
+ordering barrier. The opt-in `PORTIA109` rule recognizes direct, statically visible
+`SendReactionAsync` calls that send complementary `CreateX` and `CancelX` commands from
+different reactors and recommends consolidation. Applications that opt into `PORTIA110` also
+receive a constructor-dependency check for known effect types, helping keep reaction handlers
+limited to deterministic command dispatch. The default allowed dependencies are `IRequestBus` and
+`IProjectionCheckpointStore`; replace that list per file with the comma-separated
+`portia_reactor_allowed_dependencies` `.editorconfig` option. Both rules are intentionally conservative; arbitrary
+application gateways and indirect command flow still require architectural review.
+
 ## Constructor-injected repository
 
 A read model is a simple data contract. A repository owns persistence and queries for that data;
@@ -229,9 +241,16 @@ propagates.
 includes the eligible time and failure count. Processing observed for at least 30 seconds is
 reported as `long_running`. With operations enabled, `Attempt` and `Repair` explain durable
 evidence, including uncertain commit outcomes and an approved resume when required. A journaled
-attempt is historical evidence. `Owner` reports local execution or an independent Fitz lease
-observation, with a null value for `HasOwner` when ownership cannot be observed. Confirmed status
-never advances checkpoints, invokes handlers, or changes repair approval.
+transient failure remains `retry_wait` with its next eligible time when status is read independently
+of the worker. A permanently failed or exhausted processor remains `blocked` until an approved
+repair is queued. A journaled attempt is historical evidence.
+
+`Owner` reports local execution or an independent Fitz lease observation. A confirmed false value
+produces `owner_unavailable`; a failed probe leaves `HasOwner` null and retains `Owner.Error` while
+`Execution` reports `observation_unavailable` for the `owner` stage. `CheckpointError`,
+`SourceError`, and `FailureError` similarly distinguish unavailable authoritative or advisory
+observations without discarding any checkpoint or repair evidence that was read successfully.
+Confirmed status never advances checkpoints, invokes handlers, or changes repair approval.
 
 Counts describe unread source records, including events without a matching handler. Cursors remain
 opaque. An event-store provider can implement `IDomainEventProgressReader` to measure progress;

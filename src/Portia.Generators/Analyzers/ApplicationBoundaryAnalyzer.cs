@@ -31,9 +31,14 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
         "'{0}' calls '{1}'; queries read through repositories and reactors send commands from committed facts. Keep aggregate hydration in command handling.",
         "PortiaStructure", DiagnosticSeverity.Warning, true, customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
+    static readonly DiagnosticDescriptor InternalRequestRegistration = new("PORTIA214",
+        "System request handler is not registered",
+        "System request handler '{0}' is not registered. Register it in the owning feature with AddRequestHandler<{0}> so every host that composes that feature receives the internal command.",
+        "PortiaStructure", DiagnosticSeverity.Warning, true, customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
-        [Dependency, Registration, CommandStub, Hydration];
+        [Dependency, Registration, CommandStub, Hydration, InternalRequestRegistration];
 
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)
@@ -46,16 +51,19 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
                 return;
 
             var registrations = new ConcurrentBag<(Location Location, string Feature)>();
+            var registeredHandlers = new ConcurrentBag<INamedTypeSymbol>();
             var invocations = new ConcurrentBag<(IMethodSymbol Caller, IMethodSymbol Target, Location Location, bool Hydrates)>();
             start.RegisterCompilationEndAction(end =>
             {
                 AnalyzeDependencies(end, project);
                 ReportRegistrations(end, registrations);
+                ReportInternalRequestRegistrations(end, registeredHandlers);
 
                 if (project.Role == "Core")
                     AnalyzeQueryHydration(end, invocations);
             });
-            start.RegisterOperationAction(operation => AnalyzeInvocation(operation, project, registrations, invocations),
+            start.RegisterOperationAction(operation =>
+                    AnalyzeInvocation(operation, project, registrations, registeredHandlers, invocations),
                 OperationKind.Invocation);
 
             if (project.Role is "Common" or "Core")
@@ -122,6 +130,7 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
         OperationAnalysisContext context,
         ApplicationProject project,
         ConcurrentBag<(Location Location, string Feature)> registrations,
+        ConcurrentBag<INamedTypeSymbol> registeredHandlers,
         ConcurrentBag<(IMethodSymbol Caller, IMethodSymbol Target, Location Location, bool Hydrates)> invocations
     )
     {
@@ -134,6 +143,10 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
 
         if (project.Role == "Core" && IsComponentRegistration(method))
         {
+            if (method.Name == "AddRequestHandler" &&
+                method.TypeArguments.FirstOrDefault() is INamedTypeSymbol registeredHandler)
+                registeredHandlers.Add(registeredHandler);
+
             var path = project.RelativePath(invocation.Syntax.SyntaxTree);
             var feature = FeatureOf(method.TypeArguments.FirstOrDefault())
                           ?? (path.Length >= 2 && path[0] == "Features" ? path[1] : "Feature");
@@ -203,7 +216,29 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
                             context.ReportDiagnostic(Diagnostic.Create(Hydration, root.Location, type.Name,
                                 root.Target.Name));
                     }
+
                 }
+        }
+    }
+
+    static void ReportInternalRequestRegistrations(
+        CompilationAnalysisContext context,
+        ConcurrentBag<INamedTypeSymbol> registeredHandlers
+    )
+    {
+        var registered = new HashSet<ISymbol>(registeredHandlers, SymbolEqualityComparer.Default);
+
+        foreach (var handler in context.Compilation.GetSymbolsWithName(_ => true, SymbolFilter.Type)
+                     .OfType<INamedTypeSymbol>()
+                     .Where(type => !type.IsAbstract && type.DeclaringSyntaxReferences.Length != 0
+                                    && ApplicationProject.Requests(type).Any(request =>
+                                        request.TypeArguments[0] is INamedTypeSymbol requestType
+                                        && requestType.AllInterfaces.Any(iface =>
+                                            SymbolNames.Is(iface, "Cntryl.Portia.ISystemRequest")))))
+        {
+            if (!registered.Contains(handler))
+                context.ReportDiagnostic(Diagnostic.Create(InternalRequestRegistration,
+                    handler.Locations.FirstOrDefault(), handler.Name));
         }
     }
 

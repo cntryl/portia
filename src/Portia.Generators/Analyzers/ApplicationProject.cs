@@ -6,11 +6,20 @@ namespace Cntryl.Portia;
 
 // Application conventions are opt-in. Portia's own public namespaces and package layout are
 // framework contracts, and are not an application of the Common/Core/Api/Worker convention.
-sealed class ApplicationProject(string directory, string name, string rootNamespace, bool isTest, string? explicitRole)
+sealed class ApplicationProject(
+    string directory,
+    string name,
+    string rootNamespace,
+    bool isTest,
+    string? explicitRole,
+    int aggregateSemanticBudget)
 {
+    public const int DefaultAggregateSemanticBudget = 12;
+
     public string Name { get; } = name;
     public string RootNamespace { get; } = rootNamespace;
     public bool IsTest { get; } = isTest;
+    public int AggregateSemanticBudget { get; } = aggregateSemanticBudget;
     public string Role { get; } = explicitRole ?? name.Split('.').Last();
     public string ApplicationName { get; } = name.Contains('.') ? name.Substring(0, name.LastIndexOf('.')) : name;
 
@@ -38,9 +47,26 @@ sealed class ApplicationProject(string directory, string name, string rootNamesp
                 && !string.IsNullOrWhiteSpace(editorConfigRole)
                 ? editorConfigRole.Trim()
                 : null;
+        var aggregateSemanticBudget =
+            global.TryGetValue("portia_aggregate_semantic_budget", out var configuredBudget)
+            && int.TryParse(configuredBudget, out var budget)
+            && budget > 0
+                ? budget
+                : DefaultAggregateSemanticBudget;
         return new ApplicationProject(directory.Replace('\\', '/').TrimEnd('/'), name, rootNamespace,
-            string.Equals(isTest, "true", StringComparison.OrdinalIgnoreCase), projectRole);
+            string.Equals(isTest, "true", StringComparison.OrdinalIgnoreCase), projectRole, aggregateSemanticBudget);
     }
+
+    public static int AggregateSemanticBudgetFor(
+        AnalyzerConfigOptionsProvider options,
+        SyntaxTree tree,
+        int fallback
+    ) =>
+        options.GetOptions(tree).TryGetValue("portia_aggregate_semantic_budget", out var configuredBudget)
+        && int.TryParse(configuredBudget, out var budget)
+        && budget > 0
+            ? budget
+            : fallback;
 
     public string[] RelativePath(SyntaxTree tree)
     {

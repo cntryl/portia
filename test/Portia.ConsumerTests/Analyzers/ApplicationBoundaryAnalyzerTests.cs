@@ -3,6 +3,63 @@ namespace Cntryl.Portia.Consumer;
 public sealed class ApplicationBoundaryAnalyzerTests
 {
     [Fact]
+    public void ShouldReportMissingRegistrationGivenInternalSystemRequestHandler()
+    {
+        // Arrange
+        const string source = """
+                              using Cntryl.Portia;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              namespace Shop.Core.Features.Orders.Handlers;
+                              [Discriminator("orders.refresh", 1)]
+                              public sealed record Refresh : IRequest, ISystemRequest;
+                              public sealed class RefreshHandler : IRequestHandler<Refresh>
+                              {
+                                  public ValueTask<Result> HandleAsync(
+                                      IRequestContext<Refresh> context, CancellationToken ct) => default;
+                              }
+                              """;
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core",
+            new ApplicationBoundaryAnalyzer(), [("Features/Orders/Handlers/RefreshHandler.cs", source)]);
+
+        // Assert
+        Assert.Single(diagnostics, item => item.Id == "PORTIA214");
+    }
+
+    [Fact]
+    public void ShouldAllowRegisteredInternalSystemRequestHandlerGivenFeatureRegistration()
+    {
+        // Arrange
+        const string source = """
+                              using Cntryl.Portia;
+                              using System.Threading;
+                              using System.Threading.Tasks;
+                              namespace Shop.Core.Features.Orders;
+                              [Discriminator("orders.refresh", 1)]
+                              public sealed record Refresh : IRequest, ISystemRequest;
+                              public sealed class RefreshHandler : IRequestHandler<Refresh>
+                              {
+                                  public ValueTask<Result> HandleAsync(
+                                      IRequestContext<Refresh> context, CancellationToken ct) => default;
+                              }
+                              public static class OrdersPortiaExtensions
+                              {
+                                  public static void Add(PortiaBuilder builder) =>
+                                      builder.AddRequestHandler<RefreshHandler>();
+                              }
+                              """;
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core",
+            new ApplicationBoundaryAnalyzer(), [("Features/Orders/OrdersPortiaExtensions.cs", source)]);
+
+        // Assert
+        Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA214");
+    }
+
+    [Fact]
     public void ShouldRecognizeApplicationBoundaryGivenQualifiedAssemblyNames()
     {
         // Arrange

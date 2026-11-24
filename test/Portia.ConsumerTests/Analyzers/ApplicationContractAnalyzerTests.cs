@@ -149,6 +149,28 @@ public sealed class ApplicationContractAnalyzerTests
     }
 
     [Fact]
+    public void ShouldReportWireIdentityWithoutAnalyzerTimeoutGivenVeryLongInvalidName()
+    {
+        // Arrange
+        var source =
+            $"using Cntryl.Portia; namespace Shop.Common.Features.Orders.Commands; " +
+            $"[Discriminator(\"orders.{new string('a', 5_000_000)}!\", 1)] public record PlaceOrder : IRequest;";
+
+        // Act
+        var original = ApplicationAnalyzerCompilation.Analyze("Shop.Common", new ApplicationContractAnalyzer(),
+            [("Features/Orders/Commands/PlaceOrder.cs", source)]);
+        var withLeadingComment = ApplicationAnalyzerCompilation.Analyze("Shop.Common",
+            new ApplicationContractAnalyzer(),
+            [("Features/Orders/Commands/PlaceOrder.cs", "// leading documentation\n" + source)]);
+
+        // Assert
+        _ = Assert.Single(original, item => item.Id == "PORTIA210");
+        _ = Assert.Single(withLeadingComment, item => item.Id == "PORTIA210");
+        Assert.Equal(original.Select(item => item.Id).Order(StringComparer.Ordinal),
+            withLeadingComment.Select(item => item.Id).Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
     public void ShouldIgnoreRequestFamilyGivenInterfaceContract()
     {
         // Arrange

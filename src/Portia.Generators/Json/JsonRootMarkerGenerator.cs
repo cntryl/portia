@@ -29,7 +29,11 @@ public sealed class JsonRootMarkerGenerator : IIncrementalGenerator
                         model.Name, reason));
         });
         var roots = contexts
-            .Select(static (models, _) => new RootSet(models.SelectMany(model => model.Roots).ToArray()))
+            .Select(static (models, _) => new RootSet(models.SelectMany(model => model.Roots)
+                .Distinct()
+                .OrderBy(root => root.RootType, StringComparer.Ordinal)
+                .ThenBy(root => root.ContextType, StringComparer.Ordinal)
+                .ToArray()))
             .WithTrackingName("PortiaJsonRootEmission");
         context.RegisterSourceOutput(roots, static (output, model) => Generate(output, model.Roots));
     }
@@ -54,6 +58,8 @@ public sealed class JsonRootMarkerGenerator : IIncrementalGenerator
             .OfType<ITypeSymbol>()
             .Select(root => new RootModel(root.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), name, factory,
                 descriptions))
+            .OrderBy(root => root.RootType, StringComparer.Ordinal)
+            .ThenBy(root => root.ContextType, StringComparer.Ordinal)
             .ToArray();
         return new ContextModel(name, location, null, roots);
     }
