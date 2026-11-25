@@ -48,11 +48,14 @@ public sealed class FitzEventStoreProgressTests
         // Arrange
         var pattern = EventStreamPattern.ForPattern("tenant", area);
         var client = new ProgressClient(Page(false, Item(3, 10, 30), Item(4, 11, 31)));
+        var clock = new ManualTestClock();
+        var store = new FitzEventStore(client, new UnusedSerializer(), logger: null, clock);
 
         // Act
-        var progress = await Store(client).GetProgressAsync(pattern, Cursor(position), TestContext.Current.CancellationToken);
+        var progress = await store.GetProgressAsync(pattern, Cursor(position), TestContext.Current.CancellationToken);
 
         // Assert
+        Assert.Equal(clock.GetUtcNow(), progress.ObservedAt);
         Assert.Equal(Cursor(position), progress.Position);
         Assert.Equal(Cursor(head), progress.SourcePosition);
         Assert.Equal(2UL, progress.PendingEvents);

@@ -19,12 +19,68 @@ namespace Cntryl.Portia.Tests.DataProtection;
 /// <summary>Exercises AWS key snapshot caching, cancellation, and expiry with deterministic clients.</summary>
 public sealed class AwsDataProtectionKeyRingTests
 {
+    /// <summary>Refreshes a composed AWS key ring after the host clock reaches its cache lifetime.</summary>
+    [Fact]
+    public async Task ShouldRefreshSnapshotGivenConfiguredClockReachesExpiry()
+    {
+        // Arrange
+        var clock = new ManualTestClock();
+        using var secrets = new FakeSecrets(Manifest(1));
+        using var kms = new FakeKms();
+        var services = new ServiceCollection();
+        services.AddSingleton<TimeProvider>(clock);
+        var lifetime = TimeSpan.FromMinutes(5);
+        services.AddAwsDataProtection(builder => builder.UseClients(secrets, kms)
+            .UseKeyRing("secret", "arn:aws:kms:region:account:key/id", "ring")
+            .UseCacheLifetime(lifetime));
+        using var provider = services.BuildServiceProvider();
+        var ring = provider.GetRequiredService<IDataProtectionKeyRing>();
+        var ct = TestContext.Current.CancellationToken;
+        using var first = await ring.AcquireActiveAsync(ct);
+        clock.Advance(lifetime);
+
+        // Act
+        using var refreshed = await ring.AcquireActiveAsync(ct);
+
+        // Assert
+        Assert.True(refreshed.IsActive);
+        Assert.Equal(2, secrets.Calls);
+        Assert.Equal(2, kms.Calls);
+    }
+
+    /// <summary>Refuses an unwrap that returns after the operation deadline on the injected clock.</summary>
+    [Fact]
+    public async Task ShouldCancelUnwrapGivenClockReachesOperationDeadline()
+    {
+        // Arrange
+        var clock = new ManualTestClock();
+        using var secrets = new FakeSecrets(Manifest(1));
+        using var kms = new FakeKms { Block = true };
+        using var ring = new AwsDataProtectionKeyRing(new AwsSecretReader(secrets), kms, "secret",
+            "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromMinutes(5), clock);
+        var ct = TestContext.Current.CancellationToken;
+        var acquisition = ring.AcquireActiveAsync(ct).AsTask();
+        await kms.Started.Task.WaitAsync(ct);
+
+        // Act
+        clock.Advance(TimeSpan.FromSeconds(30));
+        kms.Release.TrySetResult(true);
+        var exception = await Record.ExceptionAsync(async () =>
+        {
+            using var lease = await acquisition;
+        });
+
+        // Assert
+        Assert.IsAssignableFrom<OperationCanceledException>(exception);
+        Assert.All(kms.LastPlaintextBuffer!, value => Assert.Equal(0, value));
+    }
+
     /// <summary>Coalesces concurrent requests for one manifest and root.</summary>
     [Fact]
     public async Task ShouldShareManifestAndKeyUnwrapGivenConcurrentAcquires()
     {
         // Arrange
-        var time = new ManualTimeProvider();
+        var time = new ManualTestClock();
         var secrets = new FakeSecrets(Manifest(1));
         var kms = new FakeKms { Block = true };
         using var ring = new AwsDataProtectionKeyRing(new AwsSecretReader(secrets), kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromMinutes(5), time);
@@ -51,7 +107,7 @@ public sealed class AwsDataProtectionKeyRingTests
     public async Task ShouldRejectLateKmsResultGivenExpiredSnapshot()
     {
         // Arrange
-        var time = new ManualTimeProvider();
+        var time = new ManualTestClock();
         var secrets = new FakeSecrets(Manifest(1));
         var kms = new FakeKms { Block = true };
         using var ring = new AwsDataProtectionKeyRing(new AwsSecretReader(secrets), kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromSeconds(5), time);
@@ -74,7 +130,7 @@ public sealed class AwsDataProtectionKeyRingTests
     public async Task ShouldRejectCachedRootGivenDeadlinePassesBeforeLeasing()
     {
         // Arrange
-        using var time = new ManualTimeProvider();
+        var time = new JumpingTimestampProvider();
         using var secrets = new FakeSecrets(Manifest(1));
         using var kms = new FakeKms();
         using var ring = new AwsDataProtectionKeyRing(new AwsSecretReader(secrets), kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromSeconds(5), time);
@@ -99,7 +155,7 @@ public sealed class AwsDataProtectionKeyRingTests
     public async Task ShouldPreserveSharedUnwrapGivenCancelledWaiter()
     {
         // Arrange
-        var time = new ManualTimeProvider();
+        var time = new ManualTestClock();
         var secrets = new FakeSecrets(Manifest(1));
         var kms = new FakeKms { Block = true };
         using var ring = new AwsDataProtectionKeyRing(new AwsSecretReader(secrets), kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromMinutes(5), time);
@@ -126,7 +182,7 @@ public sealed class AwsDataProtectionKeyRingTests
     public async Task ShouldRejectManifestGivenRevisionDowngrade()
     {
         // Arrange
-        var time = new ManualTimeProvider();
+        var time = new ManualTestClock();
         var secrets = new FakeSecrets(Manifest(2), Manifest(1));
         var kms = new FakeKms();
         using var ring = new AwsDataProtectionKeyRing(new AwsSecretReader(secrets), kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromSeconds(1), time);
@@ -147,7 +203,7 @@ public sealed class AwsDataProtectionKeyRingTests
     public async Task ShouldRetryKeyUnwrapGivenTransientKmsFailure()
     {
         // Arrange
-        var time = new ManualTimeProvider();
+        var time = new ManualTestClock();
         var secrets = new FakeSecrets(Manifest(1));
         var kms = new FakeKms { FailuresRemaining = 1 };
         using var ring = new AwsDataProtectionKeyRing(new AwsSecretReader(secrets), kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromMinutes(5), time);
@@ -168,7 +224,7 @@ public sealed class AwsDataProtectionKeyRingTests
     public async Task ShouldRejectManifestGivenReusedRevisionWithChangedContent()
     {
         // Arrange
-        var time = new ManualTimeProvider();
+        var time = new ManualTestClock();
         var secrets = new FakeSecrets(Manifest(1), Manifest(1, wrappedRoot: 8));
         var kms = new FakeKms();
         using var ring = new AwsDataProtectionKeyRing(new AwsSecretReader(secrets), kms, "secret", "arn:aws:kms:region:account:key/id", "ring", TimeSpan.FromSeconds(1), time);
@@ -247,12 +303,14 @@ public sealed class AwsDataProtectionKeyRingTests
         }
     }
 
-    sealed class ManualTimeProvider : TimeProvider, IDisposable
+    sealed class JumpingTimestampProvider : TimeProvider
     {
+        readonly ManualTestClock _timers = new();
         long _ticks;
         long _advanceAfterRead;
-        ManualTimer? _timer;
+
         public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
         public override long GetTimestamp()
         {
             var current = Interlocked.Read(ref _ticks);
@@ -262,29 +320,7 @@ public sealed class AwsDataProtectionKeyRingTests
 
         public void AdvanceAfterNextRead(TimeSpan amount) => Interlocked.Exchange(ref _advanceAfterRead, amount.Ticks);
 
-        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
-        {
-            _timer = new ManualTimer(this, callback, state, dueTime);
-            return _timer;
-        }
-        public void Dispose() => _timer?.Dispose();
-        public void Advance(TimeSpan amount)
-        {
-            Interlocked.Add(ref _ticks, amount.Ticks);
-            _timer?.FireIfDue();
-        }
-        sealed class ManualTimer(ManualTimeProvider time, TimerCallback callback, object? state, TimeSpan due) : ITimer
-        {
-            readonly long _expiresAt = time.GetTimestamp() + due.Ticks;
-            int _fired;
-            public bool Change(TimeSpan dueTime, TimeSpan period) => throw new NotSupportedException();
-            public void Dispose() => Interlocked.Exchange(ref _fired, 1);
-            public ValueTask DisposeAsync() { Dispose(); return ValueTask.CompletedTask; }
-            public void FireIfDue()
-            {
-                if (time.GetTimestamp() >= _expiresAt && Interlocked.Exchange(ref _fired, 1) == 0)
-                    callback(state);
-            }
-        }
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
+            _timers.CreateTimer(callback, state, dueTime, period);
     }
 }

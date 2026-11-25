@@ -14,7 +14,8 @@ public sealed class GcpObjectStorage(
     StorageClient client,
     UrlSigner signer,
     IObjectStorageTenantResolver tenantResolver,
-    IDataProtector sessionProtector) : IObjectStorage
+    IDataProtector sessionProtector,
+    TimeProvider timeProvider) : IObjectStorage
 {
     const string DigestMetadata = "portia-sha256";
     const string LengthMetadata = "portia-length";
@@ -35,8 +36,20 @@ public sealed class GcpObjectStorage(
     readonly IObjectStorageTenantResolver _tenantResolver =
         tenantResolver ?? throw new ArgumentNullException(nameof(tenantResolver));
 
+    readonly TimeProvider _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+
     readonly IDataProtector _sessionProtector =
         sessionProtector ?? throw new ArgumentNullException(nameof(sessionProtector));
+
+    /// <summary>Creates object storage using the system clock.</summary>
+    public GcpObjectStorage(
+        StorageClient client,
+        UrlSigner signer,
+        IObjectStorageTenantResolver tenantResolver,
+        IDataProtector sessionProtector
+    ) : this(client, signer, tenantResolver, sessionProtector, TimeProvider.System)
+    {
+    }
 
     /// <inheritdoc />
     public async ValueTask<ObjectUploadSession> CreateUploadAsync(
@@ -69,7 +82,7 @@ public sealed class GcpObjectStorage(
             uploadKey,
             expected.Sha256,
             expected.Length,
-            DateTimeOffset.UtcNow.Add(UploadLifetime)).Encode(_sessionProtector));
+            _clock.GetUtcNow().Add(UploadLifetime)).Encode(_sessionProtector));
     }
 
     /// <inheritdoc />
@@ -91,8 +104,8 @@ public sealed class GcpObjectStorage(
 
         var duration = ObjectStorageRules.BoundLifetime(lifetime);
         var payload = SessionPayload.Decode(session.Token, _sessionProtector);
-        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt);
-        var now = DateTimeOffset.UtcNow;
+        var now = _clock.GetUtcNow();
+        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt, now);
         var expiresAt = now.Add(duration);
 
         if (expiresAt > payload.ExpiresAt)
@@ -116,7 +129,7 @@ public sealed class GcpObjectStorage(
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(parts);
         var payload = SessionPayload.Decode(session.Token, _sessionProtector);
-        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt);
+        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt, _clock.GetUtcNow());
         // A canceled call can be a retry after completion committed but lost its response.
         // Only an explicit abort can safely discard potentially promoted staging data.
         ct.ThrowIfCancellationRequested();
@@ -256,7 +269,7 @@ public sealed class GcpObjectStorage(
         }
 
 
-        var expiresAt = DateTimeOffset.UtcNow.Add(duration);
+        var expiresAt = _clock.GetUtcNow().Add(duration);
         var url = await SignAsync(location.BucketReference, objectKey, duration,
             HttpMethod.Get, ct).ConfigureAwait(false);
         return new(new Uri(url), expiresAt);
@@ -313,6 +326,7 @@ public sealed class GcpObjectStorage(
         }
     }
 
+    // The Google signer owns the signature timestamp. Portia supplies the bounded validity duration.
     async ValueTask<string> SignAsync(
         string bucket,
         string name,
@@ -441,7 +455,7 @@ public sealed class GcpObjectStorage(
                     throw;
                 }
 
-                await Task.Delay(TimeSpan.FromMilliseconds(50 * attempt), ct).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(50 * attempt), _clock, ct).ConfigureAwait(false);
             }
         }
     }

@@ -13,6 +13,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
 {
     const ulong ReadPageSize = 1024;
     const ulong ProgressReadByteBudget = 256 * 1024;
+    readonly TimeProvider _clock;
     readonly ILogger<FitzEventStore>? _logger;
     readonly IDomainEventSerializer _serializer;
     readonly IStreamClient _streams;
@@ -39,6 +40,20 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
         IStreamClient streams,
         IDomainEventSerializer serializer,
         ILogger<FitzEventStore>? logger
+    ) : this(streams, serializer, logger, TimeProvider.System)
+    {
+    }
+
+    /// <summary>Creates a Fitz-backed event store with an application clock for progress observations.</summary>
+    /// <param name="streams">The Fitz stream client.</param>
+    /// <param name="serializer">The durable domain-event serializer.</param>
+    /// <param name="logger">Reports cleanup failures after a confirmed commit.</param>
+    /// <param name="timeProvider">Provides the observation time for stream progress.</param>
+    public FitzEventStore(
+        IStreamClient streams,
+        IDomainEventSerializer serializer,
+        ILogger<FitzEventStore>? logger,
+        TimeProvider timeProvider
     )
     {
         ArgumentNullException.ThrowIfNull(streams);
@@ -47,6 +62,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
         _streams = streams;
         _serializer = serializer;
         _logger = logger;
+        _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     /// <inheritdoc />
@@ -231,7 +247,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
 
 
             return new EventStreamProgress(position, Cursor(head), pending,
-                offset <= head ? offset == head : null, DateTimeOffset.UtcNow, lowerBound);
+                offset <= head ? offset == head : null, _clock.GetUtcNow(), lowerBound);
         }
 
         // The published Fitz client exposes resource metadata, but not realm/area watermarks.
@@ -244,7 +260,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
 
         if (!page.CaughtUp)
             return new EventStreamProgress(position, null, null, page.Items.Count == 0 ? null : false,
-                DateTimeOffset.UtcNow, records.Count);
+                _clock.GetUtcNow(), records.Count);
 
         if (page.Items.Count == 0)
             return await ObserveEmptyPatternAsync(pattern, position, offset, page.NextOffset, ct).ConfigureAwait(false);
@@ -256,7 +272,7 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
 
         ulong? pendingEvents = records.Contiguous && sourcePosition == records.NextOffset ? records.Count : null;
         return new EventStreamProgress(position, Cursor(sourcePosition), pendingEvents, false,
-            DateTimeOffset.UtcNow, records.Count);
+            _clock.GetUtcNow(), records.Count);
     }
 
     async ValueTask<EventStreamProgress> ObserveEmptyPatternAsync(
@@ -269,10 +285,10 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
     {
         if (nextOffset > offset)
             return new EventStreamProgress(position, Cursor(nextOffset), null, false,
-                DateTimeOffset.UtcNow, 0);
+                _clock.GetUtcNow(), 0);
 
         if (offset == 0)
-            return new EventStreamProgress(position, null, 0, true, DateTimeOffset.UtcNow, 0);
+            return new EventStreamProgress(position, null, 0, true, _clock.GetUtcNow(), 0);
 
         // Empty reads initialize their cursor from the requested offset. Verify one preceding
         // position before calling a nonzero checkpoint caught up: the checkpoint may be ahead
@@ -283,21 +299,21 @@ public sealed class FitzEventStore : IEventStore, IDomainEventNotifier, IDomainE
 
         if (!preceding.CaughtUp)
             return new EventStreamProgress(position, null, null, observed.Count > 0 ? false : null,
-                DateTimeOffset.UtcNow, observed.Count);
+                _clock.GetUtcNow(), observed.Count);
 
         var head = preceding.NextOffset;
 
         if (preceding.Items.Count == 0 && head <= offset - 1)
-            return new EventStreamProgress(position, null, null, null, DateTimeOffset.UtcNow);
+            return new EventStreamProgress(position, null, null, null, _clock.GetUtcNow());
 
 
         if (head < observed.NextOffset)
             throw new InvalidOperationException("Fitz returned a source cursor behind its records.");
 
         if (head == offset)
-            return new EventStreamProgress(position, Cursor(head), 0, true, DateTimeOffset.UtcNow, 0);
+            return new EventStreamProgress(position, Cursor(head), 0, true, _clock.GetUtcNow(), 0);
 
-        return new EventStreamProgress(position, Cursor(head), null, false, DateTimeOffset.UtcNow, observed.Count);
+        return new EventStreamProgress(position, Cursor(head), null, false, _clock.GetUtcNow(), observed.Count);
     }
 
     static (ulong Count, bool Contiguous, ulong NextOffset) InspectProgressRecords(

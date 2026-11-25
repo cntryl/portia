@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 
@@ -16,10 +15,17 @@ namespace Cntryl.Portia.Testing;
 ///     <c>Portia.Testing</c>) since it depends on <c>Cntryl.Fitz.Abstractions</c> — an app testing its
 ///     own RPC-based code can reuse this exact type instead of writing its own fake.
 /// </summary>
-public sealed class InMemoryRpcClient : IRpcClient
+/// <param name="timeProvider">Controls RPC and worker deadlines.</param>
+public sealed class InMemoryRpcClient(TimeProvider timeProvider) : IRpcClient
 {
+    readonly TimeProvider _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     readonly Lock _gate = new();
     readonly List<Worker> _workers = [];
+
+    /// <summary>Creates an in-memory RPC client using the system clock.</summary>
+    public InMemoryRpcClient() : this(TimeProvider.System)
+    {
+    }
 
     // Match IRpcClient's two overloads, including their optional cancellation tokens.
 #pragma warning disable RS0026
@@ -47,17 +53,16 @@ public sealed class InMemoryRpcClient : IRpcClient
         [EnumeratorCancellation] CancellationToken ct
     )
     {
-        var budgetStartedAt = Stopwatch.GetTimestamp();
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var budgetStartedAt = _clock.GetTimestamp();
+        using var budget = timeout is { } duration && duration > TimeSpan.Zero
+            ? new CancellationTokenSource(duration, _clock)
+            : null;
+        using var deadline = budget is null
+            ? CancellationTokenSource.CreateLinkedTokenSource(ct)
+            : CancellationTokenSource.CreateLinkedTokenSource(ct, budget.Token);
 
-        if (timeout is { } budget)
-        {
-            if (budget == TimeSpan.Zero)
-                deadline.Cancel();
-            else
-                deadline.CancelAfter(budget);
-        }
-
+        if (timeout == TimeSpan.Zero)
+            deadline.Cancel();
 
         var callToken = deadline.Token;
 
@@ -77,7 +82,7 @@ public sealed class InMemoryRpcClient : IRpcClient
 
             callToken.ThrowIfCancellationRequested();
             using var invocation = new WorkerInvocation(worker, route, body.ToArray(), timeout,
-                budgetStartedAt, cancellation, callToken);
+                budgetStartedAt, _clock, cancellation, callToken);
 
             await foreach (var frame in invocation.ReadAsync(callToken).ConfigureAwait(false))
             {
@@ -196,6 +201,7 @@ public sealed class InMemoryRpcClient : IRpcClient
             ReadOnlyMemory<byte> body,
             TimeSpan? timeout,
             long budgetStartedAt,
+            TimeProvider clock,
             TaskCompletionSource<RpcCancellationOutcome> cancellation,
             CancellationToken ct
         )
@@ -203,7 +209,7 @@ public sealed class InMemoryRpcClient : IRpcClient
             _cancellation = cancellation;
             _callerRegistration = ct.Register(Cancel);
             // Independent dispatch also bounds callers of synchronously blocking handlers.
-            _worker = Task.Run(() => RunAsync(worker, route, body, timeout, budgetStartedAt, ct),
+            _worker = Task.Run(() => RunAsync(worker, route, body, timeout, budgetStartedAt, clock, ct),
                 CancellationToken.None);
         }
 
@@ -245,6 +251,7 @@ public sealed class InMemoryRpcClient : IRpcClient
             ReadOnlyMemory<byte> body,
             TimeSpan? timeout,
             long budgetStartedAt,
+            TimeProvider clock,
             CancellationToken ct
         )
         {
@@ -252,9 +259,9 @@ public sealed class InMemoryRpcClient : IRpcClient
             {
                 ct.ThrowIfCancellationRequested();
                 var remaining = timeout is { } duration
-                    ? TimeSpan.FromTicks(Math.Max(0, (duration - Stopwatch.GetElapsedTime(budgetStartedAt)).Ticks))
+                    ? TimeSpan.FromTicks(Math.Max(0, (duration - clock.GetElapsedTime(budgetStartedAt)).Ticks))
                     : (TimeSpan?)null;
-                await worker.Handler(new RpcRequest(route, body, remaining), this, _workerCancellation.Token)
+                await worker.Handler(new RpcRequest(route, body, remaining, clock), this, _workerCancellation.Token)
                     .ConfigureAwait(false);
                 Complete();
             }

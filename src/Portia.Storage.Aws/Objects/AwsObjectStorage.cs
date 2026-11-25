@@ -4,7 +4,8 @@ namespace Cntryl.Portia.Storage.Aws;
 public sealed class AwsObjectStorage(
     IAmazonS3 client,
     IObjectStorageTenantResolver tenantResolver,
-    IDataProtector sessionProtector) : IObjectStorage
+    IDataProtector sessionProtector,
+    TimeProvider timeProvider) : IObjectStorage
 {
     const string DigestMetadata = "portia-sha256";
     const int MaximumParts = 10_000;
@@ -16,8 +17,19 @@ public sealed class AwsObjectStorage(
     readonly IObjectStorageTenantResolver _tenantResolver =
         tenantResolver ?? throw new ArgumentNullException(nameof(tenantResolver));
 
+    readonly TimeProvider _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+
     readonly IDataProtector _sessionProtector =
         sessionProtector ?? throw new ArgumentNullException(nameof(sessionProtector));
+
+    /// <summary>Creates object storage using the system clock.</summary>
+    public AwsObjectStorage(
+        IAmazonS3 client,
+        IObjectStorageTenantResolver tenantResolver,
+        IDataProtector sessionProtector
+    ) : this(client, tenantResolver, sessionProtector, TimeProvider.System)
+    {
+    }
 
     /// <inheritdoc />
     public async ValueTask<ObjectUploadSession> CreateUploadAsync(
@@ -50,7 +62,7 @@ public sealed class AwsObjectStorage(
             response.UploadId,
             expected.Sha256,
             expected.Length,
-            DateTimeOffset.UtcNow.Add(UploadLifetime)).Encode(_sessionProtector));
+            _clock.GetUtcNow().Add(UploadLifetime)).Encode(_sessionProtector));
     }
 
     /// <inheritdoc />
@@ -72,8 +84,9 @@ public sealed class AwsObjectStorage(
 
         var duration = ObjectStorageRules.BoundLifetime(lifetime);
         var payload = SessionPayload.Decode(session.Token, _sessionProtector);
-        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt);
-        var expiresAt = DateTimeOffset.UtcNow.Add(duration);
+        var now = _clock.GetUtcNow();
+        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt, now);
+        var expiresAt = now.Add(duration);
 
         if (expiresAt > payload.ExpiresAt)
         {
@@ -104,7 +117,7 @@ public sealed class AwsObjectStorage(
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(parts);
         var payload = SessionPayload.Decode(session.Token, _sessionProtector);
-        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt);
+        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt, _clock.GetUtcNow());
         // A canceled call can be a retry after S3 committed completion but lost its response.
         // Only an explicit abort can safely discard its potentially completed staging object.
         ct.ThrowIfCancellationRequested();
@@ -242,7 +255,7 @@ public sealed class AwsObjectStorage(
         }
 
 
-        var expiresAt = DateTimeOffset.UtcNow.Add(duration);
+        var expiresAt = _clock.GetUtcNow().Add(duration);
         var url = _client.GetPreSignedURL(new GetPreSignedUrlRequest
         {
             BucketName = location.BucketReference,
@@ -405,7 +418,7 @@ public sealed class AwsObjectStorage(
                     throw;
                 }
 
-                await Task.Delay(TimeSpan.FromMilliseconds(50 * attempt), ct).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(50 * attempt), _clock, ct).ConfigureAwait(false);
             }
         }
     }

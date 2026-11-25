@@ -95,7 +95,8 @@ public sealed class PortiaFitzBuilder
         services.TryAddSingleton<IEventStore>(provider => new FitzEventStore(
             provider.GetRequiredService<FitzApplicationConnection>().Client.Stream,
             provider.GetRequiredService<IDomainEventSerializer>(),
-            provider.GetService<ILogger<FitzEventStore>>()));
+            provider.GetService<ILogger<FitzEventStore>>(),
+            provider.GetService<TimeProvider>() ?? TimeProvider.System));
         services.TryAddSingleton<IDomainEventReader>(provider => provider.GetRequiredService<IEventStore>());
         services.TryAddSingleton<IDomainEventWriter>(provider => provider.GetRequiredService<IEventStore>());
         // Push wake-ups come from the event store when it can notify. An application that registers its
@@ -175,7 +176,7 @@ public sealed class PortiaFitzBuilder
             provider.GetRequiredService<FitzApplicationConnection>(),
             provider.GetRequiredService<IServiceScopeFactory>(),
             provider.GetRequiredService<RequestTransportCatalog>(), () => ProcessorStatusNamespace,
-            provider.GetService<ILogger<FitzProcessorStatusRpcRegistrar>>()));
+            provider.GetService<ILogger<FitzProcessorStatusRpcRegistrar>>(), provider.GetService<TimeProvider>()));
         services.TryAddSingleton<IRequestQueuePublisher>(provider => new FitzRequestQueuePublisher(
             provider.GetRequiredService<FitzApplicationConnection>().Client.Queue,
             provider.GetRequiredService<IRequestSerializer>(),

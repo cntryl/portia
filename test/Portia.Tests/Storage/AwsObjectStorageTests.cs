@@ -3,6 +3,34 @@ namespace Cntryl.Portia.Tests.Storage;
 /// <summary>Checks AWS request construction and object verification without cloud credentials.</summary>
 public sealed class AwsObjectStorageTests
 {
+    /// <summary>Refuses an upload at its expiry according to the clock registered by the application.</summary>
+    [Fact]
+    public async Task ShouldRejectPartSigningGivenConfiguredClockReachesSessionExpiry()
+    {
+        // Arrange
+        var clock = new ManualTestClock();
+        var client = DispatchProxy.Create<IAmazonS3, TestS3ClientProxy>();
+        var services = new ServiceCollection();
+        services.AddSingleton<TimeProvider>(clock);
+        services.AddDataProtection().UseEphemeralDataProtectionProvider();
+        services.AddSingleton<IObjectStorageTenantResolver>(new ApplicationStorageResolver("alias/shared"));
+        services.AddAwsObjectStorage(builder => builder.UseClient(client));
+        using var provider = services.BuildServiceProvider();
+        var storage = provider.GetRequiredService<IObjectStorage>();
+        var ct = TestContext.Current.CancellationToken;
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"),
+            new ObjectDigest(new string('a', 64), 1), ct);
+        clock.Advance(TimeSpan.FromHours(24));
+
+        // Act
+        var exception = await Record.ExceptionAsync(async () =>
+            await storage.SignPartAsync(session, 1, TimeSpan.FromMinutes(5), ct));
+
+        // Assert
+        var expired = Assert.IsType<InvalidOperationException>(exception);
+        Assert.Equal("The upload session has expired.", expired.Message);
+    }
+
     /// <summary>An older adapter cannot decode sessions whose destinations are now application-owned.</summary>
     [Fact]
     public async Task ShouldRejectNewSessionGivenLegacyProtector()

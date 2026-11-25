@@ -19,7 +19,8 @@ public static class GcpObjectStorageServiceCollectionExtensions
             builder.Signer ?? CreateSigner(client),
             provider.GetRequiredService<IObjectStorageTenantResolver>(),
             provider.GetRequiredService<IDataProtectionProvider>()
-                .CreateProtector("Cntryl.Portia.Storage.Gcp.UploadSession.v2")));
+                .CreateProtector("Cntryl.Portia.Storage.Gcp.UploadSession.v2"),
+            provider.GetService<TimeProvider>() ?? TimeProvider.System));
         return services;
     }
 

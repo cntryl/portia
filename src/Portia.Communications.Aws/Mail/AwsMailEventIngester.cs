@@ -10,9 +10,16 @@ namespace Cntryl.Portia.Communications.Aws;
 ///     an SQS queue that only the SES event destination can write to.
 /// </remarks>
 /// <param name="receiver">The application's delivery-event receiver.</param>
-public sealed class AwsMailEventIngester(IDeliveryEventReceiver receiver)
+/// <param name="timeProvider">Provides the fallback time for records with no valid timestamp.</param>
+public sealed class AwsMailEventIngester(IDeliveryEventReceiver receiver, TimeProvider timeProvider)
 {
+    readonly TimeProvider _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     readonly IDeliveryEventReceiver _receiver = receiver ?? throw new ArgumentNullException(nameof(receiver));
+
+    /// <summary>Creates an ingester with the system clock for records with no valid timestamp.</summary>
+    public AwsMailEventIngester(IDeliveryEventReceiver receiver) : this(receiver, TimeProvider.System)
+    {
+    }
 
     /// <summary>Ingests one SES event.</summary>
     /// <param name="json">The event JSON, optionally wrapped in an SNS notification or EventBridge event.</param>
@@ -34,7 +41,7 @@ public sealed class AwsMailEventIngester(IDeliveryEventReceiver receiver)
         return true;
     }
 
-    static DeliveryEvent? Parse(string json)
+    DeliveryEvent? Parse(string json)
     {
         try
         {
@@ -63,7 +70,7 @@ public sealed class AwsMailEventIngester(IDeliveryEventReceiver receiver)
         }
     }
 
-    static DeliveryEvent? Read(JsonElement sesEvent)
+    DeliveryEvent? Read(JsonElement sesEvent)
     {
         if (sesEvent.ValueKind != JsonValueKind.Object
             || !sesEvent.TryGetProperty("mail", out var mail) || mail.ValueKind != JsonValueKind.Object
@@ -90,7 +97,7 @@ public sealed class AwsMailEventIngester(IDeliveryEventReceiver receiver)
 
         var occurredAt = sesEvent.TryGetProperty(known.Detail, out var detail) && Timestamp(detail) is { } specific
             ? specific
-            : Timestamp(mail) ?? DateTimeOffset.UtcNow;
+            : Timestamp(mail) ?? _clock.GetUtcNow();
         return new DeliveryEvent(tenant, CommunicationChannel.Mail, new SendId(send), known.Kind, occurredAt);
     }
 

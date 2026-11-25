@@ -1,13 +1,20 @@
 namespace Cntryl.Portia.Testing;
 
 /// <summary>An in-memory implementation for exercising tenant-scoped object storage behavior.</summary>
-public sealed class FakeObjectStorage : IObjectStorage
+/// <param name="timeProvider">Controls upload and download expiration.</param>
+public sealed class FakeObjectStorage(TimeProvider timeProvider) : IObjectStorage
 {
+    readonly TimeProvider _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     readonly object _sync = new();
     readonly Dictionary<TenantId, Dictionary<string, byte[]>> _objects = [];
     readonly Dictionary<string, Upload> _uploads = [with(StringComparer.Ordinal)];
     readonly Dictionary<string, CompletedUpload> _completedUploads = [with(StringComparer.Ordinal)];
     DateTimeOffset _nextCompletedPrune;
+
+    /// <summary>Creates in-memory storage using the system clock.</summary>
+    public FakeObjectStorage() : this(TimeProvider.System)
+    {
+    }
 
     /// <summary>Gets the number of active upload sessions.</summary>
     public int ActiveUploadCount
@@ -34,7 +41,7 @@ public sealed class FakeObjectStorage : IObjectStorage
         lock (_sync)
         {
             PruneCompletedUploads();
-            _uploads.Add(token, new Upload(tenantId, expected, DateTimeOffset.UtcNow.AddHours(24)));
+            _uploads.Add(token, new Upload(tenantId, expected, _clock.GetUtcNow().AddHours(24)));
         }
 
         return ValueTask.FromResult(new ObjectUploadSession(token));
@@ -64,8 +71,9 @@ public sealed class FakeObjectStorage : IObjectStorage
         lock (_sync)
         {
             var upload = GetUpload(session);
-            EnsureActive(upload);
-            var expires = Min(DateTimeOffset.UtcNow.Add(lifetime), upload.ExpiresAt);
+            var now = _clock.GetUtcNow();
+            EnsureActive(upload, now);
+            var expires = Min(now.Add(lifetime), upload.ExpiresAt);
             return ValueTask.FromResult(new ObjectUploadPart(partNumber,
                 new Uri($"memory://upload/{session.Token}/{partNumber}"), expires));
         }
@@ -90,7 +98,7 @@ public sealed class FakeObjectStorage : IObjectStorage
 
         lock (_sync)
         {
-            EnsureActive(GetUpload(session));
+            EnsureActive(GetUpload(session), _clock.GetUtcNow());
         }
 
         using var memory = new MemoryStream();
@@ -121,7 +129,7 @@ public sealed class FakeObjectStorage : IObjectStorage
         lock (_sync)
         {
             var upload = GetUpload(session);
-            EnsureActive(upload);
+            EnsureActive(upload, _clock.GetUtcNow());
             upload.Parts[partNumber] = (receipt, content);
             return new ObjectPartReceipt(partNumber, receipt);
         }
@@ -143,7 +151,7 @@ public sealed class FakeObjectStorage : IObjectStorage
 
             if (_completedUploads.TryGetValue(session.Token, out var completed))
             {
-                if (completed.ExpiresAt <= DateTimeOffset.UtcNow)
+                if (completed.ExpiresAt <= _clock.GetUtcNow())
                 {
                     _completedUploads.Remove(session.Token);
                     throw new InvalidOperationException("The upload session has expired.");
@@ -172,7 +180,7 @@ public sealed class FakeObjectStorage : IObjectStorage
 
 
             var upload = GetUpload(session);
-            EnsureActive(upload);
+            EnsureActive(upload, _clock.GetUtcNow());
 
             // Like S3, rejected receipts or part sizes leave the session open so the caller can correct
             // its parts and complete again. Only a content verification outcome consumes the session.
@@ -302,7 +310,7 @@ public sealed class FakeObjectStorage : IObjectStorage
             throw new FileNotFoundException("The verified object was not found.");
         }
 
-        var expires = DateTimeOffset.UtcNow.Add(lifetime);
+        var expires = _clock.GetUtcNow().Add(lifetime);
         return new ObjectDownload(
             new Uri($"memory://download/{Uri.EscapeDataString(tenantId.Value)}/{expected.Sha256}"), expires);
     }
@@ -358,9 +366,9 @@ public sealed class FakeObjectStorage : IObjectStorage
         return objects;
     }
 
-    static void EnsureActive(Upload upload)
+    static void EnsureActive(Upload upload, DateTimeOffset now)
     {
-        if (upload.ExpiresAt <= DateTimeOffset.UtcNow)
+        if (upload.ExpiresAt <= now)
         {
             throw new InvalidOperationException("The upload session has expired.");
         }
@@ -370,7 +378,7 @@ public sealed class FakeObjectStorage : IObjectStorage
 
     void PruneCompletedUploads()
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _clock.GetUtcNow();
 
         if (now < _nextCompletedPrune)
         {

@@ -1,1 +1,2 @@
 #nullable enable
+Cntryl.Portia.Communications.Aws.AwsMailEventIngester.AwsMailEventIngester(Cntryl.Portia.Communications.IDeliveryEventReceiver! receiver, System.TimeProvider! timeProvider) -> void

@@ -1,1 +1,2 @@
 #nullable enable
+Cntryl.Portia.Storage.Azure.AzureObjectStorage.AzureObjectStorage(Azure.Storage.Blobs.BlobServiceClient! client, Cntryl.Portia.Storage.IObjectStorageTenantResolver! tenantResolver, Microsoft.AspNetCore.DataProtection.IDataProtector! sessionProtector, System.TimeProvider! timeProvider) -> void

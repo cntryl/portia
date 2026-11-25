@@ -18,7 +18,8 @@ public static class AwsObjectStorageServiceCollectionExtensions
             client,
             provider.GetRequiredService<IObjectStorageTenantResolver>(),
             provider.GetRequiredService<IDataProtectionProvider>()
-                .CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v2")));
+                .CreateProtector("Cntryl.Portia.Storage.Aws.UploadSession.v2"),
+            provider.GetService<TimeProvider>() ?? TimeProvider.System));
         return services;
     }
 }

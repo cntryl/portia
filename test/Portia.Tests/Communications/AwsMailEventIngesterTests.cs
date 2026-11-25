@@ -41,6 +41,36 @@ public sealed class AwsMailEventIngesterTests
             DateTimeOffset.Parse("2026-11-13T10:00:05Z", System.Globalization.CultureInfo.InvariantCulture)), delivery);
     }
 
+    /// <summary>Uses the host clock only when SES reports no timestamp.</summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("2026-11-13T10:00:00Z")]
+    public async Task ShouldUseMailOrReceiptTimestampGivenNoEventTimestamp(string? providerTime)
+    {
+        // Arrange
+        var clock = new ManualTestClock();
+        var receiver = new RecordingReceiver();
+        var client = DispatchProxy.Create<IAmazonSimpleEmailServiceV2, AwsMailSenderTests.TestSesClientProxy>();
+        var services = new ServiceCollection();
+        services.AddSingleton<TimeProvider>(clock);
+        services.AddSingleton<IDeliveryEventReceiver>(receiver);
+        services.AddAwsMail(builder => builder.UseClient(client));
+        using var provider = services.BuildServiceProvider();
+        var ingester = provider.GetRequiredService<AwsMailEventIngester>();
+        var json = System.Text.Json.Nodes.JsonNode.Parse(await SesEventAsync("Delivery", "delivery"))!.AsObject();
+        _ = json["delivery"]!.AsObject().Remove("timestamp");
+        json["mail"]!["timestamp"] = providerTime;
+        var expected = providerTime is null ? clock.GetUtcNow() :
+            DateTimeOffset.Parse(providerTime, System.Globalization.CultureInfo.InvariantCulture);
+
+        // Act
+        var ingested = await ingester.IngestAsync(json.ToJsonString(), TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.True(ingested);
+        Assert.Equal(expected, Assert.Single(receiver.Events).OccurredAt);
+    }
+
     /// <summary>Mail that Portia did not send, and engagement events, are not delivery events.</summary>
     [Theory]
     [InlineData(

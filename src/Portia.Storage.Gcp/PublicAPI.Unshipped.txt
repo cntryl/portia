@@ -1,1 +1,2 @@
 #nullable enable
+Cntryl.Portia.Storage.Gcp.GcpObjectStorage.GcpObjectStorage(Google.Cloud.Storage.V1.StorageClient! client, Google.Cloud.Storage.V1.UrlSigner! signer, Cntryl.Portia.Storage.IObjectStorageTenantResolver! tenantResolver, Microsoft.AspNetCore.DataProtection.IDataProtector! sessionProtector, System.TimeProvider! timeProvider) -> void

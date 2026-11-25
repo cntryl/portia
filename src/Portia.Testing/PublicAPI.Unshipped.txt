@@ -1,1 +1,3 @@
 #nullable enable
+Cntryl.Portia.Testing.FakeObjectStorage.FakeObjectStorage(System.TimeProvider! timeProvider) -> void
+Cntryl.Portia.Testing.InMemoryEventStore.InMemoryEventStore(System.TimeProvider! timeProvider) -> void

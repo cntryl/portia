@@ -39,7 +39,8 @@ public static class AwsMailServiceCollectionExtensions
         services.AddSingleton<IMailSender>(provider =>
             new AwsMailSender(client, provider.GetRequiredService<IAwsMailTenantResolver>()));
         services.AddSingleton(provider =>
-            new AwsMailEventIngester(provider.GetRequiredService<IDeliveryEventReceiver>()));
+            new AwsMailEventIngester(provider.GetRequiredService<IDeliveryEventReceiver>(),
+                provider.GetService<TimeProvider>() ?? TimeProvider.System));
         return services;
     }
 }
