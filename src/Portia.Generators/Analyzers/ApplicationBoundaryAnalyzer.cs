@@ -28,7 +28,7 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
         "PortiaStructure", DiagnosticSeverity.Warning, true);
 
     static readonly DiagnosticDescriptor Hydration = new("PORTIA212", "Query or reactor hydrates an aggregate",
-        "'{0}' calls '{1}'; queries read through repositories and reactors send commands from committed facts. Keep aggregate hydration in command handling.",
+        "'{0}' calls '{1}'. Use a read model in queries and dispatch commands from reactors. Command handlers can hydrate other aggregates for advisory validation. Completion still requires authoritative outcomes from the owning aggregates.",
         "PortiaStructure", DiagnosticSeverity.Warning, true, customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     static readonly DiagnosticDescriptor InternalRequestRegistration = new("PORTIA214",

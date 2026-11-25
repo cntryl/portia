@@ -7,29 +7,24 @@ namespace Cntryl.Portia;
 /// </summary>
 public sealed class RequestDispatchTests
 {
-    /// <summary>Dispatches both request shapes from one delivery description.</summary>
+    /// <summary>Dispatches a query and returns its typed result after actor validation.</summary>
     [Fact]
-    public async Task ShouldDispatchBothRequestShapesGivenOneDelivery()
+    public async Task ShouldReturnQueryResultGivenActorValidationSuccess()
     {
         // Arrange
         using var busHost = TestRequestBus.Create();
-        using var cancellation = new CancellationTokenSource();
-        var invocation = new QueueInvocation("queue://test/work/item", 1);
-
-        var command = await RequestDispatch.SendAsync(
-            new TestRequestActorValidator(), busHost.Bus, new ChangeValue(1),
-            new RequestDelivery("test.change_value", invocation, RequestMetadata.Create(), "valid-token"),
-            cancellation.Token);
+        var delivery = new RequestDelivery("test.get_value", new QueueInvocation("queue://test/work/item", 1),
+            RequestMetadata.Create(), "valid-token");
 
         // Act
-        var query = await RequestDispatch.SendAsync(
-            new TestRequestActorValidator(), busHost.Bus, new GetValue(),
-            new RequestDelivery("test.get_value", invocation, RequestMetadata.Create(), "valid-token"),
-            cancellation.Token);
+        var dispatch = await RequestDispatch.SendAsync(
+            new TestRequestActorValidator(), busHost.Bus, new GetValue(), delivery,
+            TestContext.Current.CancellationToken);
 
         // Assert
-        Assert.True(command.WasDispatched);
-        Assert.True(query.WasDispatched);
+        Assert.True(dispatch.WasDispatched);
+        Assert.True(dispatch.Outcome.IsSuccess);
+        Assert.Equal(7, dispatch.Outcome.Value);
     }
 
     /// <summary>
