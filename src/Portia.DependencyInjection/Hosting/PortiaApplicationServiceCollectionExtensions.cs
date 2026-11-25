@@ -53,7 +53,8 @@ public static class PortiaApplicationServiceCollectionExtensions
             provider.GetServices<RequestPipelineBehaviorRegistration>(),
             provider.GetServices<RequestGuardRegistration>(),
             provider.GetServices<RequestTransportRegistration>(),
-            provider.GetRequiredService<PortiaBuilder>().AuthorizationRequirement()));
+            provider.GetRequiredService<PortiaBuilder>().AuthorizationRequirement(),
+            provider.GetRequiredService<PortiaBuilder>().RequestActorAuthorizationRequired));
         services.TryAddSingleton<PortiaStartupValidationRegistry>();
         // Keyed, so an application's own JsonSerializerOptions never becomes Portia's wire format.
         services.TryAddKeyedSingleton(PortiaServiceKeys.Json,

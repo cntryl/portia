@@ -882,7 +882,7 @@ public sealed class ProcessorStatusTests
         Assert.Single(provider.GetServices<RequestHandlerRegistration>(),
             item => item.RequestType == typeof(GetProcessorStatus));
         Assert.Single(provider.GetServices<RequestAuthorizerRegistration>(),
-            item => item.RequestType == typeof(GetProcessorStatus));
+            item => item.ScopeType.IsAssignableFrom(typeof(GetProcessorStatus)));
         Assert.Single(provider.GetServices<RequestTransportRegistration>(),
             item => item.RequestType == typeof(GetProcessorStatus));
         var options = provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);

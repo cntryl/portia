@@ -105,7 +105,7 @@ public sealed class GeneratorStabilityTests
     {
         // Arrange
         const int expectedGenerators = 8;
-        const int expectedAnalyzers = 6;
+        const int expectedAnalyzers = 7;
 
         // Act
         var generators = AllGenerators();

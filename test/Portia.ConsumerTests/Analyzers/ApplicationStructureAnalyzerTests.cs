@@ -29,8 +29,39 @@ public sealed class ApplicationStructureAnalyzerTests
         Assert.DoesNotContain(diagnostics, item => item.Id is "PORTIA204" or "PORTIA203");
     }
 
+    [Theory]
+    [InlineData("Orders")]
+    [InlineData("Returns")]
+    public void ShouldAllowSharedEntityTypeGivenTwoAggregatesStoreTheirOwnInstances(string secondFeature)
+    {
+        // Arrange
+        const string entity = "namespace Shop.Core.Features.Orders.Aggregates.Entities; public sealed class OrderLine;";
+        static string Root(string feature, string name) => $$"""
+            using System.Collections.Generic;
+            using Cntryl.Portia;
+            using Shop.Core.Features.Orders.Aggregates.Entities;
+            namespace Shop.Core.Features.{{feature}}.Aggregates;
+            public sealed class {{name}}(Uuid id) : Aggregate(id, new EventStreamAddress("shop", "{{feature}}", id.ToString()))
+            {
+                private List<OrderLine> Lines { get; } = new();
+            }
+            """;
+        var files = new[]
+        {
+            ("Features/Orders/Aggregates/Entities/OrderLine.cs", entity),
+            ("Features/Orders/Aggregates/Order.cs", Root("Orders", "Order")),
+            ($"Features/{secondFeature}/Aggregates/Return.cs", Root(secondFeature, "Return"))
+        };
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(), files);
+
+        // Assert
+        Assert.Empty(diagnostics);
+    }
+
     [Fact]
-    public void ShouldCountPartialAggregateOnceGivenEntityStorageInOnePart()
+    public void ShouldAcceptChildEntityGivenStorageInPartialAggregate()
     {
         // Arrange
         const string root = "using Cntryl.Portia; using Shop.Core.Features.Orders.Aggregates.Entities; namespace Shop.Core.Features.Orders.Aggregates; public sealed partial class Order(Uuid id) : Aggregate(id, new EventStreamAddress(\"shop\", \"orders\", id.ToString())) { private OrderLine _line = new(); }";
@@ -50,27 +81,7 @@ public sealed class ApplicationStructureAnalyzerTests
     }
 
     [Fact]
-    public void ShouldRequireConcreteAggregateOwnerGivenEntityStoredByAbstractRoot()
-    {
-        // Arrange
-        const string root = "using Cntryl.Portia; using Shop.Core.Features.Orders.Aggregates.Entities; namespace Shop.Core.Features.Orders.Aggregates; public abstract class OrderBase(Uuid id) : Aggregate(id, new EventStreamAddress(\"shop\", \"orders\", id.ToString())) { protected OrderLine Line { get; } = new(); }";
-        const string entity = "namespace Shop.Core.Features.Orders.Aggregates.Entities; public sealed class OrderLine;";
-
-        // Act
-        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
-        [
-            ("Features/Orders/Aggregates/OrderBase.cs", root),
-            ("Features/Orders/Aggregates/Entities/OrderLine.cs", entity)
-        ]);
-
-        // Assert
-        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
-        Assert.Contains("orphan", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
-            StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void ShouldCountInheritedEntityStorageGivenConcreteAggregateRoot()
+    public void ShouldAcceptChildEntityGivenInheritedStorage()
     {
         // Arrange
         const string root = "using Cntryl.Portia; using Shop.Core.Features.Orders.Aggregates.Entities; namespace Shop.Core.Features.Orders.Aggregates; public abstract class OrderBase(Uuid id) : Aggregate(id, new EventStreamAddress(\"shop\", \"orders\", id.ToString())) { protected OrderLine Line { get; } = new(); } public sealed class Order(Uuid id) : OrderBase(id);";
@@ -108,28 +119,35 @@ public sealed class ApplicationStructureAnalyzerTests
     }
 
     [Theory]
-    [InlineData(false, "orphan")]
-    [InlineData(true, "multiple owners")]
-    public void ShouldRejectInvalidEntityOwnershipGivenAggregateFeature(bool twoOwners, string reason)
+    [InlineData("Entities", "Entities")]
+    [InlineData("Entities/Shipping", "Entities.Shipping")]
+    public void ShouldAllowChildEntityGivenNoVisibleAggregateInCompilation(string folder, string entityNamespace)
     {
         // Arrange
-        const string entity = "namespace Shop.Core.Features.Orders.Aggregates.Entities; public sealed class OrderLine;";
-        var roots = new List<(string Path, string Source)>();
-
-        if (twoOwners)
-        {
-            roots.Add(("Features/Orders/Aggregates/Order.cs", "using Cntryl.Portia; using Shop.Core.Features.Orders.Aggregates.Entities; namespace Shop.Core.Features.Orders.Aggregates; public sealed class Order(Uuid id) : Aggregate(id, new EventStreamAddress(\"shop\", \"orders\", id.ToString())) { private OrderLine _line = new(); }"));
-            roots.Add(("Features/Orders/Aggregates/OtherOrder.cs", "using Cntryl.Portia; using Shop.Core.Features.Orders.Aggregates.Entities; namespace Shop.Core.Features.Orders.Aggregates; public sealed class OtherOrder(Uuid id) : Aggregate(id, new EventStreamAddress(\"shop\", \"orders\", id.ToString())) { private OrderLine _line = new(); }"));
-        }
+        var entity = $"namespace Shop.Core.Features.Orders.Aggregates.{entityNamespace}; public sealed record OrderLine(int Quantity);";
 
         // Act
-
         var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
-            roots.Append(("Features/Orders/Aggregates/Entities/OrderLine.cs", entity)).ToArray());
+            [($"Features/Orders/Aggregates/{folder}/OrderLine.cs", entity)]);
 
         // Assert
-        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA204");
-        Assert.Contains(reason, diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public void ShouldReportFolderRoleGivenStaticClassInEntities()
+    {
+        // Arrange
+        const string source = "namespace Shop.Core.Features.Orders.Aggregates.Entities; public static class Pricing;";
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
+            [("Features/Orders/Aggregates/Entities/Pricing.cs", source)]);
+
+        // Assert
+        var diagnostic = Assert.Single(diagnostics);
+        Assert.Equal("PORTIA204", diagnostic.Id);
+        Assert.Contains("instance", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
             StringComparison.OrdinalIgnoreCase);
     }
 
@@ -967,220 +985,31 @@ public sealed class ApplicationStructureAnalyzerTests
     }
 
     [Fact]
-    public void ShouldRecommendCompositionGivenLargeAggregateFile()
+    public void ShouldAcceptAggregatesGivenManyOperationsRaisingTheSameEventType()
     {
         // Arrange
-        const string prefix = """
-                              using Cntryl.Portia;
-                              namespace Shop.Core.Features.Orders.Aggregates;
-                              public sealed class Order(Uuid id) : Aggregate(id, new EventStreamAddress("shop", "orders", id.ToString()))
-                              {
-                              """;
-        var source = prefix + string.Concat(Enumerable.Range(0, 13)
-            .Select(index => $"public void Command{index}() {{ }} ")) + "}";
+        const string shared = "namespace Shop.Core.Features.Orders.Events; public sealed record AddressChanged : Cntryl.Portia.DomainEvent;";
+        var operations = string.Join("\n", Enumerable.Range(1, 14).Select(i =>
+            $"public void ChangeAddress{i}() => RaiseEvent(new AddressChanged());"));
+        string[] rootNames = ["Order", "Shipment"];
+        var files = rootNames.Select(name =>
+            ($"Features/Orders/Aggregates/{name}.cs", $$"""
+                using Cntryl.Portia;
+                using Shop.Core.Features.Orders.Events;
+                namespace Shop.Core.Features.Orders.Aggregates;
+                public sealed class {{name}} : Aggregate
+                {
+                    public {{name}}(Uuid id) : base(id, new EventStreamAddress("shop", "{{name}}", id.ToString()))
+                        => On<AddressChanged>(_ => { });
+                    {{operations}}
+                }
+                """)).Append(("Features/Orders/Events/AddressChanged.cs", shared)).ToArray();
 
         // Act
-        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
-            [("Features/Orders/Aggregates/Order.cs", source)]);
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(), files);
 
         // Assert
-        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA208");
-        Assert.Contains("split", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
-            StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("partial", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
-            StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public void ShouldKeepAggregateReviewBudgetStableGivenFormattingAndComments()
-    {
-        // Arrange
-        const string prefix = """
-                              using Cntryl.Portia;
-                              namespace Shop.Core.Features.Orders.Aggregates;
-                              public sealed class Order(Uuid id) : Aggregate(id, new EventStreamAddress("shop", "orders", id.ToString()))
-                              {
-                              """;
-        var compact = prefix + string.Concat(Enumerable.Range(0, 10)
-            .Select(index => $"public void Command{index}() {{ }} ")) + "}";
-        var expanded = prefix + string.Concat(Enumerable.Range(0, 10)
-            .SelectMany(index => new[]
-            {
-                $"  // Formatting and documentation for Command{index}\n",
-                $"  public void Command{index}()\n",
-                "  {\n",
-                "  \n",
-                "  }\n",
-                "\n"
-            })) + "}";
-
-        // Act
-        var compactDiagnostics =
-            ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
-                [("Features/Orders/Aggregates/Order.cs", compact)]);
-        var expandedDiagnostics =
-            ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
-                [("Features/Orders/Aggregates/Order.cs", expanded)]);
-
-        // Assert
-        Assert.DoesNotContain(compactDiagnostics, item => item.Id == "PORTIA208");
-        Assert.DoesNotContain(expandedDiagnostics, item => item.Id == "PORTIA208");
-    }
-
-    [Fact]
-    public void ShouldCrossAggregateReviewBudgetGivenSemanticPressureRegardlessOfFormatting()
-    {
-        // Arrange
-        const string prefix = """
-                              using Cntryl.Portia;
-                              namespace Shop.Core.Features.Orders.Aggregates;
-                              public sealed class Order(Uuid id) : Aggregate(id, new EventStreamAddress("shop", "orders", id.ToString()))
-                              {
-                              """;
-        var compact = prefix + string.Concat(Enumerable.Range(0, 13)
-            .Select(index => $"public void Command{index}() {{ }} ")) + "}";
-        var expanded = prefix + string.Concat(Enumerable.Range(0, 13)
-            .Select(index => $"  public void Command{index}() {{ }}\n")) + "}";
-
-        // Act
-        var compactDiagnostics =
-            ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
-                [("Features/Orders/Aggregates/Order.cs", compact)]);
-        var expandedDiagnostics =
-            ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationStructureAnalyzer(),
-                [("Features/Orders/Aggregates/Order.cs", expanded)]);
-
-        // Assert
-        _ = Assert.Single(compactDiagnostics, item => item.Id == "PORTIA208");
-        _ = Assert.Single(expandedDiagnostics, item => item.Id == "PORTIA208");
-    }
-
-    [Fact]
-    public void ShouldHonorConfiguredAggregateReviewBudgetGivenSemanticPressure()
-    {
-        // Arrange
-        const string prefix = """
-                              using Cntryl.Portia;
-                              namespace Shop.Core.Features.Orders.Aggregates;
-                              public sealed class Order(Uuid id) : Aggregate(id, new EventStreamAddress("shop", "orders", id.ToString()))
-                              {
-                              """;
-        var atBudget = prefix + string.Concat(Enumerable.Range(0, 10)
-            .Select(index => $"public void Command{index}() {{ }} ")) + "}";
-        var overBudget = prefix + string.Concat(Enumerable.Range(0, 11)
-            .Select(index => $"public void Command{index}() {{ }} ")) + "}";
-
-        // Act
-        var atBudgetDiagnostics = ApplicationAnalyzerCompilation.Analyze(
-            "Shop.Core", new ApplicationStructureAnalyzer(),
-            [("Features/Orders/Aggregates/Order.cs", atBudget)], aggregateSemanticBudget: 10);
-        var overBudgetDiagnostics = ApplicationAnalyzerCompilation.Analyze(
-            "Shop.Core", new ApplicationStructureAnalyzer(),
-            [("Features/Orders/Aggregates/Order.cs", overBudget)], aggregateSemanticBudget: 10);
-
-        // Assert
-        Assert.DoesNotContain(atBudgetDiagnostics, item => item.Id == "PORTIA208");
-        var diagnostic = Assert.Single(overBudgetDiagnostics, item => item.Id == "PORTIA208");
-        Assert.Contains("11", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
-            StringComparison.Ordinal);
-        Assert.Contains("10", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ShouldHonorFileScopedAggregateReviewBudgetGivenSemanticPressure()
-    {
-        // Arrange
-        const string source = """
-                              using Cntryl.Portia;
-                              namespace Shop.Core.Features.Orders.Aggregates;
-                              public sealed class Order(Uuid id) : Aggregate(id, new EventStreamAddress("shop", "orders", id.ToString()))
-                              {
-                                  public void Command1() { }
-                                  public void Command2() { }
-                              }
-                              """;
-
-        // Act
-        var diagnostics = ApplicationAnalyzerCompilation.Analyze(
-            "Shop.Core", new ApplicationStructureAnalyzer(),
-            [("Features/Orders/Aggregates/Order.cs", source)],
-            aggregateSemanticBudget: 12, fileAggregateSemanticBudget: 1);
-
-        // Assert
-        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA208");
-        Assert.Contains("2", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ShouldCountBoundAggregateEventResponsibilitiesGivenOnHandlers()
-    {
-        // Arrange
-        const string source = """
-                              using Cntryl.Portia;
-                              namespace Shop.Core.Features.Orders.Aggregates;
-                              public sealed record Event1 : DomainEvent;
-                              public sealed record Event2 : DomainEvent;
-                              public sealed class Order : Aggregate
-                              {
-                                  public Order(Uuid id) : base(id, new EventStreamAddress("shop", "orders", id.ToString()))
-                                  {
-                                      On<Event1>(_ => { });
-                                      On<Event2>(_ => { });
-                                  }
-                              }
-                              """;
-
-        // Act
-        var diagnostics = ApplicationAnalyzerCompilation.Analyze(
-            "Shop.Core", new ApplicationStructureAnalyzer(),
-            [("Features/Orders/Aggregates/Order.cs", source)], aggregateSemanticBudget: 1);
-
-        // Assert
-        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA208");
-        Assert.Contains("2", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ShouldCountAggregateEventResponsibilitiesGivenPartialDeclarations()
-    {
-        // Arrange
-        const string primary = """
-                               using Cntryl.Portia;
-                               namespace Shop.Core.Features.Orders.Aggregates;
-                               public sealed partial class Order : Aggregate
-                               {
-                                   public Order(Uuid id) : base(id, new EventStreamAddress("shop", "orders", id.ToString()))
-                                   {
-                                       On<Event1>(_ => { });
-                                   }
-                               }
-                               public sealed record Event1 : DomainEvent;
-                               """;
-        const string secondary = """
-                                 using Cntryl.Portia;
-                                 namespace Shop.Core.Features.Orders.Aggregates;
-                                 public sealed partial class Order
-                                 {
-                                     private void Replay() => On<Event2>(_ => { });
-                                 }
-                                 public sealed record Event2 : DomainEvent;
-                                 """;
-
-        // Act
-        var diagnostics = ApplicationAnalyzerCompilation.Analyze(
-            "Shop.Core", new ApplicationStructureAnalyzer(),
-            [
-                ("Features/Orders/Aggregates/Order.cs", primary),
-                ("Features/Orders/Aggregates/Order.Events.cs", secondary)
-            ], aggregateSemanticBudget: 1);
-
-        // Assert
-        var diagnostic = Assert.Single(diagnostics, item => item.Id == "PORTIA208");
-        Assert.Contains("2", diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
-            StringComparison.Ordinal);
+        Assert.Empty(diagnostics);
     }
 
     [Fact]

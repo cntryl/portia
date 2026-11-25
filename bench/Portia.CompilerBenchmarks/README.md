@@ -12,8 +12,8 @@ dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchm
 dotnet bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll verify --size small
 ```
 
-Verification covers the shipped eight generators, five analyzers and three code-fix providers.
-The manifest currently has 93 cases: seven representative application requests, generator edits and isolated generators, analyzer compilation
+Verification covers the shipped eight generators, seven analyzers and three code-fix providers.
+The manifest includes representative application requests, generator edits and isolated generators, analyzer compilation
 and document requests, nine code-fix actions with six stages each, and eight project Fix All cases.
 The newer contract metadata path has a description edit and a `PORTIA031` activation control.
 The representative graph uses valid Common/Core/Api/Worker projects, compilation references, correct
@@ -26,6 +26,14 @@ declared output-family changes, and stable tracked model steps. Code fixes use a
 map portable locations to workspace trees, apply real operations and compile all affected projects.
 They must remove every targeted diagnostic. Small Fix All cases repair ten diagnostics; Standard
 and Large repair 100. The namespace fixture scales references to 1, 10 and 100 respectively.
+
+Four analyzer cases exercise allocation growth. Use the existing `compare` command with
+`analyzers/ComponentPracticeAnalyzer/reactors-disabled` or `reactors-enabled` to measure 50, 200,
+500, or 1,000 unrelated reactors plus one complementary pair. At `--size large`,
+`analyzers/ScenarioObservationAnalyzer/assignments` and
+`analyzers/ApplicationBoundaryAnalyzer/repeated-calls` each analyze 25,600 assignments that call
+source helpers. Verification checks the scenario finding, the query hydration finding, and the
+reaction diagnostic count under both severity settings.
 
 Run A/A calibration using the same immutable executable on the macOS reference host:
 

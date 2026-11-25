@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <CompilerVisibleProperty Include="PortiaProjectStructure"/>
+    <CompilerVisibleProperty Include="PortiaRequireRequestActor"/>
     <CompilerVisibleProperty Include="MSBuildProjectDirectory"/>
     <CompilerVisibleProperty Include="MSBuildProjectName"/>
     <CompilerVisibleProperty Include="RootNamespace"/>

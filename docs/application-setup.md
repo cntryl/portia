@@ -295,6 +295,38 @@ Read/validation failure does not apply the fetched batch. If a domain event hand
 throws while applying the batch, discard the instance; arbitrary application state
 cannot be rolled back by the framework.
 
+## Classifying request actors
+
+Enable the standard actor policies at each host's composition root:
+
+```csharp
+services.AddPortia().RequireRequestActors();
+```
+
+Declare one actor marker per request, directly or through a request-family interface. The
+request still declares its shape with `IRequest`, `IRequest<T>`, or `IStreamRequest<T>`.
+
+| Marker | Principal admitted by the standard policy |
+| --- | --- |
+| `IPublicRequest` | An anonymous or signed-in principal. Any applicable permission, resource, or signed-link checks still apply. |
+| `IAuthenticatedRequest` | Exactly one authenticated identity with a nonblank, unambiguous subject and issuer. An attributable Portia system principal qualifies. |
+| `ISystemRequest` | An attributable Portia system principal recognized by `RequestActor.IsSystem`. |
+
+These policies use the principal supplied by the host after credential validation. Request-specific
+authorizers continue to enforce access to the requested operation or resource. The framework uses
+the same subject and issuer for admission and event attribution. A principal with multiple
+authenticated identities or conflicting subject claims cannot be recorded as a single actor.
+
+Select transport independently. A local system command needs only its handler. Add `ICallable`
+to enable a remote call, with the route and registration required by the transport. Use
+`ISchedulable` for a scheduled system command. Add `<PortiaRequireRequestActor>true</PortiaRequireRequestActor>`
+to a contracts project's MSBuild properties to report missing or conflicting actor markers as
+`PORTIA033` at build time.
+
+When migrating application-owned markers, bind requests and custom authorizers to the Portia
+interfaces together. Preserve application-specific registrations in existing composition helpers.
+Tests that discover application contracts by assembly should use a type defined in the application.
+
 ## Projectors and reactors across worker replicas
 
 Workload registration belongs in shared setup. Projectors specify their scope, and single-event

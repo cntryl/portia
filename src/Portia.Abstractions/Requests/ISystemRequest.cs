@@ -1,6 +1,6 @@
 namespace Cntryl.Portia;
 
 /// <summary>
-///     Marks an internal request whose handler is composed by the owning feature.
+///     Marks a request contract issued by the system.
 /// </summary>
-public interface ISystemRequest : IUnaryRequest;
+public interface ISystemRequest : IRequestBase;

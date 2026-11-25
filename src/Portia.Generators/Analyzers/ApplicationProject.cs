@@ -11,15 +11,11 @@ sealed class ApplicationProject(
     string name,
     string rootNamespace,
     bool isTest,
-    string? explicitRole,
-    int aggregateSemanticBudget)
+    string? explicitRole)
 {
-    public const int DefaultAggregateSemanticBudget = 12;
-
     public string Name { get; } = name;
     public string RootNamespace { get; } = rootNamespace;
     public bool IsTest { get; } = isTest;
-    public int AggregateSemanticBudget { get; } = aggregateSemanticBudget;
     public string Role { get; } = explicitRole ?? name.Split('.').Last();
     public string ApplicationName { get; } = name.Contains('.') ? name.Substring(0, name.LastIndexOf('.')) : name;
 
@@ -47,26 +43,9 @@ sealed class ApplicationProject(
                 && !string.IsNullOrWhiteSpace(editorConfigRole)
                 ? editorConfigRole.Trim()
                 : null;
-        var aggregateSemanticBudget =
-            global.TryGetValue("portia_aggregate_semantic_budget", out var configuredBudget)
-            && int.TryParse(configuredBudget, out var budget)
-            && budget > 0
-                ? budget
-                : DefaultAggregateSemanticBudget;
         return new ApplicationProject(directory.Replace('\\', '/').TrimEnd('/'), name, rootNamespace,
-            string.Equals(isTest, "true", StringComparison.OrdinalIgnoreCase), projectRole, aggregateSemanticBudget);
+            string.Equals(isTest, "true", StringComparison.OrdinalIgnoreCase), projectRole);
     }
-
-    public static int AggregateSemanticBudgetFor(
-        AnalyzerConfigOptionsProvider options,
-        SyntaxTree tree,
-        int fallback
-    ) =>
-        options.GetOptions(tree).TryGetValue("portia_aggregate_semantic_budget", out var configuredBudget)
-        && int.TryParse(configuredBudget, out var budget)
-        && budget > 0
-            ? budget
-            : fallback;
 
     public string[] RelativePath(SyntaxTree tree)
     {

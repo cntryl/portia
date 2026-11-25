@@ -664,9 +664,33 @@ public sealed class RequestBus(IServiceProvider services, RequestRegistry regist
     // An unprotected request under RequireAuthorization() is a composition mistake, not an access
     // decision: throwing names the fix, where a Forbidden result would pass for a real denial.
     [DoesNotReturn]
-    static void ThrowUnprotectedRequest(Type requestType) =>
+    void ThrowUnprotectedRequest(Type requestType)
+    {
+        if (registry.InvalidActorClassificationTypes.Contains(requestType))
+        {
+            throw new InvalidOperationException(
+                $"Request type '{requestType.FullName}' must implement exactly one actor marker: IAuthenticatedRequest, ISystemRequest, or IPublicRequest.");
+        }
+
+        if (registry.MissingActorAuthorizationTypes.Contains(requestType))
+        {
+            if (typeof(IPublicRequest).IsAssignableFrom(requestType))
+            {
+                throw new InvalidOperationException(
+                    $"Public request type '{requestType.FullName}' requires AllowAnonymous<IPublicRequest>() or a narrower public request family allowance.");
+            }
+
+            var family = typeof(ISystemRequest).IsAssignableFrom(requestType)
+                ? nameof(ISystemRequest)
+                : nameof(IAuthenticatedRequest);
+            throw new InvalidOperationException(
+                $"Request type '{requestType.FullName}' requires a Principal-stage authorizer bound to {family} or a narrower actor-family interface.");
+        }
+
+
         throw new InvalidOperationException(
             $"Request type '{requestType.FullName}' has no applicable request authorizer or [RequiresPermission], and RequireAuthorization() is enabled. Register an authorizer, declare a permission, or call RequireAuthorization(options => options.AllowAnonymous<{requestType.Name}>()).");
+    }
 
     // A request type can implement more than one request contract, but one registration serves it.
     // Dispatching through a contract it is not handled as is a composition mistake, named here

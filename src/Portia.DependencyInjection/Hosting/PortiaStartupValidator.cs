@@ -48,6 +48,22 @@ sealed class PortiaStartupValidator(
                 "RequireAuthorization() is enabled, but the registered RequestRegistry was not composed by AddPortia(), so dispatch would not enforce it. Remove the custom RequestRegistry registration.");
         }
 
+        if (requests.InvalidActorClassificationTypes.Count > 0)
+        {
+            var invalidActors = requests.InvalidActorClassificationTypes.Select(type => type.FullName ?? type.Name)
+                .Order(StringComparer.Ordinal);
+            throw new InvalidOperationException(
+                $"Each listed request must implement exactly one of IAuthenticatedRequest, ISystemRequest, or IPublicRequest. Invalid actor classification: {string.Join(", ", invalidActors)}.");
+        }
+
+        if (requests.MissingActorAuthorizationTypes.Count > 0)
+        {
+            var missingActors = requests.MissingActorAuthorizationTypes.Select(type => type.FullName ?? type.Name)
+                .Order(StringComparer.Ordinal);
+            throw new InvalidOperationException(
+                $"Actor-classified requests require a principal-stage authorizer bound to their actor family, or public requests must be allowed anonymous: {string.Join(", ", missingActors)}.");
+        }
+
         if (requests.UnprotectedRequestTypes.Count > 0)
         {
             var unprotected = requests.UnprotectedRequestTypes.Select(type => type.FullName ?? type.Name)

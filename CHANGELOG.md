@@ -4,6 +4,29 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.15.1
+
+### Added
+
+- Portia now owns `IPublicRequest`, `IAuthenticatedRequest`, and `ISystemRequest`. Register the standard policies
+  with `RequireRequestActors()`. Opt in to build-time classification with `PortiaRequireRequestActor`.
+  Applications with same-named interfaces should replace their declarations and update authorizer registrations.
+- `ActorAttribution.TryFromAuthenticatedPrincipal` resolves one authenticated identity and one unambiguous
+  subject/issuer pair. Event attribution rejects conflicting identities or claims.
+
+### Fixed
+
+- A routed `ISystemRequest` without a transport marker no longer generates an invalid callable RPC registration.
+  A system request can have either request shape. JSON coverage follows the operations that use serialization.
+
+### Changed
+
+- Retired `PORTIA208` and its aggregate size budget. Applications can remove
+  `portia_aggregate_semantic_budget` from their analyzer configuration.
+- `PORTIA204` accepts child entity types shared by multiple aggregate types. It flags misplaced
+  roots, event contracts, and Portia components in `Aggregates/Entities/` and identifies their
+  destination folders.
+
 ## 0.15.0
 
 ### Added

@@ -139,6 +139,7 @@ Cntryl.Portia.IAggregateReader
 Cntryl.Portia.IAggregateReader.HydrateAsync<TAggregate>(TAggregate! aggregate, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<TAggregate!>
 Cntryl.Portia.IAggregateWriter
 Cntryl.Portia.IAggregateWriter.SaveAsync<TAggregate>(TAggregate! aggregate, Cntryl.Portia.IExecutionContext! context, System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+Cntryl.Portia.IAuthenticatedRequest
 Cntryl.Portia.IBatchProjectorHandler<TEvent>
 Cntryl.Portia.IBatchReactorHandler<TEvent>
 Cntryl.Portia.ICallable
@@ -181,6 +182,7 @@ Cntryl.Portia.IProjectorContext
 Cntryl.Portia.IProjectorContext.Identity.get -> Cntryl.Portia.CheckpointIdentity!
 Cntryl.Portia.IProjectorContext.IsRebuild.get -> bool
 Cntryl.Portia.IProjectorHandler<TEvent>
+Cntryl.Portia.IPublicRequest
 Cntryl.Portia.IQueuable
 Cntryl.Portia.IQueuedRequest
 Cntryl.Portia.IQueuedRequest.AbandonAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
@@ -272,6 +274,7 @@ Cntryl.Portia.IStreamRequestHandler<TRequest, TOut>
 Cntryl.Portia.IStreamRequestHandler<TRequest, TOut>.HandleAsync(Cntryl.Portia.IRequestContext<TRequest>! context, System.Threading.CancellationToken ct) -> System.Collections.Generic.IAsyncEnumerable<TOut>!
 Cntryl.Portia.IStreamRequestPipelineBehavior<TRequest, TOut>
 Cntryl.Portia.IStreamRequestPipelineBehavior<TRequest, TOut>.HandleAsync(Cntryl.Portia.IRequestContext<TRequest>! context, Cntryl.Portia.StreamRequestPipelineNext<TOut>! continuation, System.Threading.CancellationToken ct) -> System.Collections.Generic.IAsyncEnumerable<TOut>!
+Cntryl.Portia.ISystemRequest
 Cntryl.Portia.ITenantDirectory
 Cntryl.Portia.ITenantDirectory.GetActiveTenantsAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.TenantId>!
 Cntryl.Portia.ITenantDirectory.WatchAsync(System.Threading.CancellationToken ct = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<Cntryl.Portia.TenantLifecycleChange>!
@@ -758,6 +761,7 @@ override sealed Cntryl.Portia.NoticeInvocation.Equals(Cntryl.Portia.RequestInvoc
 override sealed Cntryl.Portia.QueueInvocation.Equals(Cntryl.Portia.RequestInvocation? other) -> bool
 override sealed Cntryl.Portia.RpcInvocation.Equals(Cntryl.Portia.RequestInvocation? other) -> bool
 override sealed Cntryl.Portia.ScheduleInvocation.Equals(Cntryl.Portia.RequestInvocation? other) -> bool
+static Cntryl.Portia.ActorAttribution.TryFromAuthenticatedPrincipal(System.Security.Claims.ClaimsPrincipal! principal, out Cntryl.Portia.ActorAttribution? attribution) -> bool
 static Cntryl.Portia.ActorAttribution.operator !=(Cntryl.Portia.ActorAttribution? left, Cntryl.Portia.ActorAttribution? right) -> bool
 static Cntryl.Portia.ActorAttribution.operator ==(Cntryl.Portia.ActorAttribution? left, Cntryl.Portia.ActorAttribution? right) -> bool
 static Cntryl.Portia.AggregateOutcome.CommitOnSuccess(Cntryl.Portia.Result result) -> Cntryl.Portia.AggregateOutcome

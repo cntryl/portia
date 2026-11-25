@@ -17,6 +17,8 @@ Cntryl.Portia.ProjectorReactorEventDispatcherGenerator.ProjectorReactorEventDisp
 Cntryl.Portia.RegistrationCallInterceptorGenerator
 Cntryl.Portia.RegistrationCallInterceptorGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
 Cntryl.Portia.RegistrationCallInterceptorGenerator.RegistrationCallInterceptorGenerator() -> void
+Cntryl.Portia.RequestActorAnalyzer
+Cntryl.Portia.RequestActorAnalyzer.RequestActorAnalyzer() -> void
 Cntryl.Portia.RequestShapeDiagnosticsGenerator
 Cntryl.Portia.RequestShapeDiagnosticsGenerator.Initialize(Microsoft.CodeAnalysis.IncrementalGeneratorInitializationContext context) -> void
 Cntryl.Portia.RequestShapeDiagnosticsGenerator.RequestShapeDiagnosticsGenerator() -> void
@@ -26,6 +28,8 @@ Cntryl.Portia.ScenarioObservationAnalyzer
 Cntryl.Portia.ScenarioObservationAnalyzer.ScenarioObservationAnalyzer() -> void
 override Cntryl.Portia.ComponentPracticeAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
 override Cntryl.Portia.ComponentPracticeAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>
+override Cntryl.Portia.RequestActorAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
+override Cntryl.Portia.RequestActorAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>
 override Cntryl.Portia.ScenarioObservationAnalyzer.Initialize(Microsoft.CodeAnalysis.Diagnostics.AnalysisContext! context) -> void
 override Cntryl.Portia.ScenarioObservationAnalyzer.SupportedDiagnostics.get -> System.Collections.Immutable.ImmutableArray<Microsoft.CodeAnalysis.DiagnosticDescriptor!>
 Cntryl.Portia.ApplicationBoundaryAnalyzer

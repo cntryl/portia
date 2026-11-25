@@ -31,6 +31,10 @@ sealed record CaseSpec(string Kind, string Operation, string Component = "all")
         .. CompilerHost.Generators.Select(type => new CaseSpec("generators", "body", type.Name)),
         new("analyzers", "full"), new("analyzers", "document"),
         .. CompilerHost.Analyzers.Select(type => new CaseSpec("analyzers", "full", type.Name)),
+        new("analyzers", "reactors-disabled", nameof(ComponentPracticeAnalyzer)),
+        new("analyzers", "reactors-enabled", nameof(ComponentPracticeAnalyzer)),
+        new("analyzers", "assignments", nameof(ScenarioObservationAnalyzer)),
+        new("analyzers", "repeated-calls", nameof(ApplicationBoundaryAnalyzer)),
         .. FixFixture.Names.SelectMany(name => FixStages
             .Select(stage => new CaseSpec("fixes", stage, name))),
         .. FixFixture.Names.Where(name => name != "version").Select(name => new CaseSpec("fixes", "fix-all", name))
@@ -57,7 +61,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
     : IDisposable
 {
     static readonly string[] CombinedAnalyzerDiagnostics =
-        ["PORTIA200", "PORTIA209", "PORTIA211", "PORTIA102", "PORTIA107", "PORTIA108"];
+        ["PORTIA200", "PORTIA209", "PORTIA211", "PORTIA102", "PORTIA107", "PORTIA108", "PORTIA033"];
 
     int _executed;
     bool _completed;
@@ -208,14 +212,15 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
 
     static BenchmarkCase PrepareAnalyzers(CaseSpec spec, string size, CancellationToken ct)
     {
-        var fixture = CompilerFixture.Create(size);
+        var allocationWorkload = spec.Operation is not ("full" or "document");
+        var fixture = CompilerFixture.Create(allocationWorkload ? "minimal" : size);
         var generator = CompilerHost.Driver().RunGenerators(fixture.Compilation, ct);
         var generated = fixture.Compilation.AddSyntaxTrees(generator.GetRunResult().GeneratedTrees);
         var role = spec.Component == nameof(ApplicationContractAnalyzer) ? "Common" : "Core";
         var control = CSharpSyntaxTree.ParseText("""
                                                  using System; using System.Threading; using System.Threading.Tasks; using Cntryl.Portia; using Bench.Core.Features.Work.Commands;
                                                  namespace Bench.Core.Features.Work.Models;
-                                                 public record Extra; public record Behavior { public int Compute() => 1; }
+                                                 public sealed record Unclassified : IRequest; public record Extra; public record Behavior { public int Compute() => 1; }
                                                  public sealed class ServiceAggregate(Uuid id, IServiceProvider services) : Aggregate(id, new EventStreamAddress("r", "a", id.ToString()));
                                                  public sealed record ReplayEvent : DomainEvent;
                                                  public sealed class ReplayAggregate : Aggregate
@@ -234,8 +239,12 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
             CompilerHost.ParseOptions, "/benchmark/Bench.Core/Features/Work/Commands/StubRequest.cs",
             cancellationToken: ct);
         var compilation = generated.AddSyntaxTrees(control, command);
+
+        if (allocationWorkload)
+            compilation = AddAllocationWorkload(compilation, spec.Operation, size, ct);
+
         var analyzers = CompilerHost.CreateAnalyzers(spec.Component);
-        var options = new CompilationWithAnalyzersOptions(new AnalyzerOptions([], new FixtureOptions(role)),
+        var options = new CompilationWithAnalyzersOptions(new AnalyzerOptions([], new FixtureOptions(role, requireRequestActor: true)),
             null, concurrentAnalysis: spec.Component == "all", logAnalyzerExecutionTime: false,
             reportSuppressedDiagnostics: false);
         var driver = compilation.WithAnalyzers([.. analyzers], options);
@@ -266,6 +275,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
             {
                 nameof(ApplicationContractAnalyzer) => "PORTIA209",
                 nameof(ApplicationBoundaryAnalyzer) => "PORTIA211",
+                nameof(RequestActorAnalyzer) => "PORTIA033",
                 nameof(ComponentPracticeAnalyzer) => "PORTIA102",
                 nameof(ScenarioObservationAnalyzer) => "PORTIA107",
                 nameof(AggregateOnHandlerAnalyzer) => "PORTIA108",
@@ -274,6 +284,13 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
 
             if (!diagnostics.Any(item => item.Id == expected))
                 throw new InvalidOperationException(spec.Id + " did not activate " + expected);
+
+            if (spec.Operation.StartsWith("reactors-", StringComparison.Ordinal)
+                && diagnostics.Count(item => item.Id == "PORTIA109") != (spec.Operation == "reactors-enabled" ? 1 : 0))
+                throw new InvalidOperationException(spec.Id + " returned an unexpected split-reaction count.");
+
+            if (spec.Operation == "repeated-calls" && diagnostics.Count(item => item.Id == "PORTIA212") != 1)
+                throw new InvalidOperationException(spec.Id + " did not report the query entry call.");
 
             var repeat = compilation.WithAnalyzers([.. CompilerHost.CreateAnalyzers(spec.Component)], options);
             var comparison = spec.Operation == "document"
