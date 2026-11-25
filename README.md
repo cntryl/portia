@@ -1,183 +1,77 @@
 # Portia
 
-Portia is a cohesive application framework for .NET 11. It carries an operation from its entry point through
-authorization and domain decisions, then runs the durable work that follows.
+Portia is a .NET 11 application framework for event-sourced decisions and
+durable work. Register a handler once and expose it through the entry points
+your application supports, including HTTP, MCP, RPC, queues, and local dispatch.
+Entry points share the authorization and guard pipeline. Portia carries actor
+identity and causation across delivery boundaries.
 
-ASP.NET Core already does HTTP well. Portia is the application model behind HTTP—and behind RPC, queues, notices,
-schedules, and local calls. Entry points share the handler, authorization, causation, and telemetry model. Each
-transport has its own acceptance and delivery guarantees.
+Aggregates record decisions with optimistic concurrency. Projectors update
+read models and commit their checkpoints with the updates. Reactors handle
+follow-up work and can replay, so applications make those effects idempotent.
+For work spanning aggregates, a guard can catch predictable failures early.
+Completion depends on the participants' committed outcomes.
 
-```text
-HTTP / RPC / queue / schedule / local
-                    │
-                    ▼
- request → authorization → behaviors → guards → handler → aggregate → Fitz event log
-                                                           │
-                                           ┌───────────────┴───────────────┐
-                                           ▼                               ▼
-                                projector + checkpoint              reactor + effect
-                                           │
-                                           ▼
-                           Cassie / PostgreSQL / Snowflake / ...
+## Install
+
+Packages are available from the Cntryl GitHub Packages feed. Follow the
+[feed and credential setup](docs/getting-started.md) before installing.
+
+```sh
+dotnet add package Cntryl.Portia.AspNetCore
+dotnet add package Cntryl.Portia.Analyzers
 ```
 
-The unit of value is not `command → handler → route`. It is the complete path from intent to durable consequence.
+These are the starting packages for an HTTP host with compile-time registration
+and diagnostics. Use `Cntryl.Portia.DependencyInjection` to compose a host without
+HTTP, `Cntryl.Portia.Fitz` for Fitz persistence and transports, and
+`Cntryl.Portia.Cassie` for Cassie projection repositories. Keep the Portia
+packages on the same version.
 
-## What Portia provides
+## Quick start
 
-- **One application operation, many entry points.** A handler is selected once and can be reached locally or through an
-  explicitly allowed transport without transport logic entering the handler.
-- **One execution context.** Actor identity, authorization, correlation, causation, expected failures, tracing, and
-  metrics follow the request across process and delivery boundaries.
-- **Event-sourced decisions.** Aggregates are ordinary application objects. Portia hydrates and saves their events with
-  optimistic concurrency and stable event identities.
-- **Durable consequences.** Projectors atomically commit read-model changes with their checkpoints. Reactors run
-  external effects at least once with preserved event causation. Failed work never silently advances progress.
-- **Inspectable processors.** Each hosted projector and reactor exposes one
-  operator-only [status RPC](docs/projectors-and-reactors.md#operator-inspection-of-a-projector-or-reactor)
-  for committed progress, source backlog, and available failure evidence.
-- **One composition, independent deployments.** An API and its workers share application setup but can be deployed and
-  scaled separately. Workers support global, per-tenant, and fleet-coordinated ownership.
-- **Compile-time wiring.** Registration, transport descriptors, HTTP binding, and JSON roots are source-generated and
-  checked by Portia analyzers. The supported runtime path uses no assembly scanning or reflection, and NativeAOT smoke
-  consumers under `smoke/` exercise it.
-- **Reusable request preflight.** Scoped asynchronous guards run at the unary handler boundary, can target one request
-  or an application-owned request family, and short-circuit with the ordinary `Result` contract.
+Follow the [getting-started guide](docs/getting-started.md) to define a request,
+register its handler, and expose it through a host. The
+[Accounts example](examples/Portia.Accounts/README.md) runs the complete flow
+locally, from opening an account and depositing funds to reading its projected
+balance. It includes a separate worker and OpenTelemetry setup.
 
-## A vertical slice
+## Guides
 
-A request declares its stable identity and the transports the application permits:
+| Task | Guide |
+| --- | --- |
+| Compose an API or worker | [Application setup](docs/application-setup.md) · [Project structure](docs/project-structure.md) |
+| Define a request and authorize its actor | [Contracts](docs/contract-attributes.md) · [Request pipeline](docs/request-pipeline.md) · [Request identities](docs/request-identities.md) |
+| Apply events and coordinate decisions across aggregates | [Projectors and reactors](docs/projectors-and-reactors.md) · [Validation authority](docs/validation-authority.md) |
+| Use a backend for projections | [Cassie repositories](docs/cassie-projections.md) · [Projection store contract](docs/projectors-and-reactors.md) |
+| Expose tools or generate API descriptions | [MCP](docs/mcp.md) · [OpenAPI](docs/openapi-descriptions.md) |
+| Connect application services | [Data protection](docs/data-protection.md) · [Secrets](docs/secrets.md) · [Object storage](docs/object-storage.md) · [Mail and SMS](docs/communications.md) |
+| Test, deploy, or troubleshoot | [Testing](docs/testing.md) · [Operations](docs/operations.md) · [Observability](docs/observability.md) · [Native AOT](docs/native-aot.md) |
+| Understand framework boundaries | [Scope](docs/scope.md) · [Design decisions](docs/design-decisions.md) |
 
-```csharp
-[RequestRoute("banking", "accounts", "*", "deposit")]
-[Discriminator("accounts.deposit")]
-public sealed record Deposit(Uuid AccountId, int Amount)
-    : IRequest, ICallable, IQueuable;
-```
+## Choose a Fitz primitive
 
-Its handler contains the application decision, not HTTP or queue plumbing:
+| Use | When |
+| --- | --- |
+| Event streams | Store authoritative aggregate history for replay. Each append is atomic within one stream. |
+| KV | Store keyed current state, derived data, or processor checkpoints. |
+| Queues | Send work to one competing consumer. Accepted work can be lost or redelivered after a crash. Use a committed event when the work must survive a crash. |
+| Notices | Notify subscribers. Each subscribed replica can receive the notice. |
+| Schedules | Trigger work at a time or on a recurrence. A received Fitz firing can be lost on process failure. |
 
-```csharp
-public sealed class DepositHandler(IAggregateExecutor aggregates)
-    : IRequestHandler<Deposit>
-{
-    public ValueTask<Result> HandleAsync(
-        IRequestContext<Deposit> context,
-        CancellationToken ct) =>
-        aggregates.ExecuteAsync(
-            new Account(context.Request.AccountId),
-            account => AggregateOutcome.Commit(account.Deposit(context.Request.Amount)),
-            context,
-            ct);
-}
-```
-
-The application registers the behavior and the durable work caused by its events:
-
-```csharp
-services.AddPortia()
-    .AddRequestHandler<DepositHandler>()
-    .AddProjector<AccountBalanceProjector>("AccountBalanceProjector", WorkloadScope.PerTenant)
-    .AddReactor<DepositReceiptReactor, MoneyDeposited>("DepositReceiptReactor",
-        EventStreamPattern.ForTenant("accounts"))
-    .AddFitz(configuration.GetSection("Fitz"), fitz => fitz.UseKvCheckpoints("kv://banking/progress/reactors"));
-```
-
-A single-event reactor is an ordinary class that implements `IReactorHandler<TEvent>` and injects
-the services it calls. Its registration declares a stable name and source. `ForTenant(...)` runs one
-workload per active tenant, while `ForPattern(...)` selects a global workload with a fixed realm.
-The host chooses the checkpoint store once. See [writing a reactor](docs/projectors-and-reactors.md#reactions).
-
-An API host explicitly maps HTTP endpoints. A worker host calls the same application setup and adds `.AddWorkers()`. The
-handler and domain model do not change when the operation is sent over RPC, placed on a queue, or invoked in-process.
-
-The
-[complete consumer fixture](test/Portia.ConsumerTests/Requests/CompleteWorkflowTests.cs)
-executes one business handler through direct dispatch, HTTP, RPC, and a real Fitz queue, then proves that the resulting
-events retain actor and causal metadata and drive projectors and reactors.
-
-## Persistence without a lowest-common-denominator model
-
-Fitz is Portia's first-party event log, transport, scheduler, and coordination layer. Cassie is the first-party
-read-model engine for SQL, graph, time-series, and vector workloads.
-
-Neither is hidden behind a generic query language. A projector receives an ordinary application repository built on the
-backend's native client and schema. Read models are simple data contracts returned by repository
-queries; repositories own persistence behavior, and projectors apply events through them. That repository implements
-`IProjectionStore` and returns `IProjectionBatch` handles to give Portia the lifecycle and atomic
-read-model-plus-checkpoint
-boundary it needs.
-
-PostgreSQL, Snowflake, or another store can therefore be added in userland without changing Portia, writing a custom
-runner, or translating queries into a framework DSL. If a target cannot atomically commit its changes and checkpoint, it
-is modeled honestly as an at-least-once reactor effect instead.
-
-## Choose the right Fitz primitive
-
-| Use               | When                                                                                                                                                                                                                                            |
-|-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **Event streams** | Record ordered, authoritative aggregate decisions that must be rehydrated or replayed. Each append is atomic for one aggregate stream.                                                                                                          |
-| **KV**            | Store keyed current or derived state, such as projection data and processor checkpoints. KV is not the aggregate event history.                                                                                                                 |
-| **Queues**        | Send work to one competing consumer, with optional initial delay, message TTL, and retry delay. Fitz persists queue changes in the background for lower acknowledgment latency. A crash can lose an accepted request or cause redelivery. Use a committed event as the source of work when it must survive a crash. |
-| **Notices**       | Fan out notifications to subscribers, such as waking interested workers. Each replica receives the notice; it is not competing queue work.                                                                                                      |
-| **Schedules**     | Trigger work by time or recurrence. Choose the provider's delivery policy deliberately; a received Fitz firing can be lost on process failure.                                                                                                  |
-
-See [application setup](docs/application-setup.md) and [Fitz integration](docs/fitz.md) for transport and durability
-details.
-
-## Start here
-
-- **Build an application:** [getting started](docs/getting-started.md), [shared setup](docs/application-setup.md),
-  and [project structure](docs/project-structure.md).
-- **Define
-  contracts:** [attributes and validation](docs/contract-attributes.md), [OpenAPI descriptions](docs/openapi-descriptions.md),
-  [request pipeline](docs/request-pipeline.md), [execution context](docs/request-context.md),
-  and [request identities](docs/request-identities.md).
-- **Process
-  events:** [projectors and reactors](docs/projectors-and-reactors.md), [processor operations](docs/operations.md),
-  [Fitz integration](docs/fitz.md), and [Cassie repositories](docs/cassie-projections.md).
-- **Coordinate business outcomes:** [choreograph a reservation](docs/validation-authority.md#implementing-the-order-and-inventory-workflow).
-- **Connect services:** [data protection](docs/data-protection.md), [secrets](docs/secrets.md), [object storage](docs/object-storage.md),
-  [mail and SMS](docs/communications.md),
-  and [MCP tools, resources, and prompts](docs/mcp.md).
-- **Qualify and operate:** [testing](docs/testing.md), [observability](docs/observability.md),
-  [performance and scaling](docs/performance-and-scaling.md), and [NativeAOT](docs/native-aot.md).
-- **Understand the boundaries:** [scope](docs/scope.md), [design decisions](docs/design-decisions.md),
-  [validation authority](docs/validation-authority.md), and [platform boundaries](docs/platform-vision.md).
-
-Historical migration notes remain available in
-the [0.14.1 source tree](https://github.com/cntryl/portia/tree/v0.14.1/docs).
+See [Fitz integration](docs/fitz.md) for delivery and persistence details.
 
 ## Development
 
-Package versions are managed in `Directory.Packages.props`; restore the solution normally.
-The standalone examples and package-consumer smoke projects declare their external versions
-explicitly and select the Portia package version during qualification. Install a stable .NET 11 SDK;
-`global.json` sets 11.0.100 as the minimum SDK and rolls forward to the latest installed .NET 11
-feature band.
+Run a service-free check from the repository root with the .NET 11 SDK.
 
 ```sh
-dotnet restore Portia.slnx
-dotnet format Portia.slnx --verify-no-changes --no-restore
-dotnet build Portia.slnx --configuration Release --no-restore
-dotnet test --solution Portia.slnx --configuration Release --no-build \
-  --filter-not-trait "Category=BrokerIntegration" --filter-not-trait "Category=StorageIntegration" \
-  --filter-not-trait "Category=CassieIntegration" --filter-not-trait "Category=DurabilityIntegration"
-docker compose up --detach --wait fitz
-dotnet test --project test/Portia.Tests/Portia.Tests.csproj --configuration Release --no-build --filter-trait "Category=BrokerIntegration"
-dotnet test --project test/Portia.ConsumerTests/Portia.ConsumerTests.csproj --configuration Release --no-build --filter-trait "Category=BrokerIntegration"
-docker compose up --detach sqrzl
-curl --fail --silent --show-error --retry 30 --retry-delay 1 --retry-connrefused --max-time 2 --output /dev/null http://127.0.0.1:9000/healthz
-PORTIA_S3_TEST_ENDPOINT=http://127.0.0.1:9000 dotnet test --project test/Portia.Tests/Portia.Tests.csproj --configuration Release --no-build --filter-trait "Category=StorageIntegration"
-docker compose down --volumes
+dotnet test --solution Portia.slnx -c Release \
+  --filter-not-trait Category=BrokerIntegration --filter-not-trait Category=StorageIntegration \
+  --filter-not-trait Category=CassieIntegration --filter-not-trait Category=DurabilityIntegration
 ```
 
-Broker integration uses `ws://127.0.0.1:4090/ws` by default. Override it with
-`FITZ_TEST_ENDPOINT`. Storage integration requires the Sqrzl S3 endpoint supplied by
-`PORTIA_S3_TEST_ENDPOINT`. CI runs restore, formatting, Release build, service-free tests, and the
-broker, object-storage, Cassie, and crash-durability integration categories.
-The first test command needs no external service.
+See [Contributing](CONTRIBUTING.md) for hosted integration checks and formatting,
+and the [changelog](CHANGELOG.md) for release history.
 
-## License
-
-Portia is licensed under the [Apache License, Version 2.0](LICENSE).
+Portia is licensed under [Apache 2.0](LICENSE).
