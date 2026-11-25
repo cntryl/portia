@@ -2,6 +2,19 @@ name: Publish
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      pack-only:
+        description: Upload the packages for the caller without publishing or tagging.
+        type: boolean
+        default: false
+    outputs:
+      artifact-id:
+        description: The immutable package artifact for the caller.
+        value: ${{ jobs.publish.outputs.artifact-id }}
+      package-version:
+        description: The version of the packed packages.
+        value: ${{ jobs.publish.outputs.package-version }}
 
 permissions:
   contents: write
@@ -10,19 +23,18 @@ permissions:
 jobs:
   publish:
     name: Pack and publish packages
-    if: github.ref == 'refs/heads/main'
+    if: inputs.pack-only || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      artifact-id: ${{ steps.artifact.outputs.artifact-id }}
+      package-version: ${{ steps.version.outputs.package-version }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PACKAGE_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
 
     steps:
-      - name: Require main
-        if: github.ref != 'refs/heads/main'
-        run: echo "Publish must run from refs/heads/main" && exit 1
-
       - name: Check out repository
         uses: actions/checkout@v7
 
@@ -42,7 +54,19 @@ jobs:
           --output artifacts/packages
           -p:PackageVersion="${{ steps.version.outputs.package-version }}"
 
+      - name: Upload release packages
+        if: inputs.pack-only
+        uses: actions/upload-artifact@v7.0.2
+        id: artifact
+        with:
+          name: release-packages-${{ github.run_attempt }}
+          path: |
+            artifacts/packages/*.nupkg
+            artifacts/packages/*.snupkg
+          if-no-files-found: error
+
       - name: Publish packages
+        if: ${{ !inputs.pack-only }}
         run: >-
           dotnet nuget push artifacts/packages/*.nupkg
           --api-key "$NUGET_AUTH_TOKEN"
@@ -50,6 +74,7 @@ jobs:
           --skip-duplicate
 
       - name: Tag release
+        if: ${{ !inputs.pack-only }}
         env:
           PACKAGE_VERSION: ${{ steps.version.outputs.package-version }}
         run: |
