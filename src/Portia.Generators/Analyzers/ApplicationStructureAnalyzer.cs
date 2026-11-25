@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -33,11 +32,6 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         "Handler '{0}' handles more than one request; use one handler per command or query", "PortiaStructure",
         DiagnosticSeverity.Warning, true);
 
-    static readonly DiagnosticDescriptor AggregateSize = new("PORTIA208", "Aggregate spans too many semantic responsibilities",
-        "Aggregate '{0}' has {1} command/event responsibilities, exceeding the configured review budget of {2}; split independent command intentions and event lifecycles across clear aggregate boundaries while preserving each atomic invariant",
-        "PortiaStructure", DiagnosticSeverity.Warning, true,
-        customTags: [WellKnownDiagnosticTags.CompilationEnd]);
-
     static readonly DiagnosticDescriptor ProjectRole = new("PORTIA213", "Unsupported application project role",
         "Application project '{0}' must use Common, Core, Api, Worker, Mcp, Host, or Shared, via PortiaProjectRole or portia_project_role; mark test projects with IsTestProject",
         "PortiaStructure", DiagnosticSeverity.Warning, true, customTags: [WellKnownDiagnosticTags.CompilationEnd]);
@@ -54,7 +48,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
 
     /// <inheritdoc />
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get; } =
-        [OneType, FileName, Namespace, FeaturePath, FolderRole, HandlerRequests, AggregateSize, ProjectRole];
+        [OneType, FileName, Namespace, FeaturePath, FolderRole, HandlerRequests, ProjectRole];
 
     /// <inheritdoc />
     public override void Initialize(AnalysisContext context)
@@ -72,22 +66,15 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                     Diagnostic.Create(ProjectRole, Location.None, project.Name)));
             }
 
-            var aggregateOwnership = new AggregateOwnershipIndex(start.Compilation, project);
-            var aggregateResponsibilities = new ConcurrentBag<AggregateResponsibility>();
-            start.RegisterCompilationEndAction(end =>
-                ReportAggregateResponsibilities(end, aggregateResponsibilities));
-            start.RegisterSemanticModelAction(model =>
-                AnalyzeFile(model, project, aggregateOwnership, start.Options.AnalyzerConfigOptionsProvider,
-                    aggregateResponsibilities));
+            var aggregateReferences = new AggregateReferenceIndex(start.Compilation, project);
+            start.RegisterSemanticModelAction(model => AnalyzeFile(model, project, aggregateReferences));
         });
     }
 
     static void AnalyzeFile(
         SemanticModelAnalysisContext context,
         ApplicationProject project,
-        AggregateOwnershipIndex aggregateOwnership,
-        AnalyzerConfigOptionsProvider options,
-        ConcurrentBag<AggregateResponsibility> aggregateResponsibilities
+        AggregateReferenceIndex aggregateReferences
     )
     {
         var tree = context.SemanticModel.SyntaxTree;
@@ -145,7 +132,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
 
         var folders = project.Role == "Common" ? CommonFolders : CoreFolders;
         var featureProject = !project.IsTest && project.Role is "Common" or "Core";
-        var entityFile = project.Role == "Core" && path.Length == 5 && path[0] == "Features"
+        var entityFile = project.Role == "Core" && path.Length >= 5 && path[0] == "Features"
                          && path[2] == "Aggregates" && path[3] == "Entities";
         var featureFile = path.Length >= 4 && path[0] == "Features"
                           && (Array.IndexOf(folders, path[2]) >= 0 || entityFile);
@@ -216,23 +203,20 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                 }
             }
 
-            if (featureProject && featureFile
-                               && !BelongsIn(symbol, entityFile ? "Entities" : path[2], project, path[1], aggregateOwnership,
-                                   context.CancellationToken))
+            if (featureProject && featureFile)
             {
-                var responsibility = entityFile && ApplicationProject.DerivesFrom(symbol, "Aggregate")
-                    ? "aggregate roots belong directly under Aggregates, outside Entities"
-                    : entityFile && !IsPlainEntityType(symbol)
-                        ? "entities are child classes; requests, events, and Portia business components belong in their own roles"
-                    : entityFile && aggregateOwnership.EntityOwnerCount(path[1], symbol, context.CancellationToken) > 1
-                        ? "child entities must have exactly one aggregate root that stores them; this entity has multiple owners"
-                        : entityFile
-                            ? "child entities must have exactly one concrete aggregate root in the same feature that stores them; orphan entities need an owner"
-                            : project.Role == "Common" && path[2] == "Values" && symbol.TypeKind == TypeKind.Enum
-                                ? "enums are data models; place this enum in the feature's Models folder"
-                                : FolderResponsibility(path[2]);
-                context.ReportDiagnostic(Diagnostic.Create(FolderRole, identifier.GetLocation(), symbol.Name,
-                    entityFile ? path[3] : path[2], responsibility));
+                var folder = entityFile ? path[3] : path[2];
+                var guidance = entityFile ? EntityPlacementError(symbol) : null;
+
+                if (!entityFile && !BelongsIn(symbol, folder, project, path[1], aggregateReferences, context.CancellationToken))
+                {
+                    guidance = project.Role == "Common" && folder == "Values" && symbol.TypeKind == TypeKind.Enum
+                        ? "enums are data models; place this enum in the feature's Models folder"
+                        : FolderResponsibility(folder);
+                }
+
+                if (guidance is not null)
+                    context.ReportDiagnostic(Diagnostic.Create(FolderRole, identifier.GetLocation(), symbol.Name, folder, guidance));
             }
 
             if (featureProject && registrationFile && (!symbol.IsStatic || symbol.Name != path[1] + "PortiaExtensions"))
@@ -246,65 +230,6 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             {
                 context.ReportDiagnostic(Diagnostic.Create(HandlerRequests, identifier.GetLocation(), symbol.Name));
             }
-
-            if (!project.IsTest && ApplicationProject.DerivesFrom(symbol, "Aggregate"))
-            {
-                var isFirstDeclaration = symbol.DeclaringSyntaxReferences.FirstOrDefault() is { } first
-                                         && first.SyntaxTree == tree
-                                         && first.Span == declaration.Span;
-                var commandMethods = symbol.GetMembers().OfType<IMethodSymbol>()
-                    .Where(method => method is
-                    {
-                        IsImplicitlyDeclared: false,
-                        IsStatic: false,
-                        IsOverride: false,
-                        MethodKind: MethodKind.Ordinary,
-                        DeclaredAccessibility: Accessibility.Public
-                    })
-                    .Select(method => method.Name)
-                    .Distinct(StringComparer.Ordinal)
-                    .ToArray();
-                var eventTypes = declaration.DescendantNodes().OfType<GenericNameSyntax>()
-                    .Where(name => name.Identifier.ValueText == "On"
-                                   && name.TypeArgumentList.Arguments.Count == 1
-                                   && context.SemanticModel.GetSymbolInfo(name, context.CancellationToken).Symbol is
-                                       IMethodSymbol { TypeArguments.Length: 1 } method
-                                   && SymbolNames.Is(method.ContainingType, "Cntryl.Portia.Aggregate"))
-                    .Select(name => context.SemanticModel.GetTypeInfo(name.TypeArgumentList.Arguments[0],
-                        context.CancellationToken).Type)
-                    .OfType<INamedTypeSymbol>()
-                    .Select(type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
-                    .Distinct(StringComparer.Ordinal);
-                var budget = ApplicationProject.AggregateSemanticBudgetFor(options, tree,
-                    project.AggregateSemanticBudget);
-                aggregateResponsibilities.Add(new AggregateResponsibility(symbol, eventTypes.ToArray(),
-                    isFirstDeclaration ? commandMethods.Length : 0,
-                    isFirstDeclaration ? identifier.GetLocation() : null,
-                    isFirstDeclaration ? budget : 0));
-            }
-        }
-    }
-
-    static void ReportAggregateResponsibilities(
-        CompilationAnalysisContext context,
-        ConcurrentBag<AggregateResponsibility> responsibilities
-    )
-    {
-        foreach (var aggregate in responsibilities.GroupBy(item => item.Symbol, SymbolEqualityComparer.Default))
-        {
-            var primary = aggregate.FirstOrDefault(item => item.Location is not null);
-
-            if (primary is null)
-                continue;
-
-            var eventCount = aggregate.SelectMany(item => item.EventTypes)
-                .Distinct(StringComparer.Ordinal)
-                .Count();
-            var count = primary.CommandCount + eventCount;
-
-            if (count > primary.Budget)
-                context.ReportDiagnostic(Diagnostic.Create(AggregateSize, primary.Location, primary.Symbol.Name,
-                    count, primary.Budget));
         }
     }
 
@@ -314,13 +239,6 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         DelegateDeclarationSyntax @delegate => @delegate.Identifier,
         _ => throw new ArgumentException("Expected a type declaration", nameof(declaration))
     };
-
-    sealed record AggregateResponsibility(
-        INamedTypeSymbol Symbol,
-        string[] EventTypes,
-        int CommandCount,
-        Location? Location,
-        int Budget);
 
     static string Filename(string name, int arity)
     {
@@ -359,7 +277,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         string folder,
         ApplicationProject project,
         string feature,
-        AggregateOwnershipIndex aggregateOwnership,
+        AggregateReferenceIndex aggregateReferences,
         CancellationToken cancellationToken
     )
     {
@@ -384,9 +302,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             "Reactors" => reactor && !handler && !projector,
             "Projectors" => projector && !handler && !reactor,
             "Authorization" => authorizer && !handler && !reactor && !projector,
-            "Aggregates" => aggregate || plain && aggregateOwnership.Contains(feature, symbol, cancellationToken),
-            "Entities" => IsPlainEntityType(symbol)
-                           && aggregateOwnership.EntityOwnerCount(feature, symbol, cancellationToken) == 1,
+            "Aggregates" => aggregate || plain && aggregateReferences.Contains(feature, symbol, cancellationToken),
             "Ports" => symbol.TypeKind == TypeKind.Interface && plain,
             "Models" => plain && IsDataOnly(symbol),
             "Repositories" => plain &&
@@ -396,7 +312,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                            || executionComponent && !handler && !reactor && !projector && !authorizer
                            || plain && symbol.TypeKind == TypeKind.Class && !IsDataOnly(symbol)
                            && !IsErrorType(symbol) && !IsActionType(symbol) && !IsSourceType(symbol)
-                           && !aggregateOwnership.Contains(feature, symbol, cancellationToken),
+                           && !aggregateReferences.Contains(feature, symbol, cancellationToken),
             "Sources" => plain && symbol.TypeKind == TypeKind.Class && !symbol.IsRecord && IsSourceType(symbol),
             "Actions" => plain && IsActionType(symbol),
             "Errors" => plain && IsErrorType(symbol),
@@ -405,13 +321,36 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         };
     }
 
-    static bool IsPlainEntityType(INamedTypeSymbol symbol) => symbol.TypeKind == TypeKind.Class
-                                                               && !ApplicationProject.IsRequest(symbol)
-                                                               && !ApplicationProject.DerivesFrom(symbol, "DomainEvent")
-                                                               && !ApplicationProject.DerivesFrom(symbol, "Aggregate")
-                                                               && !ApplicationProject.IsReactor(symbol)
-                                                               && !ApplicationProject.IsProjector(symbol)
-                                                               && !PortiaComponentRoles.IsComponent(symbol);
+    static string? EntityPlacementError(INamedTypeSymbol symbol)
+    {
+        if (ApplicationProject.DerivesFrom(symbol, "Aggregate"))
+            return "move the aggregate root directly into the feature's Aggregates folder";
+
+        if (ApplicationProject.DerivesFrom(symbol, "DomainEvent"))
+            return "move the event contract to the feature's Events folder";
+
+        if (ApplicationProject.IsRequest(symbol))
+            return "move the request contract to its Common feature's Commands or Queries folder";
+
+        if (ApplicationProject.IsReactor(symbol))
+            return "move the reactor to the feature's Reactors folder";
+
+        if (ApplicationProject.IsProjector(symbol))
+            return "move the projector to the feature's Projectors folder";
+
+        if (ApplicationProject.Requests(symbol).Length != 0)
+            return "move the request handler to the feature's Handlers or Capabilities folder";
+
+        if (symbol.AllInterfaces.Any(iface => PortiaComponentRoles.Is(iface, PortiaComponentRoles.Authorizer)))
+            return "move the request authorizer to the feature's Authorization folder";
+
+        if (PortiaComponentRoles.IsComponent(symbol))
+            return "move the guard or pipeline behavior to the feature's Execution folder";
+
+        return symbol is { TypeKind: TypeKind.Class, IsStatic: false }
+            ? null
+            : "place only child entity instance classes or record classes in Entities";
+    }
 
     static bool IsPortiaJsonContext(INamedTypeSymbol symbol) => symbol.GetAttributes().Any(attribute =>
         attribute.AttributeClass is { } marker && SymbolNames.Is(marker, "Cntryl.Portia.PortiaJsonContextAttribute"));
@@ -517,7 +456,7 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             return path.Length >= 4 && path[0] == "Features" && path[1] == feature;
         }));
 
-    sealed class AggregateOwnershipIndex(Compilation compilation, ApplicationProject project)
+    sealed class AggregateReferenceIndex(Compilation compilation, ApplicationProject project)
     {
         readonly object _gate = new();
         ImmutableDictionary<string, ImmutableHashSet<INamedTypeSymbol>>? _byFeature;
@@ -540,63 +479,14 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        public int EntityOwnerCount(string feature, INamedTypeSymbol entity, CancellationToken cancellationToken)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-
-            while (!Monitor.TryEnter(_gate, 50))
-                cancellationToken.ThrowIfCancellationRequested();
-
-            try
-            {
-                _byFeature ??= Build(cancellationToken);
-                return _entityOwners!.TryGetValue(feature, out var owners)
-                       && owners.TryGetValue(entity.OriginalDefinition, out var count) ? count : 0;
-            }
-            finally
-            {
-                Monitor.Exit(_gate);
-            }
-        }
-
-        ImmutableDictionary<string, ImmutableDictionary<INamedTypeSymbol, int>>? _entityOwners;
-
         ImmutableDictionary<string, ImmutableHashSet<INamedTypeSymbol>> Build(CancellationToken cancellationToken)
         {
             var features = new Dictionary<string, HashSet<INamedTypeSymbol>>(StringComparer.Ordinal);
-            var entityTypes = new Dictionary<string, HashSet<INamedTypeSymbol>>(StringComparer.Ordinal);
-            var ownership = new Dictionary<string, Dictionary<INamedTypeSymbol, int>>(StringComparer.Ordinal);
-            var countedRoots = new Dictionary<string, HashSet<INamedTypeSymbol>>(StringComparer.Ordinal);
 
             foreach (var tree in compilation.SyntaxTrees)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var path = project.RelativePath(tree);
-
-                if (path.Length != 5 || path[0] != "Features" || path[2] != "Aggregates" || path[3] != "Entities")
-                    continue;
-#pragma warning disable RS1030 // Entity identity is compared semantically across source trees.
-
-                var entityModel = compilation.GetSemanticModel(tree);
-#pragma warning restore RS1030
-                foreach (var declaration in tree.GetRoot(cancellationToken).DescendantNodes().OfType<TypeDeclarationSyntax>())
-                    if (entityModel.GetDeclaredSymbol(declaration, cancellationToken) is { TypeKind: TypeKind.Class } entity)
-                    {
-                        if (!entityTypes.TryGetValue(path[1], out var entities))
-                            entityTypes.Add(path[1], entities = NewSymbolSet());
-
-                        _ = entities.Add(entity.OriginalDefinition);
-                    }
-            }
-
-            foreach (var tree in compilation.SyntaxTrees)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var path = project.RelativePath(tree);
-
-                if (path.Length == 5 && path[0] == "Features" && path[2] == "Aggregates"
-                    && path[3] == "Entities")
-                    continue;
 
                 if (path.Length != 4 || path[0] != "Features" || path[2] != "Aggregates")
                     continue;
@@ -615,26 +505,6 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                     if (!features.TryGetValue(path[1], out var types))
                         features.Add(path[1], types = [with(SymbolEqualityComparer.Default)]);
 
-                    if (!ownership.TryGetValue(path[1], out var featureOwners))
-                        ownership.Add(path[1], featureOwners = NewOwnerMap());
-
-                    if (!aggregate.IsAbstract && entityTypes.TryGetValue(path[1], out var featureEntities))
-                    {
-                        if (!countedRoots.TryGetValue(path[1], out var roots))
-                            countedRoots.Add(path[1], roots = NewSymbolSet());
-
-                        if (roots.Add(aggregate.OriginalDefinition))
-                        {
-                            foreach (var entity in featureEntities)
-                            {
-                                if (!StoresEntity(aggregate, entity))
-                                    continue;
-
-                                featureOwners[entity] = featureOwners.TryGetValue(entity, out var owners) ? owners + 1 : 1;
-                            }
-                        }
-                    }
-
                     foreach (var node in declaration.DescendantNodes().OfType<SimpleNameSyntax>())
                     {
                         cancellationToken.ThrowIfCancellationRequested();
@@ -648,66 +518,9 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
                 }
             }
 
-            _entityOwners = ownership.ToImmutableDictionary(pair => pair.Key,
-                pair => pair.Value.ToImmutableDictionary(SymbolEqualityComparer.Default), StringComparer.Ordinal);
             return features.ToImmutableDictionary(pair => pair.Key,
                 pair => pair.Value.ToImmutableHashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default),
                 StringComparer.Ordinal);
-        }
-
-        static bool StoresEntity(INamedTypeSymbol aggregate, INamedTypeSymbol entity)
-        {
-            for (var current = aggregate; current is not null; current = current.BaseType)
-            {
-                foreach (var member in current.GetMembers())
-                {
-                    if (member.IsStatic)
-                        continue;
-
-                    var storedType = member switch
-                    {
-                        IFieldSymbol field => field.Type,
-                        IPropertySymbol property when IsAutoProperty(property) => property.Type,
-                        _ => null
-                    };
-
-                    if (storedType is not null && ContainsType(storedType, entity))
-                        return true;
-                }
-            }
-
-            return false;
-        }
-
-        static bool IsAutoProperty(IPropertySymbol property) => !property.IsStatic && !property.IsIndexer
-            && property.DeclaringSyntaxReferences.Select(reference => reference.GetSyntax())
-                .OfType<PropertyDeclarationSyntax>().Any(declaration => declaration.AccessorList is { } accessors
-                    && accessors.Accessors.Count > 0 && accessors.Accessors.All(accessor => accessor.Body is null
-                        && accessor.ExpressionBody is null));
-
-        static bool ContainsType(ITypeSymbol candidate, INamedTypeSymbol target)
-        {
-            if (candidate is INamedTypeSymbol named && SymbolEqualityComparer.Default.Equals(named.OriginalDefinition, target))
-                return true;
-
-            return candidate switch
-            {
-                IArrayTypeSymbol array => ContainsType(array.ElementType, target),
-                INamedTypeSymbol generic => generic.TypeArguments.Any(argument => ContainsType(argument, target)),
-                _ => false
-            };
-        }
-
-        static HashSet<INamedTypeSymbol> NewSymbolSet()
-        {
-            var symbols = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-            return symbols;
-        }
-
-        static Dictionary<INamedTypeSymbol, int> NewOwnerMap()
-        {
-            var owners = new Dictionary<INamedTypeSymbol, int>(SymbolEqualityComparer.Default);
-            return owners;
         }
     }
 
@@ -721,7 +534,6 @@ public sealed class ApplicationStructureAnalyzer : DiagnosticAnalyzer
         "Projectors" => "only projectors belong here",
         "Authorization" => "only request authorizers belong here",
         "Aggregates" => "aggregate roots and their directly owned rule or state collaborators belong here",
-        "Entities" => "each child entity must have exactly one aggregate root in its feature that stores it; aggregate roots belong directly under Aggregates",
         "Ports" => "a port is an application interface to a production dependency",
         "Models" => "data-only models belong here",
         "Values" => "immutable record values belong here",

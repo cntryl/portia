@@ -18,9 +18,7 @@ static class ApplicationAnalyzerCompilation
         MetadataReference[]? references = null,
         string? assemblyName = null,
         string? projectRole = null,
-        string? editorConfigProjectRole = null,
-        int? aggregateSemanticBudget = null,
-        int? fileAggregateSemanticBudget = null
+        string? editorConfigProjectRole = null
     )
     {
         var platformReferences = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
@@ -44,7 +42,7 @@ static class ApplicationAnalyzerCompilation
             diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
         var diagnostics = compilation
             .WithAnalyzers([analyzer], Options(projectName, directory, rootNamespace, enabled, isTest, projectRole,
-                editorConfigProjectRole, aggregateSemanticBudget, fileAggregateSemanticBudget))
+                editorConfigProjectRole))
             .GetAnalyzerDiagnosticsAsync().GetAwaiter().GetResult();
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "AD0001");
         return diagnostics;
@@ -57,9 +55,7 @@ static class ApplicationAnalyzerCompilation
         bool enabled = true,
         bool isTest = false,
         string? projectRole = null,
-        string? editorConfigProjectRole = null,
-        int? aggregateSemanticBudget = null,
-        int? fileAggregateSemanticBudget = null
+        string? editorConfigProjectRole = null
     )
     {
         var values = new Dictionary<string, string>
@@ -81,26 +77,6 @@ static class ApplicationAnalyzerCompilation
             values["portia_project_role"] = editorConfigProjectRole;
         }
 
-        if (aggregateSemanticBudget is not null)
-        {
-            values["portia_aggregate_semantic_budget"] =
-                aggregateSemanticBudget.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        }
-
-        var globals = values.ToImmutableDictionary(StringComparer.OrdinalIgnoreCase);
-        var fileValues = fileAggregateSemanticBudget is null
-            ? null
-            : ImmutableDictionary.CreateBuilder<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        if (fileValues is not null)
-        {
-            foreach (var item in globals)
-                fileValues[item.Key] = item.Value;
-
-            fileValues["portia_aggregate_semantic_budget"] =
-                fileAggregateSemanticBudget!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        }
-
-        return new AnalyzerOptions([], new ApplicationAnalyzerOptionsProvider(globals, fileValues?.ToImmutable()));
+        return new AnalyzerOptions([], new ApplicationAnalyzerOptionsProvider(values.ToImmutableDictionary(StringComparer.OrdinalIgnoreCase)));
     }
 }

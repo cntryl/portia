@@ -69,15 +69,10 @@ feature folders flat within each role and use the same feature names in Common a
 fits nowhere, reconsider the concept or amend the rule explicitly. There is one registration file
 per Core feature, rather than one per component.
 
-An entity is an aggregate-owned child with its own stable identity and lifecycle. Use an ordinary
-class (a record class is also allowed) and let the aggregate's declared state establish ownership:
-exactly one concrete root in the same feature stores it in an instance field or auto-property,
-directly or through a collection or array. The root remains the command entry point and enforces
-rules spanning its children. Place entities in `Core/Features/{Feature}/Aggregates/Entities/`;
-keep aggregate roots in `Aggregates/`.
-Orphan entities, entities stored by multiple roots, and roots placed in `Entities/` are structural
-errors. Identity representation belongs to the application; an entity need not expose a uniform
-`Id` member.
+Place child entity classes and record classes in `Core/Features/{Feature}/Aggregates/Entities/`.
+An entity represents a child with its own identity and lifecycle. Several aggregate types can reuse
+the same entity type. Each root enforces the rules for the state it commits on its own stream.
+The application chooses the representation of each child’s identity. Aggregate roots belong directly in `Aggregates/`.
 
 Declare one top-level type per file, including enums and delegates. Nested types stay with their owner. Match the filename to the type; generic filenames use `OfT` for one parameter and `OfT2` for two, for example `Page<T>` in `PageOfT.cs`. A type already ending in the appropriate suffix does not repeat it. Partial declarations may use an aspect name such as `PageOfT.Serialization.cs`. Namespaces are the project's
 `RootNamespace` followed by its folders, including in test projects. Api and Worker can use the
@@ -85,7 +80,7 @@ ordinary top-level `Program.cs` composition root.
 
 | Core folder | Responsibility |
 | --- | --- |
-| Aggregates | Aggregate roots and directly owned rule or state collaborators. Keep local invariants visible and prefer composition as an aggregate grows beyond the configured semantic responsibility budget (12 by default). Child entities with their own identity and lifecycle live in `Aggregates/Entities/`. |
+| Aggregates | Aggregate roots and directly owned rule or state collaborators. Keep together the decisions that must commit atomically. Child entities with their own identity and lifecycle live in `Aggregates/Entities/`. |
 | Handlers | One handler per command or query; keep unrelated types elsewhere. |
 | Reactors | Map committed facts to commands and send them. Do not hydrate aggregates or re-verify the source fact. |
 | Projectors | Write read models through repositories. |
@@ -99,11 +94,8 @@ Start aggregate sizing decisions with the invariants and their owners. Extract a
 its own identity and lifecycle and participates in an atomic rule with its root. Entity methods may
 propose facts about the entity's own lifecycle; the root decides whether those facts fit
 aggregate-wide invariants and emits them on the root stream. Replay handlers rebuild both root and
-child state from those facts. `PORTIA208` counts declared public command methods and distinct `On<TEvent>` replay/event
-responsibilities rather than physical lines, so formatting and comments do not change the result.
-Its default review budget is 12 responsibilities; set
-`portia_aggregate_semantic_budget` in `.editorconfig` for a stricter or looser boundary. Treat the
-threshold as a prompt to inspect these boundaries rather than as a target.
+child state from those facts. Multiple aggregate types can raise the same event type. Each occurrence
+belongs to the stream on which its root raised it.
 
 Composition is the way to keep a large aggregate reviewable. Aggregate collaborators must be directly referenced by an aggregate in the feature. Models have data-only shapes, values have immutable value shapes, and repository implementations satisfy a persistence contract or an interface declared in the feature. Concept budgets and helper-chain quality remain review responsibilities.
 
@@ -174,9 +166,6 @@ portia_project_role = Mcp
 
 [src/Shared.Hosting/**.cs]
 portia_project_role = Host
-
-[src/Shop.Core/**.cs]
-portia_aggregate_semantic_budget = 10
 ```
 
 `PortiaProjectRole` in `Directory.Build.props` is a build-time override:
@@ -223,11 +212,10 @@ retain their behavior regardless of this opt-in.
 | PORTIA201 | A filename differs from its type's name, including `OfT` for generics. | Rename the file, retaining the type's name. |
 | PORTIA202 | A namespace differs from RootNamespace plus folders. | Change the document namespace and update references across the solution. |
 | PORTIA203 | Common/Core files fall outside the closed feature folders. | Diagnostic explains the allowed folders. |
-| PORTIA204 | A known component role is in the wrong folder, or a port is not an interface. It also rejects authored aggregates, request/event contracts, and recognized Portia business components declared in Api or Worker; `Aggregates/Entities/` holds plain child classes, each owned by one same-feature aggregate root. | Diagnostic identifies the folder's responsibility or missing/ambiguous entity owner. |
+| PORTIA204 | A known component role is in the wrong folder, or a port is not an interface. It also rejects authored aggregates, request/event contracts, and recognized Portia business components declared in Api or Worker; `Aggregates/Entities/` holds child entity classes and record classes. | Diagnostic identifies the misplaced type and the folder's role. |
 | PORTIA205 | One handler implements contracts for multiple requests. | Separate the operations deliberately. |
 | PORTIA206 | Common references another application project, or Core references one other than Common or a `*.Abstractions` project; either references a known infrastructure adapter; Cassie connection setup occurs outside Api/Worker; Api and Worker reference each other. | Move composition to a root; Core's Cassie repository API is allowed. |
 | PORTIA207 | Core component registration occurs outside its feature registration file. | Diagnostic names the destination file. |
-| PORTIA208 | An aggregate exceeds the semantic responsibility budget (12 by default). | Formatting and comments do not affect the count. Start with each command/event lifecycle and its owner; extract a child entity when it has its own identity and lifecycle within an atomic root rule. |
 | PORTIA209 | Common declares executable members, except construction of sealed record values in Values. | Move other behavior into Core. |
 | PORTIA210 | A request/event lacks a valid feature discriminator or explicit positive version. | Make an omitted default version explicit; never guess or change a wire identity. |
 | PORTIA211 | A command handler's implementation consists solely of throwing `NotImplementedException`. | Implement the operation or remove its surface. |
