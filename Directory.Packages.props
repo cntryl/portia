@@ -7,7 +7,7 @@
     <PackageVersion Include="JsonSchema.Net" Version="9.7.0" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="AWSSDK.KeyManagementService" Version="4.1.1.1" />
-    <PackageVersion Include="AWSSDK.S3" Version="4.1.2" />
+    <PackageVersion Include="AWSSDK.S3" Version="4.1.2.1" />
     <PackageVersion Include="AWSSDK.SecretsManager" Version="4.1.1.2" />
     <PackageVersion Include="AWSSDK.SimpleEmailV2" Version="4.1.1" />
     <PackageVersion Include="Azure.Storage.Blobs" Version="12.30.2" />
