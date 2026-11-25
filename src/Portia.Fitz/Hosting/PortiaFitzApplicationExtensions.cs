@@ -79,7 +79,9 @@ public static class PortiaFitzApplicationExtensions
             }
 
             configure(builder);
-        }, _ => new FitzApplicationConnection(new FitzClient(settings), true, timeout), (uri, token, timeout));
+        }, provider => new FitzApplicationConnection(
+            new FitzClient(settings, provider.GetService<TimeProvider>() ?? TimeProvider.System), true, timeout),
+            (uri, token, timeout));
     }
 
     /// <summary>Configures an owned client, including an optional rotating backend token provider.</summary>
@@ -117,7 +119,8 @@ public static class PortiaFitzApplicationExtensions
         var timeout = startupTimeout ?? TimeSpan.FromSeconds(15);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(timeout, TimeSpan.Zero);
         return Register(application, configure,
-            provider => new FitzApplicationConnection(new FitzClient(configuration), true, timeout),
+            provider => new FitzApplicationConnection(
+                new FitzClient(configuration, provider.GetService<TimeProvider>() ?? TimeProvider.System), true, timeout),
             (configuration, timeout));
     }
 
