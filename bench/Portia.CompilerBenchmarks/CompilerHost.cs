@@ -32,7 +32,8 @@ static class CompilerHost
     public static readonly Type[] Analyzers =
     [
         typeof(ApplicationStructureAnalyzer), typeof(ApplicationBoundaryAnalyzer), typeof(ApplicationContractAnalyzer),
-        typeof(ComponentPracticeAnalyzer), typeof(ScenarioObservationAnalyzer), typeof(AggregateOnHandlerAnalyzer)
+        typeof(ComponentPracticeAnalyzer), typeof(ScenarioObservationAnalyzer), typeof(AggregateOnHandlerAnalyzer),
+        typeof(RequestActorAnalyzer)
     ];
 
     public static readonly Type[] CodeFixes =
@@ -131,10 +132,11 @@ static class CompilerHost
     }
 }
 
-sealed class FixtureOptions(string role, bool enabled = true) : AnalyzerConfigOptionsProvider
+sealed class FixtureOptions(string role, bool enabled = true, bool requireRequestActor = false) : AnalyzerConfigOptionsProvider
 {
     readonly Values _values = new(new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
     {
+        ["build_property.PortiaRequireRequestActor"] = requireRequestActor ? "true" : "false",
         ["build_property.PortiaProjectStructure"] = enabled ? "true" : "false",
         ["build_property.MSBuildProjectDirectory"] = "/benchmark/Bench." + role,
         ["build_property.MSBuildProjectName"] = "Bench." + role,

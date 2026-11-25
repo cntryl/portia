@@ -19,7 +19,7 @@ static class ProcessorStatusRegistration
         _ = application.AddGeneratedHandler(
             new RequestRegistration<GetProcessorStatus, ProcessorStatusHandler, ProcessorStatus>());
         _ = application.AddGeneratedAuthorizer(
-            new RequestAuthorizerRegistration<GetProcessorStatus, ProcessorStatusAuthorizer>(AuthorizationStage
+            new RequestAuthorizerRegistration<IProcessorStatusRequest, ProcessorStatusAuthorizer>(AuthorizationStage
                 .Principal));
         _ = application.AddGeneratedRequest(new RequestTransportRegistration(typeof(GetProcessorStatus),
             [RequestTransportId.Callable], new RequestRouteAttribute("*", "*", "*", "status"),

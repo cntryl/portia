@@ -26,10 +26,6 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
         "Transported request '{0}' declares invalid transport ID '{1}'; use ASCII letters, digits, '.', '-', and '_'",
         "Portia", DiagnosticSeverity.Error, true);
 
-    static readonly DiagnosticDescriptor InvalidSystemRequest = new("PORTIA032", "Invalid system request",
-        "System request '{0}' must be unary; stream requests cannot participate in internal callable command choreography",
-        "Portia", DiagnosticSeverity.Error, true);
-
     /// <inheritdoc />
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -85,16 +81,6 @@ public sealed class PortiaServiceRegistrationGenerator : IIncrementalGenerator
                 sourceContext.ReportDiagnostic(Diagnostic.Create(GeneratedTypeShape.Unsupported,
                     model.Location.ToLocation(), model.TypeName, model.Reason));
             }
-        });
-        var invalidSystemRequests = analyses.Select(static (analysis, _) => analysis.SystemRequest)
-            .Where(static model => model is not null).Select(static (model, _) => model!)
-            .Collect();
-        context.RegisterSourceOutput(invalidSystemRequests, static (sourceContext, invalid) =>
-        {
-            foreach (var model in invalid.GroupBy(model => model.TypeName, StringComparer.Ordinal)
-                         .Select(group => group.First()))
-                sourceContext.ReportDiagnostic(Diagnostic.Create(InvalidSystemRequest,
-                    model.Location.ToLocation(), model.TypeName));
         });
         var components = context.SyntaxProvider
             .CreateSyntaxProvider(

@@ -896,7 +896,8 @@ Every registered request, including streamed requests, then needs an applicable
 `IRequestAuthorizer<T>`, a `[RequiresPermission]`, or an anonymous allowance. Hosted startup lists
 every unprotected request type in stable order before serving work, and dispatch refuses an
 unprotected request with an exception that names the fix, so a missing allowance is never mistaken
-for a real denial. A principal-stage `IRequestAuthorizer<IRequestBase>` protects every request.
+for a real denial. Requests using the standard actor markers additionally require their principal policy.
+See [Classifying request actors](application-setup.md#classifying-request-actors).
 Request types stay free of authorization attributes.
 
 A request that acts within one tenant implements `ITenantRequest`, directly or through a request-family

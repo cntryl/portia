@@ -19,6 +19,7 @@ public sealed class PortiaBuilder
     readonly PortiaJsonComposer _json = new();
     readonly List<Func<Type, PortiaContractMetadata?>> _metadataProviders = [];
     PortiaContractMetadataRegistry? _contracts;
+    bool _requestActorAuthorization;
 
     internal PortiaBuilder(IServiceCollection services)
     {
@@ -153,8 +154,27 @@ public sealed class PortiaBuilder
         return this;
     }
 
+    /// <summary>Requires authenticated actor attribution for authenticated and system request families.</summary>
+    /// <returns>This builder, for chaining.</returns>
+    public PortiaBuilder RequireRequestActors()
+    {
+        if (!_requestActorAuthorization)
+        {
+            _requestActorAuthorization = true;
+            _ = AddGeneratedAuthorizer(new RequestAuthorizerRegistration<IAuthenticatedRequest,
+                AuthenticatedRequestActorAuthorizer>(AuthorizationStage.Principal));
+            _ = AddGeneratedAuthorizer(new RequestAuthorizerRegistration<ISystemRequest,
+                SystemRequestActorAuthorizer>(AuthorizationStage.Principal));
+        }
+
+        _ = RequireAuthorization(options => options.AllowAnonymous<IPublicRequest>());
+        return this;
+    }
+
     internal RequestAuthorizationRequirement? AuthorizationRequirement() =>
         _catalog.AuthorizationRequired ? new RequestAuthorizationRequirement(_catalog.AnonymousRequests) : null;
+
+    internal bool RequestActorAuthorizationRequired => _requestActorAuthorization;
 
     static InvalidOperationException MissingGeneratedRegistration(Type type, string role) => new(
         $"Portia.Generators did not intercept registration of {role} '{type}'. Ensure Portia.DependencyInjection's analyzer assets are enabled. "

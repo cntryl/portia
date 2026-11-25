@@ -57,7 +57,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
     : IDisposable
 {
     static readonly string[] CombinedAnalyzerDiagnostics =
-        ["PORTIA200", "PORTIA209", "PORTIA211", "PORTIA102", "PORTIA107", "PORTIA108"];
+        ["PORTIA200", "PORTIA209", "PORTIA211", "PORTIA102", "PORTIA107", "PORTIA108", "PORTIA033"];
 
     int _executed;
     bool _completed;
@@ -215,7 +215,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
         var control = CSharpSyntaxTree.ParseText("""
                                                  using System; using System.Threading; using System.Threading.Tasks; using Cntryl.Portia; using Bench.Core.Features.Work.Commands;
                                                  namespace Bench.Core.Features.Work.Models;
-                                                 public record Extra; public record Behavior { public int Compute() => 1; }
+                                                 public sealed record Unclassified : IRequest; public record Extra; public record Behavior { public int Compute() => 1; }
                                                  public sealed class ServiceAggregate(Uuid id, IServiceProvider services) : Aggregate(id, new EventStreamAddress("r", "a", id.ToString()));
                                                  public sealed record ReplayEvent : DomainEvent;
                                                  public sealed class ReplayAggregate : Aggregate
@@ -235,7 +235,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
             cancellationToken: ct);
         var compilation = generated.AddSyntaxTrees(control, command);
         var analyzers = CompilerHost.CreateAnalyzers(spec.Component);
-        var options = new CompilationWithAnalyzersOptions(new AnalyzerOptions([], new FixtureOptions(role)),
+        var options = new CompilationWithAnalyzersOptions(new AnalyzerOptions([], new FixtureOptions(role, requireRequestActor: true)),
             null, concurrentAnalysis: spec.Component == "all", logAnalyzerExecutionTime: false,
             reportSuppressedDiagnostics: false);
         var driver = compilation.WithAnalyzers([.. analyzers], options);
@@ -266,6 +266,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
             {
                 nameof(ApplicationContractAnalyzer) => "PORTIA209",
                 nameof(ApplicationBoundaryAnalyzer) => "PORTIA211",
+                nameof(RequestActorAnalyzer) => "PORTIA033",
                 nameof(ComponentPracticeAnalyzer) => "PORTIA102",
                 nameof(ScenarioObservationAnalyzer) => "PORTIA107",
                 nameof(AggregateOnHandlerAnalyzer) => "PORTIA108",

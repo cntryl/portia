@@ -22,6 +22,7 @@ Cntryl.Portia.PortiaBuilder.ConfigureJson(System.Action<System.Text.Json.JsonSer
 Cntryl.Portia.PortiaBuilder.RequireAuthorization(System.Action<Cntryl.Portia.PortiaAuthorizationOptions!>? configure = null) -> Cntryl.Portia.PortiaBuilder!
 Cntryl.Portia.PortiaBuilder.ConfigureWorker(string! name, System.Action<Microsoft.Extensions.DependencyInjection.IServiceCollection!>! configure) -> Cntryl.Portia.PortiaBuilder!
 Cntryl.Portia.PortiaBuilder.RegisterDynamicRequest<TRequest>() -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.PortiaBuilder.RequireRequestActors() -> Cntryl.Portia.PortiaBuilder!
 Cntryl.Portia.PortiaBuilder.Services.get -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 Cntryl.Portia.PortiaEventServiceCollectionExtensions
 Cntryl.Portia.PortiaHostingServiceCollectionExtensions

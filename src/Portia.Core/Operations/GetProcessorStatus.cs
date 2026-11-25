@@ -1,11 +1,18 @@
 namespace Cntryl.Portia;
 
+interface IProcessorStatusRequest : IAuthenticatedRequest
+{
+    string Processor { get; }
+
+    string? Tenant { get; }
+}
+
 /// <summary>Reads committed progress and available failure evidence for one projector or reactor.</summary>
 /// <param name="Processor">The component's stable registered workload name.</param>
 /// <param name="Tenant">The exact tenant, or null for a global workload.</param>
 [Discriminator("portia.processor_status", 1)]
 [RequestRoute("*", "*", "*", "status")]
-public sealed record GetProcessorStatus(string Processor, string? Tenant = null) : IRequest<ProcessorStatus>, ICallable;
+public sealed record GetProcessorStatus(string Processor, string? Tenant = null) : IRequest<ProcessorStatus>, ICallable, IProcessorStatusRequest;
 
 /// <summary>A sampled view of one component's authoritative progress and available failure evidence.</summary>
 /// <param name="Processor">The stable registered workload name.</param>

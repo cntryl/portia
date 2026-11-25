@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -201,6 +202,121 @@ public sealed class RequireAuthorizationTests
         Assert.Empty(optional.UnprotectedRequestTypes);
     }
 
+    /// <summary>Actor-classified requests require a principal authorizer bound to their marker family.</summary>
+    [Fact]
+    public void ShouldRequirePrincipalActorFamilyCoverageGivenAuthorizationIsRequired()
+    {
+        // Arrange
+        var handlers = new RequestHandlerRegistration[]
+        {
+            new RequestRegistration<AuthenticatedActorCommand, AuthenticatedActorHandler>(),
+            new RequestRegistration<SystemActorCommand, SystemActorHandler>()
+        };
+
+        // Act
+        var registry = new RequestRegistry(handlers, [], [], [], [], new RequestAuthorizationRequirement([]));
+
+        // Assert
+        Assert.Equal(new[] { typeof(AuthenticatedActorCommand), typeof(SystemActorCommand) },
+            registry.MissingActorAuthorizationTypes.OrderBy(type => type.Name));
+    }
+
+    /// <summary>A concrete principal policy cannot replace actor-family coverage.</summary>
+    [Fact]
+    public void ShouldRequireActorFamilyPrincipalPolicyGivenConcretePrincipalPolicy()
+    {
+        // Arrange
+        var handlers = new RequestHandlerRegistration[]
+        {
+            new RequestRegistration<AuthenticatedActorCommand, AuthenticatedActorHandler>()
+        };
+        var authorizers = new RequestAuthorizerRegistration[]
+        {
+            new RequestAuthorizerRegistration<AuthenticatedActorCommand, ConcreteActorPolicy>(AuthorizationStage.Principal)
+        };
+
+        // Act
+        var registry = new RequestRegistry(handlers, authorizers, [], [], [], new RequestAuthorizationRequirement([]));
+
+        // Assert
+        Assert.Contains(typeof(AuthenticatedActorCommand), registry.MissingActorAuthorizationTypes);
+    }
+
+    /// <summary>A resource authorizer cannot bypass missing actor-family coverage in direct dispatch.</summary>
+    [Fact]
+    public async Task ShouldRefuseActorRequestBeforeHandlerGivenOnlyResourceAuthorization()
+    {
+        // Arrange
+        var calls = new List<string>();
+        var handler = new AuthenticatedActorHandler(calls);
+        var registry = new RequestRegistry(
+            [new RequestRegistration<AuthenticatedActorCommand, AuthenticatedActorHandler>()],
+            [new RequestAuthorizerRegistration<IAuthenticatedRequest, AuthenticatedFamilyPolicy>(
+                AuthorizationStage.ResourceAccess)],
+            [], [], [], new RequestAuthorizationRequirement([]));
+        var services = new ServiceCollection().AddSingleton(handler).BuildServiceProvider();
+        var bus = new RequestBus(services, registry);
+
+        // Act
+        var thrown = await Record.ExceptionAsync(() => bus.DispatchAsync(new AuthenticatedActorCommand(),
+            bus.CreateContext(RequestActor.CreateSystem("test")), TestContext.Current.CancellationToken).AsTask());
+
+        // Assert
+        Assert.IsType<InvalidOperationException>(thrown);
+        Assert.Empty(calls);
+    }
+
+    /// <summary>Actor-family principal policies satisfy standard actor coverage.</summary>
+    [Fact]
+    public void ShouldAcceptActorFamilyPrincipalPoliciesGivenAuthorizationIsRequired()
+    {
+        // Arrange
+        var handlers = new RequestHandlerRegistration[]
+        {
+            new RequestRegistration<AuthenticatedActorCommand, AuthenticatedActorHandler>(),
+            new RequestRegistration<SystemActorCommand, SystemActorHandler>(),
+            new RequestRegistration<PublicActorCommand, PublicActorHandler, string>()
+        };
+        var authorizers = new RequestAuthorizerRegistration[]
+        {
+            new RequestAuthorizerRegistration<IAuthenticatedRequest, AuthenticatedFamilyPolicy>(AuthorizationStage.Principal),
+            new RequestAuthorizerRegistration<ISystemRequest, SystemFamilyPolicy>(AuthorizationStage.Principal)
+        };
+
+        // Act
+        var registry = new RequestRegistry(handlers, authorizers, [], [], [],
+            new RequestAuthorizationRequirement([typeof(global::Cntryl.Portia.IPublicRequest)]));
+
+        // Assert
+        Assert.Empty(registry.MissingActorAuthorizationTypes);
+    }
+
+    /// <summary>Opt-in actor authorization rejects unclassified and multiply classified application requests.</summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ShouldRejectInvalidActorClassificationGivenActorAuthorizationIsEnabled(bool requireActors)
+    {
+        // Arrange
+        var handlers = new RequestHandlerRegistration[]
+        {
+            new RequestRegistration<AuthenticatedActorCommand, AuthenticatedActorHandler>(),
+            new RequestRegistration<UnclassifiedActorCommand, UnclassifiedActorHandler>(),
+            new RequestRegistration<ConflictingActorCommand, ConflictingActorHandler>()
+        };
+
+        // Act
+        var registry = new RequestRegistry(handlers, [], [], [], [], new RequestAuthorizationRequirement([]),
+            requestActorAuthorizationRequired: requireActors);
+
+        // Assert
+        Type[] expected = requireActors
+            ? [typeof(ConflictingActorCommand), typeof(UnclassifiedActorCommand)]
+            : [typeof(ConflictingActorCommand)];
+        Assert.Equal(expected,
+            registry.InvalidActorClassificationTypes.OrderBy(type => type.Name));
+    }
+
     /// <summary>RequireAuthorization chains on the same builder.</summary>
     [Fact]
     public void ShouldReturnSameBuilderGivenRequireAuthorization()
@@ -213,6 +329,143 @@ public sealed class RequireAuthorizationTests
 
         // Assert
         Assert.Same(builder, returned);
+    }
+
+    /// <summary>Request actor policy registration is idempotent and opts in to fail-closed dispatch.</summary>
+    [Fact]
+    public async Task ShouldRegisterRequestActorPoliciesGivenRepeatedOptIn()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var builder = services.AddPortia();
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<AuthenticatedActorCommand, AuthenticatedActorHandler>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<SystemActorCommand, SystemActorHandler>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PublicActorCommand, PublicActorHandler, string>());
+        _ = services.AddSingleton<PublicActorHandler>();
+
+        // Act
+        var returned = builder.RequireRequestActors().RequireRequestActors();
+        using var provider = services.BuildServiceProvider();
+        var registry = provider.GetRequiredService<RequestRegistry>();
+        using var scope = provider.CreateScope();
+        var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
+        var publicResult = await bus.DispatchAsync(new PublicActorCommand(), bus.CreateContext(RequestActor.Anonymous),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Same(builder, returned);
+        Assert.True(registry.RequiresAuthorization);
+        Assert.Empty(registry.InvalidActorClassificationTypes);
+        Assert.Empty(registry.UnprotectedRequestTypes);
+        Assert.Equal("public", publicResult.Value);
+    }
+
+    /// <summary>Public classification allows anonymous dispatch while applicable resource policy still runs.</summary>
+    [Fact]
+    public async Task ShouldRunPublicResourcePolicyGivenRequestActorAuthorization()
+    {
+        // Arrange
+        var calls = new List<string>();
+        var services = new ServiceCollection();
+        _ = services.AddSingleton(calls);
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<PublicActorCommand, PublicActorHandler, string>());
+        _ = services.AddSingleton<RequestAuthorizerRegistration>(
+            new RequestAuthorizerRegistration<global::Cntryl.Portia.IPublicRequest, DenyPublicActorPolicy>(
+                AuthorizationStage.ResourceAccess));
+        _ = services.AddSingleton<PublicActorHandler>();
+        _ = services.AddSingleton<DenyPublicActorPolicy>();
+        _ = services.AddPortia().RequireRequestActors();
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
+
+        // Act
+        var result = await bus.DispatchAsync(new PublicActorCommand(), bus.CreateContext(RequestActor.Anonymous),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(RequestErrorKind.Forbidden, result.Error!.Kind);
+        Assert.Equal(["public-resource-policy"], calls);
+    }
+
+    /// <summary>Authenticated actor checks reject anonymous dispatch before the handler runs.</summary>
+    [Fact]
+    public async Task ShouldRejectAnonymousActorGivenAuthenticatedRequestFamily()
+    {
+        // Arrange
+        var calls = new List<string>();
+        var services = ActorProtectedServices(calls);
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
+
+        // Act
+        var result = await bus.DispatchAsync(new AuthenticatedActorCommand(), bus.CreateContext(RequestActor.Anonymous),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(RequestErrorKind.Unauthorized, result.Error!.Kind);
+        Assert.Empty(calls);
+    }
+
+    /// <summary>System actor checks forbid an authenticated user before the handler runs.</summary>
+    [Fact]
+    public async Task ShouldForbidUserActorGivenSystemRequestFamily()
+    {
+        // Arrange
+        var calls = new List<string>();
+        var services = ActorProtectedServices(calls);
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
+        var user = new ClaimsPrincipal(new ClaimsIdentity(
+            [new Claim(ClaimTypes.NameIdentifier, "user-1", ClaimValueTypes.String, "test-issuer")], "test"));
+
+        // Act
+        var result = await bus.DispatchAsync(new SystemActorCommand(), bus.CreateContext(user),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal(RequestErrorKind.Forbidden, result.Error!.Kind);
+        Assert.Empty(calls);
+    }
+
+    /// <summary>System actor checks admit an attributable system principal.</summary>
+    [Fact]
+    public async Task ShouldDispatchSystemActorGivenSystemRequestFamily()
+    {
+        // Arrange
+        var calls = new List<string>();
+        var services = ActorProtectedServices(calls);
+        await using var provider = services.BuildServiceProvider();
+        await using var scope = provider.CreateAsyncScope();
+        var bus = scope.ServiceProvider.GetRequiredService<IRequestBus>();
+
+        // Act
+        var result = await bus.DispatchAsync(new SystemActorCommand(), bus.CreateContext(RequestActor.CreateSystem("worker")),
+            TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.True(result.IsSuccess);
+        Assert.Equal(["system-handler"], calls);
+    }
+
+    static ServiceCollection ActorProtectedServices(List<string> calls)
+    {
+        var services = new ServiceCollection();
+        _ = services.AddSingleton(calls);
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<AuthenticatedActorCommand, AuthenticatedActorHandler>());
+        _ = services.AddSingleton<RequestHandlerRegistration>(
+            new RequestRegistration<SystemActorCommand, SystemActorHandler>());
+        _ = services.AddSingleton<AuthenticatedActorHandler>();
+        _ = services.AddSingleton<SystemActorHandler>();
+        _ = services.AddPortia().RequireRequestActors();
+        return services;
     }
 
     /// <summary>A provider composed without hosting still refuses unprotected requests.</summary>
@@ -503,6 +756,85 @@ public sealed class RequireAuthorizationTests
     internal interface IAuthorizedFamily : IRequest;
 
     internal interface IPublicRequest : IRequestBase;
+
+    internal sealed record AuthenticatedActorCommand : IRequest, IAuthenticatedRequest;
+
+    internal sealed record SystemActorCommand : IRequest, ISystemRequest;
+
+    internal sealed record PublicActorCommand : IRequest<string>, global::Cntryl.Portia.IPublicRequest;
+
+    internal sealed record UnclassifiedActorCommand : IRequest;
+
+    internal sealed record ConflictingActorCommand : IRequest, IAuthenticatedRequest, global::Cntryl.Portia.IPublicRequest;
+
+    internal sealed class AuthenticatedActorHandler(List<string>? calls = null) : IRequestHandler<AuthenticatedActorCommand>
+    {
+        public ValueTask<Result> HandleAsync(IRequestContext<AuthenticatedActorCommand> context, CancellationToken ct)
+        {
+            calls?.Add("authenticated-handler");
+            return ValueTask.FromResult(Result.Success);
+        }
+    }
+
+    internal sealed class SystemActorHandler : IRequestHandler<SystemActorCommand>
+    {
+        readonly List<string>? _calls;
+
+        public SystemActorHandler(List<string>? calls = null) => _calls = calls;
+
+        public ValueTask<Result> HandleAsync(IRequestContext<SystemActorCommand> context, CancellationToken ct)
+        {
+            _calls?.Add("system-handler");
+            return ValueTask.FromResult(Result.Success);
+        }
+    }
+
+    internal sealed class PublicActorHandler(List<string>? calls = null) : IRequestHandler<PublicActorCommand, string>
+    {
+        public ValueTask<Result<string>> HandleAsync(IRequestContext<PublicActorCommand> context, CancellationToken ct)
+        {
+            calls?.Add("public-handler");
+            return ValueTask.FromResult(Result<string>.Success("public"));
+        }
+    }
+
+    internal sealed class DenyPublicActorPolicy(List<string> calls)
+        : IRequestAuthorizer<global::Cntryl.Portia.IPublicRequest>
+    {
+        public ValueTask<Result> AuthorizeAsync(
+            IRequestContext<global::Cntryl.Portia.IPublicRequest> context,
+            CancellationToken ct
+        )
+        {
+            calls.Add("public-resource-policy");
+            return ValueTask.FromResult(Result.Failure(RequestError.Forbidden("Denied by the resource policy.")));
+        }
+    }
+
+    internal sealed class UnclassifiedActorHandler : IRequestHandler<UnclassifiedActorCommand>
+    {
+        public ValueTask<Result> HandleAsync(IRequestContext<UnclassifiedActorCommand> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+    }
+
+    internal sealed class ConflictingActorHandler : IRequestHandler<ConflictingActorCommand>
+    {
+        public ValueTask<Result> HandleAsync(IRequestContext<ConflictingActorCommand> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+    }
+
+    internal sealed class AuthenticatedFamilyPolicy : IRequestAuthorizer<IAuthenticatedRequest>
+    {
+        public ValueTask<Result> AuthorizeAsync(IRequestContext<IAuthenticatedRequest> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+    }
+
+    internal sealed class SystemFamilyPolicy : IRequestAuthorizer<ISystemRequest>
+    {
+        public ValueTask<Result> AuthorizeAsync(IRequestContext<ISystemRequest> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+    }
+
+    internal sealed class ConcreteActorPolicy : IRequestAuthorizer<AuthenticatedActorCommand>
+    {
+        public ValueTask<Result> AuthorizeAsync(IRequestContext<AuthenticatedActorCommand> context, CancellationToken ct) => ValueTask.FromResult(Result.Success);
+    }
 
     internal sealed record UnprotectedCommand : IRequest, IPublicRequest;
 

@@ -59,7 +59,8 @@ public sealed class RequestRegistry
         IEnumerable<RequestPipelineBehaviorRegistration> behaviors,
         IEnumerable<RequestGuardRegistration> guards,
         IEnumerable<RequestTransportRegistration> requests,
-        RequestAuthorizationRequirement? authorization
+        RequestAuthorizationRequirement? authorization,
+        bool requestActorAuthorizationRequired = false
     )
     {
         ArgumentNullException.ThrowIfNull(handlers);
@@ -166,7 +167,7 @@ public sealed class RequestRegistry
             .Select(registration => registration.RequestType)
             .ToFrozenSet();
         RequiresAuthorization = authorization is not null;
-        UnprotectedRequestTypes = authorization is null
+        var unprotected = authorization is null
             ? FrozenSet<Type>.Empty
             : _handlers.Values
                 .Where(registration => registration.Permission is null &&
@@ -175,6 +176,33 @@ public sealed class RequestRegistry
                                            authorizer.ScopeType.IsAssignableFrom(registration.RequestType)))
                 .Select(registration => registration.RequestType)
                 .ToFrozenSet();
+
+        InvalidActorClassificationTypes = authorization is not null || requestActorAuthorizationRequired
+            ? _handlers.Keys.Where(type =>
+            {
+                var count = ActorClassificationCount(type);
+                return count > 1 || (requestActorAuthorizationRequired && count == 0);
+            }).ToFrozenSet()
+            : FrozenSet<Type>.Empty;
+        MissingActorAuthorizationTypes = authorization is null
+            ? FrozenSet<Type>.Empty
+            : _handlers.Keys.Where(type =>
+            {
+                if (ActorClassificationCount(type) != 1)
+                    return false;
+
+                if (typeof(IPublicRequest).IsAssignableFrom(type))
+                    return !authorization.AllowsAnonymous(type);
+
+                var family = typeof(ISystemRequest).IsAssignableFrom(type)
+                    ? typeof(ISystemRequest)
+                    : typeof(IAuthenticatedRequest);
+                return !_authorizers.Any(authorizer => authorizer.Stage == AuthorizationStage.Principal &&
+                    authorizer.ScopeType.IsInterface && family.IsAssignableFrom(authorizer.ScopeType) &&
+                    authorizer.ScopeType.IsAssignableFrom(type));
+            }).ToFrozenSet();
+        UnprotectedRequestTypes = unprotected.Concat(InvalidActorClassificationTypes)
+            .Concat(MissingActorAuthorizationTypes).ToFrozenSet();
     }
 
     // Fail-closed authorization is a composition decision, so the unprotected set is computed once
@@ -186,6 +214,15 @@ public sealed class RequestRegistry
     // This can only be known after generated registrations from every feature assembly compose.
     // Hosting validates the resulting immutable set without resolving a scoped evaluator.
     internal IReadOnlySet<Type> PermissionRequestTypes { get; }
+
+    internal IReadOnlySet<Type> InvalidActorClassificationTypes { get; }
+
+    internal IReadOnlySet<Type> MissingActorAuthorizationTypes { get; }
+
+    static int ActorClassificationCount(Type type) =>
+        (typeof(IAuthenticatedRequest).IsAssignableFrom(type) ? 1 : 0) +
+        (typeof(ISystemRequest).IsAssignableFrom(type) ? 1 : 0) +
+        (typeof(IPublicRequest).IsAssignableFrom(type) ? 1 : 0);
 
     internal RequestHandlerRegistration Handler(Type requestType) =>
         _handlers.TryGetValue(requestType, out var registration)

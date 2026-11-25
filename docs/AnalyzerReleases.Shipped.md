@@ -2,10 +2,17 @@
 
 ## Release 0.15.1
 
+### New Rules
+
+ Rule ID   | Category | Severity | Notes
+-----------|----------|----------|------
+ PORTIA033 | Portia | Error | An opted-in project must declare exactly one actor marker on each concrete request.
+
 ### Removed Rules
 
  Rule ID   | Category        | Severity | Notes
 -----------|-----------------|----------|------
+ PORTIA032 | Portia          | Error    | System actor requests can use either request shape.
  PORTIA208 | PortiaStructure | Warning  | Aggregate size and member counts do not establish a misplaced responsibility.
 
 ## Release 0.15.0

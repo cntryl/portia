@@ -3,14 +3,14 @@ using Microsoft.Extensions.Configuration;
 namespace Cntryl.Portia;
 
 sealed class ProcessorStatusAuthorizer(IOperationalAuthorizer? policy = null, IConfiguration? configuration = null)
-    : IRequestAuthorizer<GetProcessorStatus>
+    : IRequestAuthorizer<IProcessorStatusRequest>
 {
-    public async ValueTask<Result> AuthorizeAsync(IRequestContext<GetProcessorStatus> context, CancellationToken ct)
+    public async ValueTask<Result> AuthorizeAsync(IRequestContext<IProcessorStatusRequest> context, CancellationToken ct)
     {
         var actor = context.Actor;
 
-        if (!actor.Identities.Any(identity => identity.IsAuthenticated))
-            return RequestError.Unauthorized("Processor status requires an authenticated actor.");
+        if (!ActorAttribution.TryFromAuthenticatedPrincipal(actor, out _))
+            return RequestError.Unauthorized("Processor status requires one unambiguous authenticated actor.");
 
         if (!SystemOperatorAuthorization.IsAdministrator(actor, configuration))
             return RequestError.Forbidden("Processor status requires the configured system administrator role.");

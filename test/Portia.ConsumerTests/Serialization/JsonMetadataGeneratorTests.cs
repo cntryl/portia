@@ -6,7 +6,7 @@ namespace Cntryl.Portia.Consumer;
 public sealed class JsonMetadataGeneratorTests
 {
     [Fact]
-    public void ShouldRequireRequestAndResultJsonMetadataGivenInternalSystemRequest()
+    public void ShouldNotRequireJsonMetadataGivenLocalSystemRequestMarkerAlone()
     {
         // Arrange
         const string source = """
@@ -21,32 +21,84 @@ public sealed class JsonMetadataGeneratorTests
         var diagnostics = GeneratorCompilation.Diagnostics(source, new JsonMetadataDiagnosticGenerator());
 
         // Assert
-        Assert.Equal(["SystemProbe", "SystemProbeResult"], diagnostics.Where(d => d.Id == "PORTIA025")
-            .Select(d => d.GetMessage(CultureInfo.InvariantCulture).Split('\'')[1]).Order(StringComparer.Ordinal));
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA025");
     }
 
     [Fact]
-    public void ShouldGenerateTransportRegistrationGivenInternalSystemRequest()
+    public void ShouldRegisterOnlyExplicitTransportsGivenLocalAndRouteOnlyRequests()
     {
         // Arrange
         const string source = """
+                              using System;
+                              using System.Linq;
+                              using System.Threading;
+                              using System.Threading.Tasks;
                               using Cntryl.Portia;
+                              using Microsoft.Extensions.DependencyInjection;
+                              public sealed record LocalRequest : IRequest;
+                              [Discriminator("route.only", 1)]
+                              [RequestRoute("app", "area", "resource", "route-only")]
+                              public sealed record RouteOnlyRequest : IRequest;
                               [Discriminator("portia.system_probe", 1)]
-                              [RequestRoute("*", "*", "*", "probe")]
-                              internal sealed record SystemProbe : IRequest<SystemProbeResult>, Cntryl.Portia.ISystemRequest;
-                              internal sealed record SystemProbeResult;
+                              [RequestRoute("app", "area", "resource", "call")]
+                              public sealed record CallableRequest : IRequest, ICallable;
+                              [Discriminator("portia.schedule", 1)]
+                              [RequestRoute("app", "area", "resource", "schedule")]
+                              public sealed record ScheduleRequest : IRequest, ISchedulable;
+                              public sealed class LocalHandler : IRequestHandler<LocalRequest>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<LocalRequest> context, CancellationToken ct)
+                                      => ValueTask.FromResult(Result.Success);
+                              }
+                              public sealed class RouteOnlyHandler : IRequestHandler<RouteOnlyRequest>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<RouteOnlyRequest> context, CancellationToken ct)
+                                      => ValueTask.FromResult(Result.Success);
+                              }
+                              public sealed class CallableHandler : IRequestHandler<CallableRequest>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<CallableRequest> context, CancellationToken ct)
+                                      => ValueTask.FromResult(Result.Success);
+                              }
+                              public sealed class ScheduleHandler : IRequestHandler<ScheduleRequest>
+                              {
+                                  public ValueTask<Result> HandleAsync(IRequestContext<ScheduleRequest> context, CancellationToken ct)
+                                      => ValueTask.FromResult(Result.Success);
+                              }
+                              public static class Scenario
+                              {
+                                  public static bool Run()
+                                  {
+                                      var services = new ServiceCollection();
+                                      var portia = services.AddPortia();
+                                      portia.AddRequestHandler<LocalHandler>();
+                                      portia.AddRequestHandler<RouteOnlyHandler>();
+                                      portia.AddRequestHandler<CallableHandler>();
+                                      portia.AddRequestHandler<ScheduleHandler>();
+                                      var registrations = services
+                                          .Where(descriptor => descriptor.ServiceType == typeof(RequestTransportRegistration))
+                                          .Select(descriptor => (RequestTransportRegistration)descriptor.ImplementationInstance!)
+                                          .ToArray();
+                                      return registrations.Length == 2
+                                          && registrations.Single(item => item.RequestType == typeof(CallableRequest))
+                                              .Transports.SetEquals([RequestTransportId.Callable])
+                                          && registrations.Single(item => item.RequestType == typeof(ScheduleRequest))
+                                              .Transports.SetEquals([RequestTransportId.Schedule]);
+                                  }
+                              }
                               """;
 
         // Act
-        var generated = GeneratorCompilation.GeneratedSource(source, new PortiaServiceRegistrationGenerator());
+        var assembly = GeneratorCompilation.Compile(source,
+            new RegistrationCallInterceptorGenerator(), new PortiaServiceRegistrationGenerator());
+        var passed = assembly.GetType("Scenario")!.GetMethod("Run")!.CreateDelegate<Func<bool>>()();
 
         // Assert
-        Assert.Contains("typeof(global::SystemProbe)", generated, StringComparison.Ordinal);
-        Assert.Contains("AddGeneratedRequest", generated, StringComparison.Ordinal);
+        Assert.True(passed);
     }
 
     [Fact]
-    public void ShouldRejectSystemMarkerGivenStreamRequest()
+    public void ShouldAllowSystemMarkerGivenStreamRequest()
     {
         // Arrange
         const string source = """
@@ -61,7 +113,7 @@ public sealed class JsonMetadataGeneratorTests
         var diagnostics = GeneratorCompilation.Diagnostics(source, new PortiaServiceRegistrationGenerator());
 
         // Assert
-        _ = Assert.Single(diagnostics, diagnostic => diagnostic.Id == "PORTIA032");
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == "PORTIA032");
     }
 
     [Theory]
