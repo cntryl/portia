@@ -289,8 +289,9 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
                 && diagnostics.Count(item => item.Id == "PORTIA109") != (spec.Operation == "reactors-enabled" ? 1 : 0))
                 throw new InvalidOperationException(spec.Id + " returned an unexpected split-reaction count.");
 
-            if (spec.Operation == "repeated-calls" && diagnostics.Count(item => item.Id == "PORTIA212") != 1)
-                throw new InvalidOperationException(spec.Id + " did not report the query entry call.");
+            if (spec.Operation == "repeated-calls" &&
+                diagnostics.Count(item => item.Id == "PORTIA212") != RepeatedQueryCalls)
+                throw new InvalidOperationException(spec.Id + " did not report every query call site.");
 
             var repeat = compilation.WithAnalyzers([.. CompilerHost.CreateAnalyzers(spec.Component)], options);
             var comparison = spec.Operation == "document"

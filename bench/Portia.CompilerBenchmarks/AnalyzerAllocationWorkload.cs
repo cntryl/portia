@@ -5,6 +5,8 @@ namespace Cntryl.Portia.CompilerBenchmarks;
 
 sealed partial class BenchmarkCase
 {
+    const int RepeatedQueryCalls = 256;
+
     static CSharpCompilation AddAllocationWorkload(
         CSharpCompilation compilation,
         string operation,
@@ -70,7 +72,9 @@ sealed partial class BenchmarkCase
                                        """);
 
             if (operation == "repeated-calls")
-                Add("Handlers/QueryHandler", """
+            {
+                var calls = string.Concat(Enumerable.Repeat("            await reader.Read(ct);\n", RepeatedQueryCalls));
+                Add("Handlers/QueryHandler", $$"""
                                              using Cntryl.Portia;
                                              using System.Threading;
                                              using System.Threading.Tasks;
@@ -80,8 +84,11 @@ sealed partial class BenchmarkCase
                                                  using Bench.Common.Features.Work.Queries;
                                                  public sealed class QueryHandler(Reader reader) : IRequestHandler<Lookup>
                                                  {
-                                                     public ValueTask<Result> HandleAsync(IRequestContext<Lookup> context, CancellationToken ct) =>
-                                                         reader.Read(ct);
+                                                     public async ValueTask<Result> HandleAsync(IRequestContext<Lookup> context, CancellationToken ct)
+                                                     {
+                                             {{calls}}
+                                                         return Result.Success;
+                                                     }
                                                  }
                                                  public sealed class Reader(IAggregateReader reader, Aggregate aggregate)
                                                  {
@@ -93,6 +100,7 @@ sealed partial class BenchmarkCase
                                                  }
                                              }
                                              """);
+            }
         }
 
         return compilation.AddSyntaxTrees(trees);

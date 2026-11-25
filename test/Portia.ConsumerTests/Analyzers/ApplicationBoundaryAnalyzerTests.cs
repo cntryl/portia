@@ -289,7 +289,16 @@ public sealed class ApplicationBoundaryAnalyzerTests
 
         // Assert
         Assert.Equal(forbidden ? 1 : 0, diagnostics.Length);
-        Assert.All(diagnostics, item => Assert.Equal("PORTIA212", item.Id));
+
+        Assert.All(diagnostics, diagnostic =>
+        {
+            Assert.Equal("PORTIA212", diagnostic.Id);
+            var message = diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture);
+
+            Assert.Contains("advisory", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("command handlers", message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("authoritative outcomes", message, StringComparison.OrdinalIgnoreCase);
+        });
     }
 
     [Fact]

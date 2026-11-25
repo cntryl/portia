@@ -219,7 +219,7 @@ retain their behavior regardless of this opt-in.
 | PORTIA209 | Common declares executable members, except construction of sealed record values in Values. | Move other behavior into Core. |
 | PORTIA210 | A request/event lacks a valid feature discriminator or explicit positive version. | Make an omitted default version explicit; never guess or change a wire identity. |
 | PORTIA211 | A command handler's implementation consists solely of throwing `NotImplementedException`. | Implement the operation or remove its surface. |
-| PORTIA212 | A query handler or reactor reaches Portia aggregate hydration/execution APIs through statically bound calls in the same compilation. | Query a repository, or send an authoritative command from the reactor. Advisory reads may reject early, but only the participant's authoritative command outcome confirms or rejects the business assumption. |
+| PORTIA212 | A query handler or reactor reaches Portia aggregate hydration/execution APIs through statically bound calls in the same compilation. | Use a read model in queries and dispatch commands from reactors. Command handlers may hydrate other aggregates for advisory checks. Choreography uses committed participant outcomes to resolve cross-aggregate requirements. |
 | PORTIA213 | A production application project has an unsupported role. | Use Common, Core, Api, Worker, Mcp, Host, or Shared. Set `portia_project_role` in `.editorconfig` or `PortiaProjectRole` in MSBuild. |
 
 Constructors for sealed Common value records may validate, normalize, and initialize state. An analyzer cannot prove that arbitrary constructor callees are pure; known infrastructure dependencies remain subject to dependency diagnostics.

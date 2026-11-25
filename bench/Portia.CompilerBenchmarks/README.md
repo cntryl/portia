@@ -32,8 +32,9 @@ Four analyzer cases exercise allocation growth. Use the existing `compare` comma
 500, or 1,000 unrelated reactors plus one complementary pair. At `--size large`,
 `analyzers/ScenarioObservationAnalyzer/assignments` and
 `analyzers/ApplicationBoundaryAnalyzer/repeated-calls` each analyze 25,600 assignments that call
-source helpers. Verification checks the scenario finding, the query hydration finding, and the
-reaction diagnostic count under both severity settings.
+source helpers. The repeated-call fixture also makes 256 calls from one query handler to the same
+aggregate-hydrating helper. Verification checks the scenario finding, the hydration warning at
+each query call site, and the reaction diagnostic count under both severity settings.
 
 Run A/A calibration using the same immutable executable on the macOS reference host:
 
@@ -104,7 +105,7 @@ pairs cannot produce a compatible comparison. Intentionally changed generated ou
 and a new comparison contract; the current protocol requires identical output hashes across revisions.
 The current report protocol is `portia-compiler-benchmarks-4`; prior reports are rejected.
 Workers also record the warm-up count and fixture size, and comparisons reject different warm-up
-configurations. The harness accepts only its current report protocol.
+configurations.
 
 Raw JSONL uses a new filename per invocation. Completed samples are flushed while the child runs;
 timeouts and nonzero worker exits produce an incomplete summary and exit 1. The controller alternates

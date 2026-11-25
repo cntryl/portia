@@ -45,8 +45,10 @@ Three rules cover every stage:
   `AuthorizationStage`, which defaults to `ResourceAccess`; most applications never pass a stage.
   Behaviors run by the `order` you give them, lowest outermost.
 - **The first failure wins** and nothing after it runs.
-- **Only the aggregate is authoritative.** Whatever an authorizer or guard reads can be stale by the
-  time the handler runs, so the aggregate and the repository save still decide.
+- **Business validation reads are advisory.** An authorizer or guard may read stale state.
+  The aggregate and its commit enforce local invariants. When work proceeds on a requirement
+  spanning aggregates, choreography resolves it using the participants' committed acceptance or
+  rejection.
 
 Return a failure with the short form, which converts to `Result` and `Result<T>`:
 
