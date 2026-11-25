@@ -11,6 +11,36 @@ namespace Cntryl.Portia.Tests.Storage;
 /// <summary>Checks Cloud Storage request construction and object verification without cloud credentials.</summary>
 public sealed class GcpObjectStorageTests
 {
+    /// <summary>Clips a signed part lifetime to the session expiration using the registered clock.</summary>
+    [Fact]
+    public async Task ShouldClipSignedPartLifetimeGivenAnApplicationClock()
+    {
+        // Arrange
+        var clock = new ManualTestClock();
+        var harness = Harness.Create();
+        var services = new ServiceCollection();
+        services.AddSingleton<TimeProvider>(clock);
+        services.AddDataProtection().UseEphemeralDataProtectionProvider();
+        services.AddSingleton<IObjectStorageTenantResolver>(new Harness.Resolver());
+        using var client = Harness.CreateClient(harness.Gcs);
+        services.AddGcpObjectStorage(builder => builder.UseClient(client).UseSigner(Harness.CreateSigner()));
+        using var provider = services.BuildServiceProvider();
+        var storage = provider.GetRequiredService<IObjectStorage>();
+        var ct = TestContext.Current.CancellationToken;
+        var session = await storage.CreateUploadAsync(new TenantId("tenant-one"), Digest([1]), ct);
+        var lifetime = TimeSpan.FromMinutes(5);
+        var sessionExpiry = clock.GetUtcNow().AddHours(24);
+        clock.Advance(TimeSpan.FromHours(24) - TimeSpan.FromMinutes(2));
+
+        // Act
+        var part = await storage.SignPartAsync(session, 1, lifetime, ct);
+
+        // Assert
+        Assert.Equal(sessionExpiry, part.ExpiresAt);
+        var query = HttpUtility.ParseQueryString(part.UploadUri.Query);
+        Assert.Equal("120", query["X-Goog-Expires"]);
+    }
+
     /// <summary>Completion uses the bucket and keys captured before the application's resolver changes.</summary>
     [Fact]
     public async Task ShouldPinApplicationLayoutGivenResolverChangesDuringUpload()

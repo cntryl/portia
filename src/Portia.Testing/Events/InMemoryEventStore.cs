@@ -5,8 +5,10 @@ namespace Cntryl.Portia.Testing;
 /// <summary>
 ///     Stores ordered aggregate event histories in memory for tests.
 /// </summary>
-public sealed class InMemoryEventStore : IEventStore, IDomainEventProgressReader
+/// <param name="timeProvider">Provides the observation time for stream progress.</param>
+public sealed class InMemoryEventStore(TimeProvider timeProvider) : IEventStore, IDomainEventProgressReader
 {
+    readonly TimeProvider _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     readonly Dictionary<(string Realm, string Area), ulong> _areaOffsets = [];
     readonly Lock _gate = new();
     readonly Dictionary<string, ulong> _realmOffsets = [];
@@ -16,6 +18,11 @@ public sealed class InMemoryEventStore : IEventStore, IDomainEventProgressReader
 
     readonly Dictionary<EventStreamAddress, HashSet<Uuid>> _eventIds = [];
     readonly Dictionary<EventStreamAddress, List<DomainEventRecord>> _streams = [];
+
+    /// <summary>Creates an in-memory event store using the system clock.</summary>
+    public InMemoryEventStore() : this(TimeProvider.System)
+    {
+    }
 
     /// <inheritdoc />
     public IAsyncEnumerable<DomainEventRecord> ReadAsync(
@@ -101,7 +108,7 @@ public sealed class InMemoryEventStore : IEventStore, IDomainEventProgressReader
             };
             return ValueTask.FromResult(new EventStreamProgress(position, Encode(head),
                 offset <= head ? head - offset : null, offset <= head ? offset == head : null,
-                DateTimeOffset.UtcNow, offset <= head ? head - offset : null));
+                _clock.GetUtcNow(), offset <= head ? head - offset : null));
         }
     }
 

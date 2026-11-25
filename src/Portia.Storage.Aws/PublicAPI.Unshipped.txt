@@ -1,1 +1,2 @@
 #nullable enable
+Cntryl.Portia.Storage.Aws.AwsObjectStorage.AwsObjectStorage(Amazon.S3.IAmazonS3! client, Cntryl.Portia.Storage.IObjectStorageTenantResolver! tenantResolver, Microsoft.AspNetCore.DataProtection.IDataProtector! sessionProtector, System.TimeProvider! timeProvider) -> void

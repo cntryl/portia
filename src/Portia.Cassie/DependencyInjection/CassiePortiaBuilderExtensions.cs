@@ -27,7 +27,8 @@ public static class CassiePortiaBuilderExtensions
                                                    || service.ServiceType == typeof(CassieDataSource)))
             throw new InvalidOperationException("Cassie projection services are already configured.");
 
-        builder.Services.AddSingleton(_ => new CassieDataSource(connectionString));
+        builder.Services.AddSingleton(provider =>
+            new CassieDataSource(connectionString, provider.GetService<TimeProvider>() ?? TimeProvider.System));
         builder.Services.AddSingleton(sp =>
             new CassieProjectionDatabase(sp.GetRequiredService<CassieDataSource>(), checkpointTable));
         builder.Services.AddSingleton<IHostedService, CassieProjectionStartup>();

@@ -15,9 +15,9 @@ static class ObjectStorageRules
         return lifetime;
     }
 
-    internal static void EnsureSessionActive(DateTimeOffset expiresAt)
+    internal static void EnsureSessionActive(DateTimeOffset expiresAt, DateTimeOffset now)
     {
-        if (expiresAt <= DateTimeOffset.UtcNow)
+        if (expiresAt <= now)
         {
             throw new InvalidOperationException("The upload session has expired.");
         }

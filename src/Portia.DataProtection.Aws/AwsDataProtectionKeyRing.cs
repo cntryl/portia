@@ -70,7 +70,7 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
         {
             ObjectDisposedException.ThrowIf(_disposed != 0, this);
 
-            if (_snapshot is { } cached && _time.GetTimestamp() < cached.ExpiresAt)
+            if (_snapshot is { } cached && !cached.HasExpired(_time))
                 return cached;
 
             ExpireSnapshotLocked();
@@ -156,13 +156,14 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
 
     async Task<Snapshot> LoadSnapshotAsync()
     {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token);
-        timeout.CancelAfter(OperationTimeout);
+        using var budget = new CancellationTokenSource(OperationTimeout, _time);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token, budget.Token);
         Dictionary<(string, DataProtectionKeyRole), KeyEntry>? entries = null;
 
         try
         {
             using var manifest = await _secrets.ReadCurrentAsync(_secretArn, timeout.Token).ConfigureAwait(false);
+            timeout.Token.ThrowIfCancellationRequested();
             var manifestBytes = manifest.Bytes;
 
             if (manifestBytes.Length > MaxManifestBytes)
@@ -231,6 +232,8 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
 
             lock (_sync)
             {
+                timeout.Token.ThrowIfCancellationRequested();
+
                 if (revision == _lastRevision &&
                     (!StringComparer.Ordinal.Equals(manifest.VersionId, _lastVersionId) ||
                      !StringComparer.Ordinal.Equals(manifestDigest, _lastManifestDigest)))
@@ -241,7 +244,7 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
                 _lastManifestDigest = manifestDigest;
             }
 
-            return new Snapshot(activeId!, entries, checked(_time.GetTimestamp() + (long)(_lifetime.TotalSeconds * _time.TimestampFrequency)), _shutdown.Token);
+            return new Snapshot(activeId!, entries, _time.GetTimestamp(), _lifetime, _shutdown.Token);
         }
         catch
         {
@@ -299,21 +302,22 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
         }
     }
 
-    sealed class Snapshot(string activeKeyId, Dictionary<(string, DataProtectionKeyRole), KeyEntry> entries, long expiresAt, CancellationToken shutdownToken) : IDisposable
+    sealed class Snapshot(string activeKeyId, Dictionary<(string, DataProtectionKeyRole), KeyEntry> entries, long startedAt, TimeSpan lifetime, CancellationToken shutdownToken) : IDisposable
     {
         readonly CancellationTokenSource _lifetime = CancellationTokenSource.CreateLinkedTokenSource(shutdownToken);
         readonly object _sync = new();
         bool _disposed;
         public string ActiveKeyId { get; } = activeKeyId;
         public Dictionary<(string, DataProtectionKeyRole), KeyEntry> Entries { get; } = entries;
-        public long ExpiresAt { get; } = expiresAt;
         public CancellationToken LifetimeToken => _lifetime.Token;
         public object Sync => _sync;
         public bool IsDisposed { get { lock (_sync) return _disposed; } }
 
+        public bool HasExpired(TimeProvider time) => time.GetElapsedTime(startedAt) >= lifetime;
+
         public void ValidateLeaseDeadline(TimeProvider time)
         {
-            if (time.GetTimestamp() >= ExpiresAt)
+            if (HasExpired(time))
                 throw new TimeoutException("AWS key snapshot expired before a lease could be created.");
 
             ObjectDisposedException.ThrowIf(IsDisposed, this);
@@ -424,8 +428,8 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
 
         async Task<byte[]> UnwrapAsync(Snapshot snapshot, IAmazonKeyManagementService kms, string keyArn, string ringId, TimeProvider time, TimeSpan timeout)
         {
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(snapshot.LifetimeToken);
-            cts.CancelAfter(timeout);
+            using var budget = new CancellationTokenSource(timeout, time);
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(snapshot.LifetimeToken, budget.Token);
             var context = new Dictionary<string, string>
             {
                 ["portia:ring"] = ringId,
@@ -470,7 +474,7 @@ sealed class AwsDataProtectionKeyRing : IDataProtectionKeyRing, IDisposable
 
                 lock (snapshot.Sync)
                 {
-                    if (snapshot.IsDisposed || time.GetTimestamp() >= snapshot.ExpiresAt)
+                    if (snapshot.IsDisposed || snapshot.HasExpired(time))
                     {
                         CryptographicOperations.ZeroMemory(clear);
                         throw new TimeoutException("AWS key snapshot expired before key unwrap completed.");

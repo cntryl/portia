@@ -24,8 +24,8 @@ public static class AwsDataProtectionServiceCollectionExtensions
         var (secretArn, wrappingKeyArn, ringId) = builder.KeyRing
                                                 ?? throw new InvalidOperationException("An AWS data protection key ring must be configured.");
         var lifetime = builder.CacheLifetime;
-        services.AddSingleton<IDataProtectionKeyRing>(_ => new AwsDataProtectionKeyRing(
-            reader, kms, secretArn, wrappingKeyArn, ringId, lifetime, TimeProvider.System));
+        services.AddSingleton<IDataProtectionKeyRing>(provider => new AwsDataProtectionKeyRing(
+            reader, kms, secretArn, wrappingKeyArn, ringId, lifetime, provider.GetService<TimeProvider>() ?? TimeProvider.System));
         return services.AddPortiaDataProtection();
     }
 }

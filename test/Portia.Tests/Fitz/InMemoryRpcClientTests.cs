@@ -43,30 +43,45 @@ public sealed class InMemoryRpcClientTests
     [Fact]
     public async Task ShouldCancelWorkerGivenExpiredCallBudget()
     {
-#pragma warning disable CA1859 // Exercise the shipped Fitz interface as a consumer would.
         // Arrange
-        IRpcClient rpc = new InMemoryRpcClient();
-#pragma warning restore CA1859
-        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        await using var worker = await rpc.RegisterWorkerAsync("rpc://test", async (_, _, ct) =>
+        var clock = new ManualTestClock();
+        var rpc = new InMemoryRpcClient(clock);
+        var started = new TaskCompletionSource<RpcRequest>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var ct = TestContext.Current.CancellationToken;
+        await using var worker = await rpc.RegisterWorkerAsync("rpc://test", async (request, _, workerToken) =>
         {
-            started.SetResult();
-            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
-        }, ct: TestContext.Current.CancellationToken);
-
-        // Act
-        var call = rpc.CallStreamingAsync("rpc://test", ReadOnlyMemory<byte>.Empty, TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
-
-        // Assert
-        var failure = Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            started.SetResult(request);
+            await Task.Delay(Timeout.InfiniteTimeSpan, workerToken);
+        }, ct: ct);
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var budget = TimeSpan.FromMinutes(1);
+        var call = rpc.CallStreamingAsync("rpc://test", ReadOnlyMemory<byte>.Empty, budget, stop.Token);
+        var consumption = Record.ExceptionAsync(async () =>
         {
             await foreach (var _ in call)
             {
             }
-        });
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
-        _ = await failure.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
-        Assert.Equal(RpcCancellationOutcome.Forwarded, await call.Cancellation.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        }).AsTask();
+
+        try
+        {
+            var request = await started.Task.WaitAsync(TimeSpan.FromSeconds(5), ct);
+
+            // Act
+            clock.Advance(budget);
+            var failure = await consumption.WaitAsync(TimeSpan.FromSeconds(5), ct);
+
+            // Assert
+            Assert.IsAssignableFrom<OperationCanceledException>(failure);
+            Assert.Equal(TimeSpan.Zero, request.RemainingTime);
+            Assert.Equal(RpcCancellationOutcome.Forwarded,
+                await call.Cancellation.WaitAsync(TimeSpan.FromSeconds(5), ct));
+        }
+        finally
+        {
+            await stop.CancelAsync();
+            _ = await consumption;
+        }
     }
 
     /// <summary>

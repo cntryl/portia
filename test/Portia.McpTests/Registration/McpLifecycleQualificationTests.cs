@@ -16,6 +16,101 @@ namespace Cntryl.Portia.Tests;
 public sealed class McpLifecycleQualificationTests
 {
     [Theory]
+    [InlineData("tool")]
+    [InlineData("resource")]
+    [InlineData("prompt")]
+    public async Task ShouldCancelHandlerGivenOperationDeadlineWhenHostClockAdvances(string primitive)
+    {
+        // Arrange
+        var clock = new ManualTestClock();
+        var deadline = TimeSpan.FromHours(1);
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        budget.CancelAfter(TimeSpan.FromSeconds(15));
+        var ct = budget.Token;
+
+        var builder = WebApplication.CreateBuilder();
+        builder.WebHost.UseTestServer();
+        _ = builder.Services.AddSingleton<TimeProvider>(clock);
+        _ = builder.Services.AddSingleton<IEventStore, InMemoryEventStore>();
+        _ = QualifiedApplication.Add(builder.Services).AddMcpTool<QualifiedRead>()
+            .AddMcpResource<QualifiedRead, QualifiedState>("qualification://wait/{tenant}",
+                values => new QualifiedRead(values["tenant"], Wait: true), options =>
+                {
+                    options.Authenticated();
+                    options.AsJson();
+                })
+            .AddMcpPrompt<QualifiedRead, QualifiedState>("qualification-wait",
+                values => new QualifiedRead(values["tenant"], Wait: true),
+                _ => [new McpPromptMessage("user", "completed")], options =>
+                {
+                    options.Authenticated();
+                    options.Required("tenant");
+                })
+            .ConfigureMcpLimits(limits => limits.OperationDeadline = deadline)
+            .AddMcpHttp();
+        await using var app = builder.Build();
+        app.Use((context, next) =>
+        {
+            context.User = new ClaimsPrincipal(
+                new ClaimsIdentity([new Claim(ClaimTypes.Name, QualifiedObservations.Tenant)], "test"));
+            return next(context);
+        });
+        _ = app.MapPortiaMcp().AllowAnonymous();
+        await app.StartAsync(ct);
+        var observations = app.Services.GetRequiredService<QualifiedObservations>();
+        await using var client = await McpClient.CreateAsync(new HttpClientTransport(new HttpClientTransportOptions
+        { Endpoint = new Uri("http://localhost/mcp") }, app.GetTestClient()), cancellationToken: ct);
+
+        // Act
+        var operation = InvokeAsync();
+        var scheduled = await clock.WaitForDelayAsync(ct);
+
+        while (observations.WaitStarted == 0)
+            await Task.Delay(10, ct);
+
+        clock.Advance(deadline);
+        var error = await Record.ExceptionAsync(() => operation);
+
+        // Assert
+        Assert.Equal(deadline, scheduled);
+        Assert.Equal(1, observations.WaitCanceled);
+        Assert.False(ct.IsCancellationRequested);
+
+        if (primitive == "tool")
+        {
+            Assert.Null(error);
+            Assert.True((await operation)!.IsError);
+        }
+        else
+        {
+            Assert.IsAssignableFrom<ModelContextProtocol.McpException>(error);
+        }
+
+        async Task<CallToolResult?> InvokeAsync()
+        {
+            var arguments = new Dictionary<string, object?> { ["tenant"] = QualifiedObservations.Tenant };
+
+            switch (primitive)
+            {
+                case "tool":
+                    arguments.Add("wait", true);
+                    return await client.CallToolAsync("qualification.read", arguments, cancellationToken: ct);
+                case "resource":
+                    _ = await client.ReadResourceAsync($"qualification://wait/{QualifiedObservations.Tenant}",
+                        cancellationToken: ct);
+                    break;
+                case "prompt":
+                    _ = await client.GetPromptAsync("qualification-wait", arguments, cancellationToken: ct);
+                    break;
+                default:
+                    throw new InvalidOperationException($"Unknown MCP primitive '{primitive}'.");
+            }
+
+            return null;
+        }
+    }
+
+    [Theory]
     [InlineData("tool", "2026-07-28", false)]
     [InlineData("resource", "2026-07-28", false)]
     [InlineData("prompt", "2026-07-28", false)]

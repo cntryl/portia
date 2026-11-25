@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App"/>
+    <Compile Include="../Portia.Tests/Support/ManualTestClock.cs" Link="Support/ManualTestClock.cs"/>
     <Compile Include="../../smoke/Portia.McpStdioHost/Application/SdkCancellationProbe.cs" Link="Fixtures/SdkCancellationProbe.cs"/>
   </ItemGroup>
 

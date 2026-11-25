@@ -16,13 +16,15 @@ namespace Cntryl.Portia;
 /// <param name="catalog">Validates the request's declared transport capability.</param>
 /// <param name="actorValidator">Maps the untrusted scheduled identity assertion to an approved principal.</param>
 /// <param name="logger">Reports a delivery that cannot be translated.</param>
+/// <param name="timeProvider">Controls the backoff between transient validation failures.</param>
 public sealed class FitzScheduledRequestConsumer(
     IScheduleClient schedule,
     IRequestDeserializer serializer,
     string route,
     RequestTransportCatalog catalog,
     IScheduledRequestActorValidator actorValidator,
-    ILogger<FitzScheduledRequestConsumer>? logger = null) : IRequestNotificationConsumer
+    ILogger<FitzScheduledRequestConsumer>? logger = null,
+    TimeProvider? timeProvider = null) : IRequestNotificationConsumer
 {
     const int MaxDeferredRetries = 32;
     const int MaxValidationRetryDelaySeconds = 30;
@@ -31,7 +33,7 @@ public sealed class FitzScheduledRequestConsumer(
         actorValidator ?? throw new ArgumentNullException(nameof(actorValidator));
 
     readonly RequestTransportCatalog _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
-    readonly TimeProvider _clock = TimeProvider.System;
+    readonly TimeProvider _clock = timeProvider ?? TimeProvider.System;
 
     readonly string _route = string.IsNullOrWhiteSpace(route)
         ? throw new ArgumentException("A schedule route cannot be empty.", nameof(route))
@@ -50,10 +52,9 @@ public sealed class FitzScheduledRequestConsumer(
         TimeProvider timeProvider,
         ILogger<FitzScheduledRequestConsumer>? logger = null
     )
-        : this(schedule, serializer, route, catalog, ScopedValidatorSentinel.Instance, logger)
+        : this(schedule, serializer, route, catalog, ScopedValidatorSentinel.Instance, logger, timeProvider)
     {
         _scopes = scopes ?? throw new ArgumentNullException(nameof(scopes));
-        _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     /// <inheritdoc />

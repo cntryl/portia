@@ -460,7 +460,14 @@ public sealed class AzureObjectStorageTests
         var content = "download me"u8.ToArray();
         var digest = DigestOf(content);
         var service = new FakeBlobService();
-        var storage = CreateStorage(service);
+        var clock = new ManualTestClock();
+        var services = new ServiceCollection();
+        services.AddSingleton<TimeProvider>(clock);
+        services.AddDataProtection().UseEphemeralDataProtectionProvider();
+        services.AddSingleton<IObjectStorageTenantResolver>(new TenantContainerResolver());
+        services.AddAzureObjectStorage(builder => builder.UseClient(CreateClient(service)));
+        using var provider = services.BuildServiceProvider();
+        var storage = provider.GetRequiredService<IObjectStorage>();
         var tenant = new TenantId("tenant-one");
         service.SeedBlob($"/{FirstContainer}/content/sha256/{digest.Sha256[..2]}/{digest.Sha256}", content,
             digest.Sha256);
@@ -476,12 +483,13 @@ public sealed class AzureObjectStorageTests
             await storage.CreateDownloadAsync(tenant, digest, TimeSpan.Zero, TestContext.Current.CancellationToken));
         Assert.IsType<ArgumentOutOfRangeException>(tooLong);
         Assert.IsType<ArgumentOutOfRangeException>(zero);
-        Assert.InRange(download.ExpiresAt, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(5).AddSeconds(5));
+        Assert.Equal(clock.GetUtcNow().AddMinutes(5), download.ExpiresAt);
         var query = HttpUtility.ParseQueryString(download.DownloadUri.Query);
         Assert.Equal("r", query["sp"]);
         Assert.Equal("https", query["spr"]);
-        Assert.Equal(download.ExpiresAt.UtcDateTime,
-            DateTimeOffset.Parse(query["se"]!, CultureInfo.InvariantCulture).UtcDateTime, TimeSpan.FromSeconds(1));
+        Assert.Equal(download.ExpiresAt, DateTimeOffset.Parse(query["se"]!, CultureInfo.InvariantCulture));
+        Assert.Equal(clock.GetUtcNow().AddMinutes(-5),
+            DateTimeOffset.Parse(query["st"]!, CultureInfo.InvariantCulture));
     }
 
     /// <summary>Checks that part links cannot outlive the 24-hour upload session or exceed the lifetime bound.</summary>

@@ -40,8 +40,8 @@ sealed class PortiaMcpServerTool(
     )
     {
         var limits = request.Services?.GetRequiredService<McpLimits>() ?? new McpLimits();
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        deadline.CancelAfter(limits.OperationDeadline);
+        using var timeout = limits.StartOperationTimeout(request.Services);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
         using var receive = PortiaTelemetry.StartProcess(registration.RequestName, registration.Invocation,
             PortiaTelemetry.CaptureTraceContext(), receivedTraceContext: false);
 

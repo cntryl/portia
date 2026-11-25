@@ -7,7 +7,8 @@ namespace Cntryl.Portia.Storage.Azure;
 public sealed class AzureObjectStorage(
     BlobServiceClient client,
     IObjectStorageTenantResolver tenantResolver,
-    IDataProtector sessionProtector) : IObjectStorage
+    IDataProtector sessionProtector,
+    TimeProvider timeProvider) : IObjectStorage
 {
     // Azure metadata names must be valid C# identifiers, so they cannot contain hyphens.
     const string DigestMetadata = "portiasha256";
@@ -23,11 +24,22 @@ public sealed class AzureObjectStorage(
     readonly IObjectStorageTenantResolver _tenantResolver =
         tenantResolver ?? throw new ArgumentNullException(nameof(tenantResolver));
 
+    readonly TimeProvider _clock = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+
     readonly IDataProtector _sessionProtector =
         sessionProtector ?? throw new ArgumentNullException(nameof(sessionProtector));
 
     // Racing refreshes only cost a duplicate key request, so the cache needs no lock.
     volatile UserDelegationKey? _delegationKey;
+
+    /// <summary>Creates object storage using the system clock.</summary>
+    public AzureObjectStorage(
+        BlobServiceClient client,
+        IObjectStorageTenantResolver tenantResolver,
+        IDataProtector sessionProtector
+    ) : this(client, tenantResolver, sessionProtector, TimeProvider.System)
+    {
+    }
 
     /// <inheritdoc />
     public async ValueTask<ObjectUploadSession> CreateUploadAsync(
@@ -50,7 +62,7 @@ public sealed class AzureObjectStorage(
             uploadKey,
             expected.Sha256,
             expected.Length,
-            DateTimeOffset.UtcNow.Add(UploadLifetime)).Encode(_sessionProtector));
+            _clock.GetUtcNow().Add(UploadLifetime)).Encode(_sessionProtector));
     }
 
     /// <inheritdoc />
@@ -72,8 +84,9 @@ public sealed class AzureObjectStorage(
 
         var duration = ObjectStorageRules.BoundLifetime(lifetime);
         var payload = SessionPayload.Decode(session.Token, _sessionProtector);
-        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt);
-        var expiresAt = DateTimeOffset.UtcNow.Add(duration);
+        var now = _clock.GetUtcNow();
+        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt, now);
+        var expiresAt = now.Add(duration);
 
         if (expiresAt > payload.ExpiresAt)
         {
@@ -101,7 +114,7 @@ public sealed class AzureObjectStorage(
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(parts);
         var payload = SessionPayload.Decode(session.Token, _sessionProtector);
-        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt);
+        ObjectStorageRules.EnsureSessionActive(payload.ExpiresAt, _clock.GetUtcNow());
         // A canceled call can be a retry after Azure committed completion but lost its response.
         // Only an explicit abort can safely discard its potentially committed staging blob.
         ct.ThrowIfCancellationRequested();
@@ -247,7 +260,7 @@ public sealed class AzureObjectStorage(
         }
 
 
-        var expiresAt = DateTimeOffset.UtcNow.Add(duration);
+        var expiresAt = _clock.GetUtcNow().Add(duration);
         var blob = _client.GetBlobContainerClient(location.BucketReference).GetBlobClient(objectKey);
         var url = await SignAsync(blob, BlobSasPermissions.Read, expiresAt, encryptionScope: null, ct)
             .ConfigureAwait(false);
@@ -424,7 +437,7 @@ public sealed class AzureObjectStorage(
         var source = container.GetBlobClient(payload.StagingKey);
         // Copy Blob From URL is synchronous up to 256 MiB, the object limit, so the destination never
         // becomes visible half-written. The source is addressed by a short-lived read SAS.
-        var sourceUri = await SignAsync(source, BlobSasPermissions.Read, DateTimeOffset.UtcNow.Add(SourceReadLifetime),
+        var sourceUri = await SignAsync(source, BlobSasPermissions.Read, _clock.GetUtcNow().Add(SourceReadLifetime),
             encryptionScope: null, ct).ConfigureAwait(false);
         var destination = container.GetBlobClient(payload.ObjectKey).WithEncryptionScope(payload.EncryptionScope);
 
@@ -564,7 +577,7 @@ public sealed class AzureObjectStorage(
             BlobContainerName = blob.BlobContainerName,
             BlobName = blob.Name,
             Resource = "b",
-            StartsOn = DateTimeOffset.UtcNow.Subtract(ClockSkew),
+            StartsOn = _clock.GetUtcNow().Subtract(ClockSkew),
             Protocol = blob.Uri.Scheme == Uri.UriSchemeHttp ? SasProtocol.HttpsAndHttp : SasProtocol.Https,
             EncryptionScope = encryptionScope
         };
@@ -582,7 +595,7 @@ public sealed class AzureObjectStorage(
 
     async ValueTask<UserDelegationKey> GetDelegationKeyAsync(DateTimeOffset needUntil, CancellationToken ct)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _clock.GetUtcNow();
 
         if (_delegationKey is { } cached && cached.SignedExpiresOn >= needUntil.AddMinutes(1) &&
             cached.SignedStartsOn <= now)
