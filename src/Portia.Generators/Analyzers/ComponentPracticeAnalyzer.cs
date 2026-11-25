@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -13,7 +12,7 @@ namespace Cntryl.Portia;
 ///     already asserts, and an application that means to cross one can suppress it deliberately.
 /// </summary>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
+public sealed partial class ComponentPracticeAnalyzer : DiagnosticAnalyzer
 {
     static readonly DiagnosticDescriptor ProjectorEffect = new("PORTIA100", "Projector has known effect dependency",
         "Projector '{0}' takes known effect dependency '{1}'. Effects can replay after commit failure or during rebuild; move the effect to a reactor.",
@@ -53,7 +52,7 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
     static readonly DiagnosticDescriptor SplitDependentReactions = new("PORTIA109",
         "Dependent reactions are split across reactors",
         "Reactor '{0}' sends '{1}' and reactor '{2}' sends '{3}' for the same '{4}' lifecycle. Consolidate these dependent reactions in one reactor so their checkpoints cannot put cancellation before creation.",
-        "Portia", DiagnosticSeverity.Warning, false);
+        "Portia", DiagnosticSeverity.Warning, false, customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
     // Anything that reaches outside the component's own unit of work.
     static readonly string[] EffectTypes =
@@ -137,66 +136,7 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.Analyze |
                                                GeneratedCodeAnalysisFlags.ReportDiagnostics);
         context.EnableConcurrentExecution();
-        context.RegisterCompilationStartAction(static start =>
-        {
-            var reactions = new ConcurrentBag<ReactionHandlers>();
-            var reported = new ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
-            start.RegisterSyntaxNodeAction(nodeContext =>
-            {
-                var invocation = (InvocationExpressionSyntax)nodeContext.Node;
-
-                if (nodeContext.SemanticModel.GetSymbolInfo(invocation, nodeContext.CancellationToken).Symbol is not
-                    IMethodSymbol target
-                    || !IsReactionDispatch(target)
-                    || invocation.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault() is not { } declaration
-                    || nodeContext.SemanticModel.GetDeclaredSymbol(declaration, nodeContext.CancellationToken) is not
-                    { IsAbstract: false } reactor
-                    || invocation.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault() is not
-                    { } handlerSyntax
-                    || nodeContext.SemanticModel.GetDeclaredSymbol(handlerSyntax, nodeContext.CancellationToken) is not
-                        IMethodSymbol handler
-                    || !IsReactorHandlerImplementation(reactor, handler)
-                    || !ApplicationProject.IsReactor(reactor))
-                    return;
-
-                var command = invocation.ArgumentList.Arguments
-                    .Select(argument => nodeContext.SemanticModel.GetTypeInfo(argument.Expression,
-                        nodeContext.CancellationToken).Type)
-                    .OfType<INamedTypeSymbol>()
-                    .FirstOrDefault(ApplicationProject.IsRequest);
-
-                if (command is null)
-                    return;
-
-                var current = new ReactionHandlers(reactor, [command]);
-                reactions.Add(current);
-
-                foreach (var other in reactions)
-                {
-                    if (SymbolEqualityComparer.Default.Equals(other.Reactor, reactor))
-                        continue;
-
-                    var lifecycle = LifecyclePair(command, other.Commands[0]);
-
-                    if (lifecycle is null)
-                        continue;
-
-                    var left = reactor.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    var right = other.Reactor.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    var key = StringComparer.Ordinal.Compare(left, right) < 0
-                        ? left + "|" + right
-                        : right + "|" + left;
-
-                    if (reported.TryAdd(key, 0))
-                        nodeContext.ReportDiagnostic(Diagnostic.Create(SplitDependentReactions,
-                            reactor.Locations.FirstOrDefault(), reactor.Name,
-                            command.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
-                            other.Reactor.Name,
-                            other.Commands[0].ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
-                            lifecycle));
-                }
-            }, SyntaxKind.InvocationExpression);
-        });
+        context.RegisterCompilationStartAction(RegisterSplitReactions);
         context.RegisterSyntaxNodeAction(static syntaxContext =>
         {
             // Every rule concerns a type that derives from or implements something. A partial part without a
@@ -296,21 +236,6 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
             }
     }
 
-    static string? LifecyclePair(INamedTypeSymbol left, INamedTypeSymbol right)
-    {
-        if (!SymbolEqualityComparer.Default.Equals(left.ContainingNamespace, right.ContainingNamespace))
-            return null;
-
-        var leftAction = ActionFor(left.Name, out var leftResource);
-        var rightAction = ActionFor(right.Name, out var rightResource);
-
-        return leftAction.HasValue && rightAction.HasValue
-                                  && leftAction != rightAction
-                                  && string.Equals(leftResource, rightResource, StringComparison.Ordinal)
-            ? rightResource
-            : null;
-    }
-
     static bool IsReactionDispatch(IMethodSymbol method)
     {
         method = method.ReducedFrom ?? method;
@@ -343,20 +268,6 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         return configuredTypes.Length == 0 ? DefaultReactorDependencies : configuredTypes;
     }
 
-    static bool? ActionFor(string name, out string resource)
-    {
-        foreach (var prefix in new[] { "Create", "Cancel" })
-        {
-            if (!name.StartsWith(prefix, StringComparison.Ordinal) || name.Length == prefix.Length)
-                continue;
-
-            resource = name.Substring(prefix.Length);
-            return prefix == "Create";
-        }
-
-        resource = "";
-        return null;
-    }
     static void ReportProjectorEffects(List<Finding> findings, INamedTypeSymbol symbol, IParameterSymbol[] parameters)
     {
         if (!ApplicationProject.IsProjector(symbol))
@@ -670,10 +581,6 @@ public sealed class ComponentPracticeAnalyzer : DiagnosticAnalyzer
         AuthorizerEffect,
         ReactorBodyPurity
     }
-
-    sealed record ReactionHandlers(
-        INamedTypeSymbol Reactor,
-        INamedTypeSymbol[] Commands);
 
     sealed class Finding(Kind kind, Location location, object[] arguments)
     {

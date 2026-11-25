@@ -51,34 +51,40 @@ public sealed class ScenarioObservationAnalyzer : DiagnosticAnalyzer
 
     static (Location Location, string TypeName)? Analyze(SyntaxNodeAnalysisContext context)
     {
-        var discarded = context.Node switch
+        var candidate = context.Node switch
         {
             ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
-                when assignment.IsKind(SyntaxKind.SimpleAssignmentExpression)
-                     && context.SemanticModel.GetOperation(assignment.Left, context.CancellationToken) is
-                         IDiscardOperation
-                => assignment.Right,
+                when assignment.IsKind(SyntaxKind.SimpleAssignmentExpression) => assignment.Right,
             ExpressionStatementSyntax statement => statement.Expression,
-            ArrowExpressionClauseSyntax arrow
-                when ReturnsVoid(arrow, context.SemanticModel, context.CancellationToken) => arrow.Expression,
-            LambdaExpressionSyntax { Body: ExpressionSyntax body } lambda
-                when context.SemanticModel.GetOperation(lambda, context.CancellationToken) is
-                    IAnonymousFunctionOperation
-                {
-                    Symbol.ReturnsVoid: true
-                } => body,
+            ArrowExpressionClauseSyntax arrow => arrow.Expression,
+            LambdaExpressionSyntax { Body: ExpressionSyntax body } => body,
             _ => null
         };
 
-        while (discarded is ParenthesizedExpressionSyntax parenthesized)
-            discarded = parenthesized.Expression;
+        while (candidate is ParenthesizedExpressionSyntax parenthesized)
+            candidate = parenthesized.Expression;
 
-        var expression = discarded is InvocationExpressionSyntax invocation && MayBeScenario(invocation)
-            ? invocation
-            : null;
+        if (candidate is not InvocationExpressionSyntax expression || !MayBeScenario(expression))
+            return null;
 
-        if (expression is null
-            || context.SemanticModel.GetTypeInfo(expression, context.CancellationToken).Type is not INamedTypeSymbol
+        var isDiscarded = context.Node switch
+        {
+            ExpressionStatementSyntax { Expression: AssignmentExpressionSyntax assignment }
+                when assignment.IsKind(SyntaxKind.SimpleAssignmentExpression) =>
+                    context.SemanticModel.GetOperation(assignment.Left, context.CancellationToken) is IDiscardOperation,
+            ExpressionStatementSyntax => true,
+            ArrowExpressionClauseSyntax arrow =>
+                ReturnsVoid(arrow, context.SemanticModel, context.CancellationToken),
+            LambdaExpressionSyntax { Body: ExpressionSyntax } lambda =>
+                context.SemanticModel.GetOperation(lambda, context.CancellationToken) is
+                    IAnonymousFunctionOperation { Symbol.ReturnsVoid: true },
+            _ => false
+        };
+
+        if (!isDiscarded)
+            return null;
+
+        if (context.SemanticModel.GetTypeInfo(expression, context.CancellationToken).Type is not INamedTypeSymbol
                 type
             || !SymbolNames.IsInNamespace(type, "Cntryl.Portia.Testing")
             || !type.GetMembers("GetAwaiter").OfType<IMethodSymbol>()

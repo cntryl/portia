@@ -412,6 +412,51 @@ public sealed class ApplicationBoundaryAnalyzerTests
         Assert.DoesNotContain(diagnostics, item => item.Id == "PORTIA212");
     }
 
+    [Fact]
+    public void ShouldKeepEachQueryCallsiteGivenRepeatedCallsThroughGenericCyclicHelpers()
+    {
+        // Arrange
+        var request = GeneratorCompilation.ReferenceNamed("Shop.Common",
+            "namespace Shop.Common.Features.Orders.Queries; public record FindOrder : Cntryl.Portia.IRequest;");
+        var calls = string.Join("\n", Enumerable.Range(0, 256).Select(_ => "            Helpers.First<Aggregate>(reader, ct);"));
+        var source = $$"""
+                     using Cntryl.Portia;
+                     using System.Threading;
+                     using System.Threading.Tasks;
+                     using Shop.Common.Features.Orders.Queries;
+                     public class FindOrderBase(IAggregateReader reader) : IRequestHandler<FindOrder>
+                     {
+                         ValueTask<Result> IRequestHandler<FindOrder>.HandleAsync(IRequestContext<FindOrder> context, CancellationToken ct)
+                         {
+                     {{calls}}
+                             return ValueTask.FromResult(Result.Success);
+                         }
+                     }
+                     public sealed class FindOrderHandler(IAggregateReader reader) : FindOrderBase(reader) { }
+                     public static class Helpers
+                     {
+                         public static void First<T>(IAggregateReader reader, CancellationToken ct) where T : Aggregate => Second<T>(reader, ct);
+                         static void Second<T>(IAggregateReader reader, CancellationToken ct) where T : Aggregate
+                         {
+                             if (ct.CanBeCanceled) First<T>(reader, ct);
+                             _ = reader.HydrateAsync<T>(default!, ct);
+                         }
+                     }
+                     """;
+
+        // Act
+        var diagnostics = ApplicationAnalyzerCompilation.Analyze("Shop.Core", new ApplicationBoundaryAnalyzer(),
+            [("Features/Orders/Handlers/FindOrderHandler.cs", source)], references: [request]);
+
+        // Assert
+        var hydrationDiagnostics = diagnostics.Where(item => item.Id == "PORTIA212").ToArray();
+        Assert.Equal(256, hydrationDiagnostics.Length);
+        Assert.Equal(256, hydrationDiagnostics.Select(item => item.Location.SourceSpan).Distinct().Count());
+        Assert.All(hydrationDiagnostics, diagnostic =>
+            Assert.StartsWith("Helpers.First<Aggregate>", source.Substring(diagnostic.Location.SourceSpan.Start),
+                StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData("Shop.Core", true)]
     [InlineData("Shop.Api", false)]

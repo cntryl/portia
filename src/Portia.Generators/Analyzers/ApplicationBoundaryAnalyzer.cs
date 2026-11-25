@@ -52,18 +52,19 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
 
             var registrations = new ConcurrentBag<(Location Location, string Feature)>();
             var registeredHandlers = new ConcurrentBag<INamedTypeSymbol>();
-            var invocations = new ConcurrentBag<(IMethodSymbol Caller, IMethodSymbol Target, Location Location, bool Hydrates)>();
+            var hydrationCalls = project.Role == "Core"
+                ? new HydrationCallGraph(start.Compilation, start.CancellationToken)
+                : null;
             start.RegisterCompilationEndAction(end =>
             {
                 AnalyzeDependencies(end, project);
                 ReportRegistrations(end, registrations);
                 ReportInternalRequestRegistrations(end, registeredHandlers);
 
-                if (project.Role == "Core")
-                    AnalyzeQueryHydration(end, invocations);
+                hydrationCalls?.Report(end);
             });
             start.RegisterOperationAction(operation =>
-                    AnalyzeInvocation(operation, project, registrations, registeredHandlers, invocations),
+                    AnalyzeInvocation(operation, project, registrations, registeredHandlers, hydrationCalls),
                 OperationKind.Invocation);
 
             if (project.Role is "Common" or "Core")
@@ -133,15 +134,17 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
         ApplicationProject project,
         ConcurrentBag<(Location Location, string Feature)> registrations,
         ConcurrentBag<INamedTypeSymbol> registeredHandlers,
-        ConcurrentBag<(IMethodSymbol Caller, IMethodSymbol Target, Location Location, bool Hydrates)> invocations
+        HydrationCallGraph? hydrationCalls
     )
     {
         var invocation = (IInvocationOperation)context.Operation;
         var method = invocation.TargetMethod.ReducedFrom ?? invocation.TargetMethod;
+        var hydrates = Hydrates(method);
 
-        if (project.Role == "Core" && context.ContainingSymbol is IMethodSymbol caller)
-            invocations.Add((caller.OriginalDefinition, method.OriginalDefinition, invocation.Syntax.GetLocation(),
-                Hydrates(method)));
+        if (hydrationCalls is not null && context.ContainingSymbol is IMethodSymbol caller)
+        {
+            hydrationCalls.Add(caller.OriginalDefinition, method.OriginalDefinition, invocation.Syntax, hydrates);
+        }
 
         if (project.Role == "Core" && IsComponentRegistration(method))
         {
@@ -167,7 +170,7 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
         }
 
 
-        if (!Hydrates(method) || context.ContainingSymbol.ContainingType is not { } component)
+        if (!hydrates || context.ContainingSymbol.ContainingType is not { } component)
             return;
 
         var query = ApplicationProject.Requests(component)
@@ -178,48 +181,83 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
                 method.Name));
     }
 
-    static void AnalyzeQueryHydration(
-        CompilationAnalysisContext context,
-        ConcurrentBag<(IMethodSymbol Caller, IMethodSymbol Target, Location Location, bool Hydrates)> invocations
-    )
+    sealed class HydrationCallGraph
     {
-        var edges = invocations.ToArray();
-        var byCaller = edges.GroupBy(edge => (ISymbol)edge.Caller, SymbolEqualityComparer.Default)
-            .ToDictionary(group => group.Key, group => group.ToArray(), SymbolEqualityComparer.Default);
+        readonly IAssemblySymbol _assembly;
+        readonly Dictionary<ISymbol, string> _queryEntries = [with(SymbolEqualityComparer.Default)];
+        readonly Dictionary<ISymbol, HashSet<ISymbol>> _callersByTarget = [with(SymbolEqualityComparer.Default)];
+        readonly HashSet<ISymbol> _reachesHydration = [with(SymbolEqualityComparer.Default)];
+        readonly List<(string Handler, IMethodSymbol Target, Location Site)> _queryCalls = [];
 
-        foreach (var type in context.Compilation.GetSymbolsWithName(_ => true, SymbolFilter.Type)
-                     .OfType<INamedTypeSymbol>())
+        public HydrationCallGraph(Compilation compilation, CancellationToken ct)
         {
-            if (type.DeclaringSyntaxReferences.Length == 0)
-                continue;
+            _assembly = compilation.Assembly;
 
-            var queryHandler = ApplicationProject.Requests(type).Any(request =>
-                ApplicationProject.IsContractIn(request.TypeArguments[0], "Queries"));
+            foreach (var type in compilation.GetSymbolsWithName(_ => true, SymbolFilter.Type, ct).OfType<INamedTypeSymbol>())
+            {
+                ct.ThrowIfCancellationRequested();
 
-            if (!queryHandler)
-                continue;
-
-            foreach (var request in ApplicationProject.Requests(type).Where(request =>
-                         ApplicationProject.IsContractIn(request.TypeArguments[0], "Queries")))
-                foreach (var member in request.GetMembers("HandleAsync").OfType<IMethodSymbol>())
-                {
-                    if (type.FindImplementationForInterfaceMember(member) is not IMethodSymbol handler
-                        || !byCaller.TryGetValue(handler.OriginalDefinition, out var roots))
-                        continue;
-
-                    foreach (var root in roots)
+                foreach (var contract in ApplicationProject.Requests(type).Where(request =>
+                             ApplicationProject.IsContractIn(request.TypeArguments[0], "Queries")))
+                    foreach (var member in contract.GetMembers("HandleAsync"))
                     {
-                        if (root.Hydrates)
-                            continue; // The operation pass already reported this direct call.
-
-                        var visited = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
-
-                        if (ReachesHydration(root.Target, byCaller, visited))
-                            context.ReportDiagnostic(Diagnostic.Create(Hydration, root.Location, type.Name,
-                                root.Target.Name));
+                        if (type.FindImplementationForInterfaceMember(member) is IMethodSymbol handler
+                            && (!_queryEntries.TryGetValue(handler.OriginalDefinition, out var alias)
+                                || string.CompareOrdinal(type.Name, alias) < 0))
+                            _queryEntries[handler.OriginalDefinition] = type.Name;
                     }
+            }
+        }
 
+        public void Add(IMethodSymbol caller, IMethodSymbol target, SyntaxNode syntax, bool hydrates)
+        {
+            if (_queryEntries.Count == 0 || (!hydrates && !SymbolEqualityComparer.Default.Equals(target.ContainingAssembly, _assembly)))
+                return;
+
+            lock (_callersByTarget)
+            {
+                if (hydrates)
+                {
+                    _reachesHydration.Add(caller);
+                    return;
                 }
+
+                if (!_callersByTarget.TryGetValue(target, out var callers))
+                    _callersByTarget.Add(target, callers = [with(SymbolEqualityComparer.Default)]);
+
+                callers.Add(caller);
+
+                if (_queryEntries.TryGetValue(caller, out var handler))
+                    _queryCalls.Add((handler, target, syntax.GetLocation()));
+            }
+        }
+
+        public void Report(CompilationAnalysisContext context)
+        {
+            if (_queryCalls.Count == 0 || _reachesHydration.Count == 0)
+                return;
+
+            var pending = new Queue<ISymbol>(_reachesHydration);
+
+            while (pending.Count > 0)
+            {
+                context.CancellationToken.ThrowIfCancellationRequested();
+
+                if (!_callersByTarget.TryGetValue(pending.Dequeue(), out var callers))
+                    continue;
+
+                foreach (var caller in callers)
+                    if (_reachesHydration.Add(caller))
+                        pending.Enqueue(caller);
+            }
+
+            foreach (var (handler, target, site) in _queryCalls)
+            {
+                context.CancellationToken.ThrowIfCancellationRequested();
+
+                if (_reachesHydration.Contains(target))
+                    context.ReportDiagnostic(Diagnostic.Create(Hydration, site, handler, target.Name));
+            }
         }
     }
 
@@ -242,20 +280,6 @@ public sealed class ApplicationBoundaryAnalyzer : DiagnosticAnalyzer
                 context.ReportDiagnostic(Diagnostic.Create(InternalRequestRegistration,
                     handler.Locations.FirstOrDefault(), handler.Name));
         }
-    }
-
-    static bool ReachesHydration(
-        IMethodSymbol method,
-        Dictionary<ISymbol, (IMethodSymbol Caller, IMethodSymbol Target, Location Location, bool Hydrates)[]> byCaller,
-        HashSet<ISymbol> visited
-    )
-    {
-        method = method.OriginalDefinition;
-
-        if (!visited.Add(method) || !byCaller.TryGetValue(method, out var outgoing))
-            return false;
-
-        return outgoing.Any(edge => edge.Hydrates || ReachesHydration(edge.Target, byCaller, visited));
     }
 
     static void ReportRegistrations(
