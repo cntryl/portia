@@ -1,6 +1,26 @@
 version: 2
 
 updates:
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: "Cntryl.Portia.*"
+    groups:
+      aws-sdk:
+        patterns:
+          - "AWSSDK.*"
+        update-types:
+          - minor
+          - patch
+      nuget-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+
   - package-ecosystem: github-actions
     directory: /
     schedule:
