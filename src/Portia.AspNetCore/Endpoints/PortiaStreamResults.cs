@@ -63,6 +63,7 @@ public static class PortiaStreamResults
             CancellationTokenSource source,
             HttpResponse response,
             TimeSpan? keepAlive,
+            TimeProvider clock,
             CancellationToken ct
         )
         {
@@ -83,7 +84,7 @@ public static class PortiaStreamResults
                 while (true)
                 {
                     using var idle = CancellationTokenSource.CreateLinkedTokenSource(ct);
-                    var elapsed = Task.Delay(interval, idle.Token);
+                    var elapsed = Task.Delay(interval, clock, idle.Token);
 
                     if (await Task.WhenAny(pending, elapsed).ConfigureAwait(false) == pending)
                     {
@@ -162,6 +163,9 @@ public static class PortiaStreamResults
             var keepAlive = sse
                 ? context.RequestServices.GetService<IOptions<PortiaHttpOptions>>()?.Value.ServerSentEventKeepAlive
                 : null;
+            var clock = keepAlive is null
+                ? TimeProvider.System
+                : context.RequestServices.GetService<TimeProvider>() ?? TimeProvider.System;
             // The source gets its own token so a failed keep-alive can stop it without aborting the
             // request; the request's cancellation still reaches it through the link.
             using var sourceLifetime = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -209,7 +213,7 @@ public static class PortiaStreamResults
 
                 first = false;
                 await response.Body.FlushAsync(ct).ConfigureAwait(false);
-                hasItem = await NextAsync(iterator, sourceLifetime, response, keepAlive, ct).ConfigureAwait(false);
+                hasItem = await NextAsync(iterator, sourceLifetime, response, keepAlive, clock, ct).ConfigureAwait(false);
             }
 
 

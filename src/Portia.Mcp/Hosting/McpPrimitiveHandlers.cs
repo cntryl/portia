@@ -67,8 +67,8 @@ static class McpPrimitiveHandlers
             return result;
         }
 
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(services.GetRequiredService<McpLimits>().OperationDeadline);
+        using var timeout = services.GetRequiredService<McpLimits>().StartOperationTimeout(services);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
         var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
         var visible = new List<Tool>(result.Tools.Count);
 
@@ -99,8 +99,8 @@ static class McpPrimitiveHandlers
         if (registration is null || registration.Access == McpAccess.Public)
             return await next(call, ct).ConfigureAwait(false);
 
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(services.GetRequiredService<McpLimits>().OperationDeadline);
+        using var timeout = services.GetRequiredService<McpLimits>().StartOperationTimeout(services);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
         bool visible;
 
         try
@@ -130,8 +130,8 @@ static class McpPrimitiveHandlers
     )
     {
         var services = Services(call);
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(services.GetRequiredService<McpLimits>().OperationDeadline);
+        using var timeout = services.GetRequiredService<McpLimits>().StartOperationTimeout(services);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
         var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
         var visible = new List<Resource>();
 
@@ -160,8 +160,8 @@ static class McpPrimitiveHandlers
     )
     {
         var services = Services(call);
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(services.GetRequiredService<McpLimits>().OperationDeadline);
+        using var timeout = services.GetRequiredService<McpLimits>().StartOperationTimeout(services);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
         var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
         var visible = new List<ResourceTemplate>();
 
@@ -225,8 +225,8 @@ static class McpPrimitiveHandlers
         using var receive = PortiaTelemetry.StartProcess(entry?.Template ?? "unknown",
             new McpResourceInvocation(entry?.Template ?? "unknown"), PortiaTelemetry.CaptureTraceContext(),
             receivedTraceContext: false);
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(limits.OperationDeadline);
+        using var timeout = limits.StartOperationTimeout(services);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
 
         try
         {
@@ -301,8 +301,8 @@ static class McpPrimitiveHandlers
     )
     {
         var services = Services(call);
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(services.GetRequiredService<McpLimits>().OperationDeadline);
+        using var timeout = services.GetRequiredService<McpLimits>().StartOperationTimeout(services);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
         var actor = await ActorAsync(call, deadline.Token).ConfigureAwait(false);
         var visible = new List<Prompt>();
 
@@ -344,8 +344,8 @@ static class McpPrimitiveHandlers
         using var receive = PortiaTelemetry.StartProcess(entry?.Name ?? "unknown",
             new McpPromptInvocation(entry?.Name ?? "unknown"), PortiaTelemetry.CaptureTraceContext(),
             receivedTraceContext: false);
-        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        deadline.CancelAfter(limits.OperationDeadline);
+        using var timeout = limits.StartOperationTimeout(services);
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct, timeout.Token);
 
         try
         {

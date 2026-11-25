@@ -67,6 +67,9 @@ public sealed class McpLimits
 
     /// <summary>Maximum operation duration.</summary>
     public TimeSpan OperationDeadline { get; set; } = TimeSpan.FromMinutes(2);
+
+    internal CancellationTokenSource StartOperationTimeout(IServiceProvider? services) =>
+        new(OperationDeadline, services?.GetService<TimeProvider>() ?? TimeProvider.System);
 }
 
 /// <summary>A Portia-owned prompt message.</summary>

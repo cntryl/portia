@@ -52,17 +52,22 @@ public sealed class ServerSentEventTests : IAsyncDisposable
     ///     browsers between it and the caller will reclaim a connection they consider dead.
     /// </summary>
     [Fact]
-    public async Task ShouldSendKeepAliveCommentsGivenIdleStream()
+    public async Task ShouldSendKeepAliveCommentsGivenIdleStreamWhenHostClockAdvances()
     {
         // Arrange
-        var client = await StartAsync(TimeSpan.FromMilliseconds(50));
-
-        using var response = await client.GetAsync("/events", HttpCompletionOption.ResponseHeadersRead, TestContext.Current.CancellationToken);
+        var clock = new ManualTestClock();
+        var interval = TimeSpan.FromHours(1);
+        var client = await StartAsync(interval, clock);
+        var ct = TestContext.Current.CancellationToken;
+        using var response = await client.GetAsync("/events", HttpCompletionOption.ResponseHeadersRead, ct);
+        var scheduled = await clock.WaitForDelayAsync(ct);
 
         // Act
+        clock.Advance(interval);
         var body = await ReadUntilAsync(response, ":\n\n");
 
         // Assert
+        Assert.Equal(interval, scheduled);
         Assert.Contains(":\n\n", body, StringComparison.Ordinal);
     }
 
@@ -155,7 +160,7 @@ public sealed class ServerSentEventTests : IAsyncDisposable
         return text.ToString();
     }
 
-    async Task<HttpClient> StartAsync(TimeSpan? keepAlive)
+    async Task<HttpClient> StartAsync(TimeSpan? keepAlive, TimeProvider? timeProvider = null)
     {
         var builder = WebApplication.CreateBuilder();
         _ = builder.WebHost.UseTestServer();
@@ -163,6 +168,10 @@ public sealed class ServerSentEventTests : IAsyncDisposable
         _ = builder.Services.AddSingleton<IPermissionEvaluator>(TestPermissionEvaluator.AllowAll());
         _ = builder.Services.Configure<PortiaHttpOptions>(options =>
             options.ServerSentEventKeepAlive = keepAlive);
+
+        if (timeProvider is not null)
+            _ = builder.Services.AddSingleton(timeProvider);
+
         _app = builder.Build();
         _ = _app.MapPortiaGetSse<HttpStallingStream, string>("/events");
         await _app.StartAsync();
