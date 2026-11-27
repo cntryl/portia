@@ -2,7 +2,9 @@ name: Temporary Linux Arm64 Runtime Async pilot
 on:
   push:
     branches: [qual/linux-arm64-actions]
-    paths: [.github/workflows/temp-linux-arm64-runtime-pilot.yml]
+    paths:
+      - .github/workflows/temp-linux-arm64-runtime-pilot.yml
+      - bench/Portia.Benchmarks/build-runtime-async-comparison.sh
   workflow_dispatch:
 permissions:
   contents: read
