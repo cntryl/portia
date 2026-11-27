@@ -58,10 +58,13 @@ The controller requires a ten-second idle preflight and a one-second quiet inter
 worker. It samples host CPU/memory/thermal/power state while each managed worker runs, subtracting
 worker and controller CPU from observed host activity. Background CPU over 10%, increased swap,
 memory/thermal pressure, low-power mode or unavailable required telemetry stop collection. Rejected
-observations and already completed samples remain in the raw log. Linux supports counter inspection
-and correctness verification; thermal telemetry is currently unavailable there, so it cannot pass
-this reference-host timing policy. SDK subprocess workloads need separate process-tree accounting.
-The strict timing policy currently covers managed Roslyn workers.
+observations and already completed samples remain in the raw log. For a Linux Arm64 VM,
+set `PORTIA_COMPILER_HOST_POLICY=linux-arm64-vm` to use the explicitly recorded
+`linux-arm64-vm-1` policy. Guest thermal telemetry is unavailable. CPU, memory, swap,
+and throttling checks still apply. A short worker exit tail is included in the preceding
+accepted counter interval rather than evaluated on its own. Keep evidence and verdicts
+separate from the macOS reference host. SDK subprocess workloads need separate process-tree
+accounting. The strict timing policy currently covers managed Roslyn workers.
 
 Run a bounded diagnostic A/A comparison using two processes per pair:
 
