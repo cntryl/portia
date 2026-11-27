@@ -1,10 +1,1 @@
 #nullable enable
-Cntryl.Portia.CassiePasswordProviderOptions
-Cntryl.Portia.CassiePasswordProviderOptions.CassiePasswordProviderOptions() -> void
-Cntryl.Portia.CassiePasswordProviderOptions.CheckpointTable.get -> string!
-Cntryl.Portia.CassiePasswordProviderOptions.CheckpointTable.init -> void
-Cntryl.Portia.CassiePasswordProviderOptions.ConnectionString.get -> string!
-Cntryl.Portia.CassiePasswordProviderOptions.ConnectionString.init -> void
-Cntryl.Portia.CassiePasswordProviderOptions.PasswordProvider.get -> System.Func<System.IServiceProvider!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<string!>>!
-Cntryl.Portia.CassiePasswordProviderOptions.PasswordProvider.init -> void
-static Cntryl.Portia.CassiePortiaBuilderExtensions.AddCassie(this Cntryl.Portia.PortiaBuilder! builder, Cntryl.Portia.CassiePasswordProviderOptions! options) -> Cntryl.Portia.PortiaBuilder!

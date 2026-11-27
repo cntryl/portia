@@ -4,6 +4,14 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.17.0
+
+### Added
+
+- Cassie projections support passwords obtained from the host on each physical connection, including
+  short-lived AWS IAM credentials. Pass `CassiePasswordProviderOptions` to `AddCassie()` with a
+  passwordless connection string. Reusing a pooled session skips the callback.
+
 ## 0.15.1
 
 ### Added
