@@ -103,3 +103,61 @@ does. Save the overlay diff as part of the run provenance.
 The later #302 closure at `ffee223df15865352896b6343783e744c89532ba` has additional status
 changes and bumps Fitz to 4.3.1. A comparison that includes that revision measures both changes
 unless the Fitz dependency is explicitly held constant and the resulting build is recorded.
+
+### Analyze a campaign offline
+
+Record an A/A pilot in its own manifest, using the same revision and overlay on both sides.
+Use at least six independent pairs with equal numbers of baseline-first and candidate-first
+pairs. Keep one campaign's accepted machine and environment fixed. Before recording A/B runs,
+freeze the thresholds and references to the host acceptance evidence. Record process start
+times when launching each process. Put the accepted pairs in launch order. Keep rejected runs,
+their host records, overlay diffs, and build manifests alongside this manifest.
+
+For example, this shows one entry from the manifest. Add the other pairs in the same shape.
+The margins shown are examples. Choose them before the campaign, using the pilot as evidence.
+
+```json
+{
+  "policy": {
+    "declaredUtc": "2026-01-01T00:00:00Z",
+    "baselineRevision": "7fc296a962568c1fa3d40906e5ca9705e738addb",
+    "candidateRevision": "38886f1da27351b26774e8333dae015998c35f0e",
+    "harnessRevision": "bd09deb446c28c5dc2c5f792ec350efeda931353",
+    "baselineOverlaySha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "candidateOverlaySha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "hostAcceptance": "path to frozen host policy",
+    "marginsPercent": { "throughput": 5, "tailLatency": 10, "recoveryTime": 5 }
+  },
+  "pairs": [
+    {
+      "first": "baseline",
+      "hostAccepted": true,
+      "hostEvidence": "host/pair-01.json",
+      "baseline": { "artifact": "baseline-01.json", "startedUtc": "2026-01-01T01:00:00Z" },
+      "candidate": { "artifact": "candidate-01.json", "startedUtc": "2026-01-01T01:05:00Z" }
+    }
+  ]
+}
+```
+
+Replace the example overlay identifiers with the actual hashes. Artifact paths
+are relative to the manifest. The analyzer records them and their SHA-256 hashes in the result.
+Review the referenced host evidence and build provenance before admitting a pair. The analyzer
+checks run order, policy timestamps, environment, matrix coverage, sample counts and distinct
+Fitz realms. Host acceptance and overlay hashes are recorded inputs to that review.
+
+```sh
+python3 bench/operational-worker/compare.py artifacts/operational-worker/campaign.json \
+  > artifacts/operational-worker/comparison.json
+```
+
+The result computes raw-sample p95/p99 for normal publish-to-commit and for each phase's
+status queries. It also measures normal and recovery throughput and recovery elapsed time.
+Each process contributes one summary per metric and cell. Positive paired deterioration
+means slower latency or recovery, or lower throughput. For each median, the analyzer reports
+a two-sided sign-test interval with at least 95% coverage, treating pairs as independent.
+The interval is per metric and cell. A whole interval at or below the margin is
+`within_margin`, a whole interval above it is `exceeds_margin`, and an interval crossing it
+is `inconclusive`. At six pairs the interval covers the entire observed range. Collect more
+pairs when noise makes the result inconclusive. Use the raw checkpoint, journal, byte and retry
+counts to investigate differences after the paired comparison.
