@@ -24,6 +24,55 @@ public sealed class CompilerCancellationProbeTests
         Assert.True(observation.WorkspaceUnchanged);
     }
 
+    [Theory]
+    [InlineData("discover")]
+    [InlineData("discover-cached")]
+    [InlineData("preview")]
+    [InlineData("compute")]
+    public async Task ShouldMatchUninterruptedFixGivenCanceledRequestWhenRetriedOnSameWorkspace(string stage)
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        var spec = new CaseSpec("fixes", stage, "json-add");
+        using var canceled = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        using var operation = await BenchmarkCase.PrepareAsync(spec, "minimal", canceled.Token);
+        using var fresh = await BenchmarkCase.PrepareAsync(spec, "minimal", ct);
+        await canceled.CancelAsync();
+        var cancellation = await Record.ExceptionAsync(async () => await operation.ExecuteAsync());
+        await fresh.ExecuteAsync();
+        var expected = await fresh.VerifyAsync();
+
+        // Act
+        var retried = await operation.RetryCodeFixAsync(ct);
+
+        // Assert
+        Assert.IsAssignableFrom<OperationCanceledException>(cancellation);
+        Assert.Equal(expected, retried);
+        Assert.True(operation.WorkspaceUnchanged());
+    }
+
+    [Fact]
+    public async Task ShouldRejectRetryGivenDifferentVerifiedOutputWhenCanceledFixSettles()
+    {
+        // Arrange
+        var ct = TestContext.Current.CancellationToken;
+        var expected = new Evidence("control", 0, 0, 0, "probe");
+        Task<BenchmarkCase> Prepare(CancellationToken token) => Task.FromResult(
+            new BenchmarkCase(() => new ValueTask(Task.Delay(Timeout.Infinite, token)),
+                () => Task.FromResult(expected), workspaceUnchanged: () => true,
+                retryCodeFix: _ => Task.FromResult(expected with { OutputHash = "retry" })));
+        Task<BenchmarkCase> Control(CancellationToken _) => Task.FromResult(
+            new BenchmarkCase(() => ValueTask.CompletedTask, () => Task.FromResult(expected)));
+
+        // Act
+        var observation = await CancellationProbe.RunTrialAsync(Prepare, 0, ct, Control);
+
+        // Assert
+        Assert.Equal("canceled-after-entry", observation.Status);
+        Assert.False(observation.RetryMatchesControl);
+        Assert.Contains("differed", observation.Error, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task ShouldReportWorkspacePublicationGivenCanceledComputationWithSideEffect()
     {

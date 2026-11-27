@@ -327,6 +327,11 @@ an unchanged slow baseline does not satisfy responsiveness qualification. For sc
 growth faster than the modeled input/output work and investigate the trace rather than declaring
 all operations must scale linearly. Reference search and reachable contract graphs have distinct axes.
 
+For settled non-mutating code-fix cancellations, retry using the same workspace and compare the
+verified output to an independent uninterrupted request. Record workspace identity and output
+parity separately from cancellation response time. Requests that complete successfully during
+cancellation provide no retry evidence. Callback-level cancellation still requires separate coverage.
+
 ## Host controls and artifacts
 
 Qualification starts on one dedicated macOS Arm64 machine, then repeats the combined cases on
