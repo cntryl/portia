@@ -6,6 +6,7 @@ on:
       - .github/workflows/temp-linux-arm64-qualification.yml
       - bench/Portia.CompilerBenchmarks/**
       - bench/operational-worker/**
+      - bench/Portia.Benchmarks/Operations/OperationalWorker*.cs
   workflow_dispatch:
 permissions:
   contents: read

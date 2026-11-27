@@ -291,7 +291,7 @@ static class OperationalWorkerBenchmark
     {
         using var probes = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var samples = new ConcurrentQueue<StatusSample>();
-        await Task.WhenAll(hosts.Select(host => host.ReadStatusAsync(probes.Token)));
+        await Task.WhenAll(hosts.Select(host => host.ReadStatusAsync(ct)));
         var statusTask = StatusLoopAsync();
         var started = Stopwatch.GetTimestamp();
         OperationalProcessorState[] states;
@@ -320,7 +320,9 @@ static class OperationalWorkerBenchmark
 
         async Task ObserveAsync(JournalBenchmarkHost host)
         {
-            var latency = await host.ReadStatusAsync(probes.Token);
+            // Stop scheduling probes at the phase boundary. Let started requests finish so
+            // probe shutdown cannot cancel a send on the shared Fitz transport.
+            var latency = await host.ReadStatusAsync(ct);
             samples.Enqueue(new StatusSample(host.Workload.Name, latency));
         }
 
