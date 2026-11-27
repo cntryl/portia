@@ -3,7 +3,7 @@ using System.Diagnostics;
 namespace Cntryl.Portia.CompilerBenchmarks;
 
 sealed record CancellationObservation(string Status, double? CancelToEndMilliseconds, string? Error,
-    bool? WorkspaceUnchanged = null);
+    bool? WorkspaceUnchanged = null, bool? RetryMatchesControl = null);
 sealed record CancellationReport(string Case, string Size, CancellationObservation[] Observations, string Detail,
     ToolingIdentity Identity, string FixtureHash);
 
@@ -12,7 +12,8 @@ static class CancellationProbe
     internal static async Task<CancellationObservation> RunTrialAsync(
         Func<CancellationToken, Task<BenchmarkCase>> prepare,
         int delay,
-        CancellationToken ct
+        CancellationToken ct,
+        Func<CancellationToken, Task<BenchmarkCase>>? prepareControl = null
     )
     {
         if (delay is < 0 or > 1000)
@@ -68,7 +69,26 @@ static class CancellationProbe
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
             {
-                return CheckWorkspace(new("canceled-after-entry", Stopwatch.GetElapsedTime(start).TotalMilliseconds, null));
+                var observation = CheckWorkspace(
+                    new("canceled-after-entry", Stopwatch.GetElapsedTime(start).TotalMilliseconds, null));
+
+                if (observation.WorkspaceUnchanged != true || prepareControl is null)
+                    return observation;
+
+                var check = CheckRetryAsync(observation);
+                pending = check;
+
+                try
+                {
+                    return await check.WaitAsync(TimeSpan.FromSeconds(10), ct).ConfigureAwait(false);
+                }
+                catch (TimeoutException)
+                {
+                    return observation with
+                    {
+                        Error = "Same-workspace retry verification did not finish within ten seconds."
+                    };
+                }
             }
             catch (Exception error)
             {
@@ -103,6 +123,30 @@ static class CancellationProbe
             };
         }
 
+        async Task<CancellationObservation> CheckRetryAsync(CancellationObservation observation)
+        {
+            try
+            {
+                var retry = await operation!.RetryCodeFixAsync(ct).ConfigureAwait(false);
+                using var control = await prepareControl!(ct).ConfigureAwait(false);
+                await control.ExecuteAsync().ConfigureAwait(false);
+                var expected = await control.VerifyAsync().ConfigureAwait(false);
+                var unchanged = operation.WorkspaceUnchanged();
+                return retry == expected && unchanged == true
+                    ? observation with { RetryMatchesControl = true }
+                    : observation with
+                    {
+                        WorkspaceUnchanged = unchanged,
+                        RetryMatchesControl = false,
+                        Error = "The same-workspace retry differed from the uninterrupted code fix."
+                    };
+            }
+            catch (Exception error) when (!ct.IsCancellationRequested)
+            {
+                return observation with { RetryMatchesControl = false, Error = error.ToString() };
+            }
+        }
+
         void DisposeResources()
         {
             using (cancellation)
@@ -132,7 +176,8 @@ static class CancellationProbe
         for (var i = 0; i < trials; i++)
         {
             ct.ThrowIfCancellationRequested();
-            var result = await RunTrialAsync(token => BenchmarkCase.PrepareAsync(spec, size, token), delay, ct)
+            Task<BenchmarkCase> PrepareAsync(CancellationToken token) => BenchmarkCase.PrepareAsync(spec, size, token);
+            var result = await RunTrialAsync(PrepareAsync, delay, ct, spec.Kind == "fixes" ? PrepareAsync : null)
                 .ConfigureAwait(false);
             results.Add(result);
             Console.Error.WriteLine(System.Text.Json.JsonSerializer.Serialize(result, Campaign.Json));
@@ -142,7 +187,7 @@ static class CancellationProbe
         }
 
         return new CancellationReport(spec.Id, size, results.ToArray(),
-            "Cancellation requested after public request entry; not a claim about a specific callback. Completed-before-cancel requests are separate. Five-second response watchdog. Latencies diagnostic until collected on an accepted host. Settled code-fix trials verify unchanged workspace identity; explicit apply is excluded.",
+            "Cancellation requested after public request entry; not a claim about a specific callback. Completed-before-cancel requests are separate. Five-second response watchdog. Latencies diagnostic until collected on an accepted host. Settled code-fix trials verify unchanged workspace identity. Canceled code-fix requests are retried on that workspace and compared with an independent uninterrupted control outside the response timer. Explicit apply is excluded.",
             Campaign.Identity(), Campaign.FixtureHash(spec, size));
     }
 }

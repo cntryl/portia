@@ -167,6 +167,10 @@ allows post-100 managed growth of max(10%, 8 MiB) and at most two retired output
 are smoke checks, never retention qualification. Interrupted sessions preserve their checkpoints.
 This probe does not yet cover workspace/code-fix cache retention.
 
+Canceled non-mutating code-fix requests retry on the same workspace and compare exact verified output
+against an independent uninterrupted control. The retry and control run outside the cancellation response
+timer. A request that completes before or during cancellation does not count as retry evidence.
+
 Cancellation is requested after entry to the public benchmark request, with a five-second watchdog;
 it does not establish entry into a particular generator callback. Reports distinguish requests that
 finished before cancellation, canceled requests and requests that completed after cancellation.
@@ -183,7 +187,7 @@ components/actions, stale/overbroad output changes and nonfinite comparisons, an
 made on asynchronous worker threads. Ordinary CI runs correctness verification, not timing gates.
 
 The remaining design work includes more reference and metadata variations,
-code-fix cache retention, callback-level cancellation and same-state retry checks, SDK build measurements,
+code-fix cache retention and callback-level cancellation, SDK build measurements,
 profiling orchestration, and controlled qualification of the new session/first-load/editor paths. Analyzer workloads currently include explicit
 diagnostic controls and generated/prebound input; their totals are not a clean application's IDE
 latency. Until those remaining paths are implemented, use these results to investigate

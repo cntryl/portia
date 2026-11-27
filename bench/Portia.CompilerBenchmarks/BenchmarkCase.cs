@@ -61,7 +61,7 @@ sealed record Sample(
     double VerificationMilliseconds = 0);
 
 sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>> verify, IDisposable? owner = null,
-    Func<bool>? workspaceUnchanged = null)
+    Func<bool>? workspaceUnchanged = null, Func<CancellationToken, Task<Evidence>>? retryCodeFix = null)
     : IDisposable
 {
     static readonly string[] CombinedAnalyzerDiagnostics =
@@ -87,6 +87,11 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
     public void Dispose() => owner?.Dispose();
 
     public bool? WorkspaceUnchanged() => workspaceUnchanged?.Invoke();
+
+    internal Task<Evidence> RetryCodeFixAsync(CancellationToken ct) =>
+        _executed == 1 && !_completed && retryCodeFix is not null
+            ? retryCodeFix(ct)
+            : throw new InvalidOperationException("The probe must first attempt a non-mutating code fix.");
 
     public static async Task<BenchmarkCase> PrepareAsync(CaseSpec spec, string size, CancellationToken ct = default) =>
         spec.Kind switch
@@ -364,54 +369,67 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
                 operations = await action!.GetOperationsAsync(ct).ConfigureAwait(false);
 
             var original = fixture.Workspace.CurrentSolution;
-            return new BenchmarkCase(async () =>
+            var retryable = spec.Operation is "discover" or "discover-cached" or "preview" or "compute";
+            return new BenchmarkCase(() => ExecuteFixAsync(ct), () => VerifyFixAsync(ct), fixture,
+                () => ReferenceEquals(original, fixture.Workspace.CurrentSolution),
+                retryable ? RetryAsync : null);
+
+            async Task<Evidence> RetryAsync(CancellationToken token)
+            {
+                await ExecuteFixAsync(token).ConfigureAwait(false);
+                return await VerifyFixAsync(token).ConfigureAwait(false);
+            }
+
+            async ValueTask ExecuteFixAsync(CancellationToken token)
             {
                 switch (spec.Operation)
                 {
                     case "discover":
                     case "discover-cached":
-                        action = await fixture.DiscoverAsync(ct).ConfigureAwait(false);
+                        action = await fixture.DiscoverAsync(token).ConfigureAwait(false);
                         break;
                     case "preview":
-                        operations = await action!.GetPreviewOperationsAsync(ct).ConfigureAwait(false);
+                        operations = await action!.GetPreviewOperationsAsync(token).ConfigureAwait(false);
                         break;
                     case "compute":
-                        operations = await action!.GetOperationsAsync(ct).ConfigureAwait(false);
+                        operations = await action!.GetOperationsAsync(token).ConfigureAwait(false);
                         break;
                     case "fix-all":
-                        action = await fixture.FixAllAsync(action!, FixAllScope.Project, ct).ConfigureAwait(false)
+                        action = await fixture.FixAllAsync(action!, FixAllScope.Project, token).ConfigureAwait(false)
                                  ?? throw new InvalidOperationException("Fix All was not offered.");
-                        operations = await action.GetOperationsAsync(ct).ConfigureAwait(false);
+                        operations = await action.GetOperationsAsync(token).ConfigureAwait(false);
                         break;
                     case "complete":
-                        action = await fixture.DiscoverAsync(ct).ConfigureAwait(false);
-                        _ = await action.GetPreviewOperationsAsync(ct).ConfigureAwait(false);
-                        operations = await action.GetOperationsAsync(ct).ConfigureAwait(false);
+                        action = await fixture.DiscoverAsync(token).ConfigureAwait(false);
+                        _ = await action.GetPreviewOperationsAsync(token).ConfigureAwait(false);
+                        operations = await action.GetOperationsAsync(token).ConfigureAwait(false);
                         goto case "apply";
                     case "apply":
                         foreach (var operation in operations)
-                            operation.Apply(fixture.Workspace, ct);
+                            operation.Apply(fixture.Workspace, token);
                         changed = fixture.Workspace.CurrentSolution;
                         if (spec.Operation == "complete")
-                            _ = await fixture.RefreshAsync(changed, ct).ConfigureAwait(false);
+                            _ = await fixture.RefreshAsync(changed, token).ConfigureAwait(false);
                         break;
                     default:
                         throw new ArgumentException("Unknown code fix stage: " + spec.Operation, nameof(spec));
                 }
-            }, async () =>
+            }
+
+            async Task<Evidence> VerifyFixAsync(CancellationToken token)
             {
                 if (spec.Operation is "discover" or "discover-cached")
-                    operations = await action!.GetOperationsAsync(ct).ConfigureAwait(false);
+                    operations = await action!.GetOperationsAsync(token).ConfigureAwait(false);
 
                 changed ??= operations.OfType<ApplyChangesOperation>().SingleOrDefault()?.ChangedSolution
                             ?? throw new InvalidOperationException("Action produced no solution change.");
-                await fixture.VerifyAsync(changed, ct).ConfigureAwait(false);
+                await fixture.VerifyAsync(changed, token).ConfigureAwait(false);
                 var texts = new Dictionary<string, string>(StringComparer.Ordinal);
 
                 foreach (var project in changed.Projects)
                     foreach (var document in project.Documents)
                         texts.Add(project.Name + "/" + document.Name,
-                            (await document.GetTextAsync(ct).ConfigureAwait(false)).ToString());
+                            (await document.GetTextAsync(token).ConfigureAwait(false)).ToString());
 
                 return Snapshot(texts, fixture.DiagnosticCount,
                     "fresh AdhocWorkspace/project; diagnostics already bound; "
@@ -420,7 +438,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
                         : "first discovery or prepared action")
                     + (spec.Operation == "complete" ? "; diagnostic refresh included; " : "; refresh outside timer; ") +
                     spec.Operation);
-            }, fixture, () => ReferenceEquals(original, fixture.Workspace.CurrentSolution));
+            }
         }
         catch
         {
