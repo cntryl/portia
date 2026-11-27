@@ -261,6 +261,13 @@ jobs:
           dotnet run --project smoke/Portia.AspNetCore.PackageConsumer/Portia.AspNetCore.PackageConsumer.csproj \
             --configuration Release -p:PortiaSmokePackageVersion="$portia_version"
 
+      - name: Test packed Cassie registration
+        shell: bash
+        run: |
+          portia_version="$(dotnet msbuild src/Portia.Cassie/Portia.Cassie.csproj -getProperty:PackageVersion -nologo)"
+          dotnet run --project smoke/Portia.Cassie.PackageConsumer/Portia.Cassie.PackageConsumer.csproj \
+            --configuration Release -p:PortiaSmokePackageVersion="$portia_version"
+
       - name: Publish and test packed NativeAOT HTTP consumer
         shell: bash
         run: |

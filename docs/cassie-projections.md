@@ -1,7 +1,7 @@
 # Cassie projection repositories
 
 `Cntryl.Portia.Cassie` connects Portia projectors to Cassie's native SQL transactions through
-`Cntryl.Cassie` 0.2.1. A repository owns persistence and queries. A read model is the simple data
+`Cntryl.Cassie`. A repository owns persistence and queries. A read model is the simple data
 contract returned by those queries. A projector applies committed events through the repository.
 
 ## Composition
@@ -35,6 +35,11 @@ CREATE TABLE account_balances (
     balance_cents BIGINT NOT NULL
 );
 ```
+
+For Cassie AWS IAM authentication, omit `Password` and call
+`AddCassie((services, token) => ..., connectionString)`. Resolve the credential provider
+from the host service provider and pass the cancellation token to it. The callback can run
+concurrently for new physical connections. Use certificate-verified TLS.
 
 ## Data and repository
 

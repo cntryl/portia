@@ -3,7 +3,7 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
-    <PackageVersion Include="Cntryl.Cassie" Version="0.3.0" />
+    <PackageVersion Include="Cntryl.Cassie" Version="0.4.0" />
     <PackageVersion Include="JsonSchema.Net" Version="9.7.0" />
     <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="AWSSDK.KeyManagementService" Version="4.1.1.1" />

@@ -84,6 +84,60 @@ public sealed partial class CassieProjectionMisuseTests
         Assert.Contains("'Probe'", error.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>Rejects competing authentication settings before any services are registered.</summary>
+    [Fact]
+    public void ShouldRejectFixedPasswordGivenProviderWhenRegisteringCassie()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var builder = services.AddPortia();
+
+        // Act
+        var failure = Record.Exception(() => builder.AddCassie(
+            static (_, _) => ValueTask.FromResult("unused-token"), UnreachableServer));
+
+        // Assert
+        var error = Assert.IsType<ArgumentException>(failure);
+        Assert.Equal("connectionString", error.ParamName);
+        Assert.DoesNotContain(services, descriptor => descriptor.ServiceType == typeof(CassieDataSource));
+    }
+
+    /// <summary>Uses the host service provider to obtain the callback on physical opens.</summary>
+    [Fact]
+    public async Task ShouldResolveProviderFromHostGivenPasswordlessRegistrationWhenConnectionOpens()
+    {
+        // Arrange
+        const string passwordless = "Host=127.0.0.1;Port=1;Database=postgres;Username=cassie_aws_iam";
+        var services = new ServiceCollection();
+        var probe = new PasswordProviderProbe();
+        _ = services.AddSingleton(probe);
+        _ = services.AddPortia().AddCassie(
+            static (host, token) => host.GetRequiredService<PasswordProviderProbe>().GetPassword(token), passwordless);
+        await using var host = services.BuildServiceProvider();
+        var source = host.GetRequiredService<CassieDataSource>();
+        await using var connection = source.CreateConnection();
+
+        // Act
+        var failure = await Record.ExceptionAsync(() => connection.OpenAsync(TestContext.Current.CancellationToken));
+
+        // Assert
+        _ = Assert.IsType<InvalidOperationException>(failure);
+        Assert.Equal(1, probe.Calls);
+        Assert.Equal(passwordless, source.ConnectionString);
+    }
+
+    sealed class PasswordProviderProbe
+    {
+        public int Calls { get; private set; }
+
+        public ValueTask<string> GetPassword(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Calls++;
+            return ValueTask.FromException<string>(new InvalidOperationException("Test provider failure."));
+        }
+    }
+
     static ProcessorFailureException Diagnose(Exception thrown) =>
         new(Identity, ProjectionCheckpoint.Start, ProcessorFailureStage.Handling, innerException: thrown);
 
