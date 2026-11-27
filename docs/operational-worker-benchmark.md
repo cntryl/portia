@@ -1,0 +1,105 @@
+# Hosted operational worker benchmark
+
+The [direct journal baseline](operational-journal-baseline.md) measures individual Fitz operations.
+The hosted benchmark measures actual Portia projector passes and operator status queries with
+a synchronous Fitz projection, journal, and lease coordination. Each run creates a separate Fitz
+realm for each row. Use a dedicated, disposable broker with local disk storage.
+
+## Build and run
+
+Use the same .NET 11 SDK, OS, hardware, and broker image digest for every run in a comparison.
+Use a fresh broker data directory for each process. Record the container image digest, storage
+mount type, and broker config along with the machine and SDK details; hold them constant. The
+example uses Docker's local writable layer and disables Fitz authentication on a loopback port.
+
+```sh
+fitz_image=ghcr.io/cntryl/fitz@sha256:6d4f121fd772c17ef059c15f8653488ae8466ed30c6e5ef789b01ce65e395f30
+
+docker run --rm -d --name portia-journal-benchmark -p 127.0.0.1:40939:4090 \
+  -e FITZ_ADMIN_AUTH_MODE=open -e FITZ_AUTH_REQUIRED=false -e FITZ_HTTP_PORT=4090 \
+  -e FITZ_STORAGE_MODE=local -e FITZ_STORAGE_PATH=/data/fitz -e FITZ_TCP_ENABLED=false \
+  "$fitz_image"
+
+dotnet build bench/Portia.Benchmarks -c Release
+revision="$(git rev-parse HEAD)"
+mkdir -p artifacts/operational-worker
+cp bench/Portia.Benchmarks/bin/Release/net11.0/Portia.Benchmarks.deps.json \
+  "artifacts/operational-worker/$revision.deps.json"
+dotnet --info > "artifacts/operational-worker/$revision.dotnet.txt"
+
+PORTIA_OPERATIONAL_WORKER=run \
+FITZ_TEST_ENDPOINT=ws://127.0.0.1:40939/ws \
+PORTIA_OPERATIONAL_WORKER_ARTIFACT="artifacts/operational-worker/$revision-01.json" \
+PORTIA_OPERATIONAL_WORKER_COMMIT="$revision" \
+PORTIA_OPERATIONAL_WORKER_SDK="$(dotnet --version)" \
+PORTIA_OPERATIONAL_WORKER_BROKER="$fitz_image" \
+PORTIA_OPERATIONAL_WORKER_MACHINE="CPU model, RAM, disk and host identifier" \
+  dotnet bench/Portia.Benchmarks/bin/Release/net11.0/Portia.Benchmarks.dll
+
+docker stop portia-journal-benchmark
+```
+
+For a setup and correctness smoke, use `PORTIA_OPERATIONAL_WORKER=smoke`. This runs one
+workload with four retained receipts and two healthy events. A full run covers the cross product
+of 4 and 128 retained receipts with 1 and 8 independent workloads. Each workload has its own
+source and native projection route. It gets 20 healthy events, followed by one event while a
+shared application dependency is unavailable. Workers exhaust their transient retry budgets with
+the broker still available. The dependency reopens only after all workloads are blocked. An
+operator then previews, approves, and queues exact repairs while status queries continue.
+
+## Read the artifacts
+
+Each row records phase elapsed time, native commit and status query latency samples, p50/p95/p99,
+commit throughput, retry starts, and worker checkpoint and journal call counts. Publish to
+commit latency starts just before the append. For the outage event it includes the outage and
+the operator delay. Recovery elapsed time starts when approval and queueing begin and ends when
+repaired projection and journal state have been verified. Outage retry starts are the repeated
+failed attempts after the first failure. Polls that did not invoke a retry contribute to pass
+counts.
+
+Worker journal reads and compare-and-exchange calls are logical store operations. Native
+checkpoint loads count explicit reads and native batches count opens that include a checkpoint
+read. Per-pass averages include empty and blocked passes between observations. The journal byte
+count is the exact Fitz JSON encoding of successful worker document writes, reconstructed
+outside each measured phase. It excludes keys, indexing, protocol overhead, and separate
+operator operations. Status queries use the application request bus, sample native progress and
+journal evidence, and run every 50 ms per workload as capacity allows. The readiness query
+before each phase and any cancelled final query are excluded from the latency distribution.
+
+The benchmark verifies all normal commits, both the native checkpoint and native model during
+the outage, every failed attempt's source and checkpoint, loss of the stale-owner write, and
+the exact repair's committed receipt and unique durable attempt IDs. It measures application
+dependency failure and recovery through the real broker. Network interruption, provider failover,
+process restart and reactors are outside this fixture. Probe and counter overhead and broker
+resource contention both contribute to the elapsed numbers. The results cannot establish which
+part of the broker spent time without further profiling.
+
+## Compare revisions
+
+Use the same benchmark source at each candidate and baseline source revision. Build from separate
+worktrees and preserve the exact harness patch hash for revisions that do not include the runner.
+Archive the output directory, dependency manifest, and host/provisioning details from each run
+using a different artifact filename. A stopped run may leave an `.incomplete` artifact with only
+its finished rows.
+
+Start with a repeated same revision comparison under an idle host. Before recording a comparison,
+write down the host acceptance criteria and an acceptable regression margin for elapsed recovery,
+commit throughput and tail latency. Run an equal number of independent baseline-first and
+candidate-first pairs. Treat each process run as one independent observation. Take paired ratios
+or differences per row and phase, and report intervals across pairs. Preserve rejected and
+incomplete runs separately. Use a focused provider or host profile before attributing a
+difference to serialization, checkpoints or retry scheduling. The direct journal baseline is a
+separate control for operation cost and its output is not comparable with the hosted timings.
+
+For the core reliability comparison, use `7fc296a962568c1fa3d40906e5ca9705e738addb` (before
+the #302 changes) and `38886f1da27351b26774e8333dae015998c35f0e` (after #310, #313, #314
+and #311). Both use Fitz client 4.3.0 with the same central dependency and build settings.
+Copy the hosted benchmark's two `OperationalWorker*.cs` files into each worktree and add
+the same worker-mode dispatch to each bench entry point. The baseline predates the direct
+journal runner, so omit that dispatch there. In the baseline's `Portia.Fitz.csproj`, give
+`Portia.Benchmarks` internal access to the exact Fitz serializer, as the candidate already
+does. Save the overlay diff as part of the run provenance.
+
+The later #302 closure at `ffee223df15865352896b6343783e744c89532ba` has additional status
+changes and bumps Fitz to 4.3.1. A comparison that includes that revision measures both changes
+unless the Fitz dependency is explicitly held constant and the resulting build is recorded.
