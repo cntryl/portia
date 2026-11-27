@@ -180,8 +180,8 @@ static class OperationalWorkerBenchmark
                     var failed = FailedAttempt(blockedState);
                     var plan = await host.QueueExactRepairAsync(failed, ct);
                     var cursor = new EventCursor(failed.Sources[0].NextCursor!);
-                    var repaired = await WaitAsync(host, s => s.Block is null && s.Checkpoint == cursor.Value &&
-                                               s.Repairs.Any(r => r.PlanId == plan.Id && r.Status == OperationalRepairStatuses.Committed), ct);
+                    var repaired = await WaitAsync(host, state => RepairFinished(state, plan.Id, cursor),
+                        ct, $"repair {plan.Id} to checkpoint {cursor.Value}");
                     var receipt = repaired.Repairs.Single(record => record.PlanId == plan.Id);
                     var attempt = repaired.Attempts.Single(record => record.Id == receipt.AttemptId);
 
@@ -223,18 +223,44 @@ static class OperationalWorkerBenchmark
     static OperationalAttempt FailedAttempt(OperationalProcessorState state) =>
         state.Attempts.Single(attempt => attempt.Id == state.Block!.AttemptId);
 
+    static bool RepairFinished(OperationalProcessorState state, Guid planId, EventCursor cursor)
+    {
+        var repair = state.Repairs.SingleOrDefault(record => record.PlanId == planId);
+
+        if (repair?.Status is OperationalRepairStatuses.Invalidated or OperationalRepairStatuses.Failed
+            or OperationalRepairStatuses.Indeterminate or OperationalRepairStatuses.Resumed)
+            throw new InvalidOperationException($"Repair {planId} for {state.Target.Processor} ended as {repair.Status} at checkpoint {state.Checkpoint}.");
+
+        return repair?.Status == OperationalRepairStatuses.Committed
+            && state.Block is null && state.Checkpoint == cursor.Value;
+    }
+
     static async Task<OperationalProcessorState> WaitAsync(
         JournalBenchmarkHost host,
         Func<OperationalProcessorState, bool> reached,
-        CancellationToken ct
+        CancellationToken ct,
+        string? waitingFor = null
     )
     {
-        while (true)
-        {
-            if (await host.RawStore.ReadAsync(host.Workload.Target, ct) is { } state && reached(state))
-                return state;
+        OperationalProcessorState? last = null;
 
-            await Task.Delay(10, ct);
+        try
+        {
+            while (true)
+            {
+                last = await host.RawStore.ReadAsync(host.Workload.Target, ct);
+
+                if (last is { } state && reached(state))
+                    return state;
+
+                await Task.Delay(10, ct);
+            }
+        }
+        catch (OperationCanceledException error) when (ct.IsCancellationRequested && waitingFor is not null)
+        {
+            var latest = last is { Repairs.Count: > 0 } ? last.Repairs[^1] : null;
+            throw new TimeoutException($"Timed out waiting for {waitingFor} on {host.Workload.Name}. "
+                + $"Last checkpoint={last?.Checkpoint}, block={last?.Block?.AttemptId}, repair={latest?.Status}, revision={last?.Revision}.", error);
         }
     }
 
@@ -284,7 +310,7 @@ static class OperationalWorkerBenchmark
             {
                 await statusTask;
             }
-            catch (OperationCanceledException) when (!ct.IsCancellationRequested && probes.IsCancellationRequested)
+            catch (OperationCanceledException) when (probes.IsCancellationRequested)
             {
             }
         }
