@@ -153,6 +153,24 @@ public sealed class CompilerBenchmarkHarnessTests
     }
 
     [Theory]
+    [InlineData("cold")]
+    [InlineData("body")]
+    public async Task ShouldVerifyPortiaOutputsGivenJsonGeneratorControl(string operation)
+    {
+        // Arrange
+        var spec = CaseSpec.All().Single(item => item.Id == "generators/portia-only/" + operation);
+        using var benchmark = await BenchmarkCase.PrepareAsync(spec, "minimal", TestContext.Current.CancellationToken);
+        await benchmark.ExecuteAsync();
+
+        // Act
+        var evidence = await benchmark.VerifyAsync();
+
+        // Assert
+        Assert.True(evidence.Files > 0);
+        Assert.Contains("System.Text.Json disabled", evidence.Detail, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("split")]
     [InlineData("rename")]
     [InlineData("namespace")]

@@ -2,7 +2,8 @@ using System.Diagnostics;
 
 namespace Cntryl.Portia.CompilerBenchmarks;
 
-sealed record CancellationObservation(string Status, double? CancelToEndMilliseconds, string? Error);
+sealed record CancellationObservation(string Status, double? CancelToEndMilliseconds, string? Error,
+    bool? WorkspaceUnchanged = null);
 sealed record CancellationReport(string Case, string Size, CancellationObservation[] Observations, string Detail,
     ToolingIdentity Identity, string FixtureHash);
 
@@ -39,11 +40,11 @@ static class CancellationProbe
                 try
                 {
                     await execution.ConfigureAwait(false);
-                    return new("completed-before-cancel", null, null);
+                    return CheckWorkspace(new("completed-before-cancel", null, null));
                 }
                 catch (Exception error)
                 {
-                    return new("faulted-before-cancel", null, error.ToString());
+                    return CheckWorkspace(new("faulted-before-cancel", null, error.ToString()));
                 }
             }
 
@@ -63,15 +64,15 @@ static class CancellationProbe
             try
             {
                 await pending.ConfigureAwait(false);
-                return new("completed-after-cancel", Stopwatch.GetElapsedTime(start).TotalMilliseconds, null);
+                return CheckWorkspace(new("completed-after-cancel", Stopwatch.GetElapsedTime(start).TotalMilliseconds, null));
             }
             catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
             {
-                return new("canceled-after-entry", Stopwatch.GetElapsedTime(start).TotalMilliseconds, null);
+                return CheckWorkspace(new("canceled-after-entry", Stopwatch.GetElapsedTime(start).TotalMilliseconds, null));
             }
             catch (Exception error)
             {
-                return new("faulted-after-cancel", Stopwatch.GetElapsedTime(start).TotalMilliseconds, error.ToString());
+                return CheckWorkspace(new("faulted-after-cancel", Stopwatch.GetElapsedTime(start).TotalMilliseconds, error.ToString()));
             }
         }
         finally
@@ -87,6 +88,20 @@ static class CancellationProbe
                 _ = DisposeWhenStoppedAsync(pending);
         }
 
+        CancellationObservation CheckWorkspace(CancellationObservation observation)
+        {
+            var unchanged = operation?.WorkspaceUnchanged();
+
+            if (unchanged is not false)
+                return observation with { WorkspaceUnchanged = unchanged };
+
+            const string publication = "Code-fix computation changed the workspace before an explicit apply.";
+            return observation with
+            {
+                WorkspaceUnchanged = false,
+                Error = observation.Error is null ? publication : publication + Environment.NewLine + observation.Error
+            };
+        }
 
         void DisposeResources()
         {
@@ -127,7 +142,7 @@ static class CancellationProbe
         }
 
         return new CancellationReport(spec.Id, size, results.ToArray(),
-            "Cancellation requested after public request entry; not a claim about a specific callback. Completed-before-cancel requests are separate. Five-second response watchdog. Latencies diagnostic until collected on an accepted host; code-fix publication is excluded.",
+            "Cancellation requested after public request entry; not a claim about a specific callback. Completed-before-cancel requests are separate. Five-second response watchdog. Latencies diagnostic until collected on an accepted host. Settled code-fix trials verify unchanged workspace identity; explicit apply is excluded.",
             Campaign.Identity(), Campaign.FixtureHash(spec, size));
     }
 }

@@ -11,6 +11,8 @@ namespace Cntryl.Portia.CompilerBenchmarks;
 
 sealed record CaseSpec(string Kind, string Operation, string Component = "all")
 {
+    public const string PortiaOnly = "portia-only";
+
     static readonly string[] FixStages = ["discover", "discover-cached", "preview", "compute", "apply", "complete"];
     public string Id => Kind + "/" + Component + "/" + Operation;
 
@@ -28,6 +30,7 @@ sealed record CaseSpec(string Kind, string Operation, string Component = "all")
         new("applications", "full"), new("applications", "analyze"),
         .. CompilerFixture.Edits.Select(edit => new CaseSpec("generators", edit)), new("generators", "cold"),
         new("generators", "negative"),
+        new("generators", "cold", PortiaOnly), new("generators", "body", PortiaOnly),
         .. CompilerHost.Generators.Select(type => new CaseSpec("generators", "body", type.Name)),
         new("analyzers", "full"), new("analyzers", "document"),
         .. CompilerHost.Analyzers.Select(type => new CaseSpec("analyzers", "full", type.Name)),
@@ -57,7 +60,8 @@ sealed record Sample(
     double PreparationMilliseconds = 0,
     double VerificationMilliseconds = 0);
 
-sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>> verify, IDisposable? owner = null)
+sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>> verify, IDisposable? owner = null,
+    Func<bool>? workspaceUnchanged = null)
     : IDisposable
 {
     static readonly string[] CombinedAnalyzerDiagnostics =
@@ -81,6 +85,8 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
         : throw new InvalidOperationException("Cannot verify an incomplete operation.");
 
     public void Dispose() => owner?.Dispose();
+
+    public bool? WorkspaceUnchanged() => workspaceUnchanged?.Invoke();
 
     public static async Task<BenchmarkCase> PrepareAsync(CaseSpec spec, string size, CancellationToken ct = default) =>
         spec.Kind switch
@@ -132,10 +138,14 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
 
     static BenchmarkCase PrepareGenerators(CaseSpec spec, string size, CancellationToken ct)
     {
+        const string jsonGenerator = "JsonSourceGenerator";
+        var withJson = spec.Component != CaseSpec.PortiaOnly;
+        var component = withJson ? spec.Component : "all";
+        var combined = component == "all";
         var fixture = CompilerFixture.Create(size, negative: spec.Operation == "negative");
         var edit = spec.Operation is "cold" or "negative" ? "unchanged" : spec.Operation;
         var input = fixture.Edit(edit).Compilation;
-        var original = CompilerHost.Driver(component: spec.Component);
+        var original = CreateDriver();
 
         if (spec.Operation != "cold")
             original = original.RunGenerators(fixture.Compilation, ct);
@@ -144,28 +154,37 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
         return new BenchmarkCase(() =>
         {
             if (spec.Operation == "cold")
-                driver = CompilerHost.Driver(component: spec.Component);
+                driver = CreateDriver();
 
             driver = driver.RunGenerators(input, ct);
             return ValueTask.CompletedTask;
         }, () =>
         {
-            CompilerHost.CheckRun(driver, input, compile: spec.Component == "all" && edit != "incomplete");
+            CompilerHost.CheckRun(driver, input, compile: combined && withJson && edit != "incomplete");
             var sources = CompilerHost.Sources(driver);
-            var clean = CompilerHost.Driver(component: spec.Component).RunGenerators(input, ct);
+            var clean = CreateDriver().RunGenerators(input, ct);
             var cleanSources = CompilerHost.Sources(clean);
             Verification.Changes(cleanSources, sources, []);
 
-            if (spec.Component == "all" && spec.Operation != "negative")
+            if (combined && spec.Operation != "negative")
             {
                 var emitting = CompilerHost.Generators.Where(type => type != typeof(JsonMetadataDiagnosticGenerator)
                                                                      && type !=
                                                                      typeof(RequestShapeDiagnosticsGenerator))
                     .Select(type => type.Name);
-                Verification.Coverage(emitting, sources.Keys.Select(key => key.Split('/')[0]).Distinct()
-                    .Where(name => name != "JsonSourceGenerator"));
+                Verification.Coverage(withJson ? emitting.Append(jsonGenerator) : emitting,
+                    sources.Keys.Select(key => key.Split('/')[0]).Distinct());
             }
 
+            if (!withJson)
+            {
+                var consumer = CompilerHost.Driver().RunGenerators(input, ct);
+                CompilerHost.CheckRun(consumer, input);
+                var portiaSources = CompilerHost.Sources(consumer)
+                    .Where(pair => !pair.Key.StartsWith(jsonGenerator + "/", StringComparison.Ordinal))
+                    .ToDictionary(StringComparer.Ordinal);
+                Verification.Changes(portiaSources, sources, []);
+            }
 
             if (spec.Operation is not ("cold" or "negative"))
             {
@@ -177,15 +196,15 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
 
                 if (edit is "unchanged" or "body" or "incomplete")
                     Verification.Changes(before, sources, []);
-                else if (spec.Component == "all" && changed.Length == 0)
+                else if (combined && changed.Length == 0)
                     throw new InvalidOperationException("Edit failed to invalidate outputs: " + edit);
 
-                if (edit == "metadata" && spec.Component == "all" && !sources.Any(pair =>
+                if (edit == "metadata" && combined && !sources.Any(pair =>
                         pair.Key.StartsWith("JsonRootMarkerGenerator/", StringComparison.Ordinal) &&
                         pair.Value.Contains("units", StringComparison.Ordinal)))
                     throw new InvalidOperationException("Nested contract description was not emitted.");
 
-                if (spec.Component == "all" && edit is "route" or "metadata" or "location" or "event-add")
+                if (combined && edit is "route" or "metadata" or "location" or "event-add")
                 {
                     string[] expected = edit switch
                     {
@@ -195,7 +214,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
                         _ =>
                         [
                             nameof(DomainEventCatalogGenerator), nameof(JsonRootMarkerGenerator),
-                            nameof(RegistrationCallInterceptorGenerator), "JsonSourceGenerator"
+                            nameof(RegistrationCallInterceptorGenerator), jsonGenerator
                         ]
                     };
                     Verification.Coverage(expected, changed.Select(key => key.Split('/')[0]).Distinct());
@@ -206,8 +225,11 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
                 "fresh compilation; shared metadata references; " + (spec.Operation == "cold"
                                                                       ? "new driver"
                                                                       : "populated driver")
-                                                                  + "; warmup/static state recorded at worker level; clean-generation parity; combined consumer compilation"));
+                                                                  + "; warmup/static state recorded at worker level; clean-generation parity; "
+                                                                  + (withJson ? "System.Text.Json enabled" : "System.Text.Json disabled; paired consumer emission and Portia output parity verified after timing")));
         });
+
+        GeneratorDriver CreateDriver() => CompilerHost.Driver(component: component, withJson: withJson);
     }
 
     static BenchmarkCase PrepareAnalyzers(CaseSpec spec, string size, CancellationToken ct)
@@ -341,6 +363,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
             if (spec.Operation == "apply")
                 operations = await action!.GetOperationsAsync(ct).ConfigureAwait(false);
 
+            var original = fixture.Workspace.CurrentSolution;
             return new BenchmarkCase(async () =>
             {
                 switch (spec.Operation)
@@ -397,7 +420,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
                         : "first discovery or prepared action")
                     + (spec.Operation == "complete" ? "; diagnostic refresh included; " : "; refresh outside timer; ") +
                     spec.Operation);
-            }, fixture);
+            }, fixture, () => ReferenceEquals(original, fixture.Workspace.CurrentSolution));
         }
         catch
         {

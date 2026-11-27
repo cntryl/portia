@@ -38,7 +38,7 @@ sealed partial class BenchmarkCase
             var clean = edited.Build(ct: ct).Sources();
             Verification.Changes(clean, sources, []);
 
-            if (before is not null && spec.Operation is "unchanged" or "body" or "incomplete")
+            if (before is not null && spec.Operation is "unchanged" or "body" or "irrelevant-reference" or "incomplete")
                 Verification.Changes(before.Sources(), sources, []);
 
 
