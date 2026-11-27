@@ -17,18 +17,51 @@ public static class CassiePortiaBuilderExtensions
     public static PortiaBuilder AddCassie(
         this PortiaBuilder builder,
         string connectionString,
-        string checkpointTable = "portia_projection_checkpoints"
+        string checkpointTable = CassiePasswordProviderOptions.DefaultCheckpointTable
+    ) => RegisterCassie(builder, connectionString, checkpointTable, null);
+
+    /// <summary>Registers Cassie projections with a password supplied on each new physical connection.</summary>
+    /// <param name="builder">The application's Portia composition.</param>
+    /// <param name="options">The passwordless connection settings and host callback.</param>
+    /// <returns>The same builder for further composition.</returns>
+    public static PortiaBuilder AddCassie(this PortiaBuilder builder, CassiePasswordProviderOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(options.PasswordProvider);
+        return RegisterCassie(builder, options.ConnectionString, options.CheckpointTable, options.PasswordProvider);
+    }
+
+    static PortiaBuilder RegisterCassie(
+        PortiaBuilder builder,
+        string connectionString,
+        string checkpointTable,
+        Func<IServiceProvider, CancellationToken, ValueTask<string>>? passwordProvider
     )
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+
+        if (passwordProvider is not null)
+        {
+            CassieConnectionStringBuilder settings = [with(connectionString)];
+
+            if (settings.ContainsKey("Password"))
+                throw new ArgumentException(
+                    "A password provider cannot be combined with a Password connection string entry.",
+                    nameof(connectionString));
+        }
 
         if (builder.Services.Any(static service => service.ServiceType == typeof(CassieProjectionDatabase)
                                                    || service.ServiceType == typeof(CassieDataSource)))
             throw new InvalidOperationException("Cassie projection services are already configured.");
 
         builder.Services.AddSingleton(provider =>
-            new CassieDataSource(connectionString, provider.GetService<TimeProvider>() ?? TimeProvider.System));
+        {
+            var clock = provider.GetService<TimeProvider>() ?? TimeProvider.System;
+            return passwordProvider is null
+                ? new CassieDataSource(connectionString, clock)
+                : new CassieDataSource(connectionString, clock, token => passwordProvider(provider, token));
+        });
         builder.Services.AddSingleton(sp =>
             new CassieProjectionDatabase(sp.GetRequiredService<CassieDataSource>(), checkpointTable));
         builder.Services.AddSingleton<IHostedService, CassieProjectionStartup>();
