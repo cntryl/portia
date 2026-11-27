@@ -43,7 +43,7 @@ jobs:
           path: evidence/
   journal:
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
         with:
@@ -51,7 +51,7 @@ jobs:
       - uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
-      - name: Verify both historical journal matrices
+      - name: Verify both historical matrices and collect journal A/A noise
         run: |
           test "$(uname -m)" = aarch64
           mkdir -p "$RUNNER_TEMP/journal-evidence"
@@ -79,6 +79,17 @@ jobs:
           done
           for variant in baseline candidate; do
             bash "$runner" run "$evidence/$variant-build" "$evidence/$variant" "GitHub ubuntu-24.04-arm" "$evidence/policy.txt"
+          done
+          vmstat -w 1 > "$evidence/pilot-vmstat.txt" &
+          monitor=$!
+          trap 'kill "$monitor" 2>/dev/null || true' EXIT
+          # Six independent pairs on one VM. Use a fresh Fitz broker for each process.
+          # Record raw runs as a noise pilot until per-interval host attribution is verified.
+          for pair in 1 2 3 4 5 6; do
+            if (( pair % 2 )); then order="baseline candidate"; else order="candidate baseline"; fi
+            for side in $order; do
+              bash "$runner" run "$evidence/candidate-build" "$evidence/aa-$pair-$side" "GitHub ubuntu-24.04-arm" "$evidence/policy.txt"
+            done
           done
       - uses: actions/upload-artifact@v7.0.2
         if: always()
