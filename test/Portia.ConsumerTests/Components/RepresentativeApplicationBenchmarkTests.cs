@@ -10,6 +10,7 @@ public sealed class RepresentativeApplicationBenchmarkTests
     [InlineData("body")]
     [InlineData("metadata")]
     [InlineData("reference")]
+    [InlineData("irrelevant-reference")]
     [InlineData("incomplete")]
     public async Task ShouldVerifyFreshApplicationGivenIndependentEdit(string edit)
     {
@@ -22,6 +23,31 @@ public sealed class RepresentativeApplicationBenchmarkTests
         // Assert
         Assert.True(sample.Evidence.Files > 0);
         Assert.NotEmpty(sample.Evidence.OutputHash);
+    }
+
+    [Fact]
+    public void ShouldChangeOnlyCoreDirectReferencesGivenIrrelevantAssemblyAdded()
+    {
+        // Arrange
+        var fixture = ApplicationFixture.Create("minimal");
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var before = fixture.Build(ct: cancellationToken);
+
+        // Act
+        var after = fixture.Edit("irrelevant-reference").Build(before, cancellationToken);
+
+        // Assert
+        foreach (var oldProject in before.Projects)
+        {
+            var newProject = after.Projects.Single(project => project.Role == oldProject.Role);
+            var added = newProject.Input.References.OfType<PortableExecutableReference>()
+                .Except(oldProject.Input.References.OfType<PortableExecutableReference>());
+
+            if (newProject.Role == "Core")
+                Assert.Equal("Bench.Irrelevant.Abstractions.dll", Assert.Single(added).Display);
+            else
+                Assert.Empty(added);
+        }
     }
 
     [Fact]

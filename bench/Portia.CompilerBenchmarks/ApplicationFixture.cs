@@ -21,7 +21,7 @@ sealed record ApplicationBuild(ApplicationProjectResult[] Projects)
 
 sealed class ApplicationFixture(Dictionary<string, CSharpCompilation> inputs)
 {
-    public static readonly string[] Edits = ["unchanged", "body", "metadata", "reference", "incomplete"];
+    public static readonly string[] Edits = ["unchanged", "body", "metadata", "reference", "irrelevant-reference", "incomplete"];
     static readonly string[] Roles = ["Common", "Core", "Api", "Worker"];
 
     public string Identity => CompilerHost.Hash(string.Join("\n", Roles.SelectMany(role => inputs[role].SyntaxTrees
@@ -160,6 +160,24 @@ sealed class ApplicationFixture(Dictionary<string, CSharpCompilation> inputs)
         if (edit == "unchanged")
             return this;
 
+        var result = new Dictionary<string, CSharpCompilation>(inputs, StringComparer.Ordinal);
+
+        if (edit == "irrelevant-reference")
+        {
+            const string assemblyName = "Bench.Irrelevant.Abstractions";
+            var assembly = CSharpCompilation.Create(assemblyName,
+                [CSharpSyntaxTree.ParseText("namespace Bench.Irrelevant.Abstractions; public sealed record Unrelated(int Value);", CompilerHost.ParseOptions)],
+                CompilerHost.References, CompilerHost.CompilationOptions.WithDeterministic(true));
+            using var image = new MemoryStream();
+            var emission = assembly.Emit(image);
+
+            if (!emission.Success)
+                throw new InvalidOperationException(string.Join("\n", emission.Diagnostics));
+
+            result["Core"] = result["Core"].AddReferences(MetadataReference.CreateFromImage(image.ToArray(), filePath: assemblyName + ".dll"));
+            return new ApplicationFixture(result);
+        }
+
         var (role, file, from, to) = edit switch
         {
             "body" => ("Core", "Change0Handler.cs", "=> 1;", "=> 2;"),
@@ -169,7 +187,6 @@ sealed class ApplicationFixture(Dictionary<string, CSharpCompilation> inputs)
             "reference" => ("Common", "Change0.cs", ": IRequest, ICallable;", ": IRequest, ICallable { public int Revision { get; init; } }"),
             _ => throw new ArgumentException("Unknown application edit: " + edit, nameof(edit))
         };
-        var result = new Dictionary<string, CSharpCompilation>(inputs, StringComparer.Ordinal);
         var compilation = result[role];
         var tree = compilation.SyntaxTrees.Single(tree => tree.FilePath.EndsWith("/" + file, StringComparison.Ordinal));
         var text = tree.GetText();
@@ -191,9 +208,9 @@ sealed class ApplicationFixture(Dictionary<string, CSharpCompilation> inputs)
             ct.ThrowIfCancellationRequested();
             var dependencies = role == "Common" ? [] : results.Where(project => project.Role == "Common"
                 || role is "Api" or "Worker" && project.Role == "Core").ToArray();
-            var references = References(role).Concat(dependencies.Select(project => project.Reference)).ToArray();
-            var prior = previous?.Projects.Single(project => project.Role == role);
             var user = inputs[role];
+            var references = user.References.Concat(dependencies.Select(project => project.Reference)).ToArray();
+            var prior = previous?.Projects.Single(project => project.Role == role);
             var input = prior is not null && ReferenceEquals(user, prior.User) && prior.Input.References.SequenceEqual(references)
                 ? prior.Input : user.WithReferences(references);
             var driver = (prior?.Driver ?? CompilerHost.Driver()).RunGenerators(input, ct);

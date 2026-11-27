@@ -21,6 +21,8 @@ project convention options and no diagnostic controls. Its body/metadata/member 
 generation and changed-document syntax/semantic diagnostics; full graph diagnostics and consumer
 emission are checked after timing. `applications/all/full` measures generation plus full graph
 diagnostics; `applications/all/analyze` starts from generated input.
+`applications/all/irrelevant-reference` adds a deterministic assembly with no Portia contracts to
+Core and checks that generated output remains identical across the whole graph.
 Generator verification checks clean/incremental output parity, compilation of combined consumers,
 declared output-family changes, and stable tracked model steps. Code fixes use actual diagnostics,
 map portable locations to workspace trees, apply real operations and compile all affected projects.
@@ -104,6 +106,13 @@ incomplete
 pairs cannot produce a compatible comparison. Intentionally changed generated output needs review
 and a new comparison contract; the current protocol requires identical output hashes across revisions.
 The current report protocol is `portia-compiler-benchmarks-4`; prior reports are rejected.
+
+Use the same size and worker settings for `generators/all/cold` and `generators/portia-only/cold`,
+or for the matching `body` cases, to inspect the effect of running the pinned System.Text.Json
+generator alongside Portia. The `portia-only` timer covers the eight Portia generators. Its
+verification then enables System.Text.Json, emits the consumer and checks every Portia output
+for identical content. The two modes produce different output sets, so collect separate reports
+and compare only like modes across revisions.
 Workers also record the warm-up count and fixture size, and comparisons reject different warm-up
 configurations.
 
@@ -171,7 +180,7 @@ The harness rejects reuse of an independently prepared operation. Its tests also
 components/actions, stale/overbroad output changes and nonfinite comparisons, and verify allocations
 made on asynchronous worker threads. Ordinary CI runs correctness verification, not timing gates.
 
-The remaining design work includes more reference and metadata variations, runs without System.Text.Json,
+The remaining design work includes more reference and metadata variations,
 code-fix cache retention, callback-level cancellation and publication checks, SDK build measurements,
 profiling orchestration, and controlled qualification of the new session/first-load/editor paths. Analyzer workloads currently include explicit
 diagnostic controls and generated/prebound input; their totals are not a clean application's IDE
