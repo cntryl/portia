@@ -56,3 +56,6 @@ artifact is the durable evidence for this checkout; repeat the direct command af
 retain the JSON with the exact commit and broker configuration. The matrix is intentionally
 single-target for read/retry and all-workload for status/recovery; it does not isolate broker-side
 contention from client scheduling.
+
+For application dependency outages, hosted worker retries, and exact repair, use the
+[hosted operational worker benchmark](operational-worker-benchmark.md).
