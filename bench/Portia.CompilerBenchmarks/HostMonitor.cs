@@ -57,9 +57,25 @@ sealed class HostMonitor : IDisposable
     {
         var observed = _worker is null ? 0 : Cpu(_worker);
         var finalCpu = _worker is null ? 0 : Math.Max(_workerCpu, Math.Max(observed ?? 0, reportedCpu ?? 0));
-        _ = Observe(finalCpu);
+        MergeShortFinalInterval(finalCpu);
         var reasons = _observations.SelectMany(row => row.Verdict.Reasons).Distinct(StringComparer.Ordinal).ToArray();
         return new HostRun(Policy, reasons.Length == 0, _observations.ToArray(), reasons);
+    }
+
+    void MergeShortFinalInterval(double workerCpu)
+    {
+        // Linux CPU accounting is quantized. Fold a sub-sample exit tail into the preceding
+        // accepted interval so the same 10% budget is evaluated over a measurable window.
+        if (LinuxArm64Vm && Stopwatch.GetElapsedTime(_before.Timestamp) < TimeSpan.FromMilliseconds(500)
+            && _observations.LastOrDefault() is { Verdict.Accepted: true } previous)
+        {
+            _observations.RemoveAt(_observations.Count - 1);
+            _before = previous.Before;
+            _workerCpu -= previous.Interval.WorkerCpuMilliseconds;
+            _controllerCpu -= previous.Interval.ControllerCpuMilliseconds;
+        }
+
+        _ = Observe(workerCpu);
     }
 
     public static async Task<HostRun> IdleAsync(int seconds, CancellationToken ct)
