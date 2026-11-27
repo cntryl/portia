@@ -1,0 +1,47 @@
+name: Temporary Linux Arm64 Runtime Async pilot
+on:
+  push:
+    branches: [qual/linux-arm64-actions]
+    paths: [.github/workflows/temp-linux-arm64-runtime-pilot.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: read
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+jobs:
+  runtime:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Check frozen variants and collect an A/A pilot
+        run: |
+          test "$(uname -m)" = aarch64
+          evidence="$RUNNER_TEMP/runtime-evidence"
+          mkdir "$evidence"
+          printf '%s\n' 'Exploratory same-build pilot. This does not qualify Runtime Async or establish a regression margin.' > "$evidence/policy.txt"
+          uname -a > "$evidence/host.txt"
+          lscpu >> "$evidence/host.txt"
+          bash bench/Portia.Benchmarks/build-runtime-async-comparison.sh "$evidence/build"
+          launcher=bench/Portia.Benchmarks/run-runtime-async-process.sh
+          for mode in off on; do
+            bash "$launcher" inspect "$evidence/build" "$mode" "$evidence/inspect-$mode"
+          done
+          diff -u "$evidence/inspect-off/process.log" "$evidence/inspect-on/process.log"
+          vmstat -w 1 > "$evidence/vmstat.txt" &
+          monitor=$!
+          trap 'kill "$monitor" 2>/dev/null || true' EXIT
+          for run in first second; do
+            bash "$launcher" run "$evidence/build" off "$evidence/aa-$run"
+          done
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: runtime-linux-arm64
+          path: |
+            ${{ runner.temp }}/runtime-evidence/
+            !${{ runner.temp }}/runtime-evidence/**/bin/**

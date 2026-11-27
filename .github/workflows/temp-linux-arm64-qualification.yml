@@ -2,6 +2,10 @@ name: Temporary Linux Arm64 qualification
 on:
   push:
     branches: [qual/linux-arm64-actions]
+    paths:
+      - .github/workflows/temp-linux-arm64-qualification.yml
+      - bench/Portia.CompilerBenchmarks/**
+      - bench/operational-worker/**
   workflow_dispatch:
 permissions:
   contents: read
