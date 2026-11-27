@@ -42,25 +42,25 @@ bash bench/Portia.Benchmarks/build-runtime-async-comparison.sh /absolute/path/ru
 ```
 
 The build records the source commit, SDK and runtime inventory, compiler invocations, and a
-SHA-256 manifest for each variant. From each variant's `bin` directory, run
-`shasum -a 256 -c ../sha256.txt` before running the frozen executable. The explicit flags apply
-to the benchmark project and its Portia project references. Normal builds enable Runtime Async.
+SHA-256 manifest for each variant. The explicit flags apply to the benchmark project and its
+Portia project references. Normal builds enable Runtime Async.
 
-For each accepted process run, use the frozen benchmark assembly with these filters. In-process
-execution keeps BenchmarkDotNet from rebuilding the measured assembly. Start a fresh process for
-each sample group and specify a new artifact directory:
+Check the frozen inputs and discover the selected benchmark methods without collecting timings.
+Use a new process directory on each invocation:
 
 ```sh
-dotnet Portia.Benchmarks.dll --inProcess --job short \
-  --filter '*RequestDispatchBenchmarks*' '*HttpLifecycleBenchmarks.Json*' '*ProcessorDispatchBenchmarks*' \
-  --outliers DontRemove --allStats --exporters json --artifacts /absolute/path/pair-01-off
+bash bench/Portia.Benchmarks/run-runtime-async-process.sh inspect \
+  /absolute/path/runtime-async off /absolute/path/inspect-off
 ```
 
 Define and record the host acceptance policy and regression margins before collecting A/A and
-balanced process pairs. Run the same fixture and correctness controls for each variant. Keep
-samples from each process separate, including rejected and interrupted runs. The
-[qualification issue](https://github.com/cntryl/portia/issues/257) tracks the remaining work.
-The build command collects no timings.
+balanced process pairs, and run the same correctness controls for each variant. When the
+campaign resumes, use `run` instead of `inspect` for each timed process. In-process execution
+keeps BenchmarkDotNet from rebuilding the measured assembly. The launcher records the source,
+mode, arguments, runtime inventory, and process exit status alongside the raw results. It verifies
+the exact file list and hashes both before and after execution. Keep rejected and interrupted
+runs with the rest of the evidence. The [qualification issue](https://github.com/cntryl/portia/issues/257)
+tracks the remaining work.
 
 ## Measured hot paths
 
