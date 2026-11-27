@@ -67,8 +67,9 @@ jobs:
             if [[ "$variant" == baseline ]]; then
               sed -i '/<\/Project>/i\  <ItemGroup><InternalsVisibleTo Include="Portia.Benchmarks" /></ItemGroup>' "$src/src/Portia.Fitz/Portia.Fitz.csproj"
               sed -i '/^BenchmarkSwitcher/i\if (Environment.GetEnvironmentVariable("PORTIA_OPERATIONAL_WORKER") is "run" or "smoke")\n    await OperationalWorkerBenchmark.RunAsync();\nelse' "$src/bench/Portia.Benchmarks/Application/Program.cs"
+              sed -i 's/^BenchmarkSwitcher/    BenchmarkSwitcher/' "$src/bench/Portia.Benchmarks/Application/Program.cs"
             else
-              sed -i '/^if (Environment.GetEnvironmentVariable/i\if (Environment.GetEnvironmentVariable("PORTIA_OPERATIONAL_WORKER") is "run" or "smoke")\n    await OperationalWorkerBenchmark.RunAsync();\nelse' "$src/bench/Portia.Benchmarks/Application/Program.cs"
+              sed -i 's/^if (Environment.GetEnvironmentVariable/else if (Environment.GetEnvironmentVariable/; /^else if (Environment.GetEnvironmentVariable/i\if (Environment.GetEnvironmentVariable("PORTIA_OPERATIONAL_WORKER") is "run" or "smoke")\n    await OperationalWorkerBenchmark.RunAsync();' "$src/bench/Portia.Benchmarks/Application/Program.cs"
             fi
             bash "$runner" prepare "$src" "$evidence/$variant-build"
           done
