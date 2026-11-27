@@ -35,7 +35,7 @@ jobs:
           dll=bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll
           dotnet "$dll" verify --size small | tee evidence/verify.ndjson
           dotnet "$dll" host > evidence/host-counters.json
-          dotnet "$dll" calibrate --case generators/all/body --size small --pairs 10 --samples 10 --warmup 3 --seconds 600 --output evidence/calibration
+          dotnet "$dll" calibrate --case generators/all/body --size small --pairs 10 --samples 20 --warmup 5 --seconds 1200 --output evidence/calibration
       - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
