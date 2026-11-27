@@ -60,7 +60,8 @@ sealed record Sample(
     double PreparationMilliseconds = 0,
     double VerificationMilliseconds = 0);
 
-sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>> verify, IDisposable? owner = null)
+sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>> verify, IDisposable? owner = null,
+    Func<bool>? workspaceUnchanged = null)
     : IDisposable
 {
     static readonly string[] CombinedAnalyzerDiagnostics =
@@ -84,6 +85,8 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
         : throw new InvalidOperationException("Cannot verify an incomplete operation.");
 
     public void Dispose() => owner?.Dispose();
+
+    public bool? WorkspaceUnchanged() => workspaceUnchanged?.Invoke();
 
     public static async Task<BenchmarkCase> PrepareAsync(CaseSpec spec, string size, CancellationToken ct = default) =>
         spec.Kind switch
@@ -360,6 +363,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
             if (spec.Operation == "apply")
                 operations = await action!.GetOperationsAsync(ct).ConfigureAwait(false);
 
+            var original = fixture.Workspace.CurrentSolution;
             return new BenchmarkCase(async () =>
             {
                 switch (spec.Operation)
@@ -416,7 +420,7 @@ sealed partial class BenchmarkCase(Func<ValueTask> execute, Func<Task<Evidence>>
                         : "first discovery or prepared action")
                     + (spec.Operation == "complete" ? "; diagnostic refresh included; " : "; refresh outside timer; ") +
                     spec.Operation);
-            }, fixture);
+            }, fixture, () => ReferenceEquals(original, fixture.Workspace.CurrentSolution));
         }
         catch
         {

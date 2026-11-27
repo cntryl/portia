@@ -5,6 +5,47 @@ namespace Cntryl.Portia.Consumer;
 public sealed class CompilerCancellationProbeTests
 {
     [Theory]
+    [InlineData("discover")]
+    [InlineData("discover-cached")]
+    [InlineData("preview")]
+    [InlineData("compute")]
+    public async Task ShouldVerifyUnchangedWorkspaceGivenCodeFixCancellationProbe(string stage)
+    {
+        // Arrange
+        var spec = new CaseSpec("fixes", stage, "json-add");
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        // Act
+        var report = await CancellationProbe.RunAsync(spec, "minimal", 1, 0, cancellationToken);
+
+        // Assert
+        var observation = Assert.Single(report.Observations);
+        Assert.Null(observation.Error);
+        Assert.True(observation.WorkspaceUnchanged);
+    }
+
+    [Fact]
+    public async Task ShouldReportWorkspacePublicationGivenCanceledComputationWithSideEffect()
+    {
+        // Arrange
+        var published = false;
+        Task<BenchmarkCase> Prepare(CancellationToken token) => Task.FromResult(new BenchmarkCase(async () =>
+        {
+            published = true;
+            await Task.Delay(Timeout.Infinite, token);
+        }, () => Task.FromResult(new Evidence("probe", 0, 0, 0, "probe")),
+            workspaceUnchanged: () => !published));
+
+        // Act
+        var observation = await CancellationProbe.RunTrialAsync(Prepare, 0, TestContext.Current.CancellationToken);
+
+        // Assert
+        Assert.Equal("canceled-after-entry", observation.Status);
+        Assert.False(observation.WorkspaceUnchanged);
+        Assert.Contains("changed the workspace", observation.Error, StringComparison.Ordinal);
+    }
+
+    [Theory]
     [InlineData("generators", "body", "all")]
     [InlineData("analyzers", "full", "all")]
     [InlineData("fixes", "compute", "partial")]

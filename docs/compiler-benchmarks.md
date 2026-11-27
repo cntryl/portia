@@ -28,7 +28,7 @@ continue independently. The next evidence sequence is accepted-host A/A, represe
 first-load comparisons, long retention and in-flight cancellation observations, then Automatic and
 Balanced editor replay. Profile missed budgets, change only confirmed causes, and repeat matched
 measurements before publishing an acceptance matrix. More reference/metadata variants, code-fix
-cache retention, cancellation publication checks and SDK build timing remain explicit gaps in the
+cache retention, cancellation retry checks and SDK build timing remain explicit gaps in the
 full design.
 
 ## Measurement boundaries

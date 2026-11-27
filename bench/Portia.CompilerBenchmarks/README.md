@@ -171,7 +171,9 @@ Cancellation is requested after entry to the public benchmark request, with a fi
 it does not establish entry into a particular generator callback. Reports distinguish requests that
 finished before cancellation, canceled requests and requests that completed after cancellation.
 Only computation/discovery/preview code-fix stages are eligible; workspace publication is a separate
-boundary. Both reports include tooling/fixture identities. Retention records host counters; neither
+boundary. Each settled code-fix trial checks that the workspace still holds its original solution.
+A changed solution fails the trial. A watchdog timeout leaves the workspace check unavailable.
+Both reports include tooling/fixture identities. Retention records host counters; neither
 probe enforces the campaign's host
 policy. Their latencies remain diagnostic until the operator supplies a controlled host. Correctness
 tests and short probes can run while timing campaigns are deferred.
@@ -181,7 +183,7 @@ components/actions, stale/overbroad output changes and nonfinite comparisons, an
 made on asynchronous worker threads. Ordinary CI runs correctness verification, not timing gates.
 
 The remaining design work includes more reference and metadata variations,
-code-fix cache retention, callback-level cancellation and publication checks, SDK build measurements,
+code-fix cache retention, callback-level cancellation and same-state retry checks, SDK build measurements,
 profiling orchestration, and controlled qualification of the new session/first-load/editor paths. Analyzer workloads currently include explicit
 diagnostic controls and generated/prebound input; their totals are not a clean application's IDE
 latency. Until those remaining paths are implemented, use these results to investigate
