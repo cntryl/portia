@@ -93,8 +93,11 @@ public sealed partial class CassieProjectionMisuseTests
         var builder = services.AddPortia();
 
         // Act
-        var failure = Record.Exception(() => builder.AddCassie(
-            static (_, _) => ValueTask.FromResult("unused-token"), UnreachableServer));
+        var failure = Record.Exception(() => builder.AddCassie(new CassiePasswordProviderOptions
+        {
+            ConnectionString = UnreachableServer,
+            PasswordProvider = static (_, _) => ValueTask.FromResult("unused-token")
+        }));
 
         // Assert
         var error = Assert.IsType<ArgumentException>(failure);
@@ -111,8 +114,11 @@ public sealed partial class CassieProjectionMisuseTests
         var services = new ServiceCollection();
         var probe = new PasswordProviderProbe();
         _ = services.AddSingleton(probe);
-        _ = services.AddPortia().AddCassie(
-            static (host, token) => host.GetRequiredService<PasswordProviderProbe>().GetPassword(token), passwordless);
+        _ = services.AddPortia().AddCassie(new CassiePasswordProviderOptions
+        {
+            ConnectionString = passwordless,
+            PasswordProvider = static (host, token) => host.GetRequiredService<PasswordProviderProbe>().GetPassword(token)
+        });
         await using var host = services.BuildServiceProvider();
         var source = host.GetRequiredService<CassieDataSource>();
         await using var connection = source.CreateConnection();

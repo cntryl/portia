@@ -1,6 +1,10 @@
 #nullable enable
-static Cntryl.Portia.CassiePortiaBuilderExtensions.AddCassie(this Cntryl.Portia.PortiaBuilder! builder, System.Func<System.IServiceProvider!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<string!>>! passwordProvider, string! connectionString) -> Cntryl.Portia.PortiaBuilder!
-*REMOVED*static Cntryl.Portia.CassiePortiaBuilderExtensions.AddCassie(this Cntryl.Portia.PortiaBuilder! builder, string! connectionString, string! checkpointTable = "portia_projection_checkpoints") -> Cntryl.Portia.PortiaBuilder!
-static Cntryl.Portia.CassiePortiaBuilderExtensions.AddCassie(this Cntryl.Portia.PortiaBuilder! builder, string! connectionString, string! checkpointTable) -> Cntryl.Portia.PortiaBuilder!
-static Cntryl.Portia.CassiePortiaBuilderExtensions.AddCassie(this Cntryl.Portia.PortiaBuilder! builder, string! connectionString) -> Cntryl.Portia.PortiaBuilder!
-static Cntryl.Portia.CassiePortiaBuilderExtensions.AddCassie(this Cntryl.Portia.PortiaBuilder! builder, System.Func<System.IServiceProvider!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<string!>>! passwordProvider, string! connectionString, string! checkpointTable) -> Cntryl.Portia.PortiaBuilder!
+Cntryl.Portia.CassiePasswordProviderOptions
+Cntryl.Portia.CassiePasswordProviderOptions.CassiePasswordProviderOptions() -> void
+Cntryl.Portia.CassiePasswordProviderOptions.CheckpointTable.get -> string!
+Cntryl.Portia.CassiePasswordProviderOptions.CheckpointTable.init -> void
+Cntryl.Portia.CassiePasswordProviderOptions.ConnectionString.get -> string!
+Cntryl.Portia.CassiePasswordProviderOptions.ConnectionString.init -> void
+Cntryl.Portia.CassiePasswordProviderOptions.PasswordProvider.get -> System.Func<System.IServiceProvider!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<string!>>!
+Cntryl.Portia.CassiePasswordProviderOptions.PasswordProvider.init -> void
+static Cntryl.Portia.CassiePortiaBuilderExtensions.AddCassie(this Cntryl.Portia.PortiaBuilder! builder, Cntryl.Portia.CassiePasswordProviderOptions! options) -> Cntryl.Portia.PortiaBuilder!

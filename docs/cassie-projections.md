@@ -36,9 +36,10 @@ CREATE TABLE account_balances (
 );
 ```
 
-For Cassie AWS IAM authentication, omit `Password` and call
-`AddCassie((services, token) => ..., connectionString)`. Resolve the credential provider
-from the host service provider and pass the cancellation token to it. The callback can run
+For Cassie AWS IAM authentication, omit `Password` and pass a
+`CassiePasswordProviderOptions` instance to `AddCassie`. Set `ConnectionString`
+and `PasswordProvider`. The callback receives the host service provider and the open
+cancellation token. Resolve the credential provider from the host and pass the token to it. The callback can run
 concurrently for new physical connections. Use certificate-verified TLS.
 
 ## Data and repository

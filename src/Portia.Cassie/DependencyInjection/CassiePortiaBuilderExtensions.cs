@@ -9,15 +9,6 @@ namespace Cntryl.Portia;
 /// <summary>Connects native Cassie repositories to Portia's existing projector lifecycle.</summary>
 public static class CassiePortiaBuilderExtensions
 {
-    const string DefaultCheckpointTable = "portia_projection_checkpoints";
-
-    /// <summary>Registers a shared Cassie data source and the default checkpoint table.</summary>
-    /// <param name="builder">The application's Portia composition.</param>
-    /// <param name="connectionString">The native Cassie connection string.</param>
-    /// <returns>The same builder for further composition.</returns>
-    public static PortiaBuilder AddCassie(this PortiaBuilder builder, string connectionString) =>
-        AddCassie(builder, connectionString, DefaultCheckpointTable);
-
     /// <summary>Registers a shared Cassie data source and checkpoint metadata that a hosted application verifies at startup.</summary>
     /// <param name="builder">The application's Portia composition.</param>
     /// <param name="connectionString">The native Cassie connection string.</param>
@@ -26,33 +17,19 @@ public static class CassiePortiaBuilderExtensions
     public static PortiaBuilder AddCassie(
         this PortiaBuilder builder,
         string connectionString,
-        string checkpointTable
+        string checkpointTable = CassiePasswordProviderOptions.DefaultCheckpointTable
     ) => RegisterCassie(builder, connectionString, checkpointTable, null);
 
     /// <summary>Registers Cassie projections with a password supplied on each new physical connection.</summary>
     /// <param name="builder">The application's Portia composition.</param>
-    /// <param name="passwordProvider">A callback that receives the host service provider and the open cancellation token.</param>
-    /// <param name="connectionString">The native Cassie connection string without a Password entry.</param>
+    /// <param name="options">The passwordless connection settings and host callback.</param>
     /// <returns>The same builder for further composition.</returns>
-    public static PortiaBuilder AddCassie(
-        this PortiaBuilder builder,
-        Func<IServiceProvider, CancellationToken, ValueTask<string>> passwordProvider,
-        string connectionString
-    ) => AddCassie(builder, passwordProvider, connectionString, DefaultCheckpointTable);
-
-    /// <summary>Registers Cassie projections with a password provider and a custom checkpoint table.</summary>
-    /// <param name="builder">The application's Portia composition.</param>
-    /// <param name="passwordProvider">A callback that receives the host service provider and the open cancellation token.</param>
-    /// <param name="connectionString">The native Cassie connection string without a Password entry.</param>
-    /// <param name="checkpointTable">The unqualified metadata table in the application's Cassie database.</param>
-    /// <returns>The same builder for further composition.</returns>
-    public static PortiaBuilder AddCassie(
-        this PortiaBuilder builder,
-        Func<IServiceProvider, CancellationToken, ValueTask<string>> passwordProvider,
-        string connectionString,
-        string checkpointTable
-    ) => RegisterCassie(builder, connectionString, checkpointTable,
-        passwordProvider ?? throw new ArgumentNullException(nameof(passwordProvider)));
+    public static PortiaBuilder AddCassie(this PortiaBuilder builder, CassiePasswordProviderOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(options.PasswordProvider);
+        return RegisterCassie(builder, options.ConnectionString, options.CheckpointTable, options.PasswordProvider);
+    }
 
     static PortiaBuilder RegisterCassie(
         PortiaBuilder builder,
