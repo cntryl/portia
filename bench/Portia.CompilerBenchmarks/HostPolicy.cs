@@ -8,7 +8,7 @@ static class HostPolicy
 {
     public const double BackgroundCpuLimit = .10;
 
-    public static HostVerdict Evaluate(HostInterval interval)
+    public static HostVerdict Evaluate(HostInterval interval, bool allowUnknownThermalState = false)
     {
         var reasons = new List<string>();
 
@@ -33,9 +33,9 @@ static class HostPolicy
         if (interval.MemoryPressure != 1)
             reasons.Add("memory pressure");
 
-        if (interval.ThermalState is null)
+        if (interval.ThermalState is null && !allowUnknownThermalState)
             reasons.Add("thermal telemetry unavailable");
-        else if (interval.ThermalState != 0)
+        else if (interval.ThermalState is not (null or 0))
             reasons.Add("thermal pressure");
 
         if (interval.LowPowerMode)

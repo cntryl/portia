@@ -7,7 +7,11 @@ sealed record HostRun(string Policy, bool Accepted, HostObservation[] Observatio
 
 sealed class HostMonitor : IDisposable
 {
-    public const string Policy = "macos-reference-host-1";
+    internal static bool LinuxArm64Vm => OperatingSystem.IsLinux()
+        && System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.Arm64
+        && Environment.GetEnvironmentVariable("PORTIA_COMPILER_HOST_POLICY") == "linux-arm64-vm";
+
+    public static string Policy => LinuxArm64Vm ? "linux-arm64-vm-1" : "macos-reference-host-1";
     readonly Process _controller = Process.GetCurrentProcess();
     readonly Process? _worker;
     readonly List<HostObservation> _observations = [];
@@ -41,7 +45,7 @@ sealed class HostMonitor : IDisposable
         var after = HostCounters.Capture();
         var controller = _controller.TotalProcessorTime.TotalMilliseconds;
         var interval = HostCounters.Interval(_before, after, workerCpu - _workerCpu, controller - _controllerCpu);
-        var verdict = HostPolicy.Evaluate(interval);
+        var verdict = HostPolicy.Evaluate(interval, LinuxArm64Vm);
         _observations.Add(new HostObservation(_before, after, interval, verdict));
         _before = after;
         _controllerCpu = controller;

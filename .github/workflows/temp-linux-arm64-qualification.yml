@@ -1,0 +1,84 @@
+name: Temporary Linux Arm64 qualification
+on:
+  push:
+    branches: [qual/linux-arm64-actions]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: read
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+jobs:
+  compiler:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    env:
+      PORTIA_COMPILER_HOST_POLICY: linux-arm64-vm
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Verify fixtures and calibrate compiler measurements
+        run: |
+          test "$(uname -m)" = aarch64
+          mkdir -p evidence
+          uname -a > evidence/host.txt
+          lscpu >> evidence/host.txt
+          dotnet --info > evidence/sdk.txt
+          git rev-parse HEAD > evidence/revision.txt
+          dotnet build bench/Portia.CompilerBenchmarks -c Release
+          dll=bench/Portia.CompilerBenchmarks/bin/Release/net11.0/Portia.CompilerBenchmarks.dll
+          dotnet "$dll" verify --size small | tee evidence/verify.ndjson
+          dotnet "$dll" host > evidence/host-counters.json
+          dotnet "$dll" calibrate --case generators/all/body --size small --pairs 10 --samples 10 --warmup 3 --seconds 600 --output evidence/calibration
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: compiler-linux-arm64
+          path: evidence/
+  journal:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Verify both historical journal matrices
+        run: |
+          test "$(uname -m)" = aarch64
+          mkdir -p "$RUNNER_TEMP/journal-evidence"
+          evidence="$RUNNER_TEMP/journal-evidence"
+          printf '%s\n' 'Diagnostic only. Hosted pilot has no accepted pair-level host evidence.' > "$evidence/policy.txt"
+          uname -a > "$evidence/host.txt"
+          lscpu >> "$evidence/host.txt"
+          docker pull ghcr.io/cntryl/fitz@sha256:6d4f121fd772c17ef059c15f8653488ae8466ed30c6e5ef789b01ce65e395f30
+          runner="$PWD/bench/operational-worker/run-process.sh"
+          for variant in baseline candidate; do
+            if [[ "$variant" == baseline ]]; then rev=7fc296a962568c1fa3d40906e5ca9705e738addb
+            else rev=38886f1da27351b26774e8333dae015998c35f0e; fi
+            src="$RUNNER_TEMP/$variant"
+            git worktree add --detach "$src" "$rev"
+            mkdir -p "$src/bench/Portia.Benchmarks/Operations"
+            cp bench/Portia.Benchmarks/Operations/OperationalWorker*.cs "$src/bench/Portia.Benchmarks/Operations/"
+            if [[ "$variant" == baseline ]]; then
+              sed -i '/<\/Project>/i\  <ItemGroup><InternalsVisibleTo Include="Portia.Benchmarks" /></ItemGroup>' "$src/src/Portia.Fitz/Portia.Fitz.csproj"
+              sed -i '/^BenchmarkSwitcher/i\if (Environment.GetEnvironmentVariable("PORTIA_OPERATIONAL_WORKER") is "run" or "smoke")\n    await OperationalWorkerBenchmark.RunAsync();\nelse' "$src/bench/Portia.Benchmarks/Application/Program.cs"
+            else
+              sed -i '/^if (Environment.GetEnvironmentVariable/i\if (Environment.GetEnvironmentVariable("PORTIA_OPERATIONAL_WORKER") is "run" or "smoke")\n    await OperationalWorkerBenchmark.RunAsync();\nelse' "$src/bench/Portia.Benchmarks/Application/Program.cs"
+            fi
+            bash "$runner" prepare "$src" "$evidence/$variant-build"
+          done
+          for variant in baseline candidate; do
+            bash "$runner" run "$evidence/$variant-build" "$evidence/$variant" "GitHub ubuntu-24.04-arm" "$evidence/policy.txt"
+          done
+      - uses: actions/upload-artifact@v7.0.2
+        if: always()
+        with:
+          name: journal-linux-arm64
+          path: |
+            ${{ runner.temp }}/journal-evidence/
+            !${{ runner.temp }}/journal-evidence/**/bin/**
