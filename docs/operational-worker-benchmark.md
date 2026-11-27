@@ -39,6 +39,26 @@ PORTIA_OPERATIONAL_WORKER_MACHINE="CPU model, RAM, disk and host identifier" \
 docker stop portia-journal-benchmark
 ```
 
+For repeatable runs, use the repository launcher with a dedicated benchmark worktree and
+a locally available copy of the pinned Fitz image. Build both variants first. The launcher
+does not build during a smoke or measured process.
+
+```sh
+bash bench/operational-worker/run-process.sh prepare "$baseline_worktree" "$evidence/baseline-build"
+bash bench/operational-worker/run-process.sh prepare "$candidate_worktree" "$evidence/candidate-build"
+bash bench/operational-worker/run-process.sh smoke "$evidence/baseline-build" "$evidence/setup-check" "$machine"
+# After an accepted host sample, repeat in the declared process order:
+bash bench/operational-worker/run-process.sh run "$evidence/baseline-build" "$evidence/pair-01-baseline" "$machine" "$host_record"
+```
+
+Create the absolute evidence parent directory first. The launcher captures the tracked patch
+and benchmark source overlay, SDK details, immutable build inventory, broker image and storage
+configuration, launch timestamps, and raw result. It uses a fresh broker per process and
+verifies the build inventory again after exit. Use the SHA-256 of each build's
+`overlay-sha256.txt` as its overlay digest in the campaign manifest. Review the host record before
+launch and monitor the host throughout each pair. The launcher archives that evidence and does
+not decide whether the observed host conditions satisfy the policy.
+
 For a setup and correctness smoke, use `PORTIA_OPERATIONAL_WORKER=smoke`. This runs one
 workload with four retained receipts and two healthy events. A full run covers the cross product
 of 4 and 128 retained receipts with 1 and 8 independent workloads. Each workload has its own
