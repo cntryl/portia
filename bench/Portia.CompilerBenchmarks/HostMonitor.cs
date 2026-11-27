@@ -7,7 +7,11 @@ sealed record HostRun(string Policy, bool Accepted, HostObservation[] Observatio
 
 sealed class HostMonitor : IDisposable
 {
-    public const string Policy = "macos-reference-host-1";
+    internal static bool LinuxArm64Vm => OperatingSystem.IsLinux()
+        && System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.Arm64
+        && Environment.GetEnvironmentVariable("PORTIA_COMPILER_HOST_POLICY") == "linux-arm64-vm";
+
+    public static string Policy => LinuxArm64Vm ? "linux-arm64-vm-1" : "macos-reference-host-1";
     readonly Process _controller = Process.GetCurrentProcess();
     readonly Process? _worker;
     readonly List<HostObservation> _observations = [];
@@ -41,7 +45,7 @@ sealed class HostMonitor : IDisposable
         var after = HostCounters.Capture();
         var controller = _controller.TotalProcessorTime.TotalMilliseconds;
         var interval = HostCounters.Interval(_before, after, workerCpu - _workerCpu, controller - _controllerCpu);
-        var verdict = HostPolicy.Evaluate(interval);
+        var verdict = HostPolicy.Evaluate(interval, LinuxArm64Vm);
         _observations.Add(new HostObservation(_before, after, interval, verdict));
         _before = after;
         _controllerCpu = controller;
@@ -53,9 +57,25 @@ sealed class HostMonitor : IDisposable
     {
         var observed = _worker is null ? 0 : Cpu(_worker);
         var finalCpu = _worker is null ? 0 : Math.Max(_workerCpu, Math.Max(observed ?? 0, reportedCpu ?? 0));
-        _ = Observe(finalCpu);
+        MergeShortFinalInterval(finalCpu);
         var reasons = _observations.SelectMany(row => row.Verdict.Reasons).Distinct(StringComparer.Ordinal).ToArray();
         return new HostRun(Policy, reasons.Length == 0, _observations.ToArray(), reasons);
+    }
+
+    void MergeShortFinalInterval(double workerCpu)
+    {
+        // Linux CPU accounting is quantized. Fold a sub-sample exit tail into the preceding
+        // accepted interval so the same 10% budget is evaluated over a measurable window.
+        if (LinuxArm64Vm && Stopwatch.GetElapsedTime(_before.Timestamp) < TimeSpan.FromMilliseconds(500)
+            && _observations.LastOrDefault() is { Verdict.Accepted: true } previous)
+        {
+            _observations.RemoveAt(_observations.Count - 1);
+            _before = previous.Before;
+            _workerCpu -= previous.Interval.WorkerCpuMilliseconds;
+            _controllerCpu -= previous.Interval.ControllerCpuMilliseconds;
+        }
+
+        _ = Observe(workerCpu);
     }
 
     public static async Task<HostRun> IdleAsync(int seconds, CancellationToken ct)

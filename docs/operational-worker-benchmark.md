@@ -83,8 +83,9 @@ read. Per-pass averages include empty and blocked passes between observations. T
 count is the exact Fitz JSON encoding of successful worker document writes, reconstructed
 outside each measured phase. It excludes keys, indexing, protocol overhead, and separate
 operator operations. Status queries use the application request bus, sample native progress and
-journal evidence, and run every 50 ms per workload as capacity allows. The readiness query
-before each phase and any cancelled final query are excluded from the latency distribution.
+journal evidence, and run every 50 ms per workload as capacity allows. The readiness query before each phase is excluded from the latency distribution. At the phase
+boundary, the probe loop stops scheduling new requests and drains requests already in progress.
+Draining is outside the measured phase elapsed time.
 
 The benchmark verifies all normal commits, both the native checkpoint and native model during
 the outage, every failed attempt's source and checkpoint, loss of the stale-owner write, and

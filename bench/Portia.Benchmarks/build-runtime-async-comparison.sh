@@ -38,10 +38,10 @@ for mode in off on; do
 
   # Validate actual compiler invocations. A global MSBuild property applies to the project
   # references as well as the benchmark executable and overrides the normal build default.
-  rg '/csc(\.dll)?"? /noconfig ' "$variant/build.log" > "$variant/compilers.txt"
-  if rg -v -Fq -- "/features:$features" "$variant/compilers.txt" ||
-      ! rg -Fq '/out:obj/Release/net11.0/Portia.Benchmarks.dll' "$variant/compilers.txt" ||
-      ! rg -Fq '/out:obj/Release/net11.0/Portia.Core.dll' "$variant/compilers.txt"; then
+  grep -E '/csc(\.dll)?"? /noconfig ' "$variant/build.log" > "$variant/compilers.txt"
+  if grep -v -Fq -- "/features:$features" "$variant/compilers.txt" ||
+      ! grep -Fq '/out:obj/Release/net11.0/Portia.Benchmarks.dll' "$variant/compilers.txt" ||
+      ! grep -Fq '/out:obj/Release/net11.0/Portia.Core.dll' "$variant/compilers.txt"; then
     echo "Compiler invocations did not prove the $mode variant. See $variant/build.log." >&2
     exit 1
   fi
