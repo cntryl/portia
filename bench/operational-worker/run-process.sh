@@ -38,7 +38,15 @@ cp "$0" "$output/run-process.sh"
 printf '%s\n' "$runner_revision" > "$output/runner-revision.txt"
 
 inventory() {
+  if [[ -n $(find "$@" ! -type f ! -type d -print) ]]; then
+    echo "The benchmark input tree contains links or special files." >&2
+    return 1
+  fi
   find "$@" -type f -exec shasum -a 256 {} + | LC_ALL=C sort
+}
+
+timestamp() {
+  python3 -c 'from datetime import datetime, timezone; print(datetime.now(timezone.utc).isoformat())'
 }
 
 if [[ "$mode" == prepare ]]; then
@@ -115,11 +123,11 @@ export PORTIA_OPERATIONAL_WORKER_MACHINE="$machine"
 export DOTNET_ROLL_FORWARD=Disable
 unset DOTNET_ADDITIONAL_DEPS DOTNET_STARTUP_HOOKS DOTNET_SHARED_STORE
 dotnet --list-runtimes > "$output/dotnet-runtimes.txt"
-date -u +%FT%TZ > "$output/started-at.txt"
+timestamp > "$output/started-at.txt"
 status=0
 dotnet "$input/bin/Portia.Benchmarks.dll" > "$output/process.log" 2>&1 || status=$?
 printf '%s\n' "$status" > "$output/exit-code.txt"
-date -u +%FT%TZ > "$output/finished-at.txt"
+timestamp > "$output/finished-at.txt"
 (cd "$input/bin" && inventory .) > "$output/bin-after-sha256.txt"
 cmp "$output/bin-sha256.txt" "$output/bin-after-sha256.txt"
 if [[ "$status" != 0 ]]; then
