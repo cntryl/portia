@@ -2,51 +2,65 @@ name: Packages
 
 on:
   workflow_dispatch:
-  workflow_call:
-    outputs:
-      artifact-id:
-        description: The immutable package artifact for the caller.
-        value: ${{ jobs.pack.outputs.artifact-id }}
-      package-version:
-        description: The version of the packed packages.
-        value: ${{ jobs.pack.outputs.package-version }}
+
+concurrency:
+  group: github-packages-publish
+  cancel-in-progress: false
 
 permissions:
-  contents: read
-  packages: read
+  contents: write
+  packages: write
 
 jobs:
-  pack:
-    name: Pack NuGet packages
+  publish:
+    name: Pack and publish packages
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    outputs:
-      artifact-id: ${{ steps.artifact.outputs.artifact-id }}
-      package-version: ${{ steps.version.outputs.package-version }}
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      NUGET_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PACKAGE_SOURCE: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
 
     steps:
-      - uses: actions/checkout@v7
+      - name: Check out repository
+        uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v6
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v6
         with:
           global-json-file: global.json
 
       - name: Read package version
         id: version
-        run: |
-          version="$(dotnet msbuild src/Portia.AspNetCore/Portia.AspNetCore.csproj -getProperty:PackageVersion -nologo)"
-          test -n "$version"
-          echo "package-version=$version" >> "$GITHUB_OUTPUT"
+        run: echo "package-version=$(dotnet msbuild src/Portia.AspNetCore/Portia.AspNetCore.csproj -getProperty:PackageVersion -nologo)" >> "$GITHUB_OUTPUT"
 
       - name: Pack packages
-        run: dotnet pack Portia.slnx --configuration Release --output artifacts/packages
+        run: >-
+          dotnet pack Portia.slnx
+          --configuration Release
+          --output artifacts/packages
+          -p:PackageVersion="${{ steps.version.outputs.package-version }}"
 
-      - name: Upload packages
-        id: artifact
+      - name: Upload release packages
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: packages-${{ github.run_attempt }}
-          path: artifacts/packages/*.nupkg
+          name: release-packages-${{ github.run_attempt }}
+          path: |
+            artifacts/packages/*.nupkg
+            artifacts/packages/*.snupkg
           if-no-files-found: error
+
+      - name: Publish packages
+        run: >-
+          dotnet nuget push "artifacts/packages/*.nupkg"
+          --api-key "$NUGET_AUTH_TOKEN"
+          --source "$PACKAGE_SOURCE"
+          --skip-duplicate
+
+      - name: Tag release
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package-version }}
+        run: |
+          git tag "v${PACKAGE_VERSION}"
+          git push origin "refs/tags/v${PACKAGE_VERSION}"
