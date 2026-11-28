@@ -4,6 +4,10 @@ Notable changes to Portia. Entries call out anything that changes observable beh
 application already running on a previous version, including telemetry, since dashboards and
 alerts are as breaking to change as an API.
 
+## 0.17.1
+
+- Update the Fitz .NET dependency to 4.5.0, which fixes decoding populated Stream Peek responses.
+
 ## 0.17.0
 
 ### Added
