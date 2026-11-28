@@ -17,6 +17,7 @@ await using (var provider = services.BuildServiceProvider())
     var options = provider.GetRequiredKeyedService<JsonSerializerOptions>(PortiaServiceKeys.Json);
     var requestInfo = options.GetTypeInfo<GetProcessorStatus>();
     var request = new GetProcessorStatus("AccountBalanceProjector", "tenant-a");
+
     if (JsonSerializer.Deserialize(JsonSerializer.Serialize(request, requestInfo), requestInfo) != request)
         throw new InvalidOperationException("Packed processor status request metadata did not round-trip.");
 
@@ -27,9 +28,12 @@ await using (var provider = services.BuildServiceProvider())
             4, false, DateTimeOffset.UnixEpoch),
         new ProcessorStatusFailure("Handling", "Conflict", true, 2, false, DateTimeOffset.UnixEpoch));
     var statusJson = JsonSerializer.Serialize(status, statusInfo);
+
     if (JsonSerializer.Deserialize(statusJson, statusInfo) != status)
         throw new InvalidOperationException("Packed processor status response metadata did not round-trip.");
+
     using var document = JsonDocument.Parse(statusJson);
+
     if (document.RootElement.GetProperty("progress").GetProperty("position").GetString() != "opaque:committed")
         throw new InvalidOperationException("Packed processor status metadata changed the opaque cursor representation.");
 }
